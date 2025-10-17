@@ -1,5 +1,4 @@
 <?php
-// Connexion PDO adaptée pour Railway
 $host = getenv('MYSQLHOST');
 $db   = getenv('MYSQLDATABASE');
 $user = getenv('MYSQLUSER');
