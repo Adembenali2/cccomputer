@@ -4,6 +4,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "php -S 0.0.0.0:8080 -t ."
+    "startCommand": "php -S 0.0.0.0:8080 -t public"
   }
 }
