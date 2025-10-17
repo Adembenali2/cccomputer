@@ -1,17 +1,7 @@
-{
-    # Cette ligne est optionnelle, mais utile pour le débogage
-    debug
-}
-
-# Cette configuration s'applique à votre service
 :8080 {
-    # La ligne la plus importante : on autorise les scripts "inline"
+    # Cette ligne autorise les scripts écrits directement dans le HTML
     header Content-Security-Policy "script-src 'self' 'unsafe-inline';"
 
-    # On indique où se trouvent les fichiers publics de votre projet
-    # Si votre application principale est dans un dossier "public", décommentez la ligne suivante
-    # root * /app/public
-
-    # On active le serveur PHP
+    # Active le serveur PHP
     php_server
 }
