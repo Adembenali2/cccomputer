@@ -17,7 +17,7 @@ unset($_SESSION['login_error']);
         <img src="../assets/logos/logo.png" alt="Logo CCComputer" class="login-logo">
         <div class="login-title">Connexion à CCComputer</div>
 
-        <form class="login-form" action="/cccomputer/source/connexion/login_process.php" method="post" autocomplete="off">
+        <form class="login-form" action="/source/connexion/login_process.php" method="post" ...>
         <div class="login-fields">
                 <div>
                     <label for="email">Adresse e-mail</label>
