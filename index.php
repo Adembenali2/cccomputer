@@ -1,12 +1,4 @@
 <?php
-require 'db.php';
-
-if (!$pdo) {
-    // Connexion à la base impossible
-    error_log("Base de données non disponible pour index.php");
-    // Tu peux afficher un message générique ou continuer sans la base
-}
-
 // NOUVELLE PARTIE PHP : DÉFINIR LA DESTINATION
 // Cette page est maintenant publique, on ne met plus "auth.php" ici.
 

@@ -1,12 +1,12 @@
 <?php
-// db.php - Version stable pour Railway (production + debug léger)
+// db.php
 
-// Récupération des variables d'environnement
-$host = getenv('MYSQLHOST');
-$db   = getenv('MYSQLDATABASE');
-$user = getenv('MYSQLUSER');
-$pass = getenv('MYSQLPASSWORD');
-$port = getenv('MYSQLPORT') ?: '3306'; // défaut 3306 si non défini
+// Charger les variables d'environnement (local ou Railway)
+$host = getenv('MYSQLHOST') ?: '127.0.0.1';
+$db   = getenv('MYSQLDATABASE') ?: 'camsoncccomputer';
+$user = getenv('MYSQLUSER') ?: 'root';
+$pass = getenv('MYSQLPASSWORD') ?: '';
+$port = getenv('MYSQLPORT') ?: '3306';
 
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -14,13 +14,20 @@ $options = [
     PDO::ATTR_EMULATE_PREPARES   => false,
 ];
 
-// Connexion PDO
-$pdo = null;
+// Affichage des variables pour debug (retirer en production)
+echo "<pre>";
+echo "Host: $host\n";
+echo "DB: $db\n";
+echo "User: $user\n";
+echo "Port: $port\n";
+echo "</pre>";
+
 try {
     $pdo = new PDO("mysql:host=$host;port=$port;dbname=$db;charset=utf8mb4", $user, $pass, $options);
+    echo "<p style='color:green;'>Connexion réussie !</p>";
 } catch (PDOException $e) {
-    // Écrire l'erreur dans les logs Railway (ne pas afficher à l'utilisateur)
-    error_log('Erreur PDO : ' . $e->getMessage());
-    // Pour éviter de crasher le container, on continue sans exit
-    $pdo = null;
+    echo "<p style='color:red;'>Erreur de connexion à la base de données :</p>";
+    echo "<pre>" . $e->getMessage() . "</pre>";
+    exit;
 }
+?>
