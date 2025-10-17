@@ -1,0 +1,181 @@
+/* ===============================
+   Mise en page (alignée dashboard)
+   =============================== */
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.page-header { margin-bottom: 2rem; }
+
+.page-title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* ===============================
+   Formulaire de filtres (auto)
+   =============================== */
+.filtre-form {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: .75rem 1rem;
+  align-items: end;
+}
+
+.filtre-form > div { display: flex; flex-direction: column; }
+
+.filtre-form label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.filtre-form input[type="text"],
+.filtre-form input[type="date"] {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
+}
+
+.filtre-form input[type="text"]:focus,
+.filtre-form input[type="date"]:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.30);
+}
+
+/* États “aucun résultat” */
+.aucun,
+.aucun-resultat {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+}
+
+/* ===============================
+   Tableau desktop
+   =============================== */
+.table-responsive,
+.table-container {
+  overflow-x: auto;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-table thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  background: var(--bg-primary);
+  position: sticky; /* entête collante */
+  top: 0;
+  z-index: 1;
+}
+
+.history-table th,
+.history-table td {
+  padding: 0.70rem 0.9rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+}
+
+.history-table tbody tr:last-child td { border-bottom: none; }
+
+.history-table tbody tr:hover {
+  background-color: var(--bg-tertiary);
+}
+
+/* ===============================
+   Liste mobile (cartes)
+   =============================== */
+.history-list {
+  display: none; /* visible seulement sur mobile */
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.history-item {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-sm);
+  word-break: break-word; /* éviter le débordement de texte */
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: .75rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.item-title { font-weight: 700; color: var(--text-primary); }
+.item-date  { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; }
+
+.item-body  { display: grid; gap: 0.5rem; }
+
+.item-detail {
+  display: grid;
+  grid-template-columns: 92px 1fr; /* label + valeur */
+  gap: .5rem;
+}
+.item-detail .label { font-weight: 600; color: var(--text-secondary); }
+.item-detail .value { color: var(--text-primary); }
+
+/* ===============================
+   Responsivité
+   =============================== */
+@media (max-width: 768px) {
+  .filtre-form {
+    grid-template-columns: 1fr; /* champs empilés */
+    gap: .6rem;
+  }
+
+  /* Sur mobile : montrer les cartes, cacher le tableau */
+  .history-table { display: none; }
+  .history-list  { display: block; }
+
+  /* Ajustements lisibilité mobile */
+  .item-detail { grid-template-columns: 80px 1fr; }
+  .item-date { font-size: 0.8rem; }
+}
+
+/* ===============================
+   Accessibilité
+   =============================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
