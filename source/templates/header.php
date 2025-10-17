@@ -1,6 +1,5 @@
 <?php
 // --- header.php sécurisé ---
-// Ne modifie PAS $_SESSION['user_id'], utilise plutôt les infos de la session réelle
 $csrf = $_SESSION['csrf_token'] ?? '';
 $isAdmin = $_SESSION['emploi'] === 'Administrateur';  // exemple
 $canCommercial = in_array($_SESSION['emploi'] ?? '', ['Commercial', 'Administrateur']);
