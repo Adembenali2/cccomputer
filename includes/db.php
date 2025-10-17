@@ -1,32 +1,21 @@
 <?php
-// --- DÉBOGAGE ---
-// Affiche les variables d'environnement pour vérifier ce que PHP reçoit vraiment.
-// Copiez et collez ce code pour remplacer tout le contenu de db.php
-
-header('Content-Type: text/plain; charset=utf-8');
-
-echo "--- Débogage des variables d'environnement --- \n\n";
-
+// Connexion PDO adaptée pour Railway
 $host = getenv('MYSQLHOST');
-$port = getenv('MYSQLPORT');
+$db   = getenv('MYSQLDATABASE');
 $user = getenv('MYSQLUSER');
 $pass = getenv('MYSQLPASSWORD');
-$db   = getenv('MYSQLDATABASE');
+$port = getenv('MYSQLPORT');
 
-echo "Valeur de MYSQLHOST: ";
-var_dump($host);
+$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES   => false,
+];
 
-echo "\nValeur de MYSQLPORT: ";
-var_dump($port);
-
-echo "\nValeur de MYSQLUSER: ";
-var_dump($user);
-
-echo "\nValeur de MYSQLPASSWORD (est-elle présente ?): ";
-var_dump($pass !== false && $pass !== '');
-
-echo "\nValeur de MYSQLDATABASE: ";
-var_dump($db);
-
-exit; // On arrête le script ici pour ne pas tenter la connexion.
+try {
+    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$db;charset=utf8mb4", $user, $pass, $options);
+} catch (PDOException $e) {
+    error_log('Erreur PDO : ' . $e->getMessage());
+    exit('Erreur de connexion à la base de données.');
+}
 ?>
