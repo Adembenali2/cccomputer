@@ -1,9 +1,10 @@
 <?php
-// Connexion PDO à la base Copiercamson
-$host = 'localhost';
-$db   = 'camsoncccomputer'; // Nom de la base de données
-$user = 'root'; // à adapter si nécessaire
-$pass = '';     // à ne jamais laisser vide en production
+// Connexion PDO adaptée pour Railway
+$host = getenv('MYSQLHOST');
+$db   = getenv('MYSQLDATABASE');
+$user = getenv('MYSQLUSER');
+$pass = getenv('MYSQLPASSWORD');
+$port = getenv('MYSQLPORT'); // Railway fournit aussi un port
 
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -12,7 +13,8 @@ $options = [
 ];
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $pass, $options);
+    // La chaîne de connexion est mise à jour pour inclure le port
+    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$db;charset=utf8mb4", $user, $pass, $options);
 } catch (PDOException $e) {
     // En production, évitez d'afficher les messages d'erreur détaillés
     error_log('Erreur PDO : ' . $e->getMessage()); // Enregistre l'erreur dans le journal serveur
