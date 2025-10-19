@@ -7,5 +7,8 @@ RUN docker-php-ext-install pdo pdo_mysql
 # Étape 3: On copie tous les fichiers de notre projet dans le dossier public du serveur
 COPY . /var/www/html/
 
-# Étape 4 (NOUVELLE LIGNE) : On donne la permission au serveur Apache de lire et écrire les fichiers
+# Étape 4 (NOUVELLE LIGNE) : On crée le dossier des sessions et on donne les permissions à Apache
+RUN mkdir -p /var/lib/php/sessions && chown -R www-data:www-data /var/lib/php/sessions
+
+# Étape 5: On donne la permission au serveur Apache de lire et écrire les fichiers de l'application
 RUN chown -R www-data:www-data /var/www/html
