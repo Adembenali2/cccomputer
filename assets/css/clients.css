@@ -8,11 +8,13 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  /* éviter la coupure des colonnes sur PC : */
+  overflow-x: auto;
 }
 
 .tbl-photocopieurs {
   width: 100%;
+  min-width: 1020px; /* garantit la présence de toutes les colonnes */
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -101,6 +103,10 @@
     left: -9999px;
     height: 0;
     overflow: hidden;
+  }
+
+  .tbl-photocopieurs {
+    min-width: 0;
   }
 
   .tbl-photocopieurs,

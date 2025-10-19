@@ -5,9 +5,9 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
 /**
- * On récupère : 1 ligne par photocopieur (mac_norm) = dernier relevé,
- * + les machines connues dans photocopieurs_clients même sans relevé.
- * Aucune vue SQL requise, on utilise un CTE + window function (MariaDB 10.4+).
+ * 1 ligne par photocopieur (mac_norm) = dernier relevé.
+ * On couvre aussi les machines mappées sans relevé.
+ * Important : COALESCE sur SerialNumber et MacAddress pour fiabiliser l'affichage.
  */
 $sql = "
 WITH v_compteur_last AS (
@@ -20,18 +20,17 @@ v_last AS (
   FROM v_compteur_last
   WHERE rn = 1
 ),
--- Bloc 1 : machines ayant un relevé (dernier)
 blk_releve AS (
   SELECT
-    COALESCE(pc.mac_norm, v.mac_norm)        AS mac_norm,
-    pc.SerialNumber,
-    pc.MacAddress,
+    COALESCE(pc.mac_norm, v.mac_norm)                                 AS mac_norm,
+    COALESCE(pc.SerialNumber, v.SerialNumber)                          AS SerialNumber,
+    COALESCE(pc.MacAddress,  v.MacAddress)                             AS MacAddress,
     v.Model,
     v.Nom,
-    v.`Timestamp`                            AS last_ts,
+    v.`Timestamp`                                                      AS last_ts,
     v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
     v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
-    c.id                                     AS client_id,
+    c.id                                                               AS client_id,
     c.numero_client,
     c.raison_sociale,
     c.nom_dirigeant,
@@ -41,7 +40,6 @@ blk_releve AS (
   LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = v.mac_norm
   LEFT JOIN clients c               ON c.id = pc.id_client
 ),
--- Bloc 2 : machines mappées sans aucun relevé
 blk_sans_releve AS (
   SELECT
     pc.mac_norm,
@@ -124,8 +122,8 @@ function pctOrDash($v): string {
                         <th style="min-width:220px;">Client</th>
                         <th>Dirigeant</th>
                         <th>Téléphone</th>
-                        <th style="min-width:280px;">Photocopieur</th>
-                        <th style="min-width:240px;">Toners</th>
+                        <th style="min-width:300px;">Photocopieur</th>
+                        <th style="min-width:260px;">Toners</th>
                         <th>Total BW</th>
                         <th>Total Color</th>
                         <th>Dernier relevé</th>
@@ -142,8 +140,8 @@ function pctOrDash($v): string {
                     $mac     = $r['MacAddress'] ?: ($r['mac_norm'] ?? '');
                     $nom     = $r['Nom'] ?: '';
                     $lastTs  = $r['last_ts'] ? date('Y-m-d H:i', strtotime($r['last_ts'])) : '—';
-                    $totBW   = is_null($r['TotalBW'])    ? '—' : (int)$r['TotalBW'];
-                    $totCol  = is_null($r['TotalColor']) ? '—' : (int)$r['TotalColor'];
+                    $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
+                    $totCol  = is_null($r['TotalColor']) ? '—' : number_format((int)$r['TotalColor'], 0, ',', ' ');
 
                     $tk = $r['TonerBlack'];   $tk = is_null($tk) ? null : max(0, min(100, (int)$tk));
                     $tc = $r['TonerCyan'];    $tc = is_null($tc) ? null : max(0, min(100, (int)$tc));
@@ -203,8 +201,8 @@ function pctOrDash($v): string {
                             </div>
                         </td>
 
-                        <td class="td-metric" data-th="Total BW"><?= h((string)$totBW) ?></td>
-                        <td class="td-metric" data-th="Total Color"><?= h((string)$totCol) ?></td>
+                        <td class="td-metric" data-th="Total BW"><?= h($totBW) ?></td>
+                        <td class="td-metric" data-th="Total Color"><?= h($totCol) ?></td>
                         <td class="td-date" data-th="Dernier relevé"><?= h($lastTs) ?></td>
                     </tr>
                 <?php endforeach; ?>
