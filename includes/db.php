@@ -1,15 +1,12 @@
 <?php
-// Connexion PDO à la base de données sur Railway
-
-// On récupère les informations de connexion depuis les variables d'environnement
-// que vous configurerez dans le tableau de bord Railway.
+// On récupère les identifiants depuis les variables d'environnement de Railway
 $host = getenv('MYSQLHOST');
+$port = getenv('MYSQLPORT');
 $db   = getenv('MYSQLDATABASE');
 $user = getenv('MYSQLUSER');
 $pass = getenv('MYSQLPASSWORD');
-$port = getenv('MYSQLPORT'); // Railway utilise un port spécifique
 
-// On s'assure que le port est bien inclus dans la chaîne de connexion (DSN)
+// La chaîne de connexion (DSN) doit inclure le port, ce qui est crucial pour PDO sur Railway
 $dsn = "mysql:host=$host;port=$port;dbname=$db;charset=utf8mb4";
 
 $options = [
@@ -19,11 +16,11 @@ $options = [
 ];
 
 try {
+    // On utilise la nouvelle chaîne de connexion et les identifiants de Railway
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (PDOException $e) {
-    // Enregistre l'erreur dans les logs de Railway, sans l'afficher à l'utilisateur
-    error_log('Erreur PDO : ' . $e->getMessage()); 
-    // Affiche un message générique à l'utilisateur
-    exit('Erreur de connexion à la base de données. Veuillez réessayer plus tard.');
+    // En production, évitez d'afficher les messages d'erreur détaillés
+    error_log('Erreur PDO : ' . $e->getMessage()); // Enregistre l'erreur dans le journal serveur
+    exit('Erreur de connexion à la base de données.');
 }
 ?>
