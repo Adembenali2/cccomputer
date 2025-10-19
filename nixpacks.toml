@@ -1,2 +1,0 @@
-[phases.setup]
-nixPkgs = ["pkgs.php.extensions.pdo_mysql"]
