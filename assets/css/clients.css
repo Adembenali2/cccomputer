@@ -14,7 +14,7 @@
 }
 
 .tbl-photocopieurs {
-  width: 100%;
+  width: 150%;
   /* largeur mini optimisée pour afficher toutes les colonnes */
   min-width: 1280px;
   border-collapse: separate;
@@ -124,7 +124,7 @@
   .tbl-photocopieurs tr,
   .tbl-photocopieurs td {
     display: block;
-    width: 50%;
+    width: 100%;
   }
 
   .tbl-photocopieurs tbody tr {
