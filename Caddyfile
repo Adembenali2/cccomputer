@@ -1,6 +1,14 @@
 :8080
 
-root * /app/public
+root * /app
 encode zstd gzip
 php_server
 file_server
+
+# (facultatif) front controller si tu veux que toute URL non-fichier aille vers index.php
+# @notFile { not file }
+# rewrite @notFile /index.php
+
+# (facultatif) cacher des fichiers sensibles
+@hidden { path /.env* /Caddyfile /Dockerfile }
+respond @hidden 404
