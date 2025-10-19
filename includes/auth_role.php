@@ -1,31 +1,37 @@
 <?php
 // /includes/auth_role.php (VERSION SÉCURISÉE REDIRECTION)
 
-// Inclure auth pour la session
-require_once __DIR__ . '/auth.php';
+// Inclure le fichier auth pour la session
+require_once __DIR__ . '/auth.php'; // Vérifie que la session est démarrée
 
 /**
- * Vérifie si l'utilisateur a un des rôles autorisés.
- * Si non, redirige vers la page de redirection.
+ * Vérifie si l'utilisateur a l'un des rôles autorisés.
+ * Si non, redirige vers la page de redirection avec un code 302.
  *
- * @param array $allowed_roles
+ * @param array $allowed_roles Liste des rôles autorisés
  */
 function authorize_roles(array $allowed_roles) {
+    // Vérification que l'emploi est bien chargé depuis la session
     global $emploi;
 
-    if (!in_array($emploi, $allowed_roles, true)) {
-        // Redirection vers page d'accès refusé
-        header('Location: /cccomputer/redirection/acces_interdit.php');
+    // Si l'emploi est vide ou non valide, rediriger
+    if (empty($emploi) || !in_array($emploi, $allowed_roles, true)) {
+        // Redirection vers la page d'accès interdit
+        header('Location: /cccomputer/redirection/acces_interdit.php', true, 302);
         exit;
     }
 }
 
-// Accès réservé aux administrateurs
+/**
+ * Accès réservé aux administrateurs
+ */
 function requireAdmin() {
     return authorize_roles(['Administrateur']);
 }
 
-// Accès réservé aux commerciaux + admins
+/**
+ * Accès réservé aux commerciaux et administrateurs
+ */
 function requireCommercial() {
     return authorize_roles(['Commercial', 'Administrateur']);
 }

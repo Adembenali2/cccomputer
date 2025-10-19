@@ -1,36 +1,46 @@
 <?php
-// /public/profil.php (VERSION FINALE COMPLÈTE ET CORRIGÉE)
+// /public/profil.php (VERSION CORRIGÉE)
 
 // ÉTAPE 1 : SÉCURITÉ D'ABORD
-require_once __DIR__ . '/../includes/auth_role.php';
-authorize_roles(['Admin', 'Dirigeant']);
+require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
+authorize_roles(['Administrateur', 'Dirigeant']);           // rôles cohérents avec le reste
+require_once __DIR__ . '/../includes/db.php';               // $pdo (PDO connecté)
+
+// Contexte utilisateur courant (pour protections)
+$currentUser = [
+    'id'    => (int)($_SESSION['user_id'] ?? 0),
+    'Emploi'=> (string)($_SESSION['emploi'] ?? '')
+];
 
 // ========================================================================
 // GESTION DES REQUÊTES POST (Formulaires) - Pattern PRG
 // ========================================================================
-
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
-$ROLES = ['Chargé relation clients', 'Livreur', 'Technicien', 'Secrétaire', 'Dirigeant', 'Admin'];
+// Rôles autorisés dans le champ Emploi
+$ROLES = ['Chargé relation clients', 'Livreur', 'Technicien', 'Secrétaire', 'Dirigeant', 'Administrateur'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+    // CSRF
+    if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'])) {
         $_SESSION['flash'] = ['type' => 'error', 'msg' => "Erreur de sécurité. Veuillez réessayer."];
-        header('Location: profil.php');
+        header('Location: /public/profil.php');
         exit;
     }
 
     $action = $_POST['action'] ?? '';
-    
+
     try {
         if ($action === 'create') {
-            $email = trim($_POST['Email'] ?? '');
-            $pwd = (string)($_POST['password'] ?? '');
-            $nom = trim($_POST['nom'] ?? '');
+            $email  = trim($_POST['Email'] ?? '');
+            $pwd    = (string)($_POST['password'] ?? '');
+            $nom    = trim($_POST['nom'] ?? '');
             $prenom = trim($_POST['prenom'] ?? '');
             $emploi = trim($_POST['Emploi'] ?? '');
-            $debut = trim($_POST['date_debut'] ?? '');
+            $debut  = trim($_POST['date_debut'] ?? '');
+            $tel    = trim($_POST['telephone'] ?? '');
+            $statut = ($_POST['statut'] ?? 'actif') === 'inactif' ? 'inactif' : 'actif';
 
             if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new RuntimeException("Email invalide.");
             if (strlen($pwd) < 8) throw new RuntimeException("Mot de passe trop court (min. 8 caractères).");
@@ -38,32 +48,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!in_array($emploi, $ROLES, true)) throw new RuntimeException("Rôle (Emploi) invalide.");
             if ($debut === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $debut)) throw new RuntimeException("Date de début invalide.");
 
-            $hash = password_hash($pwd, PASSWORD_BCRYPT);
-            $stmt = $pdo->prepare("INSERT INTO utilisateurs (Email, password, nom, prenom, telephone, Emploi, statut, date_debut) VALUES (?,?,?,?,?,?,?,?)");
-            $stmt->execute([$email, $hash, $nom, $prenom, trim($_POST['telephone'] ?? ''), $emploi, $_POST['statut'] ?? 'actif', $debut]);
+            $hash = password_hash($pwd, PASSWORD_BCRYPT, ['cost' => 10]);
+            $stmt = $pdo->prepare("
+                INSERT INTO utilisateurs (Email, password, nom, prenom, telephone, Emploi, statut, date_debut)
+                VALUES (?,?,?,?,?,?,?,?)
+            ");
+            $stmt->execute([$email, $hash, $nom, $prenom, $tel, $emploi, $statut, $debut]);
+
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur créé avec succès."];
         }
         elseif ($action === 'update') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('Identifiant manquant.');
-            // Protection : empêche un admin de changer son propre rôle
-            if ($id === $currentUser['id'] && $_POST['Emploi'] !== $currentUser['Emploi']) throw new RuntimeException('Vous ne pouvez pas modifier votre propre rôle.');
-            
-            // ... (vous pouvez ajouter les autres validations ici si besoin) ...
 
-            $stmt = $pdo->prepare("UPDATE utilisateurs SET Email=?, nom=?, prenom=?, telephone=?, Emploi=?, statut=?, date_debut=? WHERE id=?");
-            $stmt->execute([$_POST['Email'], $_POST['nom'], $_POST['prenom'], $_POST['telephone'], $_POST['Emploi'], $_POST['statut'], $_POST['date_debut'], $id]);
+            // Empêche un admin/dirigeant de changer son propre rôle
+            if ($id === $currentUser['id'] && isset($_POST['Emploi']) && $_POST['Emploi'] !== $currentUser['Emploi']) {
+                throw new RuntimeException('Vous ne pouvez pas modifier votre propre rôle.');
+            }
+
+            $email  = trim($_POST['Email'] ?? '');
+            $nom    = trim($_POST['nom'] ?? '');
+            $prenom = trim($_POST['prenom'] ?? '');
+            $tel    = trim($_POST['telephone'] ?? '');
+            $emploi = trim($_POST['Emploi'] ?? '');
+            $statut = ($_POST['statut'] ?? 'actif') === 'inactif' ? 'inactif' : 'actif';
+            $debut  = trim($_POST['date_debut'] ?? '');
+
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new RuntimeException("Email invalide.");
+            if ($nom === '' || $prenom === '') throw new RuntimeException("Nom et prénom sont requis.");
+            if (!in_array($emploi, $ROLES, true)) throw new RuntimeException("Rôle (Emploi) invalide.");
+            if ($debut === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $debut)) throw new RuntimeException("Date de début invalide.");
+
+            $stmt = $pdo->prepare("
+                UPDATE utilisateurs
+                   SET Email=?, nom=?, prenom=?, telephone=?, Emploi=?, statut=?, date_debut=?
+                 WHERE id=?
+            ");
+            $stmt->execute([$email, $nom, $prenom, $tel, $emploi, $statut, $debut, $id]);
+
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur mis à jour."];
         }
         elseif ($action === 'toggle') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('Identifiant manquant.');
-            // Protection : empêche un admin de se désactiver
+            // Empêche de se désactiver soi-même
             if ($id === $currentUser['id']) throw new RuntimeException('Vous ne pouvez pas désactiver votre propre compte.');
 
-            $new = ($_POST['to'] ?? 'actif') === 'inactif' ? 'inactif' : 'actif';
+            $new = (($_POST['to'] ?? 'actif') === 'inactif') ? 'inactif' : 'actif';
             $stmt = $pdo->prepare("UPDATE utilisateurs SET statut=? WHERE id=?");
             $stmt->execute([$new, $id]);
+
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut modifié en {$new}."];
         }
         elseif ($action === 'resetpwd') {
@@ -72,24 +106,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $newpwd = (string)($_POST['new_password'] ?? '');
             if (strlen($newpwd) < 8) throw new RuntimeException('Mot de passe trop court (min. 8).');
-            
-            $hash = password_hash($newpwd, PASSWORD_BCRYPT);
+
+            $hash = password_hash($newpwd, PASSWORD_BCRYPT, ['cost' => 10]);
             $stmt = $pdo->prepare("UPDATE utilisateurs SET password=? WHERE id=?");
             $stmt->execute([$hash, $id]);
+
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Mot de passe réinitialisé."];
         }
     } catch (Throwable $e) {
         $_SESSION['flash'] = ['type' => 'error', 'msg' => $e->getMessage()];
     }
 
-    header('Location: profil.php');
+    header('Location: /public/profil.php');
     exit;
 }
 
 // ========================================================================
 // PRÉPARATION DE L'AFFICHAGE (Requêtes GET)
 // ========================================================================
-
 function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 $CSRF = $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 
@@ -101,20 +135,20 @@ $params = [];
 $where  = [];
 
 if ($search !== '') {
-    // AMÉLIORATION : Un seul placeholder pour la recherche, c'est plus simple.
     $where[] = "(Email LIKE :q OR nom LIKE :q OR prenom LIKE :q OR telephone LIKE :q)";
-    $params['q'] = "%{$search}%";
+    $params[':q'] = "%{$search}%";
 }
 if ($status !== '' && in_array($status, ['actif', 'inactif'], true)) {
     $where[] = "statut = :statut";
-    $params['statut'] = $status;
+    $params[':statut'] = $status;
 }
 if ($role !== '' && in_array($role, $ROLES, true)) {
     $where[] = "Emploi = :role";
-    $params['role'] = $role;
+    $params[':role'] = $role;
 }
 
-$sql = "SELECT id, Email, nom, prenom, telephone, Emploi, statut, date_debut, date_creation, date_modification FROM utilisateurs";
+$sql = "SELECT id, Email, nom, prenom, telephone, Emploi, statut, date_debut, date_creation, date_modification
+        FROM utilisateurs";
 if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
 $sql .= ' ORDER BY nom ASC, prenom ASC LIMIT 300';
 
@@ -122,7 +156,7 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$editId = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
+$editId  = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
 $editing = null;
 if ($editId > 0) {
     $s = $pdo->prepare("SELECT * FROM utilisateurs WHERE id=?");
@@ -136,8 +170,9 @@ if ($editId > 0) {
     <meta charset="UTF-8">
     <title>Gestion des utilisateurs</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/cccomputer/assets/css/main.css">
-    <link rel="stylesheet" href="/cccomputer/assets/css/profil.css">
+    <!-- chemins absolus -->
+    <link rel="stylesheet" href="/assets/css/main.css">
+    <link rel="stylesheet" href="/assets/css/profil.css">
 </head>
 <body>
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -145,15 +180,14 @@ if ($editId > 0) {
 <main class="page-container page-profil">
     <header class="page-header">
         <h1 class="page-title">Gestion des utilisateurs</h1>
-        <p class="page-sub">Page réservée aux administrateurs pour créer, modifier et activer/désactiver des comptes.</p>
+        <p class="page-sub">Page réservée aux administrateurs/dirigeants pour créer, modifier et activer/désactiver des comptes.</p>
     </header>
 
-    <?php // CORRECTION : On vérifie que $flash n'est pas null avant d'accéder à sa clé 'type'.
-    if ($flash && isset($flash['type'])): ?>
-        <div class="flash <?= h($flash['type']) ?>"><?= h($flash['msg']) ?></div>
+    <?php if ($flash && isset($flash['type'])): ?>
+        <div class="flash <?= h($flash['type']) ?>"><?= h($flash['msg'] ?? '') ?></div>
     <?php endif; ?>
 
-    <form class="filtre-form" method="get" action="profil.php" novalidate>
+    <form class="filtre-form" method="get" action="/public/profil.php" novalidate>
         <div class="filter-bar">
             <div class="filter-field grow">
                 <input class="filter-input" type="search" id="q" name="q" value="<?= h($search) ?>" placeholder="Rechercher (email, nom, téléphone…)" />
@@ -169,7 +203,7 @@ if ($editId > 0) {
             <div class="filter-field">
                 <select class="filter-select" id="statut" name="statut" aria-label="Statut">
                     <option value="">Statut : Tous</option>
-                    <option value="actif" <?= $status==='actif'?'selected':'' ?>>Actif</option>
+                    <option value="actif"   <?= $status==='actif'  ?'selected':'' ?>>Actif</option>
                     <option value="inactif" <?= $status==='inactif'?'selected':'' ?>>Inactif</option>
                 </select>
             </div>
@@ -182,7 +216,7 @@ if ($editId > 0) {
     <section class="grid-2cols">
         <div class="panel">
             <h2 class="panel-title">Créer un utilisateur</h2>
-            <form class="standard-form" method="post" action="profil.php" autocomplete="off">
+            <form class="standard-form" method="post" action="/public/profil.php" autocomplete="off">
                 <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
                 <input type="hidden" name="action" value="create">
                 <label>Email<input type="email" name="Email" required></label>
@@ -234,8 +268,8 @@ if ($editId > 0) {
                                 <td data-label="Statut"><span class="badge <?= $u['statut']==='actif'?'success':'muted' ?>"><?= h($u['statut']) ?></span></td>
                                 <td data-label="Début"><?= h($u['date_debut']) ?></td>
                                 <td data-label="Actions" class="actions">
-                                    <a class="btn btn-primary" href="profil.php?edit=<?= (int)$u['id'] ?>">Modifier</a>
-                                    <form method="post" action="profil.php" class="inline">
+                                    <a class="btn btn-primary" href="/public/profil.php?edit=<?= (int)$u['id'] ?>">Modifier</a>
+                                    <form method="post" action="/public/profil.php" class="inline">
                                         <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
                                         <input type="hidden" name="action" value="toggle">
                                         <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
@@ -257,7 +291,7 @@ if ($editId > 0) {
     <?php if ($editing): ?>
         <section class="panel edit-panel" id="editPanel">
             <h2 class="panel-title">Modifier l'utilisateur #<?= (int)$editing['id'] ?></h2>
-            <form class="standard-form" method="post" action="profil.php?edit=<?= (int)$editing['id'] ?>">
+            <form class="standard-form" method="post" action="/public/profil.php?edit=<?= (int)$editing['id'] ?>">
                 <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
                 <input type="hidden" name="action" value="update">
                 <input type="hidden" name="id" value="<?= (int)$editing['id'] ?>">
@@ -278,19 +312,19 @@ if ($editId > 0) {
                     </label>
                     <label>Statut
                         <select name="statut">
-                            <option value="actif" <?= ($editing['statut'] ?? '')==='actif'?'selected':'' ?>>Actif</option>
+                            <option value="actif"   <?= ($editing['statut'] ?? '')==='actif'?'selected':'' ?>>Actif</option>
                             <option value="inactif" <?= ($editing['statut'] ?? '')==='inactif'?'selected':'' ?>>Inactif</option>
                         </select>
                     </label>
                 </div>
                 <label>Date de début<input type="date" name="date_debut" value="<?= h($editing['date_debut']) ?>" required></label>
                 <button class="fiche-action-btn" type="submit">Enregistrer</button>
-                <a class="link-reset" href="profil.php">Fermer</a>
+                <a class="link-reset" href="/public/profil.php">Fermer</a>
             </form>
 
             <hr class="sep">
 
-            <form class="standard-form danger" method="post" action="profil.php?edit=<?= (int)$editing['id'] ?>" autocomplete="off">
+            <form class="standard-form danger" method="post" action="/public/profil.php?edit=<?= (int)$editing['id'] ?>" autocomplete="off">
                 <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
                 <input type="hidden" name="action" value="resetpwd">
                 <input type="hidden" name="id" value="<?= (int)$editing['id'] ?>">

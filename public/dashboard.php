@@ -1,17 +1,11 @@
 <?php
+// /public/dashboard.php
+
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../source/templates/header.php';
-
 
 // ==== Imports SFTP désactivés ====
 $import_status = 'ok'; // 'ok' ou 'off'
-
-// ==================================================================
-// DÉBUT DES DONNÉES STATIQUES (fausses données pour le front-end)
-// ==================================================================
-
-
 
 // ==================================================================
 // Historique des actions (requêtes SQL réelles)
@@ -19,13 +13,13 @@ $import_status = 'ok'; // 'ok' ou 'off'
 // 1. Nombre total d'historiques
 try {
     $stmt = $pdo->query("SELECT COUNT(*) FROM historique");
-    $nHistorique = $stmt->fetchColumn();
+    $nHistorique = (string)$stmt->fetchColumn();
 } catch (PDOException $e) {
     error_log("Erreur de requête SQL (nHistorique) : " . $e->getMessage());
     $nHistorique = 'Erreur';
 }
 
-// 2. Historique par jour
+// 2. Historique par jour (si tu l’utilises côté JS/graph)
 try {
     $sql = "SELECT DATE(date_action) AS date, COUNT(*) AS total_historique
             FROM historique
@@ -39,7 +33,7 @@ try {
     $historique_par_jour = [];
 }
 
-// Compteurs demandés
+// Compteurs “dummy”
 $nb_paiements_en_attente = 3;
 $nb_sav_a_traiter        = 5;
 $nb_livraisons_a_faire   = 8;
@@ -82,10 +76,6 @@ $clients = [
         'email'            => 'sophie.petit@fournil.com'
     ]
 ];
-
-// ==================================================================
-// FIN DES DONNÉES STATIQUES
-// ==================================================================
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -94,8 +84,9 @@ $clients = [
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Dashboard - CCComputer</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css" />
-    <script src="../assets/js/dashboard.js" defer></script>
+    <!-- Chemins absolus pour éviter les surprises -->
+    <link rel="stylesheet" href="/assets/css/dashboard.css" />
+    <script src="/assets/js/dashboard.js" defer></script>
     <style>
         /* Notification d’import (maintenue ici car liée au PHP) */
         #importNotif {
@@ -125,11 +116,9 @@ $clients = [
         .card-count.count-ok  { color: #16a34a; font-weight: 700; } /* vert si 0 impayé */
     </style>
 </head>
-<?php
-// ✅ MODIFICATION : Le header est inclus ici, juste au début du corps de la page.
-require_once __DIR__ . '/../source/templates/header.php'; 
-?>
 <body class="page-dashboard">
+    <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+
     <!-- Notification import -->
     <div
         id="importNotif"
@@ -266,7 +255,7 @@ require_once __DIR__ . '/../source/templates/header.php';
                     </svg>
                 </div>
                 <h3 class="card-title">Historiques</h3>
-                <p class="card-count"><?= htmlspecialchars($nHistorique); ?></p>
+                <p class="card-count"><?= htmlspecialchars($nHistorique, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
         </div>
     </div>

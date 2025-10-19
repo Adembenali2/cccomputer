@@ -4,7 +4,7 @@
 // ÉTAPE 1 : SÉCURITÉ D'ABORD
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_roles(['Admin', 'Dirigeant']);
-require_once __DIR__ . '/../includes/db.php';           // Doit fournir $pdo (PDO connecté)
+require_once __DIR__ . '/../includes/db.php'; // Doit fournir $pdo (PDO connecté)
 
 
 // ====== Lecture des filtres GET ======
