@@ -101,7 +101,7 @@ if (isset($_SESSION['user_id']) && $_SESSION['user_id'] > 0) {
 </head>
 <body>
     <div class="logo-container">
-        <img src="../assets/logos/logo.png" alt="Logo CCComputer" class="logo-img">
+        <img src="assets/logos/logo.png" alt="Logo CCComputer" class="logo-img">
     </div>
 </body>
 </html>
