@@ -126,7 +126,8 @@ function pctOrDash($v): string {
                         <th style="min-width:260px;">Toners</th>
                         <th>Total BW</th>
                         <th>Total Color</th>
-                        <th>Dernier relevé</th>
+                        <th style="min-width:160px;">Dernier relevé</th>
+
                     </tr>
                 </thead>
                 <tbody>

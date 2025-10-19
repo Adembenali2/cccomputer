@@ -2,26 +2,23 @@
    Clients / Photocopieurs (Desktop = table, Mobile = cartes)
    ========================================================= */
 
-/* ---------- Wrapper & Table (desktop) ---------- */
+/* Wrapper & Table (desktop) */
 .table-wrapper {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  /* important pour voir la dernière colonne sur PC */
+  /* éviter la coupure des colonnes sur PC : */
   overflow-x: auto;
-  overflow-y: hidden;
 }
 
 .tbl-photocopieurs {
   width: 100%;
-  /* largeur mini augmentée pour inclure la colonne Date */
-  min-width: 1460px;
+  min-width: 1020px; /* garantit la présence de toutes les colonnes */
   border-collapse: separate;
   border-spacing: 0;
 }
 
-/* En-têtes */
 .tbl-photocopieurs thead th {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
@@ -33,16 +30,6 @@
   white-space: nowrap;
 }
 
-/* Largeurs mini par colonne pour éviter l’écrasement */
-.tbl-photocopieurs thead th:nth-child(1) { min-width: 220px; }  /* Client */
-.tbl-photocopieurs thead th:nth-child(2) { min-width: 140px; }  /* Dirigeant */
-.tbl-photocopieurs thead th:nth-child(3) { min-width: 140px; }  /* Téléphone */
-.tbl-photocopieurs thead th:nth-child(4) { min-width: 300px; }  /* Photocopieur */
-.tbl-photocopieurs thead th:nth-child(5) { min-width: 260px; }  /* Toners */
-.tbl-photocopieurs thead th:nth-child(6) { min-width: 120px; }  /* Total BW */
-.tbl-photocopieurs thead th:nth-child(7) { min-width: 120px; }  /* Total Color */
-.tbl-photocopieurs thead th:nth-child(8) { min-width: 160px; }  /* Dernier relevé */
-
 .tbl-photocopieurs tbody td {
   padding: 0.75rem 0.85rem;
   border-bottom: 1px solid var(--border-color);
@@ -51,20 +38,7 @@
 
 .tbl-photocopieurs tbody tr:hover { background: var(--bg-secondary); }
 
-/* Option : garder la colonne Date visible en scroll horizontal */
-@media (min-width: 901px) {
-  .tbl-photocopieurs thead th:nth-child(8),
-  .tbl-photocopieurs tbody td:nth-child(8) {
-    position: sticky;
-    right: 0;
-    background: var(--bg-primary);
-    z-index: 1;
-  }
-  .tbl-photocopieurs thead th:nth-child(8) { border-left: 1px solid var(--border-color); }
-  .tbl-photocopieurs tbody td:nth-child(8) { border-left: 1px solid var(--border-color); }
-}
-
-/* ---------- Cellules de contenu ---------- */
+/* Cellules */
 .client-cell .client-raison { font-weight: 700; color: var(--text-primary); }
 .client-cell .client-num    { font-size: 0.8125rem; color: var(--text-muted); }
 
@@ -74,7 +48,7 @@
 .td-metric { font-weight: 700; text-align: right; white-space: nowrap; }
 .td-date   { white-space: nowrap; color: var(--text-secondary); }
 
-/* ---------- Toners (barres) ---------- */
+/* Toners (barres) */
 .toners {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -113,15 +87,17 @@
 
 [data-theme="dark"] .toner { border-color: #475569; }
 
-/* ---------- Bouton filtre (esthétique) ---------- */
-.filters-row .btn { color: var(--text-primary); }
+/* Filtre rapide (au-dessus du tableau) */
+.filters-row .btn {
+  color: var(--text-primary);
+}
 
 /* =========================================================
    Mode "Cartes" responsive (<= 900px)
    ========================================================= */
 @media (max-width: 900px) {
 
-  /* masquer l’en-tête et empiler en blocs */
+  /* masquer l’en-tête du tableau et empiler les lignes en blocs */
   .tbl-photocopieurs thead {
     position: absolute;
     left: -9999px;
@@ -129,7 +105,9 @@
     overflow: hidden;
   }
 
-  .tbl-photocopieurs { min-width: 0; }
+  .tbl-photocopieurs {
+    min-width: 0;
+  }
 
   .tbl-photocopieurs,
   .tbl-photocopieurs tbody,
@@ -155,30 +133,38 @@
     position: relative;
   }
 
-  .tbl-photocopieurs tbody td:last-child { border-bottom: none; }
+  .tbl-photocopieurs tbody td:last-child {
+    border-bottom: none;
+  }
 
-  /* label de la colonne via data-th */
+  /* Afficher le libellé de la colonne via data-th */
   .tbl-photocopieurs tbody td::before {
     content: attr(data-th);
     display: block;
     font-size: 0.76rem;
     color: var(--text-muted);
     margin-bottom: 0.2rem;
+    text-transform: none;
     letter-spacing: .02em;
   }
 
-  /* Toners en pleine largeur */
+  /* Toners : pleine largeur en une colonne (lisible) */
   .toners {
     grid-template-columns: 1fr;
     gap: 8px;
     min-width: 0;
   }
 
-  .td-metric, .td-date { text-align: left; white-space: normal; }
+  /* Metrics et dates : alignement gauche en mobile */
+  .td-metric,
+  .td-date {
+    text-align: left;
+    white-space: normal;
+  }
 }
 
 /* =========================================================
-   Petits écrans (<= 480px)
+   Petits écrans (<= 480px) : micro-ajustements
    ========================================================= */
 @media (max-width: 480px) {
   .machine-cell .machine-sub { font-size: 0.78rem; }
@@ -187,5 +173,7 @@
   .toner { height: 12px; }
   .toner em { font-size: 0.68rem; }
 
-  .filters-row input { font-size: 0.95rem !important; }
+  .filters-row input {
+    font-size: 0.95rem !important;
+  }
 }
