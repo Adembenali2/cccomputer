@@ -1,9 +1,9 @@
 <?php
 // ⚠️ Remplace ces valeurs par celles de ta base TablePlus
-$host = "TON_HOST";       // ex: db-host.tableplus.com
-$db   = "NOM_DE_LA_BASE";
-$user = "TON_UTILISATEUR";
-$pass = "TON_MOT_DE_PASSE";
+$host = "centerbeam.proxy.rlwy.net";       // ex: db-host.tableplus.com
+$db   = "railway";
+$user = "root";
+$pass = "ocvbjxUZXKiYImJyiIulveNRxtKAYWeT";
 
 // Connexion à MySQL
 $mysqli = new mysqli($host, $user, $pass, $db);
