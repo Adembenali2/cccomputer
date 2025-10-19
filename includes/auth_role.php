@@ -17,7 +17,7 @@ function authorize_roles(array $allowed_roles) {
     // Si l'emploi est vide ou non valide, rediriger
     if (empty($emploi) || !in_array($emploi, $allowed_roles, true)) {
         // Redirection vers la page d'accès interdit
-        header('Location: /cccomputer/redirection/acces_interdit.php', true, 302);
+        header('Location: /redirection/acces_interdit.php', true, 302);
         exit;
     }
 }

@@ -67,8 +67,8 @@ function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES,
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Tes feuilles de style existantes -->
-    <link rel="stylesheet" href="/cccomputer/assets/css/main.css">
-    <link rel="stylesheet" href="/cccomputer/assets/css/historique.css">
+    <link rel="stylesheet" href="/assets/css/main.css">
+    <link rel="stylesheet" href="/assets/css/historique.css">
 </head>
 <body>
 
