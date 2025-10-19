@@ -124,7 +124,7 @@
   .tbl-photocopieurs tr,
   .tbl-photocopieurs td {
     display: block;
-    width: 120%;
+    width: 80%;
   }
 
   .tbl-photocopieurs tbody tr {
