@@ -4,15 +4,75 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
-// ------------------------------------------------------------------
-// Récup : un seul relevé (le dernier) par photocopieur (mac_norm)
-// avec rattachement éventuel au client (sinon “— sans client —”)
-// ------------------------------------------------------------------
-$sql = "SELECT *
-        FROM v_photocopieurs_clients_last
-        ORDER BY
-          COALESCE(raison_sociale, '— sans client —') ASC,
-          COALESCE(SerialNumber, mac_norm) ASC";
+/**
+ * On récupère : 1 ligne par photocopieur (mac_norm) = dernier relevé,
+ * + les machines connues dans photocopieurs_clients même sans relevé.
+ * Aucune vue SQL requise, on utilise un CTE + window function (MariaDB 10.4+).
+ */
+$sql = "
+WITH v_compteur_last AS (
+  SELECT r.*,
+         ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+  FROM compteur_relevee r
+),
+v_last AS (
+  SELECT *
+  FROM v_compteur_last
+  WHERE rn = 1
+),
+-- Bloc 1 : machines ayant un relevé (dernier)
+blk_releve AS (
+  SELECT
+    COALESCE(pc.mac_norm, v.mac_norm)        AS mac_norm,
+    pc.SerialNumber,
+    pc.MacAddress,
+    v.Model,
+    v.Nom,
+    v.`Timestamp`                            AS last_ts,
+    v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
+    v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
+    c.id                                     AS client_id,
+    c.numero_client,
+    c.raison_sociale,
+    c.nom_dirigeant,
+    c.prenom_dirigeant,
+    c.telephone1
+  FROM v_last v
+  LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = v.mac_norm
+  LEFT JOIN clients c               ON c.id = pc.id_client
+),
+-- Bloc 2 : machines mappées sans aucun relevé
+blk_sans_releve AS (
+  SELECT
+    pc.mac_norm,
+    pc.SerialNumber,
+    pc.MacAddress,
+    NULL AS Model,
+    NULL AS Nom,
+    NULL AS last_ts,
+    NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
+    NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+    c.id AS client_id,
+    c.numero_client,
+    c.raison_sociale,
+    c.nom_dirigeant,
+    c.prenom_dirigeant,
+    c.telephone1
+  FROM photocopieurs_clients pc
+  LEFT JOIN clients c  ON c.id = pc.id_client
+  LEFT JOIN v_last v   ON v.mac_norm = pc.mac_norm
+  WHERE v.mac_norm IS NULL
+)
+SELECT *
+FROM (
+  SELECT * FROM blk_releve
+  UNION ALL
+  SELECT * FROM blk_sans_releve
+) x
+ORDER BY
+  COALESCE(x.raison_sociale, '— sans client —') ASC,
+  COALESCE(x.SerialNumber, x.mac_norm) ASC
+";
 
 try {
     $stmt = $pdo->query($sql);
@@ -37,7 +97,7 @@ function pctOrDash($v): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Clients & Photocopieurs - CCComputer</title>
 
-    <!-- Feuilles de styles -->
+    <!-- Styles -->
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/clients.css" />
 </head>
@@ -98,28 +158,31 @@ function pctOrDash($v): string {
                     );
                 ?>
                     <tr data-search="<?= h($searchText) ?>">
-                        <td>
+                        <td data-th="Client">
                             <div class="client-cell">
                                 <div class="client-raison"><?= h($raison) ?></div>
                                 <?php if ($numero): ?>
-                                    <div class="client-num"><?= h($numero) ?></div>
+                                  <div class="client-num"><?= h($numero) ?></div>
                                 <?php endif; ?>
                             </div>
                         </td>
-                        <td><?= h($dirNom ?: '—') ?></td>
-                        <td><?= h($tel ?: '—') ?></td>
-                        <td>
+
+                        <td data-th="Dirigeant"><?= h($dirNom ?: '—') ?></td>
+                        <td data-th="Téléphone"><?= h($tel ?: '—') ?></td>
+
+                        <td data-th="Photocopieur">
                             <div class="machine-cell">
                                 <div class="machine-line"><strong><?= h($modele ?: '—') ?></strong></div>
                                 <div class="machine-sub">
                                     SN: <?= h($sn ?: '—') ?> · MAC: <?= h($mac ?: '—') ?>
                                 </div>
                                 <?php if ($nom): ?>
-                                <div class="machine-sub">Nom: <?= h($nom) ?></div>
+                                  <div class="machine-sub">Nom: <?= h($nom) ?></div>
                                 <?php endif; ?>
                             </div>
                         </td>
-                        <td>
+
+                        <td data-th="Toners">
                             <div class="toners">
                                 <div class="toner t-k" title="Black: <?= pctOrDash($tk) ?>">
                                     <span style="width:<?= ($tk!==null?$tk:0) ?>%"></span>
@@ -139,9 +202,10 @@ function pctOrDash($v): string {
                                 </div>
                             </div>
                         </td>
-                        <td class="td-metric"><?= h((string)$totBW) ?></td>
-                        <td class="td-metric"><?= h((string)$totCol) ?></td>
-                        <td class="td-date"><?= h($lastTs) ?></td>
+
+                        <td class="td-metric" data-th="Total BW"><?= h((string)$totBW) ?></td>
+                        <td class="td-metric" data-th="Total Color"><?= h((string)$totCol) ?></td>
+                        <td class="td-date" data-th="Dernier relevé"><?= h($lastTs) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -154,7 +218,7 @@ function pctOrDash($v): string {
     </div>
 
     <script>
-    // Petit filtre client-side
+    // Filtre client-side simple
     (function() {
       const q = document.getElementById('q');
       const clear = document.getElementById('clearQ');
