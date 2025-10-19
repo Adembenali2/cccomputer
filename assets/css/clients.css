@@ -1,64 +1,78 @@
 /* =========================================================
-   Clients / Photocopieurs (Desktop = table, Mobile = cartes)
+   Clients / Photocopieurs (Desktop = tableau complet,
+   Mobile = cartes)
    ========================================================= */
 
-/* Wrapper & Table (desktop) */
+/* ---------- Wrapper & Table (desktop) ---------- */
 .table-wrapper {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  /* éviter la coupure des colonnes sur PC : */
-  overflow-x: auto;
+  overflow-x: auto;   /* sécurité si écran < 1280px */
+  overflow-y: hidden;
 }
 
 .tbl-photocopieurs {
   width: 100%;
-  min-width: 1020px; /* garantit la présence de toutes les colonnes */
+  /* largeur mini optimisée pour afficher toutes les colonnes */
+  min-width: 1280px;
   border-collapse: separate;
   border-spacing: 0;
 }
 
+/* En-têtes */
 .tbl-photocopieurs thead th {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-weight: 700;
-  font-size: 0.875rem;
-  padding: 0.75rem 0.85rem;
+  font-size: 0.85rem;
+  padding: 0.65rem 0.75rem;   /* plus compact */
   border-bottom: 1px solid var(--border-color);
   text-align: left;
   white-space: nowrap;
 }
 
+/* Largeurs mini par colonne pour éviter l’écrasement
+   (total ≈ 1280px hors bordures) */
+.tbl-photocopieurs thead th:nth-child(1) { min-width: 200px; }  /* Client */
+.tbl-photocopieurs thead th:nth-child(2) { min-width: 120px; }  /* Dirigeant */
+.tbl-photocopieurs thead th:nth-child(3) { min-width: 120px; }  /* Téléphone */
+.tbl-photocopieurs thead th:nth-child(4) { min-width: 260px; }  /* Photocopieur */
+.tbl-photocopieurs thead th:nth-child(5) { min-width: 220px; }  /* Toners */
+.tbl-photocopieurs thead th:nth-child(6) { min-width: 110px; }  /* Total BW */
+.tbl-photocopieurs thead th:nth-child(7) { min-width: 110px; }  /* Total Color */
+.tbl-photocopieurs thead th:nth-child(8) { min-width: 150px; }  /* Dernier relevé */
+
 .tbl-photocopieurs tbody td {
-  padding: 0.75rem 0.85rem;
+  padding: 0.65rem 0.75rem;   /* plus compact */
   border-bottom: 1px solid var(--border-color);
   vertical-align: top;
 }
 
 .tbl-photocopieurs tbody tr:hover { background: var(--bg-secondary); }
 
-/* Cellules */
+/* ---------- Cellules de contenu ---------- */
 .client-cell .client-raison { font-weight: 700; color: var(--text-primary); }
-.client-cell .client-num    { font-size: 0.8125rem; color: var(--text-muted); }
+.client-cell .client-num    { font-size: 0.8rem; color: var(--text-muted); }
 
-.machine-cell .machine-line { margin-bottom: 0.15rem; }
-.machine-cell .machine-sub  { font-size: 0.8125rem; color: var(--text-secondary); }
+.machine-cell .machine-line { margin-bottom: 0.1rem; }
+.machine-cell .machine-sub  { font-size: 0.8rem; color: var(--text-secondary); }
 
 .td-metric { font-weight: 700; text-align: right; white-space: nowrap; }
 .td-date   { white-space: nowrap; color: var(--text-secondary); }
 
-/* Toners (barres) */
+/* ---------- Toners (barres) ---------- */
 .toners {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 10px;
+  grid-template-columns: 1fr 1fr; /* deux colonnes compactes */
+  gap: 6px 8px;
   min-width: 220px;
 }
 
 .toner {
   position: relative;
-  height: 14px;
+  height: 13px;                /* plus fin */
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 10px;
@@ -80,24 +94,22 @@
 .toner em {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-style: normal; font-size: 0.72rem; color: #fff;
+  font-style: normal; font-size: 0.7rem; color: #fff;
   text-shadow: 0 1px 1px rgba(0,0,0,0.6);
   pointer-events: none;
 }
 
 [data-theme="dark"] .toner { border-color: #475569; }
 
-/* Filtre rapide (au-dessus du tableau) */
-.filters-row .btn {
-  color: var(--text-primary);
-}
+/* ---------- Bouton filtre (esthétique) ---------- */
+.filters-row .btn { color: var(--text-primary); }
 
 /* =========================================================
    Mode "Cartes" responsive (<= 900px)
    ========================================================= */
 @media (max-width: 900px) {
 
-  /* masquer l’en-tête du tableau et empiler les lignes en blocs */
+  /* masquer l’en-tête et empiler en blocs */
   .tbl-photocopieurs thead {
     position: absolute;
     left: -9999px;
@@ -105,9 +117,7 @@
     overflow: hidden;
   }
 
-  .tbl-photocopieurs {
-    min-width: 0;
-  }
+  .tbl-photocopieurs { min-width: 0; }
 
   .tbl-photocopieurs,
   .tbl-photocopieurs tbody,
@@ -133,47 +143,37 @@
     position: relative;
   }
 
-  .tbl-photocopieurs tbody td:last-child {
-    border-bottom: none;
-  }
+  .tbl-photocopieurs tbody td:last-child { border-bottom: none; }
 
-  /* Afficher le libellé de la colonne via data-th */
+  /* label de la colonne via data-th */
   .tbl-photocopieurs tbody td::before {
     content: attr(data-th);
     display: block;
     font-size: 0.76rem;
     color: var(--text-muted);
     margin-bottom: 0.2rem;
-    text-transform: none;
     letter-spacing: .02em;
   }
 
-  /* Toners : pleine largeur en une colonne (lisible) */
+  /* Toners en pleine largeur */
   .toners {
     grid-template-columns: 1fr;
     gap: 8px;
     min-width: 0;
   }
 
-  /* Metrics et dates : alignement gauche en mobile */
-  .td-metric,
-  .td-date {
-    text-align: left;
-    white-space: normal;
-  }
+  .td-metric, .td-date { text-align: left; white-space: normal; }
 }
 
 /* =========================================================
-   Petits écrans (<= 480px) : micro-ajustements
+   Petits écrans (<= 480px)
    ========================================================= */
 @media (max-width: 480px) {
   .machine-cell .machine-sub { font-size: 0.78rem; }
-  .client-cell .client-num   { font-size: 0.75rem; }
+  .client-cell .client-num   { font-size: 0.74rem; }
 
   .toner { height: 12px; }
-  .toner em { font-size: 0.68rem; }
+  .toner em { font-size: 0.66rem; }
 
-  .filters-row input {
-    font-size: 0.95rem !important;
-  }
+  .filters-row input { font-size: 0.95rem !important; }
 }
