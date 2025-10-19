@@ -1,28 +1,20 @@
 <?php
-// /includes/session_config.php
+// includes/session_config.php
 
-// On s'assure que ce code n'est exécuté qu'une seule fois.
-if (defined('SESSION_CONFIG_LOADED')) {
-    return;
-}
-define('SESSION_CONFIG_LOADED', true);
-
-// Calculer si la connexion est sécurisée (HTTPS)
-$isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-
-// On définit les paramètres du cookie pour qu'il soit valide sur TOUT le site.
-// Adapte 'path' si ton app n'est pas sous /cccomputer/ (mettre '/' sinon).
+// Cookies de session sûrs et valables sur TOUT le site
 session_set_cookie_params([
-    'lifetime' => 0,
-    'path'     => '/cccomputer/', // <-- adapte si nécessaire (ex: '/' si site à la racine)
-    'domain'   => '',            // mettre le domaine si besoin (ex: '.mondomaine.tld')
-    'secure'   => $isSecure,
-    'httponly' => true,
-    'samesite' => 'Lax'
+  'lifetime' => 0,             // cookie de session
+  'path'     => '/',           // ⬅ IMPORTANT: pas de sous-chemin
+  'domain'   => '',            // laisser vide (Railway gère le domaine)
+  'secure'   => true,          // derrière proxy HTTPS
+  'httponly' => true,
+  'samesite' => 'Lax',
 ]);
 
-// On démarre la session uniquement si elle n'est pas déjà active.
-if (session_status() === PHP_SESSION_NONE) {
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+
+// Démarre la session si nécessaire
+if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
-?>
