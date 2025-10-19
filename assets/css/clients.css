@@ -14,7 +14,7 @@
 }
 
 .tbl-photocopieurs {
-  width: 80%;
+  width: 40%;
   /* largeur mini optimisée pour afficher toutes les colonnes */
   min-width: 1280px;
   border-collapse: separate;
