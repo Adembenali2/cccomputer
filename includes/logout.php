@@ -1,47 +1,47 @@
 <?php
-// /source/connexion/logout.php (VERSION SÉCURISÉE)
+// includes/logout.php (VERSION SÉCURISÉE, sans sortie)
 
-// 1️⃣ Inclure configurateur de session et dépendances
+// 1) Session & dépendances (session déjà démarrée dans session_config.php)
 require_once __DIR__ . '/session_config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/historique.php';
 
-session_start();
-
-// 2️⃣ Journaliser la déconnexion avant destruction
-if (isset($_SESSION['user_id']) && isset($pdo) && function_exists('enregistrerAction')) {
+// 2) Journaliser la déconnexion (best-effort, ne pas bloquer)
+if (!empty($_SESSION['user_id'])) {
     try {
-        enregistrerAction(
-            $pdo,
-            (int)$_SESSION['user_id'],
-            'deconnexion',
-            'Déconnexion manuelle via le bouton'
-        );
+        if (isset($pdo)) {
+            enregistrerAction(
+                $pdo,
+                (int)$_SESSION['user_id'],
+                'deconnexion',
+                'Déconnexion manuelle via le bouton'
+            );
+        }
     } catch (Throwable $e) {
-        // Ignorer les erreurs pour ne pas bloquer la déconnexion
+        // no-op
     }
 }
 
-// 3️⃣ Purge complète de la session
+// 3) Purge de la session
 $_SESSION = [];
 
-// 4️⃣ Supprimer le cookie de session
+// 4) Supprimer le cookie de session (forcer path "/")
 if (ini_get('session.use_cookies')) {
-    $params = session_get_cookie_params();
+    $p = session_get_cookie_params();
     setcookie(
         session_name(),
         '',
         time() - 42000,
-        $params['path'],
-        $params['domain'],
-        $params['secure'],
-        $params['httponly']
+        '/',                        // IMPORTANT: path racine
+        $p['domain'] ?: '',
+        (bool)$p['secure'],
+        (bool)$p['httponly']
     );
 }
 
-// 5️⃣ Détruire la session côté serveur
+// 5) Détruire la session serveur
 session_destroy();
 
-// 6️⃣ Redirection vers la page de login
-header('Location: ../public/login.php');
+// 6) Redirection propre vers la page de connexion
+header('Location: /public/login.php', true, 302);
 exit;
