@@ -239,7 +239,7 @@ body.modal-open { overflow: hidden; }
 .modal-header {
   position: relative;
   display: flex;
-  alignés: center;
+  align-items: center;
   justify-content: center;
   padding-right: 2.25rem;
   margin-bottom: 0.75rem;
