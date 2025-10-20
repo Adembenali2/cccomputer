@@ -439,18 +439,20 @@ input.is-disabled {
     display: none !important;
   }
 
-  /* Bloc "Toners" : aligné à gauche sans label */
+  /* ----- Toners centrés au milieu de la cellule ----- */
   .tbl-photocopieurs tbody td[data-th="Toners"] {
-    text-align: left;
-    vertical-align: middle;
-    padding-top: 0.75rem;       /* pas d'espace spécial sans label */
+    display: flex;                 /* permet l’alignement */
+    align-items: center;           /* centre verticalement */
+    justify-content: center;       /* centre horizontalement */
+    padding-block: 0.85rem;        /* espace haut/bas pour ne pas toucher les lignes */
   }
+
   .tbl-photocopieurs tbody td[data-th="Toners"] .toners {
-    display: flex;                /* force layout horizontal */
-    justify-content: flex-start;  /* aligné à gauche */
+    display: flex;                 /* layout horizontal fixe */
+    justify-content: center;       /* reste centré */
     align-items: center;
     gap: 10px;
-    margin: 0;
+    margin: 0;                     /* pas de marge parasite */
   }
 
   .td-metric, .td-date { text-align: left; white-space: normal; }

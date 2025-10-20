@@ -2,6 +2,7 @@
 // /public/clients.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/historique.php'; // <-- pour journaliser l'action
 
 /** Sécurise PDO en mode exceptions si ce n'est pas déjà fait **/
 if (method_exists($pdo, 'setAttribute')) {
@@ -18,6 +19,12 @@ function pctOrDash($v): string {
 function old(string $key, string $default=''): string {
     return htmlspecialchars($_POST[$key] ?? $default, ENT_QUOTES, 'UTF-8');
 }
+/** Essaie de récupérer l'ID utilisateur courant depuis la session **/
+function currentUserId(): ?int {
+    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
+    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
+    return null;
+}
 
 /** Génère un numéro client unique : C + 5 chiffres (ex: C12345) **/
 function generateClientNumber(PDO $pdo): string {
@@ -31,16 +38,12 @@ function generateClientNumber(PDO $pdo): string {
     return 'C' . $next;
 }
 
-/** Obtient le prochain ID si la colonne id n'est pas AUTO_INCREMENT (fallback) **/
+/** Fallback si la colonne id n'est pas AUTO_INCREMENT **/
 function nextClientId(PDO $pdo): int {
     return (int)$pdo->query("SELECT COALESCE(MAX(id),0)+1 FROM clients")->fetchColumn();
 }
-
-/** Teste si l'erreur est liée à 'id' sans valeur par défaut (id non auto-incrément) **/
 function isNoDefaultIdError(PDOException $e): bool {
-    // MySQL 1364: Field 'id' doesn't have a default value
-    // MySQL 1048: Column 'id' cannot be null (selon config stricte)
-    $code = (int)($e->errorInfo[1] ?? 0);
+    $code = (int)($e->errorInfo[1] ?? 0); // 1364: Field 'id' doesn't have a default value ; 1048: Column 'id' cannot be null
     return in_array($code, [1364, 1048], true);
 }
 
@@ -79,7 +82,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     if (empty($errors)) {
         $numero = generateClientNumber($pdo);
 
-        // Préparation (sans 'id')
         $sqlInsert = "
             INSERT INTO clients
                 (numero_client, raison_sociale, adresse, code_postal, ville,
@@ -112,14 +114,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         ];
 
         try {
+            // 1) tentative sans 'id' (AUTO_INCREMENT conseillé)
             $stmt = $pdo->prepare($sqlInsert);
             $stmt->execute($params);
 
+            // Récupère l'ID inséré (si AI)
+            $insertedId = (int)$pdo->lastInsertId() ?: null;
+
+            // Journalise l'action
+            $userId  = currentUserId();
+            $details = "Client créé: ID=" . ($insertedId ?? 'NULL') . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
+            enregistrerAction($pdo, $userId, 'client_ajoute', $details);
+
+            // Redirection
             header('Location: /public/clients.php?added=1');
             exit;
 
         } catch (PDOException $e) {
-            // Cas 1 : id non auto-incrément → retente avec id = MAX(id)+1
+            // 2) cas: id non auto-incrément → retente avec id = MAX(id)+1
             if (isNoDefaultIdError($e)) {
                 try {
                     $id = nextClientId($pdo);
@@ -138,6 +150,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $paramsWithId = $params + [':id' => $id];
                     $stmt->execute($paramsWithId);
 
+                    // Journalise l'action
+                    $userId  = currentUserId();
+                    $details = "Client créé: ID=$id, numero=" . $numero . ", raison_sociale=" . $raison_sociale;
+                    enregistrerAction($pdo, $userId, 'client_ajoute', $details);
+
                     header('Location: /public/clients.php?added=1');
                     exit;
 
@@ -146,13 +163,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client (id requis)."];
                 }
             }
-            // Cas 2 : doublon sur numero_client → regénère et retente
+            // 3) doublon numero_client → regénère et retente
             elseif ((int)($e->errorInfo[1] ?? 0) === 1062) {
                 try {
                     $numero = generateClientNumber($pdo);
                     $params[':numero_client'] = $numero;
                     $stmt = $pdo->prepare($sqlInsert);
                     $stmt->execute($params);
+
+                    $insertedId = (int)$pdo->lastInsertId() ?: null;
+                    $userId  = currentUserId();
+                    $details = "Client créé (retry): ID=" . ($insertedId ?? 'NULL') . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
+                    enregistrerAction($pdo, $userId, 'client_ajoute', $details);
 
                     header('Location: /public/clients.php?added=1');
                     exit;
@@ -163,8 +185,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 }
             } else {
                 error_log('clients.php INSERT error: '.$e->getMessage());
-                // Pour debug rapide en dev, décommente :
-                // error_log(print_r($e->errorInfo, true));
                 $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client."];
             }
         }
@@ -417,7 +437,7 @@ try {
         </div>
     </div>
 
-    <!-- ===== Popup "Ajouter un client" (overlay + fenêtre) ===== -->
+    <!-- ===== Popup "Ajouter un client" ===== -->
     <div id="clientModalOverlay" class="popup-overlay" aria-hidden="true"></div>
 
     <div id="clientModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle" style="display:none;">
@@ -469,7 +489,6 @@ try {
               </div>
             </div>
 
-            <!-- Livraison: case stylée sur une ligne, adresse juste en dessous -->
             <div class="livraison-row">
               <label class="livraison-toggle">
                 <input type="checkbox" name="livraison_identique" id="livraison_identique" <?= isset($_POST['livraison_identique']) ? 'checked' : '' ?>>
