@@ -5,19 +5,16 @@ require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
-// Paramètres d'entrée: on privilégie mac (mac_norm = 12 hex sans ":")
-// Optionnellement on peut aussi accepter ?sn=SERIALNUMBER en secours.
+// Paramètres d'entrée
 $macParam = strtoupper(trim($_GET['mac'] ?? ''));
 $snParam  = trim($_GET['sn'] ?? '');
 
-// Validation basique
 $useMac = false;
 $useSn  = false;
 
 if ($macParam !== '' && preg_match('/^[0-9A-F]{12}$/', $macParam)) {
     $useMac = true;
 } elseif ($snParam !== '') {
-    // on laisse passer tout en échappant correctement avec PDO
     $useSn = true;
 } else {
     http_response_code(400);
@@ -35,7 +32,7 @@ try {
             ORDER BY `Timestamp` DESC, id DESC
         ");
         $stmt->execute([':mac' => $macParam]);
-    } else { // useSn
+    } else {
         $stmt = $pdo->prepare("
             SELECT *
             FROM compteur_relevee
@@ -50,15 +47,15 @@ try {
     $rows = [];
 }
 
-// entête: on prend la 1ère ligne (la plus récente) si dispo
-$latest = $rows[0] ?? null;
-$macDisplay = $latest['MacAddress'] ?? ($useMac ? $macParam : '—');
+// entête (prend la plus récente si dispo)
+$latest     = $rows[0] ?? null;
+$macDisplay = $latest['MacAddress']   ?? ($useMac ? $macParam : '—');
 $snDisplay  = $latest['SerialNumber'] ?? ($useSn ? $snParam : '—');
-$model      = $latest['Model'] ?? '—';
-$name       = $latest['Nom'] ?? '—';
-$status     = $latest['Status'] ?? '—';
+$model      = $latest['Model']        ?? '—';
+$name       = $latest['Nom']          ?? '—';
+$status     = $latest['Status']       ?? '—';
 
-// petite helper pour pourcentage/— 
+// helper pour pourcentage/—
 function pctOrDash($v): string {
     if ($v === null || $v === '' || !is_numeric($v)) return '—';
     $v = max(0, min(100, (int)$v));
@@ -72,20 +69,11 @@ function pctOrDash($v): string {
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Détails photocopieur — Historique</title>
+
+  <!-- styles globaux -->
   <link rel="stylesheet" href="/assets/css/main.css" />
-  <style>
-    .details-header { display:grid; gap:.25rem; margin: 1rem 0; }
-    .details-header .h1 { font-size: 1.35rem; font-weight: 700; }
-    .meta { color: var(--text-secondary); }
-    .badge { display:inline-block; padding:.15rem .5rem; border-radius: 999px; border:1px solid var(--border-color); font-size:.85rem; }
-    .toolbar { display:flex; gap:.5rem; align-items:center; margin:.5rem 0 1rem; }
-    table.details { width:100%; border-collapse: collapse; }
-    table.details th, table.details td { padding:.5rem .6rem; border-bottom:1px solid var(--border-color); text-align:left; vertical-align: top; }
-    table.details th { background: var(--bg-elevated); position: sticky; top:0; z-index: 1; }
-    .td-num { text-align: right; font-variant-numeric: tabular-nums; white-space:nowrap; }
-    .muted { color: var(--text-secondary); }
-    .back-link { text-decoration:none; }
-  </style>
+  <!-- styles spécifiques de la page -->
+  <link rel="stylesheet" href="/assets/css/photocopieurs_details.css" />
 </head>
 <body class="page-details">
   <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -93,6 +81,10 @@ function pctOrDash($v): string {
   <div class="page-container">
     <div class="toolbar">
       <a href="/public/clients.php" class="back-link">← Retour</a>
+
+      <!-- Bouton à droite : Espace client -->
+      <!-- Remplace href="#" par l’URL réelle de l’espace client si tu en as une -->
+      <a href="#" class="btn btn-primary" id="btn-espace-client">Espace client</a>
     </div>
 
     <div class="details-header">

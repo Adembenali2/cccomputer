@@ -1,0 +1,192 @@
+/* =========================================================
+   Photocopieurs — page détails & historique
+   ========================================================= */
+
+/* Mise en page générale */
+.page-details .page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2rem;
+}
+
+/* En-tête + badges */
+.details-header { 
+  display: grid; 
+  gap: .35rem; 
+  margin: 1rem 0; 
+}
+.details-header .h1 { 
+  font-size: 1.35rem; 
+  font-weight: 800; 
+  color: var(--text-primary);
+}
+.meta { color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: .4rem .5rem; }
+.badge { 
+  display: inline-block; 
+  padding: .2rem .55rem; 
+  border-radius: 999px; 
+  border: 1px solid var(--border-color); 
+  font-size: .85rem; 
+  background: var(--bg-primary);
+}
+
+/* Barre d’outils */
+.toolbar { 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  gap: .75rem; 
+  margin: .25rem 0 1rem; 
+}
+.back-link { 
+  text-decoration: none; 
+  color: var(--text-primary); 
+  padding: .45rem .65rem; 
+  border: 1px solid var(--border-color); 
+  border-radius: var(--radius-md); 
+  background: var(--bg-primary);
+}
+.toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  padding: .5rem .8rem;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+.toolbar .btn:hover { filter: brightness(0.98); }
+.toolbar .btn-primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+.toolbar .btn-primary:hover { background: var(--accent-secondary); }
+
+/* Table wrapper */
+.table-wrapper {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* Tableau (desktop) */
+table.details { 
+  width: 100%; 
+  border-collapse: collapse; 
+  table-layout: auto;
+}
+table.details th, 
+table.details td { 
+  padding: .55rem .65rem; 
+  border-bottom: 1px solid var(--border-color); 
+  text-align: left; 
+  vertical-align: top; 
+}
+table.details thead th { 
+  background: var(--bg-tertiary); 
+  color: var(--text-secondary); 
+  font-weight: 700; 
+  position: sticky; 
+  top: 0; 
+  z-index: 1; 
+}
+table.details tbody tr:hover { background: var(--bg-secondary); }
+
+/* Nombres alignés à droite */
+.td-num { 
+  text-align: right; 
+  font-variant-numeric: tabular-nums; 
+  white-space: nowrap; 
+  font-weight: 700;
+}
+
+/* =========================================================
+   Responsive (<= 900px) : affichage en cartes (plus de tableau)
+   ========================================================= */
+@media (max-width: 900px) {
+
+  /* On cache l’en-tête du tableau */
+  table.details thead { 
+    position: absolute; 
+    left: -9999px; 
+    height: 0; 
+    overflow: hidden; 
+  }
+
+  /* Chaque ligne devient une carte */
+  table.details,
+  table.details tbody,
+  table.details tr,
+  table.details td {
+    display: block;
+    width: 100%;
+  }
+
+  table.details tbody tr {
+    border-bottom: none;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-sm);
+    margin: .75rem 0;
+    overflow: hidden;
+  }
+
+  table.details tbody td {
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: .8rem .95rem;
+    position: relative;
+  }
+  table.details tbody td:last-child { border-bottom: none; }
+
+  /* Chaque cellule affiche son label avant la valeur (avec :nth-child) */
+  table.details tbody td::before {
+    content: attr(data-label); /* fallback si on ajoute data-label côté HTML */
+    display: block;
+    font-size: .76rem;
+    color: var(--text-muted);
+    margin-bottom: .2rem;
+    letter-spacing: .02em;
+  }
+
+  /* Si data-label n’est pas défini, on injecte les labels via nth-child */
+  table.details tbody tr td:nth-child(1)::before  { content: "Date"; }
+  table.details tbody tr td:nth-child(2)::before  { content: "IP"; }
+  table.details tbody tr td:nth-child(3)::before  { content: "Modèle"; }
+  table.details tbody tr td:nth-child(4)::before  { content: "Nom"; }
+  table.details tbody tr td:nth-child(5)::before  { content: "SN"; }
+  table.details tbody tr td:nth-child(6)::before  { content: "MAC"; }
+  table.details tbody tr td:nth-child(7)::before  { content: "Statut"; }
+  table.details tbody tr td:nth-child(8)::before  { content: "Toner K"; }
+  table.details tbody tr td:nth-child(9)::before  { content: "Toner C"; }
+  table.details tbody tr td:nth-child(10)::before { content: "Toner M"; }
+  table.details tbody tr td:nth-child(11)::before { content: "Toner Y"; }
+  table.details tbody tr td:nth-child(12)::before { content: "Total BW"; }
+  table.details tbody tr td:nth-child(13)::before { content: "Total Color"; }
+  table.details tbody tr td:nth-child(14)::before { content: "Total Pages"; }
+  table.details tbody tr td:nth-child(15)::before { content: "Printed BW"; }
+  table.details tbody tr td:nth-child(16)::before { content: "Printed Color"; }
+
+  /* Les nombres redeviennent alignés à gauche en mobile */
+  .td-num { text-align: left; white-space: normal; font-weight: 700; }
+}
+
+/* =========================================================
+   Très petits écrans (<= 480px)
+   ========================================================= */
+@media (max-width: 480px) {
+  .details-header .h1 { font-size: 1.2rem; }
+  .toolbar .btn, .back-link { padding: .5rem .7rem; }
+  table.details tbody td { padding: .7rem .9rem; }
+}
