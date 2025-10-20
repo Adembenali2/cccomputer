@@ -25,13 +25,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     $snPost   = trim($_POST['sn'] ?? '');
     $macPost  = strtoupper(trim($_POST['mac'] ?? ''));
 
-    // mac_norm (12 hex sans :)
     $macNorm = preg_replace('/[^0-9A-F]/', '', strtoupper($macPost ?? ''));
     if ($clientId <= 0 || $macNorm === '') {
         $flash = ['type'=>'error','msg'=>"Client ou MAC invalide."];
     } else {
         try {
-            // On essaye d'insérer, ou maj si déjà présent (contrainte UNIQUE sur mac_norm/SerialNumber)
             $sql = "
               INSERT INTO photocopieurs_clients (id_client, SerialNumber, MacAddress)
               VALUES (:id_client, :sn, :mac)
@@ -42,11 +40,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             ";
             $pdo->prepare($sql)->execute([
                 ':id_client' => $clientId,
-                ':sn' => $snPost !== '' ? $snPost : null,
+                ':sn'  => $snPost !== '' ? $snPost : null,
                 ':mac' => $macPost
             ]);
-            // Redirige propre (évite re-post)
-            header("Location: ".$_SERVER['REQUEST_URI']);
+            header('Location: '.$_SERVER['REQUEST_URI']);
             exit;
         } catch (PDOException $e) {
             error_log('attach_client error: '.$e->getMessage());
@@ -111,7 +108,10 @@ try {
 $clientsList = [];
 try {
   $clientsList = $pdo->query("
-    SELECT id, numero_client, raison_sociale, COALESCE(nom_dirigeant,'') AS nom_dirigeant, COALESCE(prenom_dirigeant,'') AS prenom_dirigeant, telephone1
+    SELECT id, numero_client, raison_sociale,
+           COALESCE(nom_dirigeant,'') AS nom_dirigeant,
+           COALESCE(prenom_dirigeant,'') AS prenom_dirigeant,
+           telephone1
     FROM clients
     ORDER BY raison_sociale ASC
   ")->fetchAll(PDO::FETCH_ASSOC);
@@ -143,7 +143,6 @@ function pctOrIntOrNull($v): ?int {
     <div class="toolbar">
       <a href="/public/clients.php" class="back-link">← Retour</a>
 
-      <!-- Bouton à droite -->
       <?php if ($client && ($client['id'] ?? null)): ?>
         <a href="/public/client_fiche.php?id=<?= (int)$client['id'] ?>" class="btn btn-primary" id="btn-espace-client">Espace client</a>
       <?php else: ?>
@@ -160,7 +159,6 @@ function pctOrIntOrNull($v): ?int {
     <div class="details-header">
       <div class="h1">Historique du photocopieur</div>
 
-      <!-- Badges : infos photocopieur + client (si dispo) -->
       <div class="meta">
         <span class="badge">Modèle: <?= h($model) ?></span>
         <span class="badge">Nom: <?= h($name) ?></span>
@@ -215,25 +213,10 @@ function pctOrIntOrNull($v): ?int {
                 <td><?= h($ts) ?></td>
                 <td><?= h($mod) ?></td>
                 <td><?= h($st) ?></td>
-
-                <!-- Barres de toner -->
-                <td class="td-toner">
-                  <div class="toner-bar k"><span style="width:<?= $tk!==null?$tk:0 ?>%"></span></div>
-                  <em><?= $tk!==null ? $tk.'%' : '—' ?></em>
-                </td>
-                <td class="td-toner">
-                  <div class="toner-bar c"><span style="width:<?= $tc!==null?$tc:0 ?>%"></span></div>
-                  <em><?= $tc!==null ? $tc.'%' : '—' ?></em>
-                </td>
-                <td class="td-toner">
-                  <div class="toner-bar m"><span style="width:<?= $tm!==null?$tm:0 ?>%"></span></div>
-                  <em><?= $tm!==null ? $tm.'%' : '—' ?></em>
-                </td>
-                <td class="td-toner">
-                  <div class="toner-bar y"><span style="width:<?= $ty!==null?$ty:0 ?>%"></span></div>
-                  <em><?= $ty!==null ? $ty.'%' : '—' ?></em>
-                </td>
-
+                <td class="td-toner"><div class="toner-bar k"><span style="width:<?= $tk!==null?$tk:0 ?>%"></span></div><em><?= $tk!==null ? $tk.'%' : '—' ?></em></td>
+                <td class="td-toner"><div class="toner-bar c"><span style="width:<?= $tc!==null?$tc:0 ?>%"></span></div><em><?= $tc!==null ? $tc.'%' : '—' ?></em></td>
+                <td class="td-toner"><div class="toner-bar m"><span style="width:<?= $tm!==null?$tm:0 ?>%"></span></div><em><?= $tm!==null ? $tm.'%' : '—' ?></em></td>
+                <td class="td-toner"><div class="toner-bar y"><span style="width:<?= $ty!==null?$ty:0 ?>%"></span></div><em><?= $ty!==null ? $ty.'%' : '—' ?></em></td>
                 <td class="td-num"><?= h($totBW) ?></td>
                 <td class="td-num"><?= h($totCol) ?></td>
               </tr>
@@ -244,24 +227,47 @@ function pctOrIntOrNull($v): ?int {
     <?php endif; ?>
   </div>
 
-  <!-- ===== Popup d’attribution client (affiché si pas de client) ===== -->
+  <!-- ===== Popup d’attribution client ===== -->
   <div id="attachOverlay" class="popup-overlay"></div>
-  <div id="attachModal" class="support-popup" style="max-width:560px;">
+  <div id="attachModal" class="support-popup" style="max-width:640px;">
     <h3 style="margin-top:0;">Attribuer ce photocopieur à un client</h3>
+
     <form method="post" class="standard-form" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>">
       <input type="hidden" name="action" value="attach_client">
       <input type="hidden" name="sn"  value="<?= h($snDisplay) ?>">
       <input type="hidden" name="mac" value="<?= h($macDisplay) ?>">
 
-      <label>Choisir un client</label>
-      <select name="id_client" required>
-        <option value="">— Sélectionner —</option>
-        <?php foreach ($clientsList as $c): ?>
-          <option value="<?= (int)$c['id'] ?>">
-            <?= h($c['raison_sociale']) ?> (<?= h($c['numero_client']) ?>) — <?= h(trim($c['nom_dirigeant'].' '.$c['prenom_dirigeant'])) ?> — <?= h($c['telephone1']) ?>
-          </option>
-        <?php endforeach; ?>
-      </select>
+      <!-- Recherche instantanée -->
+      <div>
+        <label for="clientSearch">Rechercher un client</label>
+        <input type="text" id="clientSearch" placeholder="Tapez raison sociale, N° client, dirigeant, téléphone…">
+        <small class="muted">Filtre instantané — Entrée pour sélectionner le premier résultat.</small>
+      </div>
+
+      <div>
+        <label for="clientSelect">Résultats</label>
+        <select name="id_client" id="clientSelect" size="8" required
+                style="width:100%; max-height:280px; overflow:auto;">
+          <?php foreach ($clientsList as $c): 
+            $label = sprintf('%s (%s) — %s %s — %s',
+              $c['raison_sociale'],
+              $c['numero_client'],
+              trim($c['nom_dirigeant'].' '.$c['prenom_dirigeant']),
+              '',
+              $c['telephone1']
+            );
+          ?>
+            <option value="<?= (int)$c['id'] ?>"
+                    data-search="<?= h(strtolower(
+                      $c['raison_sociale'].' '.$c['numero_client'].' '.
+                      $c['nom_dirigeant'].' '.$c['prenom_dirigeant'].' '.$c['telephone1']
+                    )) ?>">
+              <?= h($label) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+        <div id="noMatch" class="muted" style="display:none; margin-top:.25rem;">Aucun résultat…</div>
+      </div>
 
       <div style="display:flex; gap:.5rem; justify-content:flex-end;">
         <button type="button" id="btnAttachCancel" class="btn">Annuler</button>
@@ -277,26 +283,70 @@ function pctOrIntOrNull($v): ?int {
       const ovl   = document.getElementById('attachOverlay');
       const cancel= document.getElementById('btnAttachCancel');
 
-      if (!btn || !modal || !ovl) return;
-
-      // Si le bouton est <a href="..."> (client existant), on laisse la navigation native.
-      if (btn.tagName.toLowerCase() === 'button') {
+      // Ouverture uniquement si c'est un <button> (pas de client lié)
+      if (btn && btn.tagName.toLowerCase() === 'button') {
         btn.addEventListener('click', openModal);
       }
 
-      function openModal(){
-        ovl.classList.add('active');
-        modal.classList.add('active');
-        document.body.classList.add('modal-open');
-      }
-      function closeModal(){
-        ovl.classList.remove('active');
-        modal.classList.remove('active');
-        document.body.classList.remove('modal-open');
-      }
+      function openModal(){ ovl.classList.add('active'); modal.classList.add('active'); document.body.classList.add('modal-open'); }
+      function closeModal(){ ovl.classList.remove('active'); modal.classList.remove('active'); document.body.classList.remove('modal-open'); }
 
-      ovl.addEventListener('click', closeModal);
+      ovl && ovl.addEventListener('click', closeModal);
       cancel && cancel.addEventListener('click', closeModal);
+
+      /* ---- Recherche instantanée ---- */
+      const q = document.getElementById('clientSearch');
+      const sel = document.getElementById('clientSelect');
+      const noMatch = document.getElementById('noMatch');
+
+      if (q && sel) {
+        const opts = Array.from(sel.options);
+
+        function filter() {
+          const v = q.value.trim().toLowerCase();
+          let shown = 0;
+          opts.forEach(o => {
+            const ok = !v || (o.dataset.search || o.textContent.toLowerCase()).includes(v);
+            o.hidden = !ok;
+            if (ok) shown++;
+          });
+
+          // Sélection automatique du premier visible
+          const firstVisible = opts.find(o => !o.hidden);
+          if (firstVisible) {
+            sel.value = firstVisible.value;
+          } else {
+            sel.value = '';
+          }
+
+          noMatch.style.display = shown ? 'none' : 'block';
+        }
+
+        q.addEventListener('input', filter);
+        // Enter sélectionne le premier visible
+        q.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const first = Array.from(sel.options).find(o => !o.hidden);
+            if (first) { sel.value = first.value; }
+          }
+        });
+
+        // Navigation clavier dans la liste avec flèches depuis l'input
+        q.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); sel.focus(); }
+        });
+
+        // Quand on revient du select sur l'input
+        sel.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowUp' && sel.selectedIndex === 0) {
+            e.preventDefault(); q.focus();
+          }
+        });
+
+        // Premier filtrage au chargement
+        filter();
+      }
     })();
   </script>
 </body>
