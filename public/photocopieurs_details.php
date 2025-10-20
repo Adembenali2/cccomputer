@@ -42,8 +42,36 @@ $name       = $latest['Nom']          ?? '—';
 $status     = $latest['Status']       ?? '—';
 $ipDisplay  = $latest['IpAddress']    ?? '—';
 
+// Client attribué au photocopieur (via photocopieurs_clients)
+$client = null;
+try {
+  if ($useMac) {
+    $q = $pdo->prepare("
+      SELECT c.raison_sociale, c.telephone1, c.nom_dirigeant, c.prenom_dirigeant
+      FROM photocopieurs_clients pc
+      LEFT JOIN clients c ON c.id = pc.id_client
+      WHERE pc.mac_norm = :mac
+      LIMIT 1
+    ");
+    $q->execute([':mac' => $macParam]);
+  } else {
+    $q = $pdo->prepare("
+      SELECT c.raison_sociale, c.telephone1, c.nom_dirigeant, c.prenom_dirigeant
+      FROM photocopieurs_clients pc
+      LEFT JOIN clients c ON c.id = pc.id_client
+      WHERE pc.SerialNumber = :sn
+      LIMIT 1
+    ");
+    $q->execute([':sn' => $snParam]);
+  }
+  $client = $q->fetch(PDO::FETCH_ASSOC) ?: null;
+} catch (PDOException $e) {
+  error_log('photocopieurs_details client lookup error: '.$e->getMessage());
+  $client = null;
+}
+
 // helper
-function pctOrDash($v): ?int {
+function pctOrIntOrNull($v): ?int {
   if ($v === null || $v === '' || !is_numeric($v)) return null;
   return max(0, min(100, (int)$v));
 }
@@ -70,6 +98,8 @@ function pctOrDash($v): ?int {
 
     <div class="details-header">
       <div class="h1">Historique du photocopieur</div>
+
+      <!-- Badges : infos photocopieur + client (si dispo) -->
       <div class="meta">
         <span class="badge">Modèle: <?= h($model) ?></span>
         <span class="badge">Nom: <?= h($name) ?></span>
@@ -77,7 +107,14 @@ function pctOrDash($v): ?int {
         <span class="badge">MAC: <?= h($macDisplay) ?></span>
         <span class="badge">IP: <?= h($ipDisplay) ?></span>
         <span class="badge">Statut: <?= h($status) ?></span>
+
+        <?php if ($client): ?>
+          <span class="badge">Client: <?= h($client['raison_sociale'] ?? '—') ?></span>
+          <span class="badge">Tél: <?= h($client['telephone1'] ?? '—') ?></span>
+          <span class="badge">Dirigeant: <?= h(trim(($client['nom_dirigeant'] ?? '').' '.($client['prenom_dirigeant'] ?? '')) ?: '—') ?></span>
+        <?php endif; ?>
       </div>
+
       <?php if (!$rows): ?>
         <div class="muted">Aucun relevé trouvé pour ce photocopieur.</div>
       <?php endif; ?>
@@ -105,10 +142,10 @@ function pctOrDash($v): ?int {
               $mod  = $r['Model'] ?? '—';
               $st   = $r['Status'] ?? '—';
 
-              $tk   = pctOrDash($r['TonerBlack']);
-              $tc   = pctOrDash($r['TonerCyan']);
-              $tm   = pctOrDash($r['TonerMagenta']);
-              $ty   = pctOrDash($r['TonerYellow']);
+              $tk   = pctOrIntOrNull($r['TonerBlack']);
+              $tc   = pctOrIntOrNull($r['TonerCyan']);
+              $tm   = pctOrIntOrNull($r['TonerMagenta']);
+              $ty   = pctOrIntOrNull($r['TonerYellow']);
 
               $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
               $totCol  = is_null($r['TotalColor']) ? '—' : number_format((int)$r['TotalColor'], 0, ',', ' ');
