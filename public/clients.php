@@ -437,9 +437,9 @@ try {
         </div>
 
         <div class="modal-actions">
-            <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
-            <button type="submit" class="btn-solid btn-primary">Enregistrer</button>
-            <button type="button" id="btnCancelAdd" class="btn-solid btn-danger">Annuler</button>
+        <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
+        <button type="submit" class="btn-solid btn-primary">Enregistrer</button>
+        <button type="button" id="btnCancelAdd" class="btn-solid btn-danger">Annuler</button>
         </div>
 
       </form>
