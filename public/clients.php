@@ -433,19 +433,19 @@ try {
 
                         <td data-th="Toners">
                             <div class="toners">
-                                <div class="toner t-k" title="Black: <?= pctOrDash($tk) ?>">
+                                <div class="toner t-k<?= ($tk===0 ? ' is-empty' : '') ?>" title="Black: <?= pctOrDash($tk) ?>">
                                     <span style="width:<?= ($tk!==null?$tk:0) ?>%"></span>
                                     <em><?= pctOrDash($tk) ?></em>
                                 </div>
-                                <div class="toner t-c" title="Cyan: <?= pctOrDash($tc) ?>">
+                                <div class="toner t-c<?= ($tc===0 ? ' is-empty' : '') ?>" title="Cyan: <?= pctOrDash($tc) ?>">
                                     <span style="width:<?= ($tc!==null?$tc:0) ?>%"></span>
                                     <em><?= pctOrDash($tc) ?></em>
                                 </div>
-                                <div class="toner t-m" title="Magenta: <?= pctOrDash($tm) ?>">
+                                <div class="toner t-m<?= ($tm===0 ? ' is-empty' : '') ?>" title="Magenta: <?= pctOrDash($tm) ?>">
                                     <span style="width:<?= ($tm!==null?$tm:0) ?>%"></span>
                                     <em><?= pctOrDash($tm) ?></em>
                                 </div>
-                                <div class="toner t-y" title="Yellow: <?= pctOrDash($ty) ?>">
+                                <div class="toner t-y<?= ($ty===0 ? ' is-empty' : '') ?>" title="Yellow: <?= pctOrDash($ty) ?>">
                                     <span style="width:<?= ($ty!==null?$ty:0) ?>%"></span>
                                     <em><?= pctOrDash($ty) ?></em>
                                 </div>

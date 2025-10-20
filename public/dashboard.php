@@ -41,41 +41,28 @@ $nb_livraisons_a_faire   = 8;
 // Classe de couleur pour le compteur Paiements
 $payClass = ($nb_paiements_en_attente > 0) ? 'count-bad' : 'count-ok';
 
-// Récupération de tous les clients (liste statique)
-$clients = [
-    [
-        'id' => 1,
-        'raison_sociale'   => 'Tech Solutions SARL',
-        'nom_dirigeant'    => 'Dupont',
-        'prenom_dirigeant' => 'Jean',
-        'numero_client'    => 'C001',
-        'email'            => 'jean.dupont@techsarl.com'
-    ],
-    [
-        'id' => 2,
-        'raison_sociale'   => 'Innovate & Co.',
-        'nom_dirigeant'    => 'Martin',
-        'prenom_dirigeant' => 'Marie',
-        'numero_client'    => 'C002',
-        'email'            => 'marie.martin@innovate.co'
-    ],
-    [
-        'id' => 3,
-        'raison_sociale'   => 'Digital Création',
-        'nom_dirigeant'    => 'Bernard',
-        'prenom_dirigeant' => 'Luc',
-        'numero_client'    => 'C003',
-        'email'            => 'luc.bernard@digital-creation.fr'
-    ],
-    [
-        'id' => 4,
-        'raison_sociale'   => 'Le Grand Fournil',
-        'nom_dirigeant'    => 'Petit',
-        'prenom_dirigeant' => 'Sophie',
-        'numero_client'    => 'C004',
-        'email'            => 'sophie.petit@fournil.com'
-    ]
-];
+// ==================================================================
+// Récupération de tous les clients depuis la BDD (REMPLACE la liste statique)
+// ==================================================================
+try {
+    $sql = "SELECT 
+                id,
+                numero_client,
+                raison_sociale,
+                nom_dirigeant,
+                prenom_dirigeant,
+                email
+            FROM clients
+            ORDER BY raison_sociale ASC";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $nbClients = is_array($clients) ? count($clients) : 0;
+} catch (PDOException $e) {
+    error_log('Erreur SQL (clients): ' . $e->getMessage());
+    $clients = [];
+    $nbClients = 0;
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -203,7 +190,7 @@ $clients = [
                     </svg>
                 </div>
                 <h3 class="card-title">Clients</h3>
-                <p class="card-count"><?= count($clients) ?></p>
+                <p class="card-count"><?= (int)$nbClients ?></p>
             </div>
 
             <!-- Stock -->
@@ -262,7 +249,7 @@ $clients = [
 
     <!-- Bouton Support -->
     <a href="#" class="support-btn" id="supportButton" aria-label="Support client">
-        <span class="support-badge"><?= count($clients) ?></span>
+        <span class="support-badge"><?= (int)$nbClients ?></span>
         <svg width="32" height="32" viewBox="0 0 24 24"
             fill="none" stroke="currentColor" stroke-width="2.4"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
