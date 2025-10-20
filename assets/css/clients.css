@@ -62,98 +62,54 @@
 .td-date   { color: var(--text-secondary);}
 
 /* =========================================================
-   Toners (cartouches verticales)
+   Toners (inline, compacts, hauteur texte)
    ========================================================= */
-
-.toners.toners--cartridges {
-  display: grid;
-  grid-template-columns: repeat(4, 72px); /* 4 cartouches alignées */
-  gap: 14px;
-  align-items: end;
-}
-
-.cartridge {
-  width: 72px;
+.toners--inline {
   display: flex;
-  flex-direction: column;
   align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-/* Capuchon au-dessus */
-.cartridge-cap {
-  width: 44px;
-  height: 14px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px 8px 3px 3px;
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 6px;
-}
-
-/* Corps transparent avec bord arrondi */
-.cartridge-body {
+.toners--inline .t {
   position: relative;
-  width: 56px;
-  height: 128px;             /* hauteur de la jauge */
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.04));
+  height: 1.6em;             /* ≈ hauteur de la ligne de texte */
+  line-height: 1.6em;
+  padding: 0 8px;
   border: 1px solid var(--border-color);
+  border-radius: 999px;      /* pastille */
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.9rem;         /* proche de la taille du tableau */
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.08);
 }
 
-/* Remplissage montant depuis le bas (piloté par --level 0..100) */
-.cartridge-fill {
+/* Barre de remplissage (en largeur) sous le texte */
+.toners--inline .t .bar {
   position: absolute;
-  inset: auto 0 0 0;         /* bottom: 0; left/right: 0 */
-  height: calc(var(--level, 0) * 1%);
-  transition: height .35s ease;
-  background-image:
-    linear-gradient(to bottom, rgba(255,255,255,0.15), rgba(0,0,0,0.08));
-  mix-blend-mode: overlay;   /* relief doux */
-}
-
-/* Couleurs par type */
-.t-k .cartridge-fill { background-color: #0f172a; }  /* Black */
-.t-c .cartridge-fill { background-color: #06b6d4; }  /* Cyan  */
-.t-m .cartridge-fill { background-color: #ef4444; }  /* Magenta */
-.t-y .cartridge-fill { background-color: #f59e0b; }  /* Yellow */
-
-/* Pourtour/halo léger au-dessus du niveau de liquide */
-.cartridge-body::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 10px;
-  pointer-events: none;
-  background: linear-gradient(to top, rgba(0,0,0,0.18), rgba(0,0,0,0));
-}
-
-/* Pourcentage au centre */
-.cartridge-percent {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 800;
-  font-size: 0.92rem;
-  color: #fff;
-  text-shadow: 0 2px 6px rgba(0,0,0,0.5);
-  mix-blend-mode: normal;
+  left: 0; top: 0; bottom: 0;
+  width: calc(var(--level, 0) * 1%);
+  opacity: 0.28;
   pointer-events: none;
 }
 
-/* Label sous la cartouche (K/C/M/Y) */
-.cartridge-label {
-  margin-top: 6px;
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: .02em;
-  color: var(--text-secondary);
-  text-transform: uppercase;
+/* Texte au-dessus */
+.toners--inline .t em {
+  position: relative;
+  z-index: 1;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: .01em;
 }
 
-/* Thème sombre : renforcer un peu le bord */
-[data-theme="dark"] .cartridge-body { border-color: #475569; }
-[data-theme="dark"] .cartridge-cap  { border-color: #475569; }
+/* Couleurs */
+.toners--inline .t-k .bar { background: #0f172a; } /* Noir */
+.toners--inline .t-c .bar { background: #06b6d4; } /* Cyan */
+.toners--inline .t-m .bar { background: #ef4444; } /* Magenta */
+.toners--inline .t-y .bar { background: #f59e0b; } /* Jaune */
+
+[data-theme="dark"] .toners--inline .t { border-color: #475569; }
 
 /* =========================================================
    Boutons génériques
@@ -168,20 +124,18 @@
 /* =========================================================
    Popup "Ajouter un client" (utilise .popup-overlay / .support-popup)
    ========================================================= */
-
 .support-popup {
   padding: 1.25rem 1.25rem 1rem;
   border-radius: 1.25rem;
   backdrop-filter: saturate(140%) blur(4px);
 }
 
-/* En-tête centrée, bouton X à droite */
 .modal-header {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding-right: 2.25rem;
+  justify-content: center;   /* centre le titre */
+  padding-right: 2.25rem;    /* espace pour le X */
   margin-bottom: 0.75rem;
 }
 
@@ -219,7 +173,7 @@
   line-height: 1;
 }
 
-/* Conteneurs de formulaire dans la popup */
+/* Cartes de champs dans la popup */
 .card-like {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -252,7 +206,7 @@
   margin: 0.35rem 0;
 }
 
-/* Actions en bas : à droite + style boutons */
+/* Actions */
 .modal-actions {
   display: flex;
   align-items: center;
@@ -293,11 +247,11 @@
 
 /* Annuler (rouge) */
 .btn-danger {
-  background: #ef4444;      /* rouge 500 */
+  background: #ef4444;
   color: #fff;
   border: 1px solid #ef4444;
 }
-.btn-danger:hover { background: #dc2626; } /* rouge 600 */
+.btn-danger:hover { background: #dc2626; }
 
 /* Messages flash */
 .flash { padding: 0.6rem 0.8rem; border-radius: var(--radius-md); }
@@ -342,7 +296,6 @@
 
   .tbl-photocopieurs tbody td:last-child { border-bottom: none; }
 
-  /* label de la colonne via data-th */
   .tbl-photocopieurs tbody td::before {
     content: attr(data-th);
     display: block;
@@ -352,30 +305,20 @@
     letter-spacing: .02em;
   }
 
-  /* Toners: en 4 -> 2 colonnes sur tablette/mobile large */
-  .toners.toners--cartridges {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    justify-items: center;
-  }
-  .cartridge { width: 64px; }
-  .cartridge-body { height: 118px; width: 52px; }
+  /* Toners inline : rien à changer, wrap automatique */
+  .form-grid-2 { grid-template-columns: 1fr; }
+  .modal-hint { margin-left: 0; }
 }
 
-@media (max-width: 640px) {
-  .toners.toners--cartridges {
-    grid-template-columns: repeat(2, 96px);
-    gap: 12px 18px;
-  }
-}
-
+/* =========================================================
+   Petits écrans (<= 480px)
+   ========================================================= */
 @media (max-width: 480px) {
   .machine-cell .machine-sub { font-size: 0.8rem; }
   .client-cell .client-num   { font-size: 0.78rem; }
-
   .filters-row input { font-size: 0.95rem !important; }
 
-  /* Popup: boutons plein-largeur pour confort tactile */
+  /* Popup: boutons plein-largeur */
   .modal-actions { flex-wrap: wrap; }
   .btn-solid { width: 100%; }
   .modal-hint { width: 100%; order: -1; margin: 0 0 .5rem 0; }
