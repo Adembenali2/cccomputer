@@ -334,7 +334,7 @@ try {
     <!-- ===== Popup "Ajouter un client" (overlay + fenêtre) ===== -->
     <div id="clientModalOverlay" class="popup-overlay" aria-hidden="true"></div>
 
-    <div id="clientModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle">
+    <div id="clientModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle" style="display:none;">
       <div class="modal-header">
         <h3 id="clientModalTitle">Ajouter un client</h3>
         <button type="button" id="btnCloseModal" class="icon-btn icon-btn--close" aria-label="Fermer">
@@ -458,6 +458,36 @@ try {
     <!-- Ouverture auto si erreurs validation -->
     <script>
       window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode(($flash['type']==='error' && ($_POST['action'] ?? '')==='add_client') ? true : false) ?>;
+    </script>
+
+    <!-- Gestion popup: centrer, bloquer scroll page, retirer barres -->
+    <script>
+      (function(){
+        const overlay = document.getElementById('clientModalOverlay');
+        const modal   = document.getElementById('clientModal');
+        const openBtn = document.getElementById('btnAddClient');
+        const closeBtn = document.getElementById('btnCloseModal');
+
+        function openModal(){
+          document.body.classList.add('modal-open');
+          overlay.setAttribute('aria-hidden','false');
+          overlay.style.display = 'block';
+          modal.style.display = 'block';
+        }
+        function closeModal(){
+          document.body.classList.remove('modal-open');
+          overlay.setAttribute('aria-hidden','true');
+          overlay.style.display = 'none';
+          modal.style.display = 'none';
+        }
+
+        openBtn && openBtn.addEventListener('click', openModal);
+        closeBtn && closeBtn.addEventListener('click', closeModal);
+        overlay && overlay.addEventListener('click', closeModal);
+
+        // Ouvre auto si erreurs validation
+        if (window.__CLIENT_MODAL_INIT_OPEN__) openModal();
+      })();
     </script>
 
     <!-- Sync adresse de livraison quand "identique" est coché (readOnly pour poster la valeur) -->

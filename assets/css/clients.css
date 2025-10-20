@@ -3,6 +3,12 @@
    Mobile = cartes)
    ========================================================= */
 
+/* Empêche toute barre horizontale globale */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Quand la popup est ouverte, on bloque le scroll de la page */
+body.modal-open { overflow: hidden; }
+
 /* ---------- Wrapper & Table (desktop) ---------- */
 .table-wrapper {
   background: var(--bg-primary);
@@ -53,11 +59,11 @@
 .machine-cell .machine-sub  {
   font-size: 0.85rem;
   color: var(--text-secondary);
-  overflow-wrap: break-word; /* coupe les mots/chaînes longues */
-  word-break: break-word;    /* fallback */
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
-/* chiffres : on peut garder nowrap, ils ne sont pas longs */
+/* chiffres */
 .td-metric { font-weight: 700; text-align: right; }
 .td-date   { color: var(--text-secondary);}
 
@@ -84,10 +90,10 @@
   opacity: 0.95;
 }
 
-.toner.t-k span { background: #000000; }  /* Noir */
-.toner.t-c span { background: #00d9ff; }  /* Cyan */
-.toner.t-m span { background: #ff0000; }  /* Magenta */
-.toner.t-y span { background: #ffa200; }  /* Jaune */
+.toner.t-k span { background: #000000; }
+.toner.t-c span { background: #00d9ff; }
+.toner.t-m span { background: #ff0000; }
+.toner.t-y span { background: #ffa200; }
 
 .toner em {
   position: absolute; inset: 0;
@@ -109,10 +115,23 @@
 
 /* =========================================================
    Popup "Ajouter un client"
-   (s'appuie sur .popup-overlay et .support-popup de main.css)
    ========================================================= */
 
+/* Overlay plein écran, fixe */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+}
+
+/* Fenêtre popup centrée, ne déborde jamais de l'écran */
 .support-popup {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(980px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto; /* scroll interne si contenu trop long */
   padding: 1.25rem 1.25rem 1rem;
   border-radius: 1.25rem;
   backdrop-filter: saturate(140%) blur(4px);
@@ -194,7 +213,7 @@
   margin: 0.35rem 0;
 }
 
-/* --------- NOUVEAU : livraison stylée (case custom + icône + texte aligné) --------- */
+/* --------- Livraison stylée --------- */
 .livraison-row {
   display: flex;
   align-items: center;
@@ -309,6 +328,9 @@ input.is-disabled {
 .flash-success { background: #0ea5e91a; border: 1px solid #0ea5e9; color: var(--text-primary); }
 .flash-error   { background: #ef44441a; border: 1px solid #ef4444; color: var(--text-primary); }
 
+/* Empêche tout débordement horizontal du conteneur principal */
+.page-container { overflow-x: hidden; }
+
 /* =========================================================
    Mode "Cartes" responsive (<= 900px)
    ========================================================= */
@@ -382,6 +404,5 @@ input.is-disabled {
   .btn-solid { width: 100%; }
   .modal-hint { width: 100%; order: -1; margin: 0 0 .5rem 0; }
 
-  /* icône colis plus discrète si besoin */
   .livraison-emoji { font-size: 1.2rem; }
 }
