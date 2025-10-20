@@ -17,7 +17,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: auto;        /* autosize en fonction du contenu */
+  table-layout: fixed;        /* autosize en fonction du contenu */
 }
 
 /* En-têtes */
@@ -48,7 +48,13 @@
 .client-cell .client-num    { font-size: 0.85rem; color: var(--text-muted); }
 
 .machine-cell .machine-line { margin-bottom: 0.1rem; }
-.machine-cell .machine-sub  { font-size: 0.85rem; color: var(--text-secondary); word-break: break-word; }
+/* Code CORRIGÉ à appliquer */
+.machine-cell .machine-sub  { 
+    font-size: 0.85rem; 
+    color: var(--text-secondary); 
+    overflow-wrap: break-word; /* Propriété standard pour couper les mots longs */
+    word-break: break-word;    /* Alternative/fallback pour certains cas */
+}
 
 /* chiffres : on peut garder nowrap, ils ne sont pas longs */
 .td-metric { font-weight: 700; text-align: right; }
