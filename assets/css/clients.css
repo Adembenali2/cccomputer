@@ -14,11 +14,12 @@
 }
 
 .tbl-photocopieurs {
-  width: 40%;
+  width: 100%;                /* plein écran pour éviter l’écrasement */
   /* largeur mini optimisée pour afficher toutes les colonnes */
   min-width: 1280px;
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;        /* stabilise l’alignement des colonnes */
 }
 
 /* En-têtes */
@@ -33,21 +34,12 @@
   white-space: nowrap;
 }
 
-/* Largeurs mini par colonne pour éviter l’écrasement
-   (total ≈ 1280px hors bordures) */
-.tbl-photocopieurs thead th:nth-child(1) { min-width: 200px; }  /* Client */
-.tbl-photocopieurs thead th:nth-child(2) { min-width: 120px; }  /* Dirigeant */
-.tbl-photocopieurs thead th:nth-child(3) { min-width: 120px; }  /* Téléphone */
-.tbl-photocopieurs thead th:nth-child(4) { min-width: 260px; }  /* Photocopieur */
-.tbl-photocopieurs thead th:nth-child(5) { min-width: 220px; }  /* Toners */
-.tbl-photocopieurs thead th:nth-child(6) { min-width: 110px; }  /* Total BW */
-.tbl-photocopieurs thead th:nth-child(7) { min-width: 110px; }  /* Total Color */
-.tbl-photocopieurs thead th:nth-child(8) { min-width: 150px; }  /* Dernier relevé */
-
 .tbl-photocopieurs tbody td {
   padding: 0.65rem 0.75rem;   /* plus compact */
   border-bottom: 1px solid var(--border-color);
   vertical-align: top;
+  overflow: hidden;           /* utile avec table-layout: fixed */
+  text-overflow: ellipsis;
 }
 
 .tbl-photocopieurs tbody tr:hover { background: var(--bg-secondary); }
