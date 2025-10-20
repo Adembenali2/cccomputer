@@ -412,11 +412,7 @@ input.is-disabled {
     letter-spacing: .02em;
   }
 
-  .toners {
-    grid-template-columns: 1fr;
-    gap: 8px;
-    will-change: transform;
-  }
+  .toners { display: flex; gap: 8px; } 
 
   .td-metric, .td-date { text-align: left; white-space: normal; }
 
