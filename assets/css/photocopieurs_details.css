@@ -9,10 +9,27 @@
 }
 
 /* En-tête + badges */
-.details-header { display: grid; gap: .35rem; margin: 1rem 0; }
-.details-header .h1 { font-size: 1.35rem; font-weight: 800; color: var(--text-primary); }
+.details-header { display: grid; gap: .6rem; margin: 1rem 0; }
+.details-header .h1 { font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin: 0; }
 .meta { color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: .4rem .5rem; }
-.badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; border: 1px solid var(--border-color); font-size: .85rem; background: var(--bg-primary); }
+.badge { display: inline-block; padding: .25rem .6rem; border-radius: 999px; border: 1px solid var(--border-color); font-size: .9rem; background: var(--bg-primary); }
+
+/* Carte client attribué */
+.client-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: .9rem 1rem;
+}
+.client-title { font-weight: 800; margin-bottom: .5rem; color: var(--text-primary); }
+.client-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .6rem 1rem;
+}
+.client-grid .label { font-size: .8rem; color: var(--text-muted); }
+.client-grid .value { font-weight: 700; color: var(--text-primary); }
 
 /* Barre d’outils (Retour + Espace client) */
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .25rem 0 1rem; }
@@ -31,15 +48,16 @@ table.details tbody tr:hover { background: var(--bg-secondary); }
 .td-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
 
 /* Toners = barres colorées */
-.td-toner { white-space: nowrap; }
-.td-toner em { margin-left: .5rem; font-style: normal; color: var(--text-secondary); font-weight: 700; }
-.th-toner { min-width: 120px; } /* donne un peu d'espace */
+.td-toner { white-space: nowrap; display: flex; align-items: center; gap: .5rem; }
+.td-toner em { font-style: normal; color: var(--text-secondary); font-weight: 700; min-width: 2.5ch; }
+
+.th-toner { min-width: 130px; }
 
 .toner-bar {
   --h: 10px;
   position: relative;
   width: 100%;
-  max-width: 140px;
+  max-width: 160px;
   height: var(--h);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
@@ -63,8 +81,9 @@ table.details tbody tr:hover { background: var(--bg-secondary); }
    Responsive (<= 900px)
    =========================== */
 @media (max-width: 900px) {
-  table.details thead { position: absolute; left: -9999px; height: 0; overflow: hidden; }
+  .client-grid { grid-template-columns: 1fr; }
 
+  table.details thead { position: absolute; left: -9999px; height: 0; overflow: hidden; }
   table.details, table.details tbody, table.details tr, table.details td { display: block; width: 100%; }
 
   table.details tbody tr {
@@ -81,7 +100,7 @@ table.details tbody tr:hover { background: var(--bg-secondary); }
   table.details tbody td {
     border: none;
     border-bottom: 1px solid var(--border-color);
-    padding: .85rem 1rem;
+    padding: .9rem 1rem;
     position: relative;
   }
   table.details tbody td:last-child { border-bottom: none; }
@@ -107,13 +126,12 @@ table.details tbody tr:hover { background: var(--bg-secondary); }
   table.details tbody tr td:nth-child(9)::before  { content: "Total Color"; }
 
   .td-num { text-align: left; white-space: normal; }
-  .td-toner { display: flex; align-items: center; gap: .5rem; }
   .toner-bar { max-width: none; }
 }
 
 /* Très petits écrans */
 @media (max-width: 480px) {
-  .details-header .h1 { font-size: 1.2rem; }
+  .details-header .h1 { font-size: 1.3rem; }
   .toolbar .btn, .back-link { padding: .5rem .7rem; }
-  table.details tbody td { padding: .75rem .9rem; }
+  table.details tbody td { padding: .8rem .9rem; }
 }
