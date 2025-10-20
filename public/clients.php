@@ -3,6 +3,11 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
+/** Sécurise PDO en mode exceptions si ce n'est pas déjà fait **/
+if (method_exists($pdo, 'setAttribute')) {
+    try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
+}
+
 /** Helpers **/
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 function pctOrDash($v): string {
@@ -24,6 +29,19 @@ function generateClientNumber(PDO $pdo): string {
     $next = $pdo->query($sql)->fetchColumn();
     if (!$next) { $next = '00001'; }
     return 'C' . $next;
+}
+
+/** Obtient le prochain ID si la colonne id n'est pas AUTO_INCREMENT (fallback) **/
+function nextClientId(PDO $pdo): int {
+    return (int)$pdo->query("SELECT COALESCE(MAX(id),0)+1 FROM clients")->fetchColumn();
+}
+
+/** Teste si l'erreur est liée à 'id' sans valeur par défaut (id non auto-incrément) **/
+function isNoDefaultIdError(PDOException $e): bool {
+    // MySQL 1364: Field 'id' doesn't have a default value
+    // MySQL 1048: Column 'id' cannot be null (selon config stricte)
+    $code = (int)($e->errorInfo[1] ?? 0);
+    return in_array($code, [1364, 1048], true);
 }
 
 /** Traitement POST (ajout client) **/
@@ -59,55 +77,94 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     if ($siret === '')            $errors[] = "Le SIRET est obligatoire.";
 
     if (empty($errors)) {
+        $numero = generateClientNumber($pdo);
+
+        // Préparation (sans 'id')
+        $sqlInsert = "
+            INSERT INTO clients
+                (numero_client, raison_sociale, adresse, code_postal, ville,
+                 adresse_livraison, livraison_identique, siret, numero_tva,
+                 nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
+                 email, parrain, offre)
+            VALUES
+                (:numero_client, :raison_sociale, :adresse, :code_postal, :ville,
+                 :adresse_livraison, :livraison_identique, :siret, :numero_tva,
+                 :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
+                 :email, :parrain, :offre)
+        ";
+        $params = [
+            ':numero_client'       => $numero,
+            ':raison_sociale'      => $raison_sociale,
+            ':adresse'             => $adresse,
+            ':code_postal'         => $code_postal,
+            ':ville'               => $ville,
+            ':adresse_livraison'   => ($adresse_livraison !== '' ? $adresse_livraison : null),
+            ':livraison_identique' => $livraison_identique,
+            ':siret'               => $siret,
+            ':numero_tva'          => ($numero_tva !== '' ? $numero_tva : null),
+            ':nom_dirigeant'       => $nom_dirigeant,
+            ':prenom_dirigeant'    => $prenom_dirigeant,
+            ':telephone1'          => $telephone1,
+            ':telephone2'          => ($telephone2 !== '' ? $telephone2 : null),
+            ':email'               => $email,
+            ':parrain'             => ($parrain !== '' ? $parrain : null),
+            ':offre'               => $offre,
+        ];
+
         try {
-            $numero = generateClientNumber($pdo);
-            $stmt = $pdo->prepare("
-                INSERT INTO clients
-                    (numero_client, raison_sociale, adresse, code_postal, ville,
-                     adresse_livraison, livraison_identique, siret, numero_tva,
-                     nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
-                     email, parrain, offre)
-                VALUES
-                    (:numero_client, :raison_sociale, :adresse, :code_postal, :ville,
-                     :adresse_livraison, :livraison_identique, :siret, :numero_tva,
-                     :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
-                     :email, :parrain, :offre)
-            ");
-            $params = [
-                ':numero_client'       => $numero,
-                ':raison_sociale'      => $raison_sociale,
-                ':adresse'             => $adresse,
-                ':code_postal'         => $code_postal,
-                ':ville'               => $ville,
-                ':adresse_livraison'   => ($adresse_livraison !== '' ? $adresse_livraison : null),
-                ':livraison_identique' => $livraison_identique,
-                ':siret'               => $siret,
-                ':numero_tva'          => ($numero_tva !== '' ? $numero_tva : null),
-                ':nom_dirigeant'       => $nom_dirigeant,
-                ':prenom_dirigeant'    => $prenom_dirigeant,
-                ':telephone1'          => $telephone1,
-                ':telephone2'          => ($telephone2 !== '' ? $telephone2 : null),
-                ':email'               => $email,
-                ':parrain'             => ($parrain !== '' ? $parrain : null),
-                ':offre'               => $offre,
-            ];
+            $stmt = $pdo->prepare($sqlInsert);
             $stmt->execute($params);
+
             header('Location: /public/clients.php?added=1');
             exit;
+
         } catch (PDOException $e) {
-            if ((int)$e->errorInfo[1] === 1062) {
+            // Cas 1 : id non auto-incrément → retente avec id = MAX(id)+1
+            if (isNoDefaultIdError($e)) {
+                try {
+                    $id = nextClientId($pdo);
+                    $stmt = $pdo->prepare("
+                        INSERT INTO clients
+                            (id, numero_client, raison_sociale, adresse, code_postal, ville,
+                             adresse_livraison, livraison_identique, siret, numero_tva,
+                             nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
+                             email, parrain, offre)
+                        VALUES
+                            (:id, :numero_client, :raison_sociale, :adresse, :code_postal, :ville,
+                             :adresse_livraison, :livraison_identique, :siret, :numero_tva,
+                             :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
+                             :email, :parrain, :offre)
+                    ");
+                    $paramsWithId = $params + [':id' => $id];
+                    $stmt->execute($paramsWithId);
+
+                    header('Location: /public/clients.php?added=1');
+                    exit;
+
+                } catch (PDOException $eId) {
+                    error_log('clients.php INSERT with id error: '.$eId->getMessage());
+                    $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client (id requis)."];
+                }
+            }
+            // Cas 2 : doublon sur numero_client → regénère et retente
+            elseif ((int)($e->errorInfo[1] ?? 0) === 1062) {
                 try {
                     $numero = generateClientNumber($pdo);
                     $params[':numero_client'] = $numero;
+                    $stmt = $pdo->prepare($sqlInsert);
                     $stmt->execute($params);
+
                     header('Location: /public/clients.php?added=1');
                     exit;
+
                 } catch (PDOException $e2) {
-                    error_log('clients.php INSERT retry error: '.$e2->getMessage());
+                    error_log('clients.php INSERT retry duplicate error: '.$e2->getMessage());
                     $flash = ['type' => 'error', 'msg' => "Erreur SQL (unicité): impossible de créer le client."];
                 }
             } else {
                 error_log('clients.php INSERT error: '.$e->getMessage());
+                // Pour debug rapide en dev, décommente :
+                // error_log(print_r($e->errorInfo, true));
                 $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client."];
             }
         }
@@ -119,7 +176,7 @@ if (($_GET['added'] ?? '') === '1') {
     $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
 }
 
-/** Requête principale (corrigée pour inclure les clients sans photocopieur) **/
+/** Requête principale (inclut aussi les clients sans photocopieur) **/
 $sql = "
 WITH v_compteur_last AS (
   SELECT r.*,
@@ -489,7 +546,7 @@ try {
       window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode(($flash['type']==='error' && ($_POST['action'] ?? '')==='add_client') ? true : false) ?>;
     </script>
 
-    <!-- Gestion popup: centrer, bloquer scroll page, retirer barres -->
+    <!-- Gestion popup -->
     <script>
       (function(){
         const overlay = document.getElementById('clientModalOverlay');
@@ -514,12 +571,11 @@ try {
         closeBtn && closeBtn.addEventListener('click', closeModal);
         overlay && overlay.addEventListener('click', closeModal);
 
-        // Ouvre auto si erreurs validation
         if (window.__CLIENT_MODAL_INIT_OPEN__) openModal();
       })();
     </script>
 
-    <!-- Sync adresse de livraison quand "identique" est coché (readOnly pour poster la valeur) -->
+    <!-- Sync adresse livraison -->
     <script>
       (function(){
         const cb      = document.getElementById('livraison_identique');
