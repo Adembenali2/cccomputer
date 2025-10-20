@@ -202,7 +202,9 @@ WITH v_compteur_last AS (
   FROM compteur_relevee r
 ),
 v_last AS (
-  SELECT *
+  SELECT
+    *,
+    TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
   FROM v_compteur_last
   WHERE rn = 1
 ),
@@ -216,6 +218,7 @@ blk_releve AS (
     v.Model,
     v.Nom,
     v.`Timestamp`                                                      AS last_ts,
+    v.age_hours                                                        AS last_age_hours,
     v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
     v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
     c.id                                                               AS client_id,
@@ -238,6 +241,7 @@ blk_sans_releve AS (
     NULL AS Model,
     NULL AS Nom,
     NULL AS last_ts,
+    NULL AS last_age_hours,
     NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
     NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
     c.id AS client_id,
@@ -261,6 +265,7 @@ clients_sans_machine AS (
     NULL AS Model,
     NULL AS Nom,
     NULL AS last_ts,
+    NULL AS last_age_hours,
     NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
     NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
     c.id AS client_id,
@@ -364,7 +369,9 @@ try {
                     $mac     = $r['MacAddress'] ?: ($r['mac_norm'] ?? '');
                     $macNorm = $r['mac_norm'] ?? '';
                     $nom     = $r['Nom'] ?: '';
-                    $lastTs  = $r['last_ts'] ? date('Y-m-d H:i', strtotime($r['last_ts'])) : '—';
+                    $lastTsRaw = $r['last_ts'] ?? null;
+                    $lastTs  = $lastTsRaw ? date('Y-m-d H:i', strtotime($lastTsRaw)) : '—';
+                    $ageHours = isset($r['last_age_hours']) ? (int)$r['last_age_hours'] : null;
                     $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
                     $totCol  = is_null($r['TotalColor']) ? '—' : number_format((int)$r['TotalColor'], 0, ',', ' ');
 
@@ -381,8 +388,25 @@ try {
                     );
 
                     $rowHref = $macNorm ? '/public/photocopieurs_details.php?mac=' . urlencode($macNorm) : '';
+
+                    // ----- Alerte : pas de relevé depuis >= 48h (2 jours) -----
+                    $hasMachine = ($macNorm || $sn || $modele);
+                    $isAlert = false;
+                    if ($hasMachine) {
+                        if (!$lastTsRaw) {
+                            $isAlert = true; // jamais reçu
+                        } elseif ($ageHours !== null && $ageHours >= 48) {
+                            $isAlert = true; // en retard >= 2 jours
+                        }
+                    }
+
+                    // classes de ligne
+                    $rowClasses = [];
+                    if ($rowHref)  $rowClasses[] = 'is-clickable';
+                    if ($isAlert)  $rowClasses[] = 'row-alert';
+                    $rowClassAttr = $rowClasses ? ' class="'.h(implode(' ', $rowClasses)).'"' : '';
                 ?>
-                    <tr data-search="<?= h($searchText) ?>" <?= $rowHref ? 'data-href="'.h($rowHref).'" class="is-clickable"' : '' ?>>
+                    <tr data-search="<?= h($searchText) ?>" <?= $rowHref ? 'data-href="'.h($rowHref).'"' : '' ?><?= $rowClassAttr ?>>
                         <td data-th="Client">
                             <div class="client-cell">
                                 <div class="client-raison"><?= h($raison) ?></div>
@@ -403,6 +427,14 @@ try {
                                 </div>
                                 <?php if ($nom): ?>
                                   <div class="machine-sub">Nom: <?= h($nom) ?></div>
+                                <?php endif; ?>
+
+                                <?php if ($isAlert): ?>
+                                  <div class="machine-sub">
+                                    <span class="alert-badge" title="<?= h(!$lastTsRaw ? 'Aucun relevé reçu pour cette machine.' : 'Dernier relevé il y a ~'.(int)floor($ageHours/24).' jours') ?>">
+                                      ⚠️ Relevé en retard<?= !$lastTsRaw ? ' (jamais reçu)' : (($ageHours>=48)?' (≥ 2 jours)':'') ?>
+                                    </span>
+                                  </div>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -430,7 +462,9 @@ try {
 
                         <td class="td-metric" data-th="Total BW"><?= h($totBW) ?></td>
                         <td class="td-metric" data-th="Total Color"><?= h($totCol) ?></td>
-                        <td class="td-date" data-th="Dernier relevé"><?= h($lastTs) ?></td>
+                        <td class="td-date" data-th="Dernier relevé" title="<?= h($lastTsRaw ? ('Âge: ~'.(int)$ageHours.' h') : 'Aucun relevé') ?>">
+                            <?= h($lastTs) ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

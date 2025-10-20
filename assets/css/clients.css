@@ -51,6 +51,34 @@ body.modal-open { overflow: hidden; }
   background: var(--bg-secondary);
 }
 
+/* --- Ligne en alerte (pas de relevé >= 2 jours) --- */
+.tbl-photocopieurs tbody tr.row-alert { position: relative; }
+.tbl-photocopieurs tbody tr.row-alert::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #ef4444;            /* rouge */
+  opacity: 0.6;
+}
+
+/* Badge d'alerte */
+.alert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #b91c1c;
+  background: #ef44441a;
+  border: 1px solid #ef4444;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
 /* Centrer la colonne Toners (desktop) */
 .tbl-photocopieurs tbody td[data-th="Toners"] {
   vertical-align: middle; /* milieu de la ligne */
