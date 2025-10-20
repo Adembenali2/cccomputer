@@ -428,14 +428,6 @@ try {
                                 <?php if ($nom): ?>
                                   <div class="machine-sub">Nom: <?= h($nom) ?></div>
                                 <?php endif; ?>
-
-                                <?php if ($isAlert): ?>
-                                  <div class="machine-sub">
-                                    <span class="alert-badge" title="<?= h(!$lastTsRaw ? 'Aucun relevé reçu pour cette machine.' : 'Dernier relevé il y a ~'.(int)floor($ageHours/24).' jours') ?>">
-                                      ⚠️ Relevé en retard<?= !$lastTsRaw ? ' (jamais reçu)' : (($ageHours>=48)?' (≥ 2 jours)':'') ?>
-                                    </span>
-                                  </div>
-                                <?php endif; ?>
                             </div>
                         </td>
 
@@ -465,6 +457,15 @@ try {
                         <td class="td-date" data-th="Dernier relevé" title="<?= h($lastTsRaw ? ('Âge: ~'.(int)$ageHours.' h') : 'Aucun relevé') ?>">
                             <?= h($lastTs) ?>
                         </td>
+
+                        <?php if ($isAlert): ?>
+                          <!-- Badge d'alerte absolument positionné à droite, hors tableau -->
+                          <td class="pullout-cell" aria-hidden="true" style="position: static; padding: 0; border: none;">
+                            <span class="alert-pullout" title="<?= h(!$lastTsRaw ? 'Aucun relevé reçu pour cette machine.' : 'Dernier relevé il y a ~'.(int)floor($ageHours/24).' jours') ?>">
+                              ⚠️ Relevé en retard<?= !$lastTsRaw ? ' (jamais reçu)' : (($ageHours>=48)?' (≥ 2 jours)':'') ?>
+                            </span>
+                          </td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
