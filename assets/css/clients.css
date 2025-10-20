@@ -76,11 +76,13 @@ body.modal-open { overflow: hidden; }
 
 .toner {
   position: relative;
-  height: 13px;
+  height: 13px;                   /* le tableau ne bouge pas */
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 10px;
   overflow: hidden;
+  transform: scaleY(1.5);         /* épaisseur visuelle (ajuste 1.35–1.6 si besoin) */
+  transform-origin: center;
 }
 
 .toner span {
@@ -96,9 +98,14 @@ body.modal-open { overflow: hidden; }
 .toner.t-y span { background: #ffa200; }
 
 .toner em {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-style: normal; font-size: 0.7rem; color: #fff;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-style: normal;
+  font-size: 0.78rem;             /* un peu plus grand que 0.7rem */
+  color: #fff;
   text-shadow: 0 1px 1px rgba(0,0,0,0.6);
   pointer-events: none;
 }
@@ -382,6 +389,7 @@ input.is-disabled {
   .toners {
     grid-template-columns: 1fr;
     gap: 8px;
+    will-change: transform;
   }
 
   .td-metric, .td-date { text-align: left; white-space: normal; }
