@@ -53,60 +53,111 @@
 .machine-cell .machine-sub  {
   font-size: 0.85rem;
   color: var(--text-secondary);
-  overflow-wrap: break-word; /* coupe les mots/chaînes longues */
-  word-break: break-word;    /* fallback */
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* chiffres : on peut garder nowrap, ils ne sont pas longs */
 .td-metric { font-weight: 700; text-align: right; }
 .td-date   { color: var(--text-secondary);}
 
-/* ---------- Toners (barres) ---------- */
-.toners {
+/* =========================================================
+   Toners (cartouches verticales)
+   ========================================================= */
+
+.toners.toners--cartridges {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 12px;
+  grid-template-columns: repeat(4, 72px); /* 4 cartouches alignées */
+  gap: 14px;
+  align-items: end;
 }
 
-.toner {
-  position: relative;
-  height: 18px;
+.cartridge {
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Capuchon au-dessus */
+.cartridge-cap {
+  width: 44px;
+  height: 14px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
+  border-radius: 8px 8px 3px 3px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 6px;
+}
+
+/* Corps transparent avec bord arrondi */
+.cartridge-body {
+  position: relative;
+  width: 56px;
+  height: 128px;             /* hauteur de la jauge */
   border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.04));
+  border: 1px solid var(--border-color);
   overflow: hidden;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.08);
 }
 
-.toner span {
-  display: block;
-  height: 100%;
-  transition: width 0.25s ease;
-  opacity: 0.98;
-  /* léger gloss vertical pour du relief */
-  background-image: linear-gradient(to bottom, rgba(255,255,255,0.15), rgba(0,0,0,0.05));
-  mix-blend-mode: overlay; /* garde la teinte, ajoute du relief */
+/* Remplissage montant depuis le bas (piloté par --level 0..100) */
+.cartridge-fill {
+  position: absolute;
+  inset: auto 0 0 0;         /* bottom: 0; left/right: 0 */
+  height: calc(var(--level, 0) * 1%);
+  transition: height .35s ease;
+  background-image:
+    linear-gradient(to bottom, rgba(255,255,255,0.15), rgba(0,0,0,0.08));
+  mix-blend-mode: overlay;   /* relief doux */
 }
 
-.toner.t-k span { background: #000000; }  /* Noir */
-.toner.t-c span { background: #00d9ff; }  /* Cyan */
-.toner.t-m span { background: #ff0000; }  /* Magenta */
-.toner.t-y span { background: #ffa200; }  /* Jaune */
+/* Couleurs par type */
+.t-k .cartridge-fill { background-color: #0f172a; }  /* Black */
+.t-c .cartridge-fill { background-color: #06b6d4; }  /* Cyan  */
+.t-m .cartridge-fill { background-color: #ef4444; }  /* Magenta */
+.t-y .cartridge-fill { background-color: #f59e0b; }  /* Yellow */
 
-.toner em {
+/* Pourtour/halo léger au-dessus du niveau de liquide */
+.cartridge-body::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 10px;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(0,0,0,0.18), rgba(0,0,0,0));
+}
+
+/* Pourcentage au centre */
+.cartridge-percent {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-style: normal; 
-  font-size: 0.8rem;                /* ↑ taille texte (avant: 0.7rem) */
-  font-weight: 700;                 /* bolder pour la lisibilité */
+  font-weight: 800;
+  font-size: 0.92rem;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.6);  /* contraste renforcé */
-  letter-spacing: .01em;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  mix-blend-mode: normal;
   pointer-events: none;
 }
 
-[data-theme="dark"] .toner { border-color: #475569; }
+/* Label sous la cartouche (K/C/M/Y) */
+.cartridge-label {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
 
-/* ---------- Boutons génériques ---------- */
+/* Thème sombre : renforcer un peu le bord */
+[data-theme="dark"] .cartridge-body { border-color: #475569; }
+[data-theme="dark"] .cartridge-cap  { border-color: #475569; }
+
+/* =========================================================
+   Boutons génériques
+   ========================================================= */
 .filters-row .btn { color: var(--text-primary); }
 .btn-primary {
   background: var(--accent-primary);
@@ -115,24 +166,22 @@
 }
 
 /* =========================================================
-   Popup "Ajouter un client"
-   (s'appuie sur .popup-overlay et .support-popup de main.css)
+   Popup "Ajouter un client" (utilise .popup-overlay / .support-popup)
    ========================================================= */
 
-/* Fenêtre popup (on garde la base de main.css et on peaufine) */
 .support-popup {
   padding: 1.25rem 1.25rem 1rem;
-  border-radius: 1.25rem; /* look plus doux */
+  border-radius: 1.25rem;
   backdrop-filter: saturate(140%) blur(4px);
 }
 
-/* En-tête : titre centré, bouton X en haut à droite */
+/* En-tête centrée, bouton X à droite */
 .modal-header {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;      /* centre visuellement le titre */
-  padding-right: 2.25rem;       /* réserve l’espace du bouton X */
+  justify-content: center;
+  padding-right: 2.25rem;
   margin-bottom: 0.75rem;
 }
 
@@ -143,7 +192,7 @@
   color: var(--text-primary);
 }
 
-/* Bouton X (rond, en haut à droite) */
+/* Bouton X */
 .icon-btn {
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
@@ -203,7 +252,7 @@
   margin: 0.35rem 0;
 }
 
-/* Actions en bas : alignées à droite */
+/* Actions en bas : à droite + style boutons */
 .modal-actions {
   display: flex;
   align-items: center;
@@ -212,14 +261,13 @@
   margin-top: 1rem;
 }
 
-/* Astuce/texte d’aide à gauche, boutons à droite */
 .modal-hint {
   margin-right: auto;
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
 
-/* Boutons de la popup : look homogène */
+/* Boutons solides */
 .btn-solid {
   display: inline-flex;
   align-items: center;
@@ -243,7 +291,7 @@
 }
 .btn-primary:hover { background: var(--accent-secondary); }
 
-/* Annuler (rouge, même style) */
+/* Annuler (rouge) */
 .btn-danger {
   background: #ef4444;      /* rouge 500 */
   color: #fff;
@@ -251,7 +299,7 @@
 }
 .btn-danger:hover { background: #dc2626; } /* rouge 600 */
 
-/* Messages flash (réutilisés dans la popup au besoin) */
+/* Messages flash */
 .flash { padding: 0.6rem 0.8rem; border-radius: var(--radius-md); }
 .flash-success { background: #0ea5e91a; border: 1px solid #0ea5e9; color: var(--text-primary); }
 .flash-error   { background: #ef44441a; border: 1px solid #ef4444; color: var(--text-primary); }
@@ -304,32 +352,30 @@
     letter-spacing: .02em;
   }
 
-  /* Toners en pleine largeur */
-  .toners {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  /* Toners: en 4 -> 2 colonnes sur tablette/mobile large */
+  .toners.toners--cartridges {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    justify-items: center;
   }
-
-  .td-metric, .td-date { text-align: left; white-space: normal; }
-
-  /* Popup: colonnes -> 1 */
-  .form-grid-2 { grid-template-columns: 1fr; }
-  .modal-hint { margin-left: 0; }
+  .cartridge { width: 64px; }
+  .cartridge-body { height: 118px; width: 52px; }
 }
 
-/* =========================================================
-   Petits écrans (<= 480px)
-   ========================================================= */
+@media (max-width: 640px) {
+  .toners.toners--cartridges {
+    grid-template-columns: repeat(2, 96px);
+    gap: 12px 18px;
+  }
+}
+
 @media (max-width: 480px) {
   .machine-cell .machine-sub { font-size: 0.8rem; }
   .client-cell .client-num   { font-size: 0.78rem; }
 
-  .toner { height: 12px; }
-  .toner em { font-size: 0.66rem; }
-
   .filters-row input { font-size: 0.95rem !important; }
 
-  /* Boutons plein-largeur pour le confort tactile */
+  /* Popup: boutons plein-largeur pour confort tactile */
   .modal-actions { flex-wrap: wrap; }
   .btn-solid { width: 100%; }
   .modal-hint { width: 100%; order: -1; margin: 0 0 .5rem 0; }

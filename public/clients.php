@@ -119,7 +119,7 @@ if (($_GET['added'] ?? '') === '1') {
     $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
 }
 
-/** Requête principale (inchangée) **/
+/** Requête principale **/
 $sql = "
 WITH v_compteur_last AS (
   SELECT r.*,
@@ -296,25 +296,54 @@ try {
                             </div>
                         </td>
 
+                        <!-- Toners : cartouches verticales (K/C/M/Y) -->
                         <td data-th="Toners">
-                            <div class="toners">
-                                <div class="toner t-k" title="Black: <?= pctOrDash($tk) ?>">
-                                    <span style="width:<?= ($tk!==null?$tk:0) ?>%"></span>
-                                    <em><?= pctOrDash($tk) ?></em>
+                          <div class="toners toners--cartridges">
+                            <!-- BLACK -->
+                            <div class="toner t-k" title="Black: <?= pctOrDash($tk) ?>">
+                              <div class="cartridge">
+                                <div class="cartridge-cap"></div>
+                                <div class="cartridge-body">
+                                  <div class="cartridge-fill" style="--level: <?= ($tk!==null?$tk:0) ?>;"></div>
+                                  <div class="cartridge-percent"><?= pctOrDash($tk) ?></div>
                                 </div>
-                                <div class="toner t-c" title="Cyan: <?= pctOrDash($tc) ?>">
-                                    <span style="width:<?= ($tc!==null?$tc:0) ?>%"></span>
-                                    <em><?= pctOrDash($tc) ?></em>
-                                </div>
-                                <div class="toner t-m" title="Magenta: <?= pctOrDash($tm) ?>">
-                                    <span style="width:<?= ($tm!==null?$tm:0) ?>%"></span>
-                                    <em><?= pctOrDash($tm) ?></em>
-                                </div>
-                                <div class="toner t-y" title="Yellow: <?= pctOrDash($ty) ?>">
-                                    <span style="width:<?= ($ty!==null?$ty:0) ?>%"></span>
-                                    <em><?= pctOrDash($ty) ?></em>
-                                </div>
+                                <div class="cartridge-label">K</div>
+                              </div>
                             </div>
+                            <!-- CYAN -->
+                            <div class="toner t-c" title="Cyan: <?= pctOrDash($tc) ?>">
+                              <div class="cartridge">
+                                <div class="cartridge-cap"></div>
+                                <div class="cartridge-body">
+                                  <div class="cartridge-fill" style="--level: <?= ($tc!==null?$tc:0) ?>;"></div>
+                                  <div class="cartridge-percent"><?= pctOrDash($tc) ?></div>
+                                </div>
+                                <div class="cartridge-label">C</div>
+                              </div>
+                            </div>
+                            <!-- MAGENTA -->
+                            <div class="toner t-m" title="Magenta: <?= pctOrDash($tm) ?>">
+                              <div class="cartridge">
+                                <div class="cartridge-cap"></div>
+                                <div class="cartridge-body">
+                                  <div class="cartridge-fill" style="--level: <?= ($tm!==null?$tm:0) ?>;"></div>
+                                  <div class="cartridge-percent"><?= pctOrDash($tm) ?></div>
+                                </div>
+                                <div class="cartridge-label">M</div>
+                              </div>
+                            </div>
+                            <!-- YELLOW -->
+                            <div class="toner t-y" title="Yellow: <?= pctOrDash($ty) ?>">
+                              <div class="cartridge">
+                                <div class="cartridge-cap"></div>
+                                <div class="cartridge-body">
+                                  <div class="cartridge-fill" style="--level: <?= ($ty!==null?$ty:0) ?>;"></div>
+                                  <div class="cartridge-percent"><?= pctOrDash($ty) ?></div>
+                                </div>
+                                <div class="cartridge-label">Y</div>
+                              </div>
+                            </div>
+                          </div>
                         </td>
 
                         <td class="td-metric" data-th="Total BW"><?= h($totBW) ?></td>
@@ -336,10 +365,10 @@ try {
 
     <div id="clientModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle">
       <div class="modal-header">
-      <h3 id="clientModalTitle">Ajouter un client</h3>
-      <button type="button" id="btnCloseModal" class="icon-btn icon-btn--close" aria-label="Fermer">
-        <span aria-hidden="true">×</span>
-      </button>
+        <h3 id="clientModalTitle">Ajouter un client</h3>
+        <button type="button" id="btnCloseModal" class="icon-btn icon-btn--close" aria-label="Fermer">
+          <span aria-hidden="true">×</span>
+        </button>
       </div>
 
       <?php if ($flash['type'] && $flash['type']!=='success' && ($_POST['action'] ?? '')==='add_client'): ?>
@@ -437,11 +466,10 @@ try {
         </div>
 
         <div class="modal-actions">
-            <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
-            <button type="submit" class="btn-solid btn-primary">Enregistrer</button>
-            <button type="button" id="btnCancelAdd" class="btn-solid btn-danger">Annuler</button>
+          <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
+          <button type="submit" class="btn-solid btn-primary">Enregistrer</button>
+          <button type="button" id="btnCancelAdd" class="btn-solid btn-danger">Annuler</button>
         </div>
-
       </form>
     </div>
 
