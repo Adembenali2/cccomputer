@@ -117,16 +117,16 @@ function pctOrDash($v): string {
 
         <div class="table-wrapper">
             <table class="tbl-photocopieurs" id="tbl">
-                <!-- Largeurs de colonnes FIABLES via colgroup -->
+                <!-- Largeurs de colonnes compactes via colgroup (total ≈ 1180px) -->
                 <colgroup>
-                    <col style="min-width:200px">  <!-- Client -->
-                    <col style="min-width:120px">  <!-- Dirigeant -->
-                    <col style="min-width:120px">  <!-- Téléphone -->
-                    <col style="min-width:260px">  <!-- Photocopieur -->
-                    <col style="min-width:220px">  <!-- Toners -->
+                    <col style="min-width:190px">  <!-- Client -->
+                    <col style="min-width:110px">  <!-- Dirigeant -->
+                    <col style="min-width:110px">  <!-- Téléphone -->
+                    <col style="min-width:240px">  <!-- Photocopieur -->
+                    <col style="min-width:190px">  <!-- Toners -->
                     <col style="min-width:110px">  <!-- Total BW -->
                     <col style="min-width:110px">  <!-- Total Color -->
-                    <col style="min-width:150px">  <!-- Dernier relevé -->
+                    <col style="min-width:120px">  <!-- Dernier relevé -->
                 </colgroup>
 
                 <thead>

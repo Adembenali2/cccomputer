@@ -9,14 +9,14 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  overflow-x: auto;   /* sécurité si écran < 1280px */
+  overflow-x: auto;   /* sécurité si écran étroit */
   overflow-y: hidden;
 }
 
 .tbl-photocopieurs {
-  width: 100%;                /* plein écran pour éviter l’écrasement */
-  /* largeur mini optimisée pour afficher toutes les colonnes */
-  min-width: 1280px;
+  width: 100%;
+  /* largeur mini compacte pour tenir dans .page-container (1200px) */
+  min-width: 1180px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;        /* stabilise l’alignement des colonnes */
@@ -28,14 +28,14 @@
   color: var(--text-secondary);
   font-weight: 700;
   font-size: 0.85rem;
-  padding: 0.65rem 0.75rem;   /* plus compact */
+  padding: 0.65rem 0.75rem;   /* compact */
   border-bottom: 1px solid var(--border-color);
   text-align: left;
   white-space: nowrap;
 }
 
 .tbl-photocopieurs tbody td {
-  padding: 0.65rem 0.75rem;   /* plus compact */
+  padding: 0.65rem 0.75rem;   /* compact */
   border-bottom: 1px solid var(--border-color);
   vertical-align: top;
   overflow: hidden;           /* utile avec table-layout: fixed */
@@ -59,12 +59,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr; /* deux colonnes compactes */
   gap: 6px 8px;
-  min-width: 220px;
+  min-width: 190px;               /* réduit (était 220px) */
 }
 
 .toner {
   position: relative;
-  height: 13px;                /* plus fin */
+  height: 13px;                /* fin */
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 10px;
