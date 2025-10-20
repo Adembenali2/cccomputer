@@ -196,6 +196,28 @@
   margin: 0.35rem 0;
 }
 
+/* --------- NOUVEAU : livraison en ligne + adresse dessous --------- */
+.livraison-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0.35rem 0 0.25rem 0;
+}
+.livraison-inline {
+  gap: 0.5rem;         /* espace entre case, icône, texte */
+  margin: 0;
+}
+.livraison-inline input { transform: translateY(1px); }
+.livraison-icon { font-size: 1rem; opacity: .9; }
+
+.adresse-livraison-label { margin-top: 0.25rem; display: inline-block; }
+
+input.is-disabled {
+  opacity: .6;
+  background: var(--bg-tertiary);
+  cursor: not-allowed;
+}
+
 /* Actions en bas : alignées à droite */
 .modal-actions {
   display: flex;
@@ -326,4 +348,7 @@
   .modal-actions { flex-wrap: wrap; }
   .btn-solid { width: 100%; }
   .modal-hint { width: 100%; order: -1; margin: 0 0 .5rem 0; }
+
+  /* sur très petit écran, on peut masquer l’icône */
+  .livraison-icon { display: none; }
 }

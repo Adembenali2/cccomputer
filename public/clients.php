@@ -336,12 +336,11 @@ try {
 
     <div id="clientModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle">
       <div class="modal-header">
-      <h3 id="clientModalTitle">Ajouter un client</h3>
-      <button type="button" id="btnCloseModal" class="icon-btn icon-btn--close" aria-label="Fermer">
-        <span aria-hidden="true">×</span>
-      </button>
-    </div>
-
+        <h3 id="clientModalTitle">Ajouter un client</h3>
+        <button type="button" id="btnCloseModal" class="icon-btn icon-btn--close" aria-label="Fermer">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
 
       <?php if ($flash['type'] && $flash['type']!=='success' && ($_POST['action'] ?? '')==='add_client'): ?>
         <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
@@ -384,12 +383,16 @@ try {
               </div>
             </div>
 
-            <label class="checkbox-inline">
-              <input type="checkbox" name="livraison_identique" id="livraison_identique" <?= isset($_POST['livraison_identique']) ? 'checked' : '' ?>>
-              Adresse de livraison identique
-            </label>
+            <!-- Livraison: case sur une seule ligne, adresse juste en dessous -->
+            <div class="livraison-row">
+              <label class="checkbox-inline livraison-inline">
+                <input type="checkbox" name="livraison_identique" id="livraison_identique" <?= isset($_POST['livraison_identique']) ? 'checked' : '' ?>>
+                <span class="livraison-icon" aria-hidden="true">📦</span>
+                Adresse de livraison identique
+              </label>
+            </div>
 
-            <label>Adresse de livraison</label>
+            <label for="adresse_livraison" class="adresse-livraison-label">Adresse de livraison</label>
             <input type="text" name="adresse_livraison" id="adresse_livraison" value="<?= old('adresse_livraison') ?>" placeholder="Laisser vide si identique">
           </div>
 
@@ -451,6 +454,36 @@ try {
     <!-- Ouverture auto si erreurs validation -->
     <script>
       window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode(($flash['type']==='error' && ($_POST['action'] ?? '')==='add_client') ? true : false) ?>;
+    </script>
+
+    <!-- Sync adresse de livraison quand "identique" est coché -->
+    <script>
+      (function(){
+        const cb      = document.getElementById('livraison_identique');
+        const adr     = document.querySelector('input[name="adresse"]');
+        const adrLiv  = document.getElementById('adresse_livraison');
+
+        if (!cb || !adr || !adrLiv) return;
+
+        function syncLivraison() {
+          if (cb.checked) {
+            adrLiv.value = adr.value;
+            adrLiv.setAttribute('disabled', 'disabled');
+            adrLiv.classList.add('is-disabled');
+          } else {
+            adrLiv.removeAttribute('disabled');
+            adrLiv.classList.remove('is-disabled');
+          }
+        }
+
+        adr.addEventListener('input', () => {
+          if (cb.checked) adrLiv.value = adr.value;
+        });
+        cb.addEventListener('change', syncLivraison);
+
+        // init
+        syncLivraison();
+      })();
     </script>
 </body>
 </html>
