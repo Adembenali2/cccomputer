@@ -53,7 +53,7 @@ body.modal-open { overflow: hidden; }
 
 /* Centrer la colonne Toners (desktop) */
 .tbl-photocopieurs tbody td[data-th="Toners"] {
-  vertical-align: middle; /* au milieu de la ligne */
+  vertical-align: middle; /* milieu de la ligne */
   text-align: center;     /* groupe centré horizontalement */
 }
 @media (min-width: 901px) {
@@ -77,7 +77,7 @@ body.modal-open { overflow: hidden; }
 
 /* chiffres */
 .td-metric { font-weight: 700; text-align: right; }
-.td-date   { color: var(--text-secondary);}
+.td-date   { color: var(--text-secondary); }
 
 /* =========================================================
    Toners -> cartouches type N C M J, alignées HORIZONTALEMENT
@@ -433,26 +433,24 @@ input.is-disabled {
     letter-spacing: .02em;
   }
 
-  /* Bloc "Toners" : aligné à gauche et label soigné */
+  /* --- Masquer le mot "Toners" en responsive --- */
+  .tbl-photocopieurs tbody td[data-th="Toners"]::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  /* Bloc "Toners" : aligné à gauche sans label */
   .tbl-photocopieurs tbody td[data-th="Toners"] {
-    padding-top: 1rem;
     text-align: left;
     vertical-align: middle;
-  }
-  .tbl-photocopieurs tbody td[data-th="Toners"]::before {
-    display: block;
-    text-align: left;
-    margin: 0 0 .55rem 0;   /* spacing sous le label */
-    opacity: .9;
-    letter-spacing: .02em;
-    padding-left: 2px;      /* micro-alignement visuel */
+    padding-top: 0.75rem;       /* pas d'espace spécial sans label */
   }
   .tbl-photocopieurs tbody td[data-th="Toners"] .toners {
     display: flex;                /* force layout horizontal */
     justify-content: flex-start;  /* aligné à gauche */
     align-items: center;
     gap: 10px;
-    margin-top: .05rem;
+    margin: 0;
   }
 
   .td-metric, .td-date { text-align: left; white-space: normal; }
