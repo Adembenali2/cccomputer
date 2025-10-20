@@ -454,18 +454,14 @@ try {
 
                         <td class="td-metric" data-th="Total BW"><?= h($totBW) ?></td>
                         <td class="td-metric" data-th="Total Color"><?= h($totCol) ?></td>
-                        <td class="td-date" data-th="Dernier relevé" title="<?= h($lastTsRaw ? ('Âge: ~'.(int)$ageHours.' h') : 'Aucun relevé') ?>">
+                        <td class="td-date has-pullout" data-th="Dernier relevé" title="<?= h($lastTsRaw ? ('Âge: ~'.(int)$ageHours.' h') : 'Aucun relevé') ?>">
                             <?= h($lastTs) ?>
+                            <?php if ($isAlert): ?>
+                              <span class="alert-pullout" title="<?= h(!$lastTsRaw ? 'Aucun relevé reçu pour cette machine.' : 'Dernier relevé il y a ~'.(int)floor($ageHours/24).' jours') ?>">
+                                ⚠️ Relevé en retard<?= !$lastTsRaw ? ' (jamais reçu)' : (($ageHours>=48)?' (≥ 2 jours)':'') ?>
+                              </span>
+                            <?php endif; ?>
                         </td>
-
-                        <?php if ($isAlert): ?>
-                          <!-- Badge d'alerte absolument positionné à droite, hors tableau -->
-                          <td class="pullout-cell" aria-hidden="true" style="position: static; padding: 0; border: none;">
-                            <span class="alert-pullout" title="<?= h(!$lastTsRaw ? 'Aucun relevé reçu pour cette machine.' : 'Dernier relevé il y a ~'.(int)floor($ageHours/24).' jours') ?>">
-                              ⚠️ Relevé en retard<?= !$lastTsRaw ? ' (jamais reçu)' : (($ageHours>=48)?' (≥ 2 jours)':'') ?>
-                            </span>
-                          </td>
-                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

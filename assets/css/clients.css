@@ -9,14 +9,16 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Quand la popup est ouverte, on bloque le scroll de la page */
 body.modal-open { overflow: hidden; }
 
+/* Désactive le masquage pour cette page -> permet au badge de dépasser à droite */
+.page-clients .page-container { overflow: visible; }
+
 /* ---------- Wrapper & Table (desktop) ---------- */
 .table-wrapper {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  overflow-x: visible;  /* important pour le badge en dehors du tableau */
-  overflow-y: visible;
+  overflow: visible;              /* important pour le badge */
 }
 
 .tbl-photocopieurs {
@@ -38,7 +40,7 @@ body.modal-open { overflow: hidden; }
 }
 
 /* Lignes & cellules */
-.tbl-photocopieurs tbody tr { position: relative; } /* ancre pour le badge pull-out */
+.tbl-photocopieurs tbody tr { position: relative; } /* ancre pour le badge */
 
 .tbl-photocopieurs tbody td {
   padding: 0.65rem 0.75rem;
@@ -53,12 +55,16 @@ body.modal-open { overflow: hidden; }
   background: var(--bg-secondary);
 }
 
+/* Dernière colonne: ancre locale pour le badge */
+.tbl-photocopieurs tbody td.td-date,
+.tbl-photocopieurs tbody td.has-pullout { position: relative; }
+
 /* --- Badge d'alerte tiré à droite, hors tableau --- */
 .alert-pullout {
   position: absolute;
   top: 50%;
-  left: 100%;        /* se place juste après le bord droit du <tr> */
-  transform: translate(10px, -50%); /* petit décalage + centrage vertical */
+  left: calc(100% + 10px); /* à droite du bord de la cellule */
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -70,11 +76,11 @@ body.modal-open { overflow: hidden; }
   padding: 0.2rem 0.5rem;
   border-radius: 6px;
   white-space: nowrap;
-  z-index: 5;        /* au-dessus de la table */
-  pointer-events: none; /* ne gêne pas les clics sur la ligne */
+  z-index: 5;
+  pointer-events: none; /* ne gêne pas les clics */
 }
 
-/* Ne pas afficher le badge pull-out en mode cartes (sinon déborde trop) */
+/* Ne pas afficher le badge pull-out en mode cartes */
 @media (max-width: 900px) {
   .alert-pullout { display: none; }
 }
@@ -413,9 +419,6 @@ input.is-disabled {
 .flash { padding: 0.6rem 0.8rem; border-radius: var(--radius-md); }
 .flash-success { background: #0ea5e91a; border: 1px solid #0ea5e9; color: var(--text-primary); }
 .flash-error   { background: #ef44441a; border: 1px solid #ef4444; color: var(--text-primary); }
-
-/* Empêche tout débordement horizontal du conteneur principal */
-.page-container { overflow-x: hidden; }
 
 /* =========================================================
    Mode "Cartes" responsive (<= 900px)
