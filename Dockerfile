@@ -1,16 +1,20 @@
-# Image depuis Docker Hub (évite le 403 de ghcr.io)
-FROM dunglas/frankenphp:1-php8.3
+# Image mirror (pas d’auth Docker Hub nécessaire)
+FROM mirror.gcr.io/library/php:8.3-apache
 
-# Extensions PHP dont tu as besoin
-RUN install-php-extensions pdo_mysql mysqli
+# Extensions PHP nécessaires
+RUN docker-php-ext-install pdo_mysql mysqli
 
-# Dossier de travail
-WORKDIR /app
+# Activer mod_rewrite (utile pour routes propres)
+RUN a2enmod rewrite \
+ && sed -ri 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
 
-# Copie du code de l’app
-COPY . /app
+# Code de l’app
+WORKDIR /var/www/html
+COPY . /var/www/html
 
-# Copie du Caddyfile pour FrankenPHP
-COPY Caddyfile /etc/frankenphp/Caddyfile
+# Entrypoint qui adapte le port Apache à $PORT (exigé par Railway)
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Ne PAS fixer SERVER_NAME ici : Railway fournit $PORT au runtime
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["apache2-foreground"]
