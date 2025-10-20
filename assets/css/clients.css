@@ -53,8 +53,8 @@ body.modal-open { overflow: hidden; }
 
 /* Centrer la colonne Toners (desktop) */
 .tbl-photocopieurs tbody td[data-th="Toners"] {
-  vertical-align: middle; /* centre verticalement dans la ligne */
-  text-align: center;     /* centre horizontalement le contenu */
+  vertical-align: middle; /* au milieu de la ligne */
+  text-align: center;     /* groupe centré horizontalement */
 }
 @media (min-width: 901px) {
   .tbl-photocopieurs tbody td:nth-child(5) {
@@ -85,7 +85,7 @@ body.modal-open { overflow: hidden; }
 .toners {
   display: flex;                 /* en ligne */
   align-items: center;
-  justify-content: center;       /* centré horizontalement dans la cellule */
+  justify-content: center;       /* centré dans la cellule (desktop) */
   gap: 8px;                      /* espace entre cartouches */
   flex-wrap: nowrap;             /* pas de retour à la ligne */
 }
@@ -433,22 +433,25 @@ input.is-disabled {
     letter-spacing: .02em;
   }
 
-  /* Bloc "Toners" centré sur mobile */
+  /* Bloc "Toners" : aligné à gauche et label soigné */
   .tbl-photocopieurs tbody td[data-th="Toners"] {
-    text-align: center;            /* centre horizontalement */
+    text-align: left;
     vertical-align: middle;
   }
   .tbl-photocopieurs tbody td[data-th="Toners"]::before {
     display: block;
-    text-align: left;              /* libellé aligné à gauche */
-    margin: 0 auto .25rem;
-    max-width: fit-content;
+    text-align: left;
+    margin: 0 0 .35rem 0;   /* spacing sous le label */
+    opacity: .85;
+    letter-spacing: .02em;
+    padding-left: 2px;      /* micro-alignement visuel */
   }
   .tbl-photocopieurs tbody td[data-th="Toners"] .toners {
-    display: flex;                 /* force flex même si une ancienne règle passe en grid */
-    justify-content: center;
-    gap: 8px;
-    margin: .15rem auto 0;
+    display: flex;                /* force layout horizontal */
+    justify-content: flex-start;  /* aligné à gauche */
+    align-items: center;
+    gap: 10px;
+    margin: 0;
   }
 
   .td-metric, .td-date { text-align: left; white-space: normal; }
