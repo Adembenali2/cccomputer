@@ -5,61 +5,47 @@ require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
-// Paramètres d'entrée
+// Entrée
 $macParam = strtoupper(trim($_GET['mac'] ?? ''));
 $snParam  = trim($_GET['sn'] ?? '');
 
-$useMac = false;
-$useSn  = false;
-
-if ($macParam !== '' && preg_match('/^[0-9A-F]{12}$/', $macParam)) {
-    $useMac = true;
-} elseif ($snParam !== '') {
-    $useSn = true;
-} else {
-    http_response_code(400);
-    echo "<!doctype html><meta charset='utf-8'><p>Paramètre manquant ou invalide. Utilisez ?mac=001122AABBCC (12 hex) ou ?sn=SERIAL.</p>";
-    exit;
+$useMac = false; $useSn = false;
+if ($macParam !== '' && preg_match('/^[0-9A-F]{12}$/', $macParam))      $useMac = true;
+elseif ($snParam !== '')                                                $useSn  = true;
+else {
+  http_response_code(400);
+  echo "<!doctype html><meta charset='utf-8'><p>Paramètre manquant ou invalide. Utilisez ?mac=001122AABBCC (12 hex) ou ?sn=SERIAL.</p>";
+  exit;
 }
 
-// Récupération des relevés
+// Lecture relevés
 try {
-    if ($useMac) {
-        $stmt = $pdo->prepare("
-            SELECT *
-            FROM compteur_relevee
-            WHERE mac_norm = :mac
-            ORDER BY `Timestamp` DESC, id DESC
-        ");
-        $stmt->execute([':mac' => $macParam]);
-    } else {
-        $stmt = $pdo->prepare("
-            SELECT *
-            FROM compteur_relevee
-            WHERE SerialNumber = :sn
-            ORDER BY `Timestamp` DESC, id DESC
-        ");
-        $stmt->execute([':sn' => $snParam]);
-    }
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  if ($useMac) {
+    $stmt = $pdo->prepare("SELECT * FROM compteur_relevee WHERE mac_norm = :mac ORDER BY `Timestamp` DESC, id DESC");
+    $stmt->execute([':mac' => $macParam]);
+  } else {
+    $stmt = $pdo->prepare("SELECT * FROM compteur_relevee WHERE SerialNumber = :sn ORDER BY `Timestamp` DESC, id DESC");
+    $stmt->execute([':sn' => $snParam]);
+  }
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    error_log('photocopieurs_details SQL error: ' . $e->getMessage());
-    $rows = [];
+  error_log('photocopieurs_details SQL error: '.$e->getMessage());
+  $rows = [];
 }
 
-// entête (prend la plus récente si dispo)
+// En-tête
 $latest     = $rows[0] ?? null;
 $macDisplay = $latest['MacAddress']   ?? ($useMac ? $macParam : '—');
 $snDisplay  = $latest['SerialNumber'] ?? ($useSn ? $snParam : '—');
 $model      = $latest['Model']        ?? '—';
 $name       = $latest['Nom']          ?? '—';
 $status     = $latest['Status']       ?? '—';
+$ipDisplay  = $latest['IpAddress']    ?? '—';
 
-// helper pour pourcentage/—
-function pctOrDash($v): string {
-    if ($v === null || $v === '' || !is_numeric($v)) return '—';
-    $v = max(0, min(100, (int)$v));
-    return (string)$v . '%';
+// helper
+function pctOrDash($v): ?int {
+  if ($v === null || $v === '' || !is_numeric($v)) return null;
+  return max(0, min(100, (int)$v));
 }
 ?>
 <!DOCTYPE html>
@@ -70,9 +56,7 @@ function pctOrDash($v): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Détails photocopieur — Historique</title>
 
-  <!-- styles globaux -->
   <link rel="stylesheet" href="/assets/css/main.css" />
-  <!-- styles spécifiques de la page -->
   <link rel="stylesheet" href="/assets/css/photocopieurs_details.css" />
 </head>
 <body class="page-details">
@@ -81,9 +65,6 @@ function pctOrDash($v): string {
   <div class="page-container">
     <div class="toolbar">
       <a href="/public/clients.php" class="back-link">← Retour</a>
-
-      <!-- Bouton à droite : Espace client -->
-      <!-- Remplace href="#" par l’URL réelle de l’espace client si tu en as une -->
       <a href="#" class="btn btn-primary" id="btn-espace-client">Espace client</a>
     </div>
 
@@ -94,6 +75,7 @@ function pctOrDash($v): string {
         <span class="badge">Nom: <?= h($name) ?></span>
         <span class="badge">SN: <?= h($snDisplay) ?></span>
         <span class="badge">MAC: <?= h($macDisplay) ?></span>
+        <span class="badge">IP: <?= h($ipDisplay) ?></span>
         <span class="badge">Statut: <?= h($status) ?></span>
       </div>
       <?php if (!$rows): ?>
@@ -107,59 +89,55 @@ function pctOrDash($v): string {
           <thead>
             <tr>
               <th>Date</th>
-              <th>IP</th>
               <th>Modèle</th>
-              <th>Nom</th>
-              <th>SN</th>
-              <th>MAC</th>
               <th>Statut</th>
-              <th>Toner K</th>
-              <th>Toner C</th>
-              <th>Toner M</th>
-              <th>Toner Y</th>
+              <th class="th-toner">Toner K</th>
+              <th class="th-toner">Toner C</th>
+              <th class="th-toner">Toner M</th>
+              <th class="th-toner">Toner Y</th>
               <th class="td-num">Total BW</th>
               <th class="td-num">Total Color</th>
-              <th class="td-num">Total Pages</th>
-              <th class="td-num">Printed BW</th>
-              <th class="td-num">Printed Color</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($rows as $r):
               $ts   = $r['Timestamp'] ? date('Y-m-d H:i', strtotime($r['Timestamp'])) : '—';
-              $ip   = $r['IpAddress'] ?? '—';
               $mod  = $r['Model'] ?? '—';
-              $nom  = $r['Nom'] ?? '—';
-              $sn   = $r['SerialNumber'] ?? '—';
-              $mac  = $r['MacAddress'] ?? '—';
               $st   = $r['Status'] ?? '—';
+
               $tk   = pctOrDash($r['TonerBlack']);
               $tc   = pctOrDash($r['TonerCyan']);
               $tm   = pctOrDash($r['TonerMagenta']);
               $ty   = pctOrDash($r['TonerYellow']);
+
               $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
               $totCol  = is_null($r['TotalColor']) ? '—' : number_format((int)$r['TotalColor'], 0, ',', ' ');
-              $totPg   = is_null($r['TotalPages']) ? '—' : number_format((int)$r['TotalPages'], 0, ',', ' ');
-              $prBW    = is_null($r['BWPrinted'])  ? '—' : number_format((int)$r['BWPrinted'], 0, ',', ' ');
-              $prCol   = is_null($r['ColorPrinted']) ? '—' : number_format((int)$r['ColorPrinted'], 0, ',', ' ');
             ?>
               <tr>
                 <td><?= h($ts) ?></td>
-                <td><?= h($ip) ?></td>
                 <td><?= h($mod) ?></td>
-                <td><?= h($nom) ?></td>
-                <td><?= h($sn) ?></td>
-                <td><?= h($mac) ?></td>
                 <td><?= h($st) ?></td>
-                <td><?= h($tk) ?></td>
-                <td><?= h($tc) ?></td>
-                <td><?= h($tm) ?></td>
-                <td><?= h($ty) ?></td>
+
+                <!-- Barres de toner -->
+                <td class="td-toner">
+                  <div class="toner-bar k"><span style="width:<?= $tk!==null?$tk:0 ?>%"></span></div>
+                  <em><?= $tk!==null ? $tk.'%' : '—' ?></em>
+                </td>
+                <td class="td-toner">
+                  <div class="toner-bar c"><span style="width:<?= $tc!==null?$tc:0 ?>%"></span></div>
+                  <em><?= $tc!==null ? $tc.'%' : '—' ?></em>
+                </td>
+                <td class="td-toner">
+                  <div class="toner-bar m"><span style="width:<?= $tm!==null?$tm:0 ?>%"></span></div>
+                  <em><?= $tm!==null ? $tm.'%' : '—' ?></em>
+                </td>
+                <td class="td-toner">
+                  <div class="toner-bar y"><span style="width:<?= $ty!==null?$ty:0 ?>%"></span></div>
+                  <em><?= $ty!==null ? $ty.'%' : '—' ?></em>
+                </td>
+
                 <td class="td-num"><?= h($totBW) ?></td>
                 <td class="td-num"><?= h($totCol) ?></td>
-                <td class="td-num"><?= h($totPg) ?></td>
-                <td class="td-num"><?= h($prBW) ?></td>
-                <td class="td-num"><?= h($prCol) ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>

@@ -2,7 +2,6 @@
    Photocopieurs — page détails & historique
    ========================================================= */
 
-/* Mise en page générale */
 .page-details .page-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -10,126 +9,63 @@
 }
 
 /* En-tête + badges */
-.details-header { 
-  display: grid; 
-  gap: .35rem; 
-  margin: 1rem 0; 
-}
-.details-header .h1 { 
-  font-size: 1.35rem; 
-  font-weight: 800; 
-  color: var(--text-primary);
-}
+.details-header { display: grid; gap: .35rem; margin: 1rem 0; }
+.details-header .h1 { font-size: 1.35rem; font-weight: 800; color: var(--text-primary); }
 .meta { color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: .4rem .5rem; }
-.badge { 
-  display: inline-block; 
-  padding: .2rem .55rem; 
-  border-radius: 999px; 
-  border: 1px solid var(--border-color); 
-  font-size: .85rem; 
-  background: var(--bg-primary);
-}
+.badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; border: 1px solid var(--border-color); font-size: .85rem; background: var(--bg-primary); }
 
-/* Barre d’outils */
-.toolbar { 
-  display: flex; 
-  align-items: center; 
-  justify-content: space-between; 
-  gap: .75rem; 
-  margin: .25rem 0 1rem; 
-}
-.back-link { 
-  text-decoration: none; 
-  color: var(--text-primary); 
-  padding: .45rem .65rem; 
-  border: 1px solid var(--border-color); 
-  border-radius: var(--radius-md); 
-  background: var(--bg-primary);
-}
-.toolbar .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: .4rem;
-  padding: .5rem .8rem;
-  font-weight: 700;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  cursor: pointer;
-  text-decoration: none;
-  box-shadow: var(--shadow-sm);
-  color: var(--text-primary);
-  background: var(--bg-primary);
-}
+/* Barre d’outils (Retour + Espace client) */
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .25rem 0 1rem; }
+.back-link { text-decoration: none; color: var(--text-primary); padding: .45rem .65rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary); }
+.toolbar .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .5rem .8rem; font-weight: 700; border-radius: var(--radius-md); border: 1px solid var(--border-color); cursor: pointer; text-decoration: none; box-shadow: var(--shadow-sm); color: var(--text-primary); background: var(--bg-primary); }
 .toolbar .btn:hover { filter: brightness(0.98); }
-.toolbar .btn-primary {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: #fff;
-}
+.toolbar .btn-primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
 .toolbar .btn-primary:hover { background: var(--accent-secondary); }
 
-/* Table wrapper */
-.table-wrapper {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-/* Tableau (desktop) */
-table.details { 
-  width: 100%; 
-  border-collapse: collapse; 
-  table-layout: auto;
-}
-table.details th, 
-table.details td { 
-  padding: .55rem .65rem; 
-  border-bottom: 1px solid var(--border-color); 
-  text-align: left; 
-  vertical-align: top; 
-}
-table.details thead th { 
-  background: var(--bg-tertiary); 
-  color: var(--text-secondary); 
-  font-weight: 700; 
-  position: sticky; 
-  top: 0; 
-  z-index: 1; 
-}
+/* Tableau */
+.table-wrapper { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; }
+table.details { width: 100%; border-collapse: collapse; table-layout: auto; }
+table.details th, table.details td { padding: .6rem .7rem; border-bottom: 1px solid var(--border-color); text-align: left; vertical-align: middle; }
+table.details thead th { background: var(--bg-tertiary); color: var(--text-secondary); font-weight: 700; position: sticky; top: 0; z-index: 1; }
 table.details tbody tr:hover { background: var(--bg-secondary); }
+.td-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
 
-/* Nombres alignés à droite */
-.td-num { 
-  text-align: right; 
-  font-variant-numeric: tabular-nums; 
-  white-space: nowrap; 
-  font-weight: 700;
+/* Toners = barres colorées */
+.td-toner { white-space: nowrap; }
+.td-toner em { margin-left: .5rem; font-style: normal; color: var(--text-secondary); font-weight: 700; }
+.th-toner { min-width: 120px; } /* donne un peu d'espace */
+
+.toner-bar {
+  --h: 10px;
+  position: relative;
+  width: 100%;
+  max-width: 140px;
+  height: var(--h);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 2px rgb(0 0 0 / 0.03);
 }
+.toner-bar > span {
+  position: absolute; left: 0; top: 0; height: 100%;
+  border-radius: inherit;
+  transition: width .25s ease;
+  opacity: .95;
+}
+.toner-bar.k > span { background: linear-gradient(to right, #111, #000); }
+.toner-bar.c > span { background: linear-gradient(to right, #29d3ff, #00bde8); }
+.toner-bar.m > span { background: linear-gradient(to right, #ff4da6, #e6007e); }
+.toner-bar.y > span { background: linear-gradient(to right, #ffd54d, #ffb300); }
+[data-theme="dark"] .toner-bar { border-color: #475569; }
 
-/* =========================================================
-   Responsive (<= 900px) : affichage en cartes (plus de tableau)
-   ========================================================= */
+/* ===========================
+   Responsive (<= 900px)
+   =========================== */
 @media (max-width: 900px) {
+  table.details thead { position: absolute; left: -9999px; height: 0; overflow: hidden; }
 
-  /* On cache l’en-tête du tableau */
-  table.details thead { 
-    position: absolute; 
-    left: -9999px; 
-    height: 0; 
-    overflow: hidden; 
-  }
-
-  /* Chaque ligne devient une carte */
-  table.details,
-  table.details tbody,
-  table.details tr,
-  table.details td {
-    display: block;
-    width: 100%;
-  }
+  table.details, table.details tbody, table.details tr, table.details td { display: block; width: 100%; }
 
   table.details tbody tr {
     border-bottom: none;
@@ -145,48 +81,39 @@ table.details tbody tr:hover { background: var(--bg-secondary); }
   table.details tbody td {
     border: none;
     border-bottom: 1px solid var(--border-color);
-    padding: .8rem .95rem;
+    padding: .85rem 1rem;
     position: relative;
   }
   table.details tbody td:last-child { border-bottom: none; }
 
-  /* Chaque cellule affiche son label avant la valeur (avec :nth-child) */
+  /* Labels automatiques */
   table.details tbody td::before {
-    content: attr(data-label); /* fallback si on ajoute data-label côté HTML */
+    content: attr(data-label);
     display: block;
     font-size: .76rem;
     color: var(--text-muted);
-    margin-bottom: .2rem;
+    margin-bottom: .25rem;
     letter-spacing: .02em;
   }
-
-  /* Si data-label n’est pas défini, on injecte les labels via nth-child */
+  /* si data-label n'est pas fourni, définir via nth-child */
   table.details tbody tr td:nth-child(1)::before  { content: "Date"; }
-  table.details tbody tr td:nth-child(2)::before  { content: "IP"; }
-  table.details tbody tr td:nth-child(3)::before  { content: "Modèle"; }
-  table.details tbody tr td:nth-child(4)::before  { content: "Nom"; }
-  table.details tbody tr td:nth-child(5)::before  { content: "SN"; }
-  table.details tbody tr td:nth-child(6)::before  { content: "MAC"; }
-  table.details tbody tr td:nth-child(7)::before  { content: "Statut"; }
-  table.details tbody tr td:nth-child(8)::before  { content: "Toner K"; }
-  table.details tbody tr td:nth-child(9)::before  { content: "Toner C"; }
-  table.details tbody tr td:nth-child(10)::before { content: "Toner M"; }
-  table.details tbody tr td:nth-child(11)::before { content: "Toner Y"; }
-  table.details tbody tr td:nth-child(12)::before { content: "Total BW"; }
-  table.details tbody tr td:nth-child(13)::before { content: "Total Color"; }
-  table.details tbody tr td:nth-child(14)::before { content: "Total Pages"; }
-  table.details tbody tr td:nth-child(15)::before { content: "Printed BW"; }
-  table.details tbody tr td:nth-child(16)::before { content: "Printed Color"; }
+  table.details tbody tr td:nth-child(2)::before  { content: "Modèle"; }
+  table.details tbody tr td:nth-child(3)::before  { content: "Statut"; }
+  table.details tbody tr td:nth-child(4)::before  { content: "Toner K"; }
+  table.details tbody tr td:nth-child(5)::before  { content: "Toner C"; }
+  table.details tbody tr td:nth-child(6)::before  { content: "Toner M"; }
+  table.details tbody tr td:nth-child(7)::before  { content: "Toner Y"; }
+  table.details tbody tr td:nth-child(8)::before  { content: "Total BW"; }
+  table.details tbody tr td:nth-child(9)::before  { content: "Total Color"; }
 
-  /* Les nombres redeviennent alignés à gauche en mobile */
-  .td-num { text-align: left; white-space: normal; font-weight: 700; }
+  .td-num { text-align: left; white-space: normal; }
+  .td-toner { display: flex; align-items: center; gap: .5rem; }
+  .toner-bar { max-width: none; }
 }
 
-/* =========================================================
-   Très petits écrans (<= 480px)
-   ========================================================= */
+/* Très petits écrans */
 @media (max-width: 480px) {
   .details-header .h1 { font-size: 1.2rem; }
   .toolbar .btn, .back-link { padding: .5rem .7rem; }
-  table.details tbody td { padding: .7rem .9rem; }
+  table.details tbody td { padding: .75rem .9rem; }
 }
