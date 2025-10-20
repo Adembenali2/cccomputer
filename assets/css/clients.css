@@ -131,10 +131,12 @@ body.modal-open { overflow: hidden; }
   transform: translate(-50%, -50%);
   width: min(980px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  overflow: auto; /* scroll interne si contenu trop long */
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.25rem 1.25rem 1rem;
   border-radius: 1.25rem;
   backdrop-filter: saturate(140%) blur(4px);
+  width: min(980px, calc(100dvw - 48px));  /* évite le pixel de débordement dû à 100vw */
 }
 
 /* En-tête : titre centré, bouton X */
