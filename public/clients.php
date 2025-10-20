@@ -2,7 +2,7 @@
 // /public/clients.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/historique.php'; // <-- pour journaliser l'action
+require_once __DIR__ . '/../includes/historique.php'; // journalisation
 
 /** Sécurise PDO en mode exceptions si ce n'est pas déjà fait **/
 if (method_exists($pdo, 'setAttribute')) {
@@ -43,7 +43,8 @@ function nextClientId(PDO $pdo): int {
     return (int)$pdo->query("SELECT COALESCE(MAX(id),0)+1 FROM clients")->fetchColumn();
 }
 function isNoDefaultIdError(PDOException $e): bool {
-    $code = (int)($e->errorInfo[1] ?? 0); // 1364: Field 'id' doesn't have a default value ; 1048: Column 'id' cannot be null
+    // 1364: Field 'id' doesn't have a default value ; 1048: Column 'id' cannot be null
+    $code = (int)($e->errorInfo[1] ?? 0);
     return in_array($code, [1364, 1048], true);
 }
 
@@ -118,7 +119,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             $stmt = $pdo->prepare($sqlInsert);
             $stmt->execute($params);
 
-            // Récupère l'ID inséré (si AI)
             $insertedId = (int)$pdo->lastInsertId() ?: null;
 
             // Journalise l'action
@@ -126,13 +126,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             $details = "Client créé: ID=" . ($insertedId ?? 'NULL') . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
             enregistrerAction($pdo, $userId, 'client_ajoute', $details);
 
-            // Redirection
             header('Location: /public/clients.php?added=1');
             exit;
 
         } catch (PDOException $e) {
-            // 2) cas: id non auto-incrément → retente avec id = MAX(id)+1
             if (isNoDefaultIdError($e)) {
+                // 2) cas: id non auto-incrément → retente avec id = MAX(id)+1
                 try {
                     $id = nextClientId($pdo);
                     $stmt = $pdo->prepare("
@@ -150,7 +149,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $paramsWithId = $params + [':id' => $id];
                     $stmt->execute($paramsWithId);
 
-                    // Journalise l'action
                     $userId  = currentUserId();
                     $details = "Client créé: ID=$id, numero=" . $numero . ", raison_sociale=" . $raison_sociale;
                     enregistrerAction($pdo, $userId, 'client_ajoute', $details);
@@ -163,8 +161,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client (id requis)."];
                 }
             }
-            // 3) doublon numero_client → regénère et retente
             elseif ((int)($e->errorInfo[1] ?? 0) === 1062) {
+                // 3) doublon numero_client → regénère et retente
                 try {
                     $numero = generateClientNumber($pdo);
                     $params[':numero_client'] = $numero;
@@ -308,6 +306,10 @@ try {
     <!-- Styles -->
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/clients.css" />
+    <style>
+      /* Optionnel: effet hover pour lignes cliquables */
+      tr.is-clickable:hover { background: var(--bg-elevated); }
+    </style>
 </head>
 <body class="page-clients">
     <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -360,6 +362,7 @@ try {
                     $modele  = $r['Model'] ?: '';
                     $sn      = $r['SerialNumber'] ?: '';
                     $mac     = $r['MacAddress'] ?: ($r['mac_norm'] ?? '');
+                    $macNorm = $r['mac_norm'] ?? '';
                     $nom     = $r['Nom'] ?: '';
                     $lastTs  = $r['last_ts'] ? date('Y-m-d H:i', strtotime($r['last_ts'])) : '—';
                     $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
@@ -376,8 +379,10 @@ try {
                         $dirNom . ' ' . $tel . ' ' .
                         $modele . ' ' . $sn . ' ' . $mac
                     );
+
+                    $rowHref = $macNorm ? '/public/photocopieurs_details.php?mac=' . urlencode($macNorm) : '';
                 ?>
-                    <tr data-search="<?= h($searchText) ?>">
+                    <tr data-search="<?= h($searchText) ?>" <?= $rowHref ? 'data-href="'.h($rowHref).'" class="is-clickable"' : '' ?>>
                         <td data-th="Client">
                             <div class="client-cell">
                                 <div class="client-raison"><?= h($raison) ?></div>
@@ -437,7 +442,7 @@ try {
         </div>
     </div>
 
-    <!-- ===== Popup "Ajouter un client" ===== -->
+    <!-- ===== Popup "Ajouter un client" (overlay + fenêtre) ===== -->
     <div id="clientModalOverlay" class="popup-overlay" aria-hidden="true"></div>
 
     <div id="clientModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle" style="display:none;">
@@ -489,6 +494,7 @@ try {
               </div>
             </div>
 
+            <!-- Livraison: case stylée sur une ligne, adresse juste en dessous -->
             <div class="livraison-row">
               <label class="livraison-toggle">
                 <input type="checkbox" name="livraison_identique" id="livraison_identique" <?= isset($_POST['livraison_identique']) ? 'checked' : '' ?>>
@@ -616,6 +622,21 @@ try {
         adr.addEventListener('input', () => { if (cb.checked) adrLiv.value = adr.value; });
         cb.addEventListener('change', syncLivraison);
         syncLivraison();
+      })();
+    </script>
+
+    <!-- Lignes cliquables vers les détails photocopieur -->
+    <script>
+      (function(){
+        const rows = document.querySelectorAll('table#tbl tbody tr.is-clickable[data-href]');
+        rows.forEach(tr => {
+          tr.style.cursor = 'pointer';
+          tr.addEventListener('click', (e) => {
+            if (window.getSelection && String(window.getSelection())) return; // évite lorsque texte sélectionné
+            const href = tr.getAttribute('data-href');
+            if (href) window.location.assign(href);
+          });
+        });
       })();
     </script>
 </body>
