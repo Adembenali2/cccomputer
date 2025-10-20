@@ -1,11 +1,10 @@
 <?php
 // /public/clients.php
 require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/db.php';          // base locale (clients, photocopieurs_clients…)
-require_once __DIR__ . '/../includes/db_ionos.php';    // base IONOS (last_compteur, printer_info)
-require_once __DIR__ . '/../includes/historique.php';  // journalisation
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/historique.php'; // journalisation
 
-/** Sécurise PDO local en mode exceptions si ce n'est pas déjà fait **/
+/** Sécurise PDO en mode exceptions si ce n'est pas déjà fait **/
 if (method_exists($pdo, 'setAttribute')) {
     try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
 }
@@ -20,23 +19,11 @@ function pctOrDash($v): string {
 function old(string $key, string $default=''): string {
     return htmlspecialchars($_POST[$key] ?? $default, ENT_QUOTES, 'UTF-8');
 }
+/** Essaie de récupérer l'ID utilisateur courant depuis la session **/
 function currentUserId(): ?int {
     if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
     if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
     return null;
-}
-/** Normalisation MAC → 12 hex sans séparateurs **/
-function mac_norm(?string $mac): ?string {
-    if (!$mac) return null;
-    $m = strtoupper(trim($mac));
-    $m = str_replace(['-', '.'], ':', $m);
-    if (strpos($m, ':') === false && strlen($m) === 12) $m = implode(':', str_split($m, 2));
-    return preg_replace('/[^0-9A-F]/', '', $m);
-}
-/** Statut IONOS **/
-function status_from_etat($etat): string {
-    if ($etat === null) return 'Unknown';
-    return ((int)$etat === 1) ? 'Online' : 'Offline';
 }
 
 /** Génère un numéro client unique : C + 5 chiffres (ex: C12345) **/
@@ -50,12 +37,14 @@ function generateClientNumber(PDO $pdo): string {
     if (!$next) { $next = '00001'; }
     return 'C' . $next;
 }
+
 /** Fallback si la colonne id n'est pas AUTO_INCREMENT **/
 function nextClientId(PDO $pdo): int {
     return (int)$pdo->query("SELECT COALESCE(MAX(id),0)+1 FROM clients")->fetchColumn();
 }
 function isNoDefaultIdError(PDOException $e): bool {
-    $code = (int)($e->errorInfo[1] ?? 0); // 1364 / 1048
+    // 1364: Field 'id' doesn't have a default value ; 1048: Column 'id' cannot be null
+    $code = (int)($e->errorInfo[1] ?? 0);
     return in_array($code, [1364, 1048], true);
 }
 
@@ -126,11 +115,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         ];
 
         try {
-            // tentative sans 'id'
+            // 1) tentative sans 'id' (AUTO_INCREMENT conseillé)
             $stmt = $pdo->prepare($sqlInsert);
             $stmt->execute($params);
+
             $insertedId = (int)$pdo->lastInsertId() ?: null;
 
+            // Journalise l'action
             $userId  = currentUserId();
             $details = "Client créé: ID=" . ($insertedId ?? 'NULL') . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
             enregistrerAction($pdo, $userId, 'client_ajoute', $details);
@@ -140,6 +131,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
 
         } catch (PDOException $e) {
             if (isNoDefaultIdError($e)) {
+                // 2) cas: id non auto-incrément → retente avec id = MAX(id)+1
                 try {
                     $id = nextClientId($pdo);
                     $stmt = $pdo->prepare("
@@ -170,6 +162,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 }
             }
             elseif ((int)($e->errorInfo[1] ?? 0) === 1062) {
+                // 3) doublon numero_client → regénère et retente
                 try {
                     $numero = generateClientNumber($pdo);
                     $params[':numero_client'] = $numero;
@@ -189,7 +182,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $flash = ['type' => 'error', 'msg' => "Erreur SQL (unicité): impossible de créer le client."];
                 }
             } else {
-                error_log('clients.php INSERT error: ' . $e->getMessage());
+                error_log('clients.php INSERT error: '.$e->getMessage());
                 $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client."];
             }
         }
@@ -201,146 +194,104 @@ if (($_GET['added'] ?? '') === '1') {
     $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
 }
 
-/** =======================
- *  CHARGEMENT DES DONNÉES
- *  IONOS (dernier relevé par MAC) + mapping clients locaux
- *  ======================= */
-$rows = [];
+/** Requête principale (inclut aussi les clients sans photocopieur) **/
+$sql = "
+WITH v_compteur_last AS (
+  SELECT r.*,
+         ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+  FROM compteur_relevee r
+),
+v_last AS (
+  SELECT *
+  FROM v_compteur_last
+  WHERE rn = 1
+),
+
+-- Photocopieurs ayant un dernier relevé (avec client si lié)
+blk_releve AS (
+  SELECT
+    COALESCE(pc.mac_norm, v.mac_norm)                                 AS mac_norm,
+    COALESCE(pc.SerialNumber, v.SerialNumber)                          AS SerialNumber,
+    COALESCE(pc.MacAddress,  v.MacAddress)                             AS MacAddress,
+    v.Model,
+    v.Nom,
+    v.`Timestamp`                                                      AS last_ts,
+    v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
+    v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
+    c.id                                                               AS client_id,
+    c.numero_client,
+    c.raison_sociale,
+    c.nom_dirigeant,
+    c.prenom_dirigeant,
+    c.telephone1
+  FROM v_last v
+  LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = v.mac_norm
+  LEFT JOIN clients c               ON c.id = pc.id_client
+),
+
+-- Photocopieurs sans relevé (avec client si lié)
+blk_sans_releve AS (
+  SELECT
+    pc.mac_norm,
+    pc.SerialNumber,
+    pc.MacAddress,
+    NULL AS Model,
+    NULL AS Nom,
+    NULL AS last_ts,
+    NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
+    NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+    c.id AS client_id,
+    c.numero_client,
+    c.raison_sociale,
+    c.nom_dirigeant,
+    c.prenom_dirigeant,
+    c.telephone1
+  FROM photocopieurs_clients pc
+  LEFT JOIN clients c  ON c.id = pc.id_client
+  LEFT JOIN v_last v   ON v.mac_norm = pc.mac_norm
+  WHERE v.mac_norm IS NULL
+),
+
+-- Clients sans aucun photocopieur attribué
+clients_sans_machine AS (
+  SELECT
+    NULL AS mac_norm,
+    NULL AS SerialNumber,
+    NULL AS MacAddress,
+    NULL AS Model,
+    NULL AS Nom,
+    NULL AS last_ts,
+    NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
+    NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+    c.id AS client_id,
+    c.numero_client,
+    c.raison_sociale,
+    c.nom_dirigeant,
+    c.prenom_dirigeant,
+    c.telephone1
+  FROM clients c
+  LEFT JOIN photocopieurs_clients pc ON pc.id_client = c.id
+  WHERE pc.id_client IS NULL
+)
+
+SELECT *
+FROM (
+  SELECT * FROM blk_releve
+  UNION ALL
+  SELECT * FROM blk_sans_releve
+  UNION ALL
+  SELECT * FROM clients_sans_machine
+) x
+ORDER BY
+  COALESCE(x.raison_sociale, '— sans client —') ASC,
+  COALESCE(x.SerialNumber, x.mac_norm) ASC
+";
 
 try {
-    // 1) IONOS: dernier relevé pour chaque MAC (JOIN sur sous-requête MAX(date))
-    $sqlIonos = "
-      SELECT lc.mac,
-             lc.`date`        AS last_date,
-             lc.totalNB       AS totalNB,
-             lc.totalCouleur  AS totalCouleur,
-             lc.etat          AS etat,
-             pi.addressIP     AS IpAddress,
-             pi.modele        AS modele,
-             pi.marque        AS marque,
-             pi.nomPhotocopieuse AS Nom,
-             pi.serialNum     AS SerialNumber
-      FROM last_compteur lc
-      INNER JOIN (
-        SELECT mac, MAX(`date`) AS max_date
-        FROM last_compteur
-        GROUP BY mac
-      ) t ON t.mac = lc.mac AND t.max_date = lc.`date`
-      LEFT JOIN printer_info pi ON pi.mac = lc.mac
-    ";
-    $rowsIonos = $pdoIonos->query($sqlIonos)->fetchAll(PDO::FETCH_ASSOC);
-
-    // 2) Prépare la liste des mac_norm à mapper vers clients locaux
-    $macNorms = [];
-    foreach ($rowsIonos as $r) {
-        $mn = mac_norm($r['mac'] ?? null);
-        if ($mn) $macNorms[$mn] = true;
-    }
-    $macNormList = array_keys($macNorms);
-
-    // 3) Mapping local mac_norm -> client
-    $clientByMac = [];
-    if ($macNormList) {
-        $placeholders = implode(',', array_fill(0, count($macNormList), '?'));
-        $sqlMap = "
-          SELECT pc.mac_norm, c.id AS client_id, c.numero_client, c.raison_sociale,
-                 c.nom_dirigeant, c.prenom_dirigeant, c.telephone1
-          FROM photocopieurs_clients pc
-          LEFT JOIN clients c ON c.id = pc.id_client
-          WHERE pc.mac_norm IN ($placeholders)
-        ";
-        $st = $pdo->prepare($sqlMap);
-        $st->execute($macNormList);
-        while ($m = $st->fetch(PDO::FETCH_ASSOC)) {
-            $clientByMac[$m['mac_norm']] = $m;
-        }
-    }
-
-    // 4) Construit lignes “photocopieurs avec relevé IONOS”
-    foreach ($rowsIonos as $r) {
-        $macDisp  = $r['mac'] ?? '';
-        $macNormV = mac_norm($macDisp);
-        $map      = $macNormV ? ($clientByMac[$macNormV] ?? null) : null;
-
-        $modele   = trim(($r['marque'] ? $r['marque'].' ' : '').($r['modele'] ?? ''));
-        $nom      = $r['Nom'] ?: ($modele ?: null);
-        $status   = status_from_etat($r['etat'] ?? null);
-        $ts       = $r['last_date'] ?? null;
-        $totBW    = is_numeric($r['totalNB']) ? (int)$r['totalNB'] : null;
-        $totCol   = is_numeric($r['totalCouleur']) ? (int)$r['totalCouleur'] : null;
-
-        $rows[] = [
-            'mac_norm'         => $macNormV,
-            'SerialNumber'     => $r['SerialNumber'] ?? null,
-            'MacAddress'       => $macDisp,
-            'Model'            => $modele ?: null,
-            'Nom'              => $nom ?: null,
-            'last_ts'          => $ts,
-            'TonerBlack'       => null,
-            'TonerCyan'        => null,
-            'TonerMagenta'     => null,
-            'TonerYellow'      => null,
-            'TotalBW'          => $totBW,
-            'TotalColor'       => $totCol,
-            'TotalPages'       => ($totBW!==null && $totCol!==null) ? ($totBW+$totCol) : null,
-            'Status'           => $status,
-            'client_id'        => $map['client_id'] ?? null,
-            'numero_client'    => $map['numero_client'] ?? null,
-            'raison_sociale'   => $map['raison_sociale'] ?? null,
-            'nom_dirigeant'    => $map['nom_dirigeant'] ?? null,
-            'prenom_dirigeant' => $map['prenom_dirigeant'] ?? null,
-            'telephone1'       => $map['telephone1'] ?? null,
-        ];
-    }
-
-    // 5) “Clients sans machine” (base locale) — on les ajoute aussi comme avant
-    $sqlSans = "
-      SELECT c.id AS client_id, c.numero_client, c.raison_sociale,
-             c.nom_dirigeant, c.prenom_dirigeant, c.telephone1
-      FROM clients c
-      LEFT JOIN photocopieurs_clients pc ON pc.id_client = c.id
-      WHERE pc.id_client IS NULL
-      ORDER BY c.raison_sociale ASC
-    ";
-    $sans = $pdo->query($sqlSans)->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($sans as $c) {
-        $rows[] = [
-            'mac_norm'         => null,
-            'SerialNumber'     => null,
-            'MacAddress'       => null,
-            'Model'            => null,
-            'Nom'              => null,
-            'last_ts'          => null,
-            'TonerBlack'       => null,
-            'TonerCyan'        => null,
-            'TonerMagenta'     => null,
-            'TonerYellow'      => null,
-            'TotalBW'          => null,
-            'TotalColor'       => null,
-            'TotalPages'       => null,
-            'Status'           => null,
-            'client_id'        => $c['client_id'],
-            'numero_client'    => $c['numero_client'],
-            'raison_sociale'   => $c['raison_sociale'],
-            'nom_dirigeant'    => $c['nom_dirigeant'],
-            'prenom_dirigeant' => $c['prenom_dirigeant'],
-            'telephone1'       => $c['telephone1'],
-        ];
-    }
-
-    // 6) Tri : par raison sociale (ou libellé par défaut), puis par SN ou MAC
-    usort($rows, function($a, $b) {
-        $ra = $a['raison_sociale'] ?? '— sans client —';
-        $rb = $b['raison_sociale'] ?? '— sans client —';
-        $cmp = strcasecmp($ra, $rb);
-        if ($cmp !== 0) return $cmp;
-        $ka = $a['SerialNumber'] ?? ($a['mac_norm'] ?? '');
-        $kb = $b['SerialNumber'] ?? ($b['mac_norm'] ?? '');
-        return strcasecmp($ka, $kb);
-    });
-
-} catch (Throwable $e) {
-    error_log('clients.php data load error: '.$e->getMessage());
+    $stmt = $pdo->query($sql);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('clients.php SQL error: ' . $e->getMessage());
     $rows = [];
 }
 ?>
@@ -681,25 +632,11 @@ try {
         rows.forEach(tr => {
           tr.style.cursor = 'pointer';
           tr.addEventListener('click', (e) => {
-            if (window.getSelection && String(window.getSelection())) return; // évite le clic si texte sélectionné
+            if (window.getSelection && String(window.getSelection())) return; // évite lorsque texte sélectionné
             const href = tr.getAttribute('data-href');
             if (href) window.location.assign(href);
           });
         });
-
-        // Petit filtre client-side
-        const q = document.getElementById('q');
-        const clear = document.getElementById('clearQ');
-        const tb = document.querySelector('#tbl tbody');
-        function applyFilter(){
-          const v = (q.value || '').trim().toLowerCase();
-          tb.querySelectorAll('tr').forEach(tr => {
-            const t = tr.getAttribute('data-search') || '';
-            tr.style.display = v ? (t.includes(v) ? '' : 'none') : '';
-          });
-        }
-        q && q.addEventListener('input', applyFilter);
-        clear && clear.addEventListener('click', () => { q.value=''; applyFilter(); q.focus(); });
       })();
     </script>
 </body>
