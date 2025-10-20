@@ -5,7 +5,7 @@ require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
-// Entrée
+/* ---------- Entrée ---------- */
 $macParam = strtoupper(trim($_GET['mac'] ?? ''));
 $snParam  = trim($_GET['sn'] ?? '');
 
@@ -18,7 +18,44 @@ else {
   exit;
 }
 
-// Lecture relevés
+/* ---------- Action: associer un client ---------- */
+$flash = ['type'=>null,'msg'=>null];
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'attach_client') {
+    $clientId = (int)($_POST['id_client'] ?? 0);
+    $snPost   = trim($_POST['sn'] ?? '');
+    $macPost  = strtoupper(trim($_POST['mac'] ?? ''));
+
+    // mac_norm (12 hex sans :)
+    $macNorm = preg_replace('/[^0-9A-F]/', '', strtoupper($macPost ?? ''));
+    if ($clientId <= 0 || $macNorm === '') {
+        $flash = ['type'=>'error','msg'=>"Client ou MAC invalide."];
+    } else {
+        try {
+            // On essaye d'insérer, ou maj si déjà présent (contrainte UNIQUE sur mac_norm/SerialNumber)
+            $sql = "
+              INSERT INTO photocopieurs_clients (id_client, SerialNumber, MacAddress)
+              VALUES (:id_client, :sn, :mac)
+              ON DUPLICATE KEY UPDATE
+                id_client = VALUES(id_client),
+                SerialNumber = VALUES(SerialNumber),
+                MacAddress = VALUES(MacAddress)
+            ";
+            $pdo->prepare($sql)->execute([
+                ':id_client' => $clientId,
+                ':sn' => $snPost !== '' ? $snPost : null,
+                ':mac' => $macPost
+            ]);
+            // Redirige propre (évite re-post)
+            header("Location: ".$_SERVER['REQUEST_URI']);
+            exit;
+        } catch (PDOException $e) {
+            error_log('attach_client error: '.$e->getMessage());
+            $flash = ['type'=>'error','msg'=>"Erreur: impossible d'associer le client."];
+        }
+    }
+}
+
+/* ---------- Lecture relevés ---------- */
 try {
   if ($useMac) {
     $stmt = $pdo->prepare("SELECT * FROM compteur_relevee WHERE mac_norm = :mac ORDER BY `Timestamp` DESC, id DESC");
@@ -33,7 +70,7 @@ try {
   $rows = [];
 }
 
-// En-tête
+/* ---------- En-tête ---------- */
 $latest     = $rows[0] ?? null;
 $macDisplay = $latest['MacAddress']   ?? ($useMac ? $macParam : '—');
 $snDisplay  = $latest['SerialNumber'] ?? ($useSn ? $snParam : '—');
@@ -42,12 +79,12 @@ $name       = $latest['Nom']          ?? '—';
 $status     = $latest['Status']       ?? '—';
 $ipDisplay  = $latest['IpAddress']    ?? '—';
 
-// Client attribué au photocopieur (via photocopieurs_clients)
+/* ---------- Client attribué (si existe) ---------- */
 $client = null;
 try {
   if ($useMac) {
     $q = $pdo->prepare("
-      SELECT c.raison_sociale, c.telephone1, c.nom_dirigeant, c.prenom_dirigeant
+      SELECT c.id, c.raison_sociale, c.telephone1, c.nom_dirigeant, c.prenom_dirigeant
       FROM photocopieurs_clients pc
       LEFT JOIN clients c ON c.id = pc.id_client
       WHERE pc.mac_norm = :mac
@@ -56,7 +93,7 @@ try {
     $q->execute([':mac' => $macParam]);
   } else {
     $q = $pdo->prepare("
-      SELECT c.raison_sociale, c.telephone1, c.nom_dirigeant, c.prenom_dirigeant
+      SELECT c.id, c.raison_sociale, c.telephone1, c.nom_dirigeant, c.prenom_dirigeant
       FROM photocopieurs_clients pc
       LEFT JOIN clients c ON c.id = pc.id_client
       WHERE pc.SerialNumber = :sn
@@ -70,7 +107,19 @@ try {
   $client = null;
 }
 
-// helper
+/* ---------- Liste clients (pour la popup) ---------- */
+$clientsList = [];
+try {
+  $clientsList = $pdo->query("
+    SELECT id, numero_client, raison_sociale, COALESCE(nom_dirigeant,'') AS nom_dirigeant, COALESCE(prenom_dirigeant,'') AS prenom_dirigeant, telephone1
+    FROM clients
+    ORDER BY raison_sociale ASC
+  ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+  error_log('clients list error: '.$e->getMessage());
+}
+
+/* ---------- Helpers ---------- */
 function pctOrIntOrNull($v): ?int {
   if ($v === null || $v === '' || !is_numeric($v)) return null;
   return max(0, min(100, (int)$v));
@@ -93,8 +142,20 @@ function pctOrIntOrNull($v): ?int {
   <div class="page-container">
     <div class="toolbar">
       <a href="/public/clients.php" class="back-link">← Retour</a>
-      <a href="#" class="btn btn-primary" id="btn-espace-client">Espace client</a>
+
+      <!-- Bouton à droite -->
+      <?php if ($client && ($client['id'] ?? null)): ?>
+        <a href="/public/client_fiche.php?id=<?= (int)$client['id'] ?>" class="btn btn-primary" id="btn-espace-client">Espace client</a>
+      <?php else: ?>
+        <button type="button" class="btn btn-primary" id="btn-espace-client">Espace client</button>
+      <?php endif; ?>
     </div>
+
+    <?php if ($flash['type']): ?>
+      <div class="flash <?= $flash['type']==='error'?'flash-error':'flash-success' ?>" style="margin-bottom:.75rem;">
+        <?= h($flash['msg']) ?>
+      </div>
+    <?php endif; ?>
 
     <div class="details-header">
       <div class="h1">Historique du photocopieur</div>
@@ -182,5 +243,61 @@ function pctOrIntOrNull($v): ?int {
       </div>
     <?php endif; ?>
   </div>
+
+  <!-- ===== Popup d’attribution client (affiché si pas de client) ===== -->
+  <div id="attachOverlay" class="popup-overlay"></div>
+  <div id="attachModal" class="support-popup" style="max-width:560px;">
+    <h3 style="margin-top:0;">Attribuer ce photocopieur à un client</h3>
+    <form method="post" class="standard-form" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>">
+      <input type="hidden" name="action" value="attach_client">
+      <input type="hidden" name="sn"  value="<?= h($snDisplay) ?>">
+      <input type="hidden" name="mac" value="<?= h($macDisplay) ?>">
+
+      <label>Choisir un client</label>
+      <select name="id_client" required>
+        <option value="">— Sélectionner —</option>
+        <?php foreach ($clientsList as $c): ?>
+          <option value="<?= (int)$c['id'] ?>">
+            <?= h($c['raison_sociale']) ?> (<?= h($c['numero_client']) ?>) — <?= h(trim($c['nom_dirigeant'].' '.$c['prenom_dirigeant'])) ?> — <?= h($c['telephone1']) ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+
+      <div style="display:flex; gap:.5rem; justify-content:flex-end;">
+        <button type="button" id="btnAttachCancel" class="btn">Annuler</button>
+        <button type="submit" class="btn btn-primary">Associer</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    (function(){
+      const btn   = document.getElementById('btn-espace-client');
+      const modal = document.getElementById('attachModal');
+      const ovl   = document.getElementById('attachOverlay');
+      const cancel= document.getElementById('btnAttachCancel');
+
+      if (!btn || !modal || !ovl) return;
+
+      // Si le bouton est <a href="..."> (client existant), on laisse la navigation native.
+      if (btn.tagName.toLowerCase() === 'button') {
+        btn.addEventListener('click', openModal);
+      }
+
+      function openModal(){
+        ovl.classList.add('active');
+        modal.classList.add('active');
+        document.body.classList.add('modal-open');
+      }
+      function closeModal(){
+        ovl.classList.remove('active');
+        modal.classList.remove('active');
+        document.body.classList.remove('modal-open');
+      }
+
+      ovl.addEventListener('click', closeModal);
+      cancel && cancel.addEventListener('click', closeModal);
+    })();
+  </script>
 </body>
 </html>
