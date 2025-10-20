@@ -1,6 +1,7 @@
 <?php
 // /public/client_fiche.php
-require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
+authorize_roles(['Administrateur', 'Dirigeant']);   
 require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
