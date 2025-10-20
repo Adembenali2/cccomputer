@@ -29,7 +29,7 @@
   padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
   text-align: left;
-  white-space: nowrap;       /* titres courts -> on les garde sur une ligne */
+
 }
 
 .tbl-photocopieurs tbody td {
@@ -51,8 +51,8 @@
 .machine-cell .machine-sub  { font-size: 0.85rem; color: var(--text-secondary); word-break: break-word; }
 
 /* chiffres : on peut garder nowrap, ils ne sont pas longs */
-.td-metric { font-weight: 700; text-align: right; white-space: nowrap; }
-.td-date   { white-space: nowrap; color: var(--text-secondary); }
+.td-metric { font-weight: 700; text-align: right; }
+.td-date   { color: var(--text-secondary);}
 
 /* ---------- Toners (barres) ---------- */
 .toners {
