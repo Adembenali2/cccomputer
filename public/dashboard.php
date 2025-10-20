@@ -4,9 +4,6 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
-// ==== Imports SFTP désactivés ====
-$import_status = 'ok'; // 'ok' ou 'off'
-
 // ==================================================================
 // Historique des actions (requêtes SQL réelles)
 // ==================================================================
@@ -42,7 +39,7 @@ $nb_livraisons_a_faire   = 8;
 $payClass = ($nb_paiements_en_attente > 0) ? 'count-bad' : 'count-ok';
 
 // ==================================================================
-// Récupération de tous les clients depuis la BDD (REMPLACE la liste statique)
+// Récupération clients depuis la BDD
 // ==================================================================
 try {
     $sql = "SELECT 
@@ -71,70 +68,41 @@ try {
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Dashboard - CCComputer</title>
-    <!-- Chemins absolus pour éviter les surprises -->
+    <!-- Chemins absolus -->
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <script src="/assets/js/dashboard.js" defer></script>
     <style>
-        /* Notification d’import (maintenue ici car liée au PHP) */
-        #importNotif {
-            position: fixed;
-            top: 18px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #fff;
-            color: #097c34;
-            border-radius: 22px;
-            box-shadow: 0 2px 12px #0002;
-            font-size: 15px;
-            padding: 8px 24px 8px 16px;
-            z-index: 5000;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: opacity 0.4s;
-            opacity: 0.98;
-        }
-        #importNotif .notif-icon { display:inline-flex; }
-        #importNotif.error { color: #b90303; }
-        #importNotif.error svg circle { fill: #e74c3c !important; }
+        /* --------- Petits ajouts pour le popup en 2 colonnes --------- */
+        .popup-content { display: flex; flex-direction: column; gap: 12px; }
+        .clients-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap: 10px; }
+        .client-card { display: block; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; text-decoration: none; color: inherit; background:#fff; transition: box-shadow .15s, transform .05s; }
+        .client-card:hover { box-shadow: 0 6px 18px #00000014; transform: translateY(-1px); }
+        .client-info strong { display:block; font-size: 15px; margin-bottom: 4px; }
+        .client-info span { display:block; font-size: 13px; color:#4b5563; }
 
-        /* Couleurs du compteur Paiements */
-        .card-count.count-bad { color: #dc2626; font-weight: 700; } /* rouge si impayés */
-        .card-count.count-ok  { color: #16a34a; font-weight: 700; } /* vert si 0 impayé */
+        .client-detail-view { display:none; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background:#fff; }
+        .cdv-wrap { display: grid; grid-template-columns: 200px 1fr; min-height: 360px; }
+        .cdv-sidebar { background:#f9fafb; border-right:1px solid #e5e7eb; padding: 12px; display:flex; flex-direction:column; gap:6px; }
+        .cdv-sidebar .cdv-back { margin-bottom:8px; }
+        .cdv-nav-btn { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; border:none; background:transparent; cursor:pointer; text-align:left; font-size:14px; }
+        .cdv-nav-btn[aria-selected="true"] { background:#eef2ff; color:#4338ca; font-weight:600; }
+        .cdv-main { padding: 14px; }
+        .cdv-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+        .cdv-title { font-size:18px; font-weight:700; }
+        .cdv-sub { font-size:13px; color:#6b7280; }
+        .cdv-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+        .cdv-field { border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#fff; }
+        .cdv-field .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#6b7280; }
+        .cdv-field .val { font-size:14px; margin-top:4px; }
+
+        .client-search-bar { width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; font-size:14px; }
+        .popup-header { display:flex; align-items:center; justify-content:space-between; }
+
+        /* Overlay & popup déjà présents dans votre CSS global */
     </style>
 </head>
 <body class="page-dashboard">
     <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
-
-    <!-- Notification import -->
-    <div
-        id="importNotif"
-        class="<?= $import_status === 'ok' ? '' : 'error' ?>"
-        style="display:none;"
-        role="status"
-        aria-live="polite"
-    >
-        <span class="notif-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="vertical-align:middle">
-                <circle cx="10" cy="10" r="10" fill="<?= $import_status === 'ok' ? '#1de379' : '#e74c3c' ?>" />
-                <path d="M6 10.5L9 13L14 8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-        </span>
-        <span class="notif-text">
-            Import désactivé
-        </span>
-    </div>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var notif = document.getElementById('importNotif');
-        if (notif) {
-            notif.style.display = 'flex';
-            setTimeout(function() { notif.style.opacity = '0'; }, 3800);
-            setTimeout(function() { notif.style.display = 'none'; }, 4400);
-        }
-    });
-    </script>
 
     <div class="dashboard-wrapper">
         <div class="dashboard-header">
@@ -270,49 +238,233 @@ try {
             <h3 class="popup-title" id="popupTitle">Liste des Clients</h3>
             <button class="close-btn" id="closePopup" aria-label="Fermer la fenêtre">&times;</button>
         </div>
-        <div class="popup-content">
-            <input
-                type="text"
-                id="clientSearchInput"
-                class="client-search-bar"
-                placeholder="Filtrer par nom, raison sociale, prénom ou numéro client…"
-                autocomplete="off"
-                aria-label="Rechercher un client"
-            >
-            <div class="clients-list" id="clientsList">
-                <?php foreach ($clients as $client): ?>
-                    <?php
-                        $cId     = (int)($client['id'] ?? 0);
-                        $raison  = htmlspecialchars($client['raison_sociale']   ?? '', ENT_QUOTES, 'UTF-8');
-                        $nom     = htmlspecialchars($client['nom_dirigeant']    ?? '', ENT_QUOTES, 'UTF-8');
-                        $prenom  = htmlspecialchars($client['prenom_dirigeant'] ?? '', ENT_QUOTES, 'UTF-8');
-                        $numero  = htmlspecialchars($client['numero_client']    ?? '', ENT_QUOTES, 'UTF-8');
-                        $email   = htmlspecialchars($client['email']            ?? '', ENT_QUOTES, 'UTF-8');
 
-                        // Pour les data-* utilisés par la recherche côté front (en minuscules)
-                        $dNom    = htmlspecialchars(strtolower($client['nom_dirigeant']    ?? ''), ENT_QUOTES, 'UTF-8');
-                        $dPrenom = htmlspecialchars(strtolower($client['prenom_dirigeant'] ?? ''), ENT_QUOTES, 'UTF-8');
-                        $dRaison = htmlspecialchars(strtolower($client['raison_sociale']   ?? ''), ENT_QUOTES, 'UTF-8');
-                        $dNum    = htmlspecialchars(strtolower($client['numero_client']    ?? ''), ENT_QUOTES, 'UTF-8');
-                    ?>
-                    <a href="#"
-                       class="client-card"
-                       data-client-id="<?= $cId ?>"
-                       data-nom="<?= $dNom ?>"
-                       data-prenom="<?= $dPrenom ?>"
-                       data-raison="<?= $dRaison ?>"
-                       data-numero="<?= $dNum ?>"
-                       aria-label="Ouvrir la fiche du client <?= $raison ?>">
-                        <div class="client-info">
-                            <strong><?= $raison ?></strong>
-                            <span><?= $nom ?> <?= $prenom ?></span>
-                            <span><?= $numero ?></span>
-                            <span><?= $email ?></span>
-                        </div>
-                    </a>
-                <?php endforeach; ?>
+        <div class="popup-content">
+            <!-- Vue LISTE -->
+            <div id="clientListView">
+                <input
+                    type="text"
+                    id="clientSearchInput"
+                    class="client-search-bar"
+                    placeholder="Filtrer par nom, raison sociale, prénom ou numéro client…"
+                    autocomplete="off"
+                    aria-label="Rechercher un client"
+                >
+                <div class="clients-list" id="clientsList">
+                    <?php foreach ($clients as $client): ?>
+                        <?php
+                            $cId     = (int)($client['id'] ?? 0);
+                            $raison  = htmlspecialchars($client['raison_sociale']   ?? '', ENT_QUOTES, 'UTF-8');
+                            $nom     = htmlspecialchars($client['nom_dirigeant']    ?? '', ENT_QUOTES, 'UTF-8');
+                            $prenom  = htmlspecialchars($client['prenom_dirigeant'] ?? '', ENT_QUOTES, 'UTF-8');
+                            $numero  = htmlspecialchars($client['numero_client']    ?? '', ENT_QUOTES, 'UTF-8');
+                            $email   = htmlspecialchars($client['email']            ?? '', ENT_QUOTES, 'UTF-8');
+
+                            // Data-* pour recherche & pour remplir la fiche
+                            $dNom    = htmlspecialchars(strtolower($client['nom_dirigeant']    ?? ''), ENT_QUOTES, 'UTF-8');
+                            $dPrenom = htmlspecialchars(strtolower($client['prenom_dirigeant'] ?? ''), ENT_QUOTES, 'UTF-8');
+                            $dRaison = htmlspecialchars(strtolower($client['raison_sociale']   ?? ''), ENT_QUOTES, 'UTF-8');
+                            $dNum    = htmlspecialchars(strtolower($client['numero_client']    ?? ''), ENT_QUOTES, 'UTF-8');
+                        ?>
+                        <a href="#"
+                           class="client-card"
+                           data-client-id="<?= $cId ?>"
+                           data-raison="<?= $raison ?>"
+                           data-nom="<?= $nom ?>"
+                           data-prenom="<?= $prenom ?>"
+                           data-numero="<?= $numero ?>"
+                           data-email="<?= $email ?>"
+                           data-nom-l="<?= $dNom ?>"
+                           data-prenom-l="<?= $dPrenom ?>"
+                           data-raison-l="<?= $dRaison ?>"
+                           data-numero-l="<?= $dNum ?>"
+                           aria-label="Ouvrir la fiche du client <?= $raison ?>">
+                            <div class="client-info">
+                                <strong><?= $raison ?></strong>
+                                <span><?= $nom ?> <?= $prenom ?></span>
+                                <span><?= $numero ?></span>
+                                <span><?= $email ?></span>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
             </div>
+
+            <!-- Vue FICHE -->
+            <div id="clientDetailView" class="client-detail-view" aria-hidden="true">
+                <div class="cdv-wrap">
+                    <aside class="cdv-sidebar" role="tablist" aria-label="Sections de la fiche client">
+                        <button class="cdv-nav-btn cdv-back" id="cdvBackBtn" type="button">
+                            ← Retour à la liste
+                        </button>
+                        <button class="cdv-nav-btn" data-tab="home" role="tab" aria-selected="true">Accueil</button>
+                        <button class="cdv-nav-btn" data-tab="call" role="tab" aria-selected="false">Appel</button>
+                        <button class="cdv-nav-btn" data-tab="sav" role="tab" aria-selected="false">SAV</button>
+                        <button class="cdv-nav-btn" data-tab="buy" role="tab" aria-selected="false">Achat</button>
+                    </aside>
+
+                    <section class="cdv-main">
+                        <div class="cdv-header">
+                            <div>
+                                <div class="cdv-title" id="cdvTitle">Client</div>
+                                <div class="cdv-sub" id="cdvSub"></div>
+                            </div>
+                            <div class="cdv-actions">
+                                <!-- Actions futures si besoin -->
+                            </div>
+                        </div>
+
+                        <!-- Contenu des onglets -->
+                        <div id="cdvTab-home" class="cdv-tab" data-tab="home">
+                            <div class="cdv-grid">
+                                <div class="cdv-field"><div class="lbl">Raison sociale</div><div class="val" id="f-raison">—</div></div>
+                                <div class="cdv-field"><div class="lbl">Numéro client</div><div class="val" id="f-numero">—</div></div>
+                                <div class="cdv-field"><div class="lbl">Nom dirigeant</div><div class="val" id="f-nom">—</div></div>
+                                <div class="cdv-field"><div class="lbl">Prénom dirigeant</div><div class="val" id="f-prenom">—</div></div>
+                                <div class="cdv-field"><div class="lbl">Email</div><div class="val" id="f-email">—</div></div>
+                                <div class="cdv-field"><div class="lbl">ID</div><div class="val" id="f-id">—</div></div>
+                            </div>
+                        </div>
+
+                        <div id="cdvTab-call" class="cdv-tab" data-tab="call" style="display:none;">
+                            <div class="cdv-field">
+                                <div class="lbl">Historique d’appels</div>
+                                <div class="val">À intégrer (liste d’appels, dernier contact, etc.).</div>
+                            </div>
+                        </div>
+
+                        <div id="cdvTab-sav" class="cdv-tab" data-tab="sav" style="display:none;">
+                            <div class="cdv-field">
+                                <div class="lbl">SAV</div>
+                                <div class="val">À intégrer (tickets SAV liés au client).</div>
+                            </div>
+                        </div>
+
+                        <div id="cdvTab-buy" class="cdv-tab" data-tab="buy" style="display:none;">
+                            <div class="cdv-field">
+                                <div class="lbl">Achats</div>
+                                <div class="val">À intégrer (commandes / factures du client).</div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+            <!-- /Vue FICHE -->
         </div>
     </div>
+
+    <script>
+    // --- Popup open/close from existing dashboard.js triggers (fallback here) ---
+    (function() {
+        const btn = document.getElementById('supportButton');
+        const overlay = document.getElementById('supportOverlay');
+        const popup = document.getElementById('supportPopup');
+        const closeBtn = document.getElementById('closePopup');
+
+        function openPopup(e){ if(e) e.preventDefault(); overlay.classList.add('open'); popup.classList.add('open'); }
+        function closePopup(e){ if(e) e.preventDefault(); overlay.classList.remove('open'); popup.classList.remove('open'); }
+
+        btn && btn.addEventListener('click', openPopup);
+        overlay && overlay.addEventListener('click', closePopup);
+        closeBtn && closeBtn.addEventListener('click', closePopup);
+    })();
+
+    // --- Recherche côté client ---
+    (function(){
+        const input = document.getElementById('clientSearchInput');
+        const list = document.getElementById('clientsList');
+        if(!input || !list) return;
+
+        input.addEventListener('input', function(){
+            const q = this.value.trim().toLowerCase();
+            list.querySelectorAll('.client-card').forEach(card => {
+                const hay = [
+                    card.dataset['raisonL'],
+                    card.dataset['nomL'],
+                    card.dataset['prenomL'],
+                    card.dataset['numeroL']
+                ].join(' ');
+                card.style.display = hay.includes(q) ? '' : 'none';
+            });
+        });
+    })();
+
+    // --- Fiche client dans le même popup ---
+    (function(){
+        const listView = document.getElementById('clientListView');
+        const detailView = document.getElementById('clientDetailView');
+        const list = document.getElementById('clientsList');
+        if(!list || !detailView || !listView) return;
+
+        // Champs de la fiche
+        const f = {
+            id:     document.getElementById('f-id'),
+            raison: document.getElementById('f-raison'),
+            numero: document.getElementById('f-numero'),
+            nom:    document.getElementById('f-nom'),
+            prenom: document.getElementById('f-prenom'),
+            email:  document.getElementById('f-email'),
+            title:  document.getElementById('cdvTitle'),
+            sub:    document.getElementById('cdvSub')
+        };
+
+        function showDetail(){
+            listView.style.display = 'none';
+            detailView.style.display = 'block';
+            detailView.setAttribute('aria-hidden','false');
+            document.getElementById('popupTitle').textContent = 'Fiche Client';
+            activateTab('home');
+        }
+        function showList(){
+            detailView.style.display = 'none';
+            detailView.setAttribute('aria-hidden','true');
+            listView.style.display = 'block';
+            document.getElementById('popupTitle').textContent = 'Liste des Clients';
+        }
+
+        // Ouvrir une fiche
+        list.addEventListener('click', function(e){
+            const card = e.target.closest('.client-card');
+            if(!card) return;
+            e.preventDefault();
+
+            // Remplissage
+            f.id.textContent     = card.dataset.clientId || '—';
+            f.raison.textContent = card.dataset.raison || '—';
+            f.numero.textContent = card.dataset.numero || '—';
+            f.nom.textContent    = card.dataset.nom || '—';
+            f.prenom.textContent = card.dataset.prenom || '—';
+            f.email.textContent  = card.dataset.email || '—';
+
+            f.title.textContent  = card.dataset.raison || 'Client';
+            f.sub.textContent    = (card.dataset.nom || '') + ' ' + (card.dataset.prenom || '') + ' · ' + (card.dataset.numero || '');
+
+            showDetail();
+        });
+
+        // Retour
+        document.getElementById('cdvBackBtn').addEventListener('click', function(e){
+            e.preventDefault();
+            showList();
+        });
+
+        // Gestion des onglets
+        const navButtons = detailView.querySelectorAll('.cdv-nav-btn[data-tab]');
+        navButtons.forEach(btn => {
+            btn.addEventListener('click', function(){
+                activateTab(this.dataset.tab);
+            });
+        });
+
+        function activateTab(tab){
+            // aria-selected
+            navButtons.forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+            // afficher le bon contenu
+            detailView.querySelectorAll('.cdv-tab').forEach(p => {
+                p.style.display = (p.dataset.tab === tab) ? 'block' : 'none';
+            });
+        }
+    })();
+    </script>
 </body>
 </html>
