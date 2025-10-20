@@ -51,6 +51,18 @@ body.modal-open { overflow: hidden; }
   background: var(--bg-secondary);
 }
 
+/* Centrer la colonne Toners (desktop) */
+.tbl-photocopieurs tbody td[data-th="Toners"] {
+  vertical-align: middle; /* centre verticalement dans la ligne */
+  text-align: center;     /* centre horizontalement le contenu */
+}
+@media (min-width: 901px) {
+  .tbl-photocopieurs tbody td:nth-child(5) {
+    vertical-align: middle;
+    text-align: center;
+  }
+}
+
 /* ---------- Cellules de contenu ---------- */
 .client-cell .client-raison { font-weight: 700; color: var(--text-primary); }
 .client-cell .client-num    { font-size: 0.85rem; color: var(--text-muted); }
@@ -67,13 +79,15 @@ body.modal-open { overflow: hidden; }
 .td-metric { font-weight: 700; text-align: right; }
 .td-date   { color: var(--text-secondary);}
 
-/* === Toners -> cartouches type N C M J, alignées HORIZONTALEMENT === */
+/* =========================================================
+   Toners -> cartouches type N C M J, alignées HORIZONTALEMENT
+   ========================================================= */
 .toners {
-  display: flex;                 /* => en ligne */
+  display: flex;                 /* en ligne */
   align-items: center;
+  justify-content: center;       /* centré horizontalement dans la cellule */
   gap: 8px;                      /* espace entre cartouches */
-  justify-content: flex-start;
-  flex-wrap: nowrap;             /* évite le passage à la ligne */
+  flex-wrap: nowrap;             /* pas de retour à la ligne */
 }
 
 /* Cartouche dessinée horizontale puis pivotée pour un remplissage vertical */
@@ -95,7 +109,6 @@ body.modal-open { overflow: hidden; }
   transform-origin: center;
 }
 
-
 /* Petit "capot" en haut (look cartouche) */
 .toner::before {
   content: "";
@@ -106,7 +119,7 @@ body.modal-open { overflow: hidden; }
   pointer-events: none;
 }
 
-/* Remplissage (ta valeur inline style="width:70%" sert de hauteur après rotation) */
+/* Remplissage (style="width:70%" devient hauteur après rotation) */
 .toner span {
   position: absolute;
   left: 0; top: 0;
@@ -114,7 +127,6 @@ body.modal-open { overflow: hidden; }
   transition: width .25s ease;
   opacity: .95;
 }
-
 .toner.t-k span { background: linear-gradient(to bottom, #111, #000); }
 .toner.t-c span { background: linear-gradient(to bottom, #29d3ff, #00bde8); }
 .toner.t-m span { background: linear-gradient(to bottom, #ff4da6, #e6007e); }
@@ -162,14 +174,13 @@ body.modal-open { overflow: hidden; }
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(980px, calc(100vw - 48px));
+  width: min(980px, calc(100dvw - 48px)); /* évite le débordement de 100vw */
   max-height: calc(100vh - 48px);
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: hidden;             /* pas de barre horizontale dans la modale */
   padding: 1.25rem 1.25rem 1rem;
   border-radius: 1.25rem;
   backdrop-filter: saturate(140%) blur(4px);
-  width: min(980px, calc(100dvw - 48px));  /* évite le pixel de débordement dû à 100vw */
 }
 
 /* En-tête : titre centré, bouton X */
@@ -233,12 +244,24 @@ body.modal-open { overflow: hidden; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.9rem;
+  min-width: 0;                  /* évite le débordement */
 }
 
 .grid-two {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.6rem;
+  min-width: 0;
+}
+
+.card-like { min-width: 0; }
+
+/* Les champs ne dépassent pas */
+.modal-form input,
+.modal-form select,
+.modal-form textarea {
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .checkbox-inline {
@@ -401,8 +424,6 @@ input.is-disabled {
     position: relative;
   }
 
-  .tbl-photocopieurs tbody td:last-child { border-bottom: none; }
-
   .tbl-photocopieurs tbody td::before {
     content: attr(data-th);
     display: block;
@@ -412,12 +433,31 @@ input.is-disabled {
     letter-spacing: .02em;
   }
 
-  .toners { display: flex; gap: 8px; } 
+  /* Bloc "Toners" centré sur mobile */
+  .tbl-photocopieurs tbody td[data-th="Toners"] {
+    text-align: center;            /* centre horizontalement */
+    vertical-align: middle;
+  }
+  .tbl-photocopieurs tbody td[data-th="Toners"]::before {
+    display: block;
+    text-align: left;              /* libellé aligné à gauche */
+    margin: 0 auto .25rem;
+    max-width: fit-content;
+  }
+  .tbl-photocopieurs tbody td[data-th="Toners"] .toners {
+    display: flex;                 /* force flex même si une ancienne règle passe en grid */
+    justify-content: center;
+    gap: 8px;
+    margin: .15rem auto 0;
+  }
 
   .td-metric, .td-date { text-align: left; white-space: normal; }
 
   .form-grid-2 { grid-template-columns: 1fr; }
   .modal-hint { margin-left: 0; }
+
+  /* Toners un peu plus compacts en mobile */
+  .toner { width: 48px; height: 20px; }
 }
 
 /* =========================================================
@@ -427,8 +467,8 @@ input.is-disabled {
   .machine-cell .machine-sub { font-size: 0.8rem; }
   .client-cell .client-num   { font-size: 0.78rem; }
 
-  .toner { height: 12px; }
-  .toner em { font-size: 0.66rem; }
+  .toner { width: 44px; height: 18px; }
+  .toner em { font-size: 0.7rem; }
 
   .filters-row input { font-size: 0.95rem !important; }
 
