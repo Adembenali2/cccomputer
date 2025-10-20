@@ -68,11 +68,9 @@ try {
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Dashboard - CCComputer</title>
-    <!-- Chemins absolus -->
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <script src="/assets/js/dashboard.js" defer></script>
     <style>
-        /* --------- Petits ajouts pour le popup en 2 colonnes --------- */
         .popup-content { display: flex; flex-direction: column; gap: 12px; }
         .clients-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap: 10px; }
         .client-card { display: block; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; text-decoration: none; color: inherit; background:#fff; transition: box-shadow .15s, transform .05s; }
@@ -81,7 +79,7 @@ try {
         .client-info span { display:block; font-size: 13px; color:#4b5563; }
 
         .client-detail-view { display:none; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background:#fff; }
-        .cdv-wrap { display: grid; grid-template-columns: 200px 1fr; min-height: 360px; }
+        .cdv-wrap { display: grid; grid-template-columns: 200px 1fr; min-height: 420px; }
         .cdv-sidebar { background:#f9fafb; border-right:1px solid #e5e7eb; padding: 12px; display:flex; flex-direction:column; gap:6px; }
         .cdv-sidebar .cdv-back { margin-bottom:8px; }
         .cdv-nav-btn { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; border:none; background:transparent; cursor:pointer; text-align:left; font-size:14px; }
@@ -93,12 +91,16 @@ try {
         .cdv-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
         .cdv-field { border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#fff; }
         .cdv-field .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#6b7280; }
-        .cdv-field .val { font-size:14px; margin-top:4px; }
+        .cdv-field .val { font-size:14px; margin-top:4px; word-break: break-word; }
 
         .client-search-bar { width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; font-size:14px; }
         .popup-header { display:flex; align-items:center; justify-content:space-between; }
 
-        /* Overlay & popup déjà présents dans votre CSS global */
+        /* Tableau périphériques */
+        .table { width:100%; border-collapse: collapse; }
+        .table th, .table td { border:1px solid #e5e7eb; padding:8px 10px; font-size:13px; }
+        .table th { background:#f3f4f6; text-align:left; }
+        .chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
     </style>
 </head>
 <body class="page-dashboard">
@@ -260,7 +262,6 @@ try {
                             $numero  = htmlspecialchars($client['numero_client']    ?? '', ENT_QUOTES, 'UTF-8');
                             $email   = htmlspecialchars($client['email']            ?? '', ENT_QUOTES, 'UTF-8');
 
-                            // Data-* pour recherche & pour remplir la fiche
                             $dNom    = htmlspecialchars(strtolower($client['nom_dirigeant']    ?? ''), ENT_QUOTES, 'UTF-8');
                             $dPrenom = htmlspecialchars(strtolower($client['prenom_dirigeant'] ?? ''), ENT_QUOTES, 'UTF-8');
                             $dRaison = htmlspecialchars(strtolower($client['raison_sociale']   ?? ''), ENT_QUOTES, 'UTF-8');
@@ -269,14 +270,9 @@ try {
                         <a href="#"
                            class="client-card"
                            data-client-id="<?= $cId ?>"
-                           data-raison="<?= $raison ?>"
-                           data-nom="<?= $nom ?>"
-                           data-prenom="<?= $prenom ?>"
-                           data-numero="<?= $numero ?>"
-                           data-email="<?= $email ?>"
+                           data-raison-l="<?= $dRaison ?>"
                            data-nom-l="<?= $dNom ?>"
                            data-prenom-l="<?= $dPrenom ?>"
-                           data-raison-l="<?= $dRaison ?>"
                            data-numero-l="<?= $dNum ?>"
                            aria-label="Ouvrir la fiche du client <?= $raison ?>">
                             <div class="client-info">
@@ -294,9 +290,7 @@ try {
             <div id="clientDetailView" class="client-detail-view" aria-hidden="true">
                 <div class="cdv-wrap">
                     <aside class="cdv-sidebar" role="tablist" aria-label="Sections de la fiche client">
-                        <button class="cdv-nav-btn cdv-back" id="cdvBackBtn" type="button">
-                            ← Retour à la liste
-                        </button>
+                        <button class="cdv-nav-btn cdv-back" id="cdvBackBtn" type="button">← Retour à la liste</button>
                         <button class="cdv-nav-btn" data-tab="home" role="tab" aria-selected="true">Accueil</button>
                         <button class="cdv-nav-btn" data-tab="call" role="tab" aria-selected="false">Appel</button>
                         <button class="cdv-nav-btn" data-tab="sav" role="tab" aria-selected="false">SAV</button>
@@ -309,42 +303,85 @@ try {
                                 <div class="cdv-title" id="cdvTitle">Client</div>
                                 <div class="cdv-sub" id="cdvSub"></div>
                             </div>
-                            <div class="cdv-actions">
-                                <!-- Actions futures si besoin -->
-                            </div>
+                            <div class="cdv-actions"></div>
                         </div>
 
-                        <!-- Contenu des onglets -->
+                        <!-- ACCUEIL -->
                         <div id="cdvTab-home" class="cdv-tab" data-tab="home">
-                            <div class="cdv-grid">
-                                <div class="cdv-field"><div class="lbl">Raison sociale</div><div class="val" id="f-raison">—</div></div>
-                                <div class="cdv-field"><div class="lbl">Numéro client</div><div class="val" id="f-numero">—</div></div>
-                                <div class="cdv-field"><div class="lbl">Nom dirigeant</div><div class="val" id="f-nom">—</div></div>
-                                <div class="cdv-field"><div class="lbl">Prénom dirigeant</div><div class="val" id="f-prenom">—</div></div>
-                                <div class="cdv-field"><div class="lbl">Email</div><div class="val" id="f-email">—</div></div>
-                                <div class="cdv-field"><div class="lbl">ID</div><div class="val" id="f-id">—</div></div>
+                            <div class="cdv-grid" id="clientFieldsGrid">
+                                <!-- Champs clients – remplis via JS -->
+                                <?php
+                                // Définition de l'ordre et des labels pour l'affichage
+                                $clientFields = [
+                                    'numero_client' => 'Numéro client',
+                                    'raison_sociale'=> 'Raison sociale',
+                                    'adresse'       => 'Adresse',
+                                    'code_postal'   => 'Code postal',
+                                    'ville'         => 'Ville',
+                                    'adresse_livraison' => 'Adresse livraison',
+                                    'livraison_identique'=> 'Livraison identique',
+                                    'siret'         => 'SIRET',
+                                    'numero_tva'    => 'N° TVA',
+                                    'depot_mode'    => 'Mode de paiement',
+                                    'nom_dirigeant' => 'Nom dirigeant',
+                                    'prenom_dirigeant' => 'Prénom dirigeant',
+                                    'telephone1'    => 'Téléphone 1',
+                                    'telephone2'    => 'Téléphone 2',
+                                    'email'         => 'Email',
+                                    'parrain'       => 'Parrain',
+                                    'offre'         => 'Offre',
+                                    'date_creation' => 'Date création',
+                                    'date_dajout'   => 'Date d’ajout',
+                                    'pdf1' => 'PDF 1', 'pdf2' => 'PDF 2', 'pdf3' => 'PDF 3', 'pdf4' => 'PDF 4', 'pdf5' => 'PDF 5',
+                                    'pdfcontrat'    => 'Contrat (PDF)',
+                                    'iban'          => 'IBAN',
+                                ];
+                                foreach ($clientFields as $key => $label): ?>
+                                    <div class="cdv-field" data-field="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>">
+                                        <div class="lbl"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="val" id="cf-<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>">—</div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <div class="cdv-field" style="margin-top:10px;">
+                                <div class="lbl">Matériels & derniers compteurs</div>
+                                <div class="val">
+                                    <div id="devicesWrapper">
+                                        <table class="table" id="devicesTable">
+                                            <thead>
+                                                <tr>
+                                                    <th>Serial</th>
+                                                    <th>MAC</th>
+                                                    <th>Modèle</th>
+                                                    <th>Statut</th>
+                                                    <th>Toner K</th>
+                                                    <th>C</th>
+                                                    <th>M</th>
+                                                    <th>Y</th>
+                                                    <th>Total BW</th>
+                                                    <th>Total Couleur</th>
+                                                    <th>Dernière relève</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="devicesTbody">
+                                                <tr><td colspan="11">Aucun appareil lié.</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
+                        <!-- Autres onglets (placeholder) -->
                         <div id="cdvTab-call" class="cdv-tab" data-tab="call" style="display:none;">
-                            <div class="cdv-field">
-                                <div class="lbl">Historique d’appels</div>
-                                <div class="val">À intégrer (liste d’appels, dernier contact, etc.).</div>
-                            </div>
+                            <div class="cdv-field"><div class="lbl">Appels</div><div class="val">À intégrer.</div></div>
                         </div>
-
                         <div id="cdvTab-sav" class="cdv-tab" data-tab="sav" style="display:none;">
-                            <div class="cdv-field">
-                                <div class="lbl">SAV</div>
-                                <div class="val">À intégrer (tickets SAV liés au client).</div>
-                            </div>
+                            <div class="cdv-field"><div class="lbl">SAV</div><div class="val">À intégrer.</div></div>
                         </div>
-
                         <div id="cdvTab-buy" class="cdv-tab" data-tab="buy" style="display:none;">
-                            <div class="cdv-field">
-                                <div class="lbl">Achats</div>
-                                <div class="val">À intégrer (commandes / factures du client).</div>
-                            </div>
+                            <div class="cdv-field"><div class="lbl">Achats</div><div class="val">À intégrer.</div></div>
                         </div>
                     </section>
                 </div>
@@ -354,7 +391,7 @@ try {
     </div>
 
     <script>
-    // --- Popup open/close from existing dashboard.js triggers (fallback here) ---
+    // --- Ouverture / fermeture popup ---
     (function() {
         const btn = document.getElementById('supportButton');
         const overlay = document.getElementById('supportOverlay');
@@ -389,81 +426,135 @@ try {
         });
     })();
 
-    // --- Fiche client dans le même popup ---
+    // --- Fiche client dans le même popup (chargement via AJAX) ---
     (function(){
-        const listView = document.getElementById('clientListView');
+        const listView   = document.getElementById('clientListView');
         const detailView = document.getElementById('clientDetailView');
-        const list = document.getElementById('clientsList');
+        const list       = document.getElementById('clientsList');
         if(!list || !detailView || !listView) return;
 
-        // Champs de la fiche
-        const f = {
-            id:     document.getElementById('f-id'),
-            raison: document.getElementById('f-raison'),
-            numero: document.getElementById('f-numero'),
-            nom:    document.getElementById('f-nom'),
-            prenom: document.getElementById('f-prenom'),
-            email:  document.getElementById('f-email'),
-            title:  document.getElementById('cdvTitle'),
-            sub:    document.getElementById('cdvSub')
-        };
-
-        function showDetail(){
-            listView.style.display = 'none';
-            detailView.style.display = 'block';
-            detailView.setAttribute('aria-hidden','false');
-            document.getElementById('popupTitle').textContent = 'Fiche Client';
-            activateTab('home');
-        }
-        function showList(){
-            detailView.style.display = 'none';
-            detailView.setAttribute('aria-hidden','true');
-            listView.style.display = 'block';
-            document.getElementById('popupTitle').textContent = 'Liste des Clients';
+        const navButtons = detailView.querySelectorAll('.cdv-nav-btn[data-tab]');
+        function activateTab(tab){
+            navButtons.forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+            detailView.querySelectorAll('.cdv-tab').forEach(p => { p.style.display = (p.dataset.tab === tab) ? 'block' : 'none'; });
         }
 
-        // Ouvrir une fiche
+        function showDetail(){ listView.style.display='none'; detailView.style.display='block'; detailView.setAttribute('aria-hidden','false'); document.getElementById('popupTitle').textContent='Fiche Client'; activateTab('home'); }
+        function showList(){ detailView.style.display='none'; detailView.setAttribute('aria-hidden','true'); listView.style.display='block'; document.getElementById('popupTitle').textContent='Liste des Clients'; }
+
+        document.getElementById('cdvBackBtn').addEventListener('click', function(e){ e.preventDefault(); showList(); });
+
+        navButtons.forEach(btn => btn.addEventListener('click', function(){ activateTab(this.dataset.tab); }));
+
+        // Remplit la grille des champs client
+        function fillClientFields(client){
+            const map = {
+                numero_client: client.numero_client,
+                raison_sociale: client.raison_sociale,
+                adresse: client.adresse,
+                code_postal: client.code_postal,
+                ville: client.ville,
+                adresse_livraison: client.adresse_livraison,
+                livraison_identique: client.livraison_identique ? 'Oui' : 'Non',
+                siret: client.siret,
+                numero_tva: client.numero_tva,
+                depot_mode: client.depot_mode,
+                nom_dirigeant: client.nom_dirigeant,
+                prenom_dirigeant: client.prenom_dirigeant,
+                telephone1: client.telephone1,
+                telephone2: client.telephone2,
+                email: client.email,
+                parrain: client.parrain,
+                offre: client.offre,
+                date_creation: client.date_creation,
+                date_dajout: client.date_dajout,
+                pdf1: client.pdf1, pdf2: client.pdf2, pdf3: client.pdf3, pdf4: client.pdf4, pdf5: client.pdf5,
+                pdfcontrat: client.pdfcontrat,
+                iban: client.iban
+            };
+            Object.keys(map).forEach(k=>{
+                const el = document.getElementById('cf-'+k);
+                if(!el) return;
+                let v = map[k];
+                if(!v || v===null) v='—';
+                // rend les PDF cliquables si ce sont des chemins
+                if(k.startsWith('pdf') || k==='pdfcontrat'){
+                    if(v !== '—') {
+                        const safe = String(v).replace(/"/g,'&quot;');
+                        el.innerHTML = '<a href="'+safe+'" target="_blank" rel="noopener">Ouvrir</a>';
+                    } else el.textContent = '—';
+                } else {
+                    el.textContent = v;
+                }
+            });
+        }
+
+        // Remplit la table des appareils
+        function fillDevices(devices){
+            const tbody = document.getElementById('devicesTbody');
+            tbody.innerHTML = '';
+            if(!devices || devices.length===0){
+                tbody.innerHTML = '<tr><td colspan="11">Aucun appareil lié.</td></tr>';
+                return;
+            }
+            devices.forEach(d=>{
+                const tr = document.createElement('tr');
+                const td = (t)=>{ const x=document.createElement('td'); x.textContent = (t ?? '—'); return x; };
+                tr.appendChild(td(d.SerialNumber));
+                tr.appendChild(td(d.MacAddress));
+                tr.appendChild(td(d.Model));
+                tr.appendChild(td(d.Status));
+                tr.appendChild(td(d.TonerBlack!=null? d.TonerBlack+'%':'—'));
+                tr.appendChild(td(d.TonerCyan!=null? d.TonerCyan+'%':'—'));
+                tr.appendChild(td(d.TonerMagenta!=null? d.TonerMagenta+'%':'—'));
+                tr.appendChild(td(d.TonerYellow!=null? d.TonerYellow+'%':'—'));
+                tr.appendChild(td(d.TotalBW));
+                tr.appendChild(td(d.TotalColor));
+                tr.appendChild(td(d.Timestamp));
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Charge les données serveur
+        async function loadClientDetail(id){
+            // Affichage provisoire
+            document.getElementById('cdvTitle').textContent = 'Chargement…';
+            document.getElementById('cdvSub').textContent   = '';
+            fillClientFields({}); // reset
+            fillDevices([]);      // reset
+
+            try{
+                const res = await fetch('/ajax/client_detail.php?id='+encodeURIComponent(id), { credentials:'same-origin' });
+                if(!res.ok) throw new Error('HTTP '+res.status);
+                const data = await res.json();
+
+                if(!data || !data.client){
+                    document.getElementById('cdvTitle').textContent='Client introuvable';
+                    return;
+                }
+                const c = data.client;
+
+                document.getElementById('cdvTitle').textContent = c.raison_sociale || 'Client';
+                document.getElementById('cdvSub').textContent   = [c.nom_dirigeant, c.prenom_dirigeant, '·', c.numero_client].filter(Boolean).join(' ');
+
+                fillClientFields(c);
+                fillDevices(data.devices || []);
+            } catch(err){
+                console.error(err);
+                document.getElementById('cdvTitle').textContent = 'Erreur de chargement';
+                document.getElementById('cdvSub').textContent   = 'Impossible de récupérer les données.';
+            }
+        }
+
+        // Ouvre une fiche depuis la liste
         list.addEventListener('click', function(e){
             const card = e.target.closest('.client-card');
             if(!card) return;
             e.preventDefault();
-
-            // Remplissage
-            f.id.textContent     = card.dataset.clientId || '—';
-            f.raison.textContent = card.dataset.raison || '—';
-            f.numero.textContent = card.dataset.numero || '—';
-            f.nom.textContent    = card.dataset.nom || '—';
-            f.prenom.textContent = card.dataset.prenom || '—';
-            f.email.textContent  = card.dataset.email || '—';
-
-            f.title.textContent  = card.dataset.raison || 'Client';
-            f.sub.textContent    = (card.dataset.nom || '') + ' ' + (card.dataset.prenom || '') + ' · ' + (card.dataset.numero || '');
-
+            const id = card.dataset.clientId;
             showDetail();
+            loadClientDetail(id);
         });
-
-        // Retour
-        document.getElementById('cdvBackBtn').addEventListener('click', function(e){
-            e.preventDefault();
-            showList();
-        });
-
-        // Gestion des onglets
-        const navButtons = detailView.querySelectorAll('.cdv-nav-btn[data-tab]');
-        navButtons.forEach(btn => {
-            btn.addEventListener('click', function(){
-                activateTab(this.dataset.tab);
-            });
-        });
-
-        function activateTab(tab){
-            // aria-selected
-            navButtons.forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
-            // afficher le bon contenu
-            detailView.querySelectorAll('.cdv-tab').forEach(p => {
-                p.style.display = (p.dataset.tab === tab) ? 'block' : 'none';
-            });
-        }
     })();
     </script>
 </body>
