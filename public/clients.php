@@ -348,7 +348,7 @@ try {
         </div>
       <?php endif; ?>
 
-      <form method="post" action="/public/clients.php" class="standard-form modal-form" novalidate>
+      <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form" novalidate>
         <input type="hidden" name="action" value="add_client">
 
         <div class="form-grid-2">
@@ -383,12 +383,17 @@ try {
               </div>
             </div>
 
-            <!-- Livraison: case sur une seule ligne, adresse juste en dessous -->
+            <!-- Livraison: case stylée sur une ligne, adresse juste en dessous -->
             <div class="livraison-row">
-              <label class="checkbox-inline livraison-inline">
+              <label class="livraison-toggle">
                 <input type="checkbox" name="livraison_identique" id="livraison_identique" <?= isset($_POST['livraison_identique']) ? 'checked' : '' ?>>
-                <span class="livraison-icon" aria-hidden="true">📦</span>
-                Adresse de livraison identique
+                <span class="toggle-box" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" class="toggle-check" aria-hidden="true">
+                    <path d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.9 9.9-3.242-3.243a1 1 0 1 0-1.414 1.415l3.95 3.95a1 1 0 0 0 1.414 0l10.006-10.008z"></path>
+                  </svg>
+                </span>
+                <span class="livraison-emoji" aria-hidden="true">📦</span>
+                <span class="livraison-text">Adresse de livraison identique</span>
               </label>
             </div>
 
@@ -441,9 +446,8 @@ try {
         </div>
 
         <div class="modal-actions">
-          <button type="submit" class="fiche-action-btn">Enregistrer</button>
-          <button type="button" id="btnCancelAdd" class="btn-ghost">Annuler</button>
           <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
+          <button type="submit" class="fiche-action-btn">Enregistrer</button>
         </div>
       </form>
     </div>
@@ -456,32 +460,27 @@ try {
       window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode(($flash['type']==='error' && ($_POST['action'] ?? '')==='add_client') ? true : false) ?>;
     </script>
 
-    <!-- Sync adresse de livraison quand "identique" est coché -->
+    <!-- Sync adresse de livraison quand "identique" est coché (readOnly pour poster la valeur) -->
     <script>
       (function(){
         const cb      = document.getElementById('livraison_identique');
         const adr     = document.querySelector('input[name="adresse"]');
         const adrLiv  = document.getElementById('adresse_livraison');
-
         if (!cb || !adr || !adrLiv) return;
 
         function syncLivraison() {
           if (cb.checked) {
             adrLiv.value = adr.value;
-            adrLiv.setAttribute('disabled', 'disabled');
+            adrLiv.readOnly = true;
             adrLiv.classList.add('is-disabled');
           } else {
-            adrLiv.removeAttribute('disabled');
+            adrLiv.readOnly = false;
             adrLiv.classList.remove('is-disabled');
           }
         }
 
-        adr.addEventListener('input', () => {
-          if (cb.checked) adrLiv.value = adr.value;
-        });
+        adr.addEventListener('input', () => { if (cb.checked) adrLiv.value = adr.value; });
         cb.addEventListener('change', syncLivraison);
-
-        // init
         syncLivraison();
       })();
     </script>

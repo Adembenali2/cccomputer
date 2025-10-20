@@ -112,20 +112,19 @@
    (s'appuie sur .popup-overlay et .support-popup de main.css)
    ========================================================= */
 
-/* Fenêtre popup (on garde la base de main.css et on peaufine) */
 .support-popup {
   padding: 1.25rem 1.25rem 1rem;
-  border-radius: 1.25rem; /* look plus doux */
+  border-radius: 1.25rem;
   backdrop-filter: saturate(140%) blur(4px);
 }
 
-/* En-tête : titre centré, bouton X en haut à droite */
+/* En-tête : titre centré, bouton X */
 .modal-header {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;      /* centre visuellement le titre */
-  padding-right: 2.25rem;       /* réserve l’espace du bouton X */
+  justify-content: center;
+  padding-right: 2.25rem;
   margin-bottom: 0.75rem;
 }
 
@@ -136,7 +135,6 @@
   color: var(--text-primary);
 }
 
-/* Bouton X (rond, en haut à droite) */
 .icon-btn {
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
@@ -163,7 +161,7 @@
   line-height: 1;
 }
 
-/* Conteneurs de formulaire dans la popup */
+/* Cartes/formulaires */
 .card-like {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -196,20 +194,70 @@
   margin: 0.35rem 0;
 }
 
-/* --------- NOUVEAU : livraison en ligne + adresse dessous --------- */
+/* --------- NOUVEAU : livraison stylée (case custom + icône + texte aligné) --------- */
 .livraison-row {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   margin: 0.35rem 0 0.25rem 0;
 }
-.livraison-inline {
-  gap: 0.5rem;         /* espace entre case, icône, texte */
-  margin: 0;
-}
-.livraison-inline input { transform: translateY(1px); }
-.livraison-icon { font-size: 1rem; opacity: .9; }
 
+.livraison-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.livraison-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle-box {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-color);
+  background: var(--bg-primary);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  transition: background-color .2s ease, border-color .2s ease, transform .06s ease;
+}
+
+.toggle-check {
+  width: 16px;
+  height: 16px;
+  fill: transparent;
+  transition: fill .15s ease;
+}
+
+.livraison-toggle:hover .toggle-box { background: var(--bg-tertiary); }
+
+.livraison-toggle input:checked + .toggle-box {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+.livraison-toggle input:checked + .toggle-box .toggle-check {
+  fill: #ffffff;
+}
+
+.livraison-emoji {
+  font-size: 1.35rem;   /* icône plus grande */
+  line-height: 1;
+  transform: translateY(1px);
+}
+
+.livraison-text {
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+/* Label et input d'adresse de livraison */
 .adresse-livraison-label { margin-top: 0.25rem; display: inline-block; }
 
 input.is-disabled {
@@ -218,23 +266,22 @@ input.is-disabled {
   cursor: not-allowed;
 }
 
-/* Actions en bas : alignées à droite */
+/* Bas de la popup */
 .modal-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: .5rem;
+  gap: .75rem;
   margin-top: 1rem;
 }
 
-/* Astuce/texte d’aide à gauche, boutons à droite */
 .modal-hint {
   margin-right: auto;
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
 
-/* Boutons de la popup : look homogène */
+/* Bouton principal */
 .btn-solid {
   display: inline-flex;
   align-items: center;
@@ -250,7 +297,6 @@ input.is-disabled {
 }
 .btn-solid:active { transform: translateY(1px); }
 
-/* Enregistrer (bleu) */
 .btn-primary {
   background: var(--accent-primary);
   color: #fff;
@@ -258,15 +304,7 @@ input.is-disabled {
 }
 .btn-primary:hover { background: var(--accent-secondary); }
 
-/* Annuler (rouge, même style) */
-.btn-danger {
-  background: #ef4444;      /* rouge 500 */
-  color: #fff;
-  border: 1px solid #ef4444;
-}
-.btn-danger:hover { background: #dc2626; } /* rouge 600 */
-
-/* Messages flash (réutilisés dans la popup au besoin) */
+/* Messages flash */
 .flash { padding: 0.6rem 0.8rem; border-radius: var(--radius-md); }
 .flash-success { background: #0ea5e91a; border: 1px solid #0ea5e9; color: var(--text-primary); }
 .flash-error   { background: #ef44441a; border: 1px solid #ef4444; color: var(--text-primary); }
@@ -275,7 +313,6 @@ input.is-disabled {
    Mode "Cartes" responsive (<= 900px)
    ========================================================= */
 @media (max-width: 900px) {
-  /* masquer l’en-tête et empiler en blocs */
   .tbl-photocopieurs thead {
     position: absolute;
     left: -9999px;
@@ -309,7 +346,6 @@ input.is-disabled {
 
   .tbl-photocopieurs tbody td:last-child { border-bottom: none; }
 
-  /* label de la colonne via data-th */
   .tbl-photocopieurs tbody td::before {
     content: attr(data-th);
     display: block;
@@ -319,7 +355,6 @@ input.is-disabled {
     letter-spacing: .02em;
   }
 
-  /* Toners en pleine largeur */
   .toners {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -327,7 +362,6 @@ input.is-disabled {
 
   .td-metric, .td-date { text-align: left; white-space: normal; }
 
-  /* Popup: colonnes -> 1 */
   .form-grid-2 { grid-template-columns: 1fr; }
   .modal-hint { margin-left: 0; }
 }
@@ -344,11 +378,10 @@ input.is-disabled {
 
   .filters-row input { font-size: 0.95rem !important; }
 
-  /* Boutons plein-largeur pour le confort tactile */
   .modal-actions { flex-wrap: wrap; }
   .btn-solid { width: 100%; }
   .modal-hint { width: 100%; order: -1; margin: 0 0 .5rem 0; }
 
-  /* sur très petit écran, on peut masquer l’icône */
-  .livraison-icon { display: none; }
+  /* icône colis plus discrète si besoin */
+  .livraison-emoji { font-size: 1.2rem; }
 }
