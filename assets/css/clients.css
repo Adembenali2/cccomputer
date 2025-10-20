@@ -9,17 +9,15 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  overflow-x: auto;   /* sécurité si écran étroit */
+  overflow-x: auto;   /* sécurité si très petite fenêtre */
   overflow-y: hidden;
 }
 
 .tbl-photocopieurs {
   width: 100%;
-  /* largeur mini compacte pour tenir dans .page-container (1200px) */
-  min-width: 1180px;
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: fixed;        /* stabilise l’alignement des colonnes */
+  table-layout: fixed;        /* stabilise les largeurs selon <colgroup> */
 }
 
 /* En-têtes */
@@ -59,7 +57,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr; /* deux colonnes compactes */
   gap: 6px 8px;
-  min-width: 190px;               /* réduit (était 220px) */
+  /* plus de min-width fixe : la colonne s’adapte */
 }
 
 .toner {
@@ -109,8 +107,6 @@
     overflow: hidden;
   }
 
-  .tbl-photocopieurs { min-width: 0; }
-
   .tbl-photocopieurs,
   .tbl-photocopieurs tbody,
   .tbl-photocopieurs tr,
@@ -151,7 +147,6 @@
   .toners {
     grid-template-columns: 1fr;
     gap: 8px;
-    min-width: 0;
   }
 
   .td-metric, .td-date { text-align: left; white-space: normal; }
