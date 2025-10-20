@@ -117,18 +117,7 @@ function pctOrDash($v): string {
 
         <div class="table-wrapper">
             <table class="tbl-photocopieurs" id="tbl">
-                <!-- Largeurs FLUIDES (100%) : pas de min-width qui casse -->
-                <colgroup>
-                    <col style="width:18%"><!-- Client -->
-                    <col style="width:10%"><!-- Dirigeant -->
-                    <col style="width:10%"><!-- Téléphone -->
-                    <col style="width:26%"><!-- Photocopieur -->
-                    <col style="width:16%"><!-- Toners -->
-                    <col style="width:8%"><!-- Total BW -->
-                    <col style="width:6%"><!-- Total Color -->
-                    <col style="width:6%"><!-- Dernier relevé -->
-                </colgroup>
-
+                <!-- pas de colgroup : on laisse le navigateur dimensionner selon le contenu -->
                 <thead>
                     <tr>
                         <th>Client</th>

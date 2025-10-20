@@ -9,15 +9,15 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  overflow-x: auto;   /* sécurité si très petite fenêtre */
-  overflow-y: hidden;
+  overflow-x: visible;   /* pas de scroll horizontal ici */
+  overflow-y: visible;
 }
 
 .tbl-photocopieurs {
-  width: 180%;
+  width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: fixed;        /* stabilise les largeurs selon <colgroup> */
+  table-layout: auto;        /* autosize en fonction du contenu */
 }
 
 /* En-têtes */
@@ -25,44 +25,46 @@
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-weight: 700;
-  font-size: 0.85rem;
-  padding: 0.65rem 0.75rem;   /* compact */
+  font-size: 0.9rem;
+  padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
   text-align: left;
-  white-space: nowrap;
+  white-space: nowrap;       /* titres courts -> on les garde sur une ligne */
 }
 
 .tbl-photocopieurs tbody td {
-  padding: 0.65rem 0.75rem;   /* compact */
+  padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
   vertical-align: top;
-  overflow: hidden;           /* utile avec table-layout: fixed */
-  text-overflow: ellipsis;
+  white-space: normal;       /* IMPORTANT: contenu peut aller à la ligne */
+  overflow: visible;         /* aucune coupure/ellipsis */
+  text-overflow: clip;
 }
 
 .tbl-photocopieurs tbody tr:hover { background: var(--bg-secondary); }
 
 /* ---------- Cellules de contenu ---------- */
 .client-cell .client-raison { font-weight: 700; color: var(--text-primary); }
-.client-cell .client-num    { font-size: 0.8rem; color: var(--text-muted); }
+.client-cell .client-num    { font-size: 0.85rem; color: var(--text-muted); }
 
 .machine-cell .machine-line { margin-bottom: 0.1rem; }
-.machine-cell .machine-sub  { font-size: 0.8rem; color: var(--text-secondary); }
+.machine-cell .machine-sub  { font-size: 0.85rem; color: var(--text-secondary); word-break: break-word; }
 
+/* chiffres : on peut garder nowrap, ils ne sont pas longs */
 .td-metric { font-weight: 700; text-align: right; white-space: nowrap; }
 .td-date   { white-space: nowrap; color: var(--text-secondary); }
 
 /* ---------- Toners (barres) ---------- */
 .toners {
   display: grid;
-  grid-template-columns: 1fr 1fr; /* deux colonnes compactes */
+  grid-template-columns: 1fr 1fr;
   gap: 6px 8px;
-  /* plus de min-width fixe : la colonne s’adapte */
+  /* plus de min-width : s’adapte */
 }
 
 .toner {
   position: relative;
-  height: 13px;                /* fin */
+  height: 13px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 10px;
@@ -156,8 +158,8 @@
    Petits écrans (<= 480px)
    ========================================================= */
 @media (max-width: 480px) {
-  .machine-cell .machine-sub { font-size: 0.78rem; }
-  .client-cell .client-num   { font-size: 0.74rem; }
+  .machine-cell .machine-sub { font-size: 0.8rem; }
+  .client-cell .client-num   { font-size: 0.78rem; }
 
   .toner { height: 12px; }
   .toner em { font-size: 0.66rem; }
