@@ -435,14 +435,15 @@ input.is-disabled {
 
   /* Bloc "Toners" : aligné à gauche et label soigné */
   .tbl-photocopieurs tbody td[data-th="Toners"] {
+    padding-top: 1rem;
     text-align: left;
     vertical-align: middle;
   }
   .tbl-photocopieurs tbody td[data-th="Toners"]::before {
     display: block;
     text-align: left;
-    margin: 0 0 .35rem 0;   /* spacing sous le label */
-    opacity: .85;
+    margin: 0 0 .55rem 0;   /* spacing sous le label */
+    opacity: .9;
     letter-spacing: .02em;
     padding-left: 2px;      /* micro-alignement visuel */
   }
@@ -451,7 +452,7 @@ input.is-disabled {
     justify-content: flex-start;  /* aligné à gauche */
     align-items: center;
     gap: 10px;
-    margin: 0;
+    margin-top: .05rem;
   }
 
   .td-metric, .td-date { text-align: left; white-space: normal; }
