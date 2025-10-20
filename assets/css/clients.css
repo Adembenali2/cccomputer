@@ -15,7 +15,7 @@ body.modal-open { overflow: hidden; }
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  overflow-x: visible;
+  overflow-x: visible;  /* important pour le badge en dehors du tableau */
   overflow-y: visible;
 }
 
@@ -38,6 +38,8 @@ body.modal-open { overflow: hidden; }
 }
 
 /* Lignes & cellules */
+.tbl-photocopieurs tbody tr { position: relative; } /* ancre pour le badge pull-out */
+
 .tbl-photocopieurs tbody td {
   padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
@@ -51,21 +53,12 @@ body.modal-open { overflow: hidden; }
   background: var(--bg-secondary);
 }
 
-/* --- Ligne en alerte (pas de relevé >= 2 jours) --- */
-.tbl-photocopieurs tbody tr.row-alert { position: relative; }
-.tbl-photocopieurs tbody tr.row-alert::before {
-  content: "";
+/* --- Badge d'alerte tiré à droite, hors tableau --- */
+.alert-pullout {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: #ef4444;            /* rouge */
-  opacity: 0.6;
-}
-
-/* Badge d'alerte */
-.alert-badge {
+  top: 50%;
+  left: 100%;        /* se place juste après le bord droit du <tr> */
+  transform: translate(10px, -50%); /* petit décalage + centrage vertical */
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -74,9 +67,16 @@ body.modal-open { overflow: hidden; }
   color: #b91c1c;
   background: #ef44441a;
   border: 1px solid #ef4444;
-  padding: 0.15rem 0.4rem;
+  padding: 0.2rem 0.5rem;
   border-radius: 6px;
   white-space: nowrap;
+  z-index: 5;        /* au-dessus de la table */
+  pointer-events: none; /* ne gêne pas les clics sur la ligne */
+}
+
+/* Ne pas afficher le badge pull-out en mode cartes (sinon déborde trop) */
+@media (max-width: 900px) {
+  .alert-pullout { display: none; }
 }
 
 /* Centrer la colonne Toners (desktop) */
