@@ -1,13 +1,147 @@
 <?php
 // /public/clients.php
-
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
 /**
- * 1 ligne par photocopieur (mac_norm) = dernier relevé.
- * On couvre aussi les machines mappées sans relevé.
- * Important : COALESCE sur SerialNumber et MacAddress pour fiabiliser l'affichage.
+ * Helpers
+ */
+function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+function pctOrDash($v): string {
+    if ($v === null || $v === '' || !is_numeric($v)) return '—';
+    $v = max(0, min(100, (int)$v));
+    return (string)$v . '%';
+}
+function old(string $key, string $default=''): string {
+    return htmlspecialchars($_POST[$key] ?? $default, ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Génère un numéro client unique : C + 5 chiffres (ex: C12345)
+ */
+function generateClientNumber(PDO $pdo): string {
+    $sql = "
+        SELECT LPAD(COALESCE(MAX(CAST(SUBSTRING(numero_client, 2) AS UNSIGNED)), 0) + 1, 5, '0') AS next_num
+        FROM clients
+        WHERE numero_client REGEXP '^C[0-9]{5}$'
+    ";
+    $next = $pdo->query($sql)->fetchColumn();
+    if (!$next) { $next = '00001'; }
+    return 'C' . $next;
+}
+
+/**
+ * Traitement du formulaire d'ajout client (POST)
+ */
+$flash = ['type' => null, 'msg' => null];
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'add_client') {
+
+    // Récup
+    $raison_sociale      = trim($_POST['raison_sociale'] ?? '');
+    $adresse             = trim($_POST['adresse'] ?? '');
+    $code_postal         = trim($_POST['code_postal'] ?? '');
+    $ville               = trim($_POST['ville'] ?? '');
+    $livraison_identique = isset($_POST['livraison_identique']) ? 1 : 0;
+    $adresse_livraison   = trim($_POST['adresse_livraison'] ?? '');
+    $nom_dirigeant       = trim($_POST['nom_dirigeant'] ?? '');
+    $prenom_dirigeant    = trim($_POST['prenom_dirigeant'] ?? '');
+    $telephone1          = trim($_POST['telephone1'] ?? '');
+    $telephone2          = trim($_POST['telephone2'] ?? '');
+    $email               = trim($_POST['email'] ?? '');
+    $siret               = trim($_POST['siret'] ?? '');
+    $numero_tva          = trim($_POST['numero_tva'] ?? '');
+    $parrain             = trim($_POST['parrain'] ?? '');
+    $offre               = in_array(($_POST['offre'] ?? 'packbronze'), ['packbronze','packargent'], true) ? $_POST['offre'] : 'packbronze';
+
+    // Copie adresse de livraison si identique
+    if ($livraison_identique) {
+        $adresse_livraison = $adresse;
+    }
+
+    // Validation
+    $errors = [];
+    if ($raison_sociale === '')   $errors[] = "La raison sociale est obligatoire.";
+    if ($adresse === '')          $errors[] = "L'adresse est obligatoire.";
+    if ($code_postal === '')      $errors[] = "Le code postal est obligatoire.";
+    if ($ville === '')            $errors[] = "La ville est obligatoire.";
+    if ($nom_dirigeant === '')    $errors[] = "Le nom du dirigeant est obligatoire.";
+    if ($prenom_dirigeant === '') $errors[] = "Le prénom du dirigeant est obligatoire.";
+    if ($telephone1 === '')       $errors[] = "Le téléphone est obligatoire.";
+    // NOT NULL en base
+    if ($email === '')            $errors[] = "L'email est obligatoire.";
+    if ($siret === '')            $errors[] = "Le SIRET est obligatoire.";
+
+    if (empty($errors)) {
+        try {
+            $numero = generateClientNumber($pdo);
+
+            $stmt = $pdo->prepare("
+                INSERT INTO clients
+                    (numero_client, raison_sociale, adresse, code_postal, ville,
+                     adresse_livraison, livraison_identique, siret, numero_tva,
+                     nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
+                     email, parrain, offre)
+                VALUES
+                    (:numero_client, :raison_sociale, :adresse, :code_postal, :ville,
+                     :adresse_livraison, :livraison_identique, :siret, :numero_tva,
+                     :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
+                     :email, :parrain, :offre)
+            ");
+
+            $params = [
+                ':numero_client'       => $numero,
+                ':raison_sociale'      => $raison_sociale,
+                ':adresse'             => $adresse,
+                ':code_postal'         => $code_postal,
+                ':ville'               => $ville,
+                ':adresse_livraison'   => ($adresse_livraison !== '' ? $adresse_livraison : null),
+                ':livraison_identique' => $livraison_identique,
+                ':siret'               => $siret,
+                ':numero_tva'          => ($numero_tva !== '' ? $numero_tva : null),
+                ':nom_dirigeant'       => $nom_dirigeant,
+                ':prenom_dirigeant'    => $prenom_dirigeant,
+                ':telephone1'          => $telephone1,
+                ':telephone2'          => ($telephone2 !== '' ? $telephone2 : null),
+                ':email'               => $email,
+                ':parrain'             => ($parrain !== '' ? $parrain : null),
+                ':offre'               => $offre,
+            ];
+
+            $stmt->execute($params);
+
+            header('Location: /public/clients.php?added=1');
+            exit;
+        } catch (PDOException $e) {
+            if ((int)$e->errorInfo[1] === 1062) { // duplicate numero_client
+                try {
+                    $numero = generateClientNumber($pdo);
+                    $params[':numero_client'] = $numero;
+                    $stmt->execute($params);
+                    header('Location: /public/clients.php?added=1');
+                    exit;
+                } catch (PDOException $e2) {
+                    error_log('clients.php INSERT retry error: '.$e2->getMessage());
+                    $flash = ['type' => 'error', 'msg' => "Erreur SQL (unicité): impossible de créer le client."];
+                }
+            } else {
+                error_log('clients.php INSERT error: '.$e->getMessage());
+                $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client."];
+            }
+        }
+    } else {
+        $flash = ['type' => 'error', 'msg' => implode('<br>', array_map('htmlspecialchars', $errors))];
+    }
+}
+
+// Message succès après PRG
+if (($_GET['added'] ?? '') === '1') {
+    $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
+}
+
+/**
+ * Requête principale (inchangée)
+ * 1 ligne par photocopieur (mac_norm) = dernier relevé + machines sans relevé
  */
 $sql = "
 WITH v_compteur_last AS (
@@ -79,13 +213,6 @@ try {
     error_log('clients.php SQL error: ' . $e->getMessage());
     $rows = [];
 }
-
-function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
-function pctOrDash($v): string {
-    if ($v === null || $v === '' || !is_numeric($v)) return '—';
-    $v = max(0, min(100, (int)$v));
-    return (string)$v . '%';
-}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -107,17 +234,120 @@ function pctOrDash($v): string {
             <h2 class="page-title">Photocopieurs par client (dernier relevé)</h2>
         </div>
 
+        <!-- Barre de filtres + bouton Ajouter -->
         <div class="filters-row" style="margin-bottom:1rem; display:flex; gap:0.75rem; align-items:center;">
             <input type="text" id="q" placeholder="Filtrer (client, modèle, SN, MAC)…"
                    style="flex:1; padding:0.55rem 0.75rem; border:1px solid var(--border-color); border-radius: var(--radius-md); background:var(--bg-primary); color:var(--text-primary);">
             <button id="clearQ" class="btn" style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--bg-primary); border-radius:var(--radius-md); cursor:pointer;">
                 Effacer
             </button>
+            <button id="btnAddClient" class="btn btn-primary" style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--primary); color:#fff; border-radius:var(--radius-md); cursor:pointer;">
+                + Ajouter un client
+            </button>
         </div>
 
+        <!-- Flash message -->
+        <?php if ($flash['type']): ?>
+          <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
+            <?= $flash['msg'] ?>
+          </div>
+        <?php endif; ?>
+
+        <!-- Panneau formulaire (caché par défaut ; ouvert si erreurs validation) -->
+        <div id="addClientPanel" class="add-client-panel" data-init-open="<?= ($flash['type']==='error' ? '1' : '0') ?>" hidden>
+          <form method="post" action="/public/clients.php" class="form-add-client" novalidate>
+            <input type="hidden" name="action" value="add_client">
+
+            <div class="grid-2">
+              <div class="card">
+                <h3>Informations société</h3>
+
+                <label>Raison sociale*<br>
+                  <input type="text" name="raison_sociale" value="<?= old('raison_sociale') ?>" required>
+                </label>
+
+                <label>Adresse*<br>
+                  <input type="text" name="adresse" value="<?= old('adresse') ?>" required>
+                </label>
+
+                <div class="grid-2">
+                  <label>Code postal*<br>
+                    <input type="text" name="code_postal" value="<?= old('code_postal') ?>" required>
+                  </label>
+                  <label>Ville*<br>
+                    <input type="text" name="ville" value="<?= old('ville') ?>" required>
+                  </label>
+                </div>
+
+                <div class="grid-2">
+                  <label>SIRET*<br>
+                    <input type="text" name="siret" value="<?= old('siret') ?>" required>
+                  </label>
+                  <label>Numéro TVA<br>
+                    <input type="text" name="numero_tva" value="<?= old('numero_tva') ?>">
+                  </label>
+                </div>
+
+                <label class="chk">
+                  <input type="checkbox" name="livraison_identique" id="livraison_identique" <?= isset($_POST['livraison_identique']) ? 'checked' : '' ?>>
+                  Adresse de livraison identique
+                </label>
+
+                <label>Adresse de livraison<br>
+                  <input type="text" name="adresse_livraison" id="adresse_livraison" value="<?= old('adresse_livraison') ?>" placeholder="Laisser vide si identique">
+                </label>
+              </div>
+
+              <div class="card">
+                <h3>Contacts & offre</h3>
+
+                <div class="grid-2">
+                  <label>Nom dirigeant*<br>
+                    <input type="text" name="nom_dirigeant" value="<?= old('nom_dirigeant') ?>" required>
+                  </label>
+                  <label>Prénom dirigeant*<br>
+                    <input type="text" name="prenom_dirigeant" value="<?= old('prenom_dirigeant') ?>" required>
+                  </label>
+                </div>
+
+                <div class="grid-2">
+                  <label>Téléphone*<br>
+                    <input type="text" name="telephone1" value="<?= old('telephone1') ?>" required>
+                  </label>
+                  <label>Téléphone 2<br>
+                    <input type="text" name="telephone2" value="<?= old('telephone2') ?>">
+                  </label>
+                </div>
+
+                <label>Email*<br>
+                  <input type="email" name="email" value="<?= old('email') ?>" required>
+                </label>
+
+                <div class="grid-2">
+                  <label>Parrain<br>
+                    <input type="text" name="parrain" value="<?= old('parrain') ?>">
+                  </label>
+                  <label>Offre<br>
+                    <select name="offre">
+                      <option value="packbronze" <?= (($_POST['offre'] ?? 'packbronze')==='packbronze'?'selected':'') ?>>Pack Bronze</option>
+                      <option value="packargent" <?= (($_POST['offre'] ?? '')==='packargent'?'selected':'') ?>>Pack Argent</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">Enregistrer</button>
+                  <button type="button" id="btnCancelAdd" class="btn">Annuler</button>
+                </div>
+                <p class="hint">* obligatoires — le numéro client sera généré automatiquement (ex: C12345).</p>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Tableau -->
         <div class="table-wrapper">
             <table class="tbl-photocopieurs" id="tbl">
-                <!-- pas de colgroup : on laisse le navigateur dimensionner selon le contenu -->
                 <thead>
                     <tr>
                         <th>Client</th>
@@ -216,23 +446,7 @@ function pctOrDash($v): string {
         </div>
     </div>
 
-    <script>
-    // Filtre client-side simple
-    (function() {
-      const q = document.getElementById('q');
-      const clear = document.getElementById('clearQ');
-      const rows = Array.from(document.querySelectorAll('#tbl tbody tr'));
-
-      function applyFilter() {
-        const val = (q.value || '').trim().toLowerCase();
-        rows.forEach(tr => {
-          const hay = tr.getAttribute('data-search') || '';
-          tr.style.display = hay.includes(val) ? '' : 'none';
-        });
-      }
-      q && q.addEventListener('input', applyFilter);
-      clear && clear.addEventListener('click', () => { q.value = ''; applyFilter(); });
-    })();
-    </script>
+    <!-- JS séparé -->
+    <script src="/assets/js/clients.js"></script>
 </body>
 </html>
