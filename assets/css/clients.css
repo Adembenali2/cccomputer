@@ -53,67 +53,60 @@
 .machine-cell .machine-sub  {
   font-size: 0.85rem;
   color: var(--text-secondary);
-  overflow-wrap: break-word;
-  word-break: break-word;
+  overflow-wrap: break-word; /* coupe les mots/chaînes longues */
+  word-break: break-word;    /* fallback */
 }
 
 /* chiffres : on peut garder nowrap, ils ne sont pas longs */
 .td-metric { font-weight: 700; text-align: right; }
 .td-date   { color: var(--text-secondary);}
 
-/* =========================================================
-   Toners (inline, compacts, hauteur texte)
-   ========================================================= */
-.toners--inline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+/* ---------- Toners (barres) ---------- */
+.toners {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
 }
 
-.toners--inline .t {
+.toner {
   position: relative;
-  height: 1.6em;             /* ≈ hauteur de la ligne de texte */
-  line-height: 1.6em;
-  padding: 0 8px;
+  height: 18px;
+  background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 999px;      /* pastille */
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 0.9rem;         /* proche de la taille du tableau */
-  box-shadow: var(--shadow-sm);
+  border-radius: 12px;
   overflow: hidden;
 }
 
-/* Barre de remplissage (en largeur) sous le texte */
-.toners--inline .t .bar {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: calc(var(--level, 0) * 1%);
-  opacity: 0.28;
+.toner span {
+  display: block;
+  height: 100%;
+  transition: width 0.25s ease;
+  opacity: 0.98;
+  /* léger gloss vertical pour du relief */
+  background-image: linear-gradient(to bottom, rgba(255,255,255,0.15), rgba(0,0,0,0.05));
+  mix-blend-mode: overlay; /* garde la teinte, ajoute du relief */
+}
+
+.toner.t-k span { background: #000000; }  /* Noir */
+.toner.t-c span { background: #00d9ff; }  /* Cyan */
+.toner.t-m span { background: #ff0000; }  /* Magenta */
+.toner.t-y span { background: #ffa200; }  /* Jaune */
+
+.toner em {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-style: normal; 
+  font-size: 0.8rem;                /* ↑ taille texte (avant: 0.7rem) */
+  font-weight: 700;                 /* bolder pour la lisibilité */
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);  /* contraste renforcé */
+  letter-spacing: .01em;
   pointer-events: none;
 }
 
-/* Texte au-dessus */
-.toners--inline .t em {
-  position: relative;
-  z-index: 1;
-  font-style: normal;
-  font-weight: 700;
-  letter-spacing: .01em;
-}
+[data-theme="dark"] .toner { border-color: #475569; }
 
-/* Couleurs */
-.toners--inline .t-k .bar { background: #0f172a; } /* Noir */
-.toners--inline .t-c .bar { background: #06b6d4; } /* Cyan */
-.toners--inline .t-m .bar { background: #ef4444; } /* Magenta */
-.toners--inline .t-y .bar { background: #f59e0b; } /* Jaune */
-
-[data-theme="dark"] .toners--inline .t { border-color: #475569; }
-
-/* =========================================================
-   Boutons génériques
-   ========================================================= */
+/* ---------- Boutons génériques ---------- */
 .filters-row .btn { color: var(--text-primary); }
 .btn-primary {
   background: var(--accent-primary);
@@ -122,20 +115,24 @@
 }
 
 /* =========================================================
-   Popup "Ajouter un client" (utilise .popup-overlay / .support-popup)
+   Popup "Ajouter un client"
+   (s'appuie sur .popup-overlay et .support-popup de main.css)
    ========================================================= */
+
+/* Fenêtre popup (on garde la base de main.css et on peaufine) */
 .support-popup {
   padding: 1.25rem 1.25rem 1rem;
-  border-radius: 1.25rem;
+  border-radius: 1.25rem; /* look plus doux */
   backdrop-filter: saturate(140%) blur(4px);
 }
 
+/* En-tête : titre centré, bouton X en haut à droite */
 .modal-header {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;   /* centre le titre */
-  padding-right: 2.25rem;    /* espace pour le X */
+  justify-content: center;      /* centre visuellement le titre */
+  padding-right: 2.25rem;       /* réserve l’espace du bouton X */
   margin-bottom: 0.75rem;
 }
 
@@ -146,7 +143,7 @@
   color: var(--text-primary);
 }
 
-/* Bouton X */
+/* Bouton X (rond, en haut à droite) */
 .icon-btn {
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
@@ -173,7 +170,7 @@
   line-height: 1;
 }
 
-/* Cartes de champs dans la popup */
+/* Conteneurs de formulaire dans la popup */
 .card-like {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -206,7 +203,7 @@
   margin: 0.35rem 0;
 }
 
-/* Actions */
+/* Actions en bas : alignées à droite */
 .modal-actions {
   display: flex;
   align-items: center;
@@ -215,13 +212,14 @@
   margin-top: 1rem;
 }
 
+/* Astuce/texte d’aide à gauche, boutons à droite */
 .modal-hint {
   margin-right: auto;
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
 
-/* Boutons solides */
+/* Boutons de la popup : look homogène */
 .btn-solid {
   display: inline-flex;
   align-items: center;
@@ -245,15 +243,15 @@
 }
 .btn-primary:hover { background: var(--accent-secondary); }
 
-/* Annuler (rouge) */
+/* Annuler (rouge, même style) */
 .btn-danger {
-  background: #ef4444;
+  background: #ef4444;      /* rouge 500 */
   color: #fff;
   border: 1px solid #ef4444;
 }
-.btn-danger:hover { background: #dc2626; }
+.btn-danger:hover { background: #dc2626; } /* rouge 600 */
 
-/* Messages flash */
+/* Messages flash (réutilisés dans la popup au besoin) */
 .flash { padding: 0.6rem 0.8rem; border-radius: var(--radius-md); }
 .flash-success { background: #0ea5e91a; border: 1px solid #0ea5e9; color: var(--text-primary); }
 .flash-error   { background: #ef44441a; border: 1px solid #ef4444; color: var(--text-primary); }
@@ -296,6 +294,7 @@
 
   .tbl-photocopieurs tbody td:last-child { border-bottom: none; }
 
+  /* label de la colonne via data-th */
   .tbl-photocopieurs tbody td::before {
     content: attr(data-th);
     display: block;
@@ -305,7 +304,15 @@
     letter-spacing: .02em;
   }
 
-  /* Toners inline : rien à changer, wrap automatique */
+  /* Toners en pleine largeur */
+  .toners {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .td-metric, .td-date { text-align: left; white-space: normal; }
+
+  /* Popup: colonnes -> 1 */
   .form-grid-2 { grid-template-columns: 1fr; }
   .modal-hint { margin-left: 0; }
 }
@@ -316,9 +323,13 @@
 @media (max-width: 480px) {
   .machine-cell .machine-sub { font-size: 0.8rem; }
   .client-cell .client-num   { font-size: 0.78rem; }
+
+  .toner { height: 12px; }
+  .toner em { font-size: 0.66rem; }
+
   .filters-row input { font-size: 0.95rem !important; }
 
-  /* Popup: boutons plein-largeur */
+  /* Boutons plein-largeur pour le confort tactile */
   .modal-actions { flex-wrap: wrap; }
   .btn-solid { width: 100%; }
   .modal-hint { width: 100%; order: -1; margin: 0 0 .5rem 0; }
