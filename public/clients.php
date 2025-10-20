@@ -336,8 +336,10 @@ try {
 
     <div id="clientModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle">
       <div class="modal-header">
-        <h3 id="clientModalTitle">Ajouter un client</h3>
-        <button type="button" id="btnCloseModal" class="icon-btn" aria-label="Fermer">✕</button>
+      <h3 id="clientModalTitle">Ajouter un client</h3>
+      <button type="button" id="btnCloseModal" class="icon-btn icon-btn--close" aria-label="Fermer">
+        <span aria-hidden="true">×</span>
+      </button>
       </div>
 
       <?php if ($flash['type'] && $flash['type']!=='success' && ($_POST['action'] ?? '')==='add_client'): ?>
@@ -435,10 +437,11 @@ try {
         </div>
 
         <div class="modal-actions">
-          <button type="submit" class="fiche-action-btn">Enregistrer</button>
-          <button type="button" id="btnCancelAdd" class="btn-ghost">Annuler</button>
-          <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
+            <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
+            <button type="submit" class="btn-solid btn-primary">Enregistrer</button>
+            <button type="button" id="btnCancelAdd" class="btn-solid btn-danger">Annuler</button>
         </div>
+
       </form>
     </div>
 
