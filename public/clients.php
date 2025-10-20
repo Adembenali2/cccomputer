@@ -340,7 +340,8 @@ try {
       <button type="button" id="btnCloseModal" class="icon-btn icon-btn--close" aria-label="Fermer">
         <span aria-hidden="true">×</span>
       </button>
-      </div>
+    </div>
+
 
       <?php if ($flash['type'] && $flash['type']!=='success' && ($_POST['action'] ?? '')==='add_client'): ?>
         <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
@@ -437,11 +438,10 @@ try {
         </div>
 
         <div class="modal-actions">
-        <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
-        <button type="submit" class="btn-solid btn-primary">Enregistrer</button>
-        <button type="button" id="btnCancelAdd" class="btn-solid btn-danger">Annuler</button>
+          <button type="submit" class="fiche-action-btn">Enregistrer</button>
+          <button type="button" id="btnCancelAdd" class="btn-ghost">Annuler</button>
+          <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
         </div>
-
       </form>
     </div>
 
