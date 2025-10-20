@@ -119,7 +119,7 @@ if (($_GET['added'] ?? '') === '1') {
     $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
 }
 
-/** Requête principale (inchangée) **/
+/** Requête principale (corrigée pour inclure les clients sans photocopieur) **/
 $sql = "
 WITH v_compteur_last AS (
   SELECT r.*,
@@ -131,6 +131,8 @@ v_last AS (
   FROM v_compteur_last
   WHERE rn = 1
 ),
+
+-- Photocopieurs ayant un dernier relevé (avec client si lié)
 blk_releve AS (
   SELECT
     COALESCE(pc.mac_norm, v.mac_norm)                                 AS mac_norm,
@@ -151,6 +153,8 @@ blk_releve AS (
   LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = v.mac_norm
   LEFT JOIN clients c               ON c.id = pc.id_client
 ),
+
+-- Photocopieurs sans relevé (avec client si lié)
 blk_sans_releve AS (
   SELECT
     pc.mac_norm,
@@ -171,12 +175,37 @@ blk_sans_releve AS (
   LEFT JOIN clients c  ON c.id = pc.id_client
   LEFT JOIN v_last v   ON v.mac_norm = pc.mac_norm
   WHERE v.mac_norm IS NULL
+),
+
+-- Clients sans aucun photocopieur attribué
+clients_sans_machine AS (
+  SELECT
+    NULL AS mac_norm,
+    NULL AS SerialNumber,
+    NULL AS MacAddress,
+    NULL AS Model,
+    NULL AS Nom,
+    NULL AS last_ts,
+    NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
+    NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+    c.id AS client_id,
+    c.numero_client,
+    c.raison_sociale,
+    c.nom_dirigeant,
+    c.prenom_dirigeant,
+    c.telephone1
+  FROM clients c
+  LEFT JOIN photocopieurs_clients pc ON pc.id_client = c.id
+  WHERE pc.id_client IS NULL
 )
+
 SELECT *
 FROM (
   SELECT * FROM blk_releve
   UNION ALL
   SELECT * FROM blk_sans_releve
+  UNION ALL
+  SELECT * FROM clients_sans_machine
 ) x
 ORDER BY
   COALESCE(x.raison_sociale, '— sans client —') ASC,
