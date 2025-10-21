@@ -80,9 +80,24 @@ body.modal-open { overflow: hidden; }
   pointer-events: none; /* ne gêne pas les clics */
 }
 
-/* Ne pas afficher le badge pull-out en mode cartes */
+/* Afficher et repositionner le badge pull-out en mode cartes */
 @media (max-width: 900px) {
-  .alert-pullout { display: none; }
+  .alert-pullout {
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none;
+    display: inline-flex;
+    margin-top: 0.35rem;
+    white-space: normal;
+  }
+
+  /* Aligner à droite et prévoir un peu d'espace */
+  .tbl-photocopieurs tbody td.has-pullout,
+  .tbl-photocopieurs tbody td.td-date {
+    text-align: right;
+    padding-bottom: 0.95rem;
+  }
 }
 
 /* Centrer la colonne Toners (desktop) */
