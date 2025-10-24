@@ -5,24 +5,16 @@ require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
-/**
- * Normalise une MAC.
- * Retourne:
- *  - 'norm'  => "AABBCCDDEEFF" (12 hex sans séparateurs)
- *  - 'colon' => "AA:BB:CC:DD:EE:FF" (pour stockage lisible dans MacAddress)
- */
+/** Normalise une MAC → ['norm'=>'AABBCCDDEEFF','colon'=>'AA:BB:CC:DD:EE:FF'] ou [null,null] */
 function normalizeMac(?string $mac): array {
   $raw = strtoupper(trim((string)$mac));
   $hex = preg_replace('~[^0-9A-F]~', '', $raw);
   if (strlen($hex) !== 12) return ['norm' => null, 'colon' => null];
-  return [
-    'norm'  => $hex,
-    'colon' => implode(':', str_split($hex, 2)),
-  ];
+  return ['norm' => $hex, 'colon' => implode(':', str_split($hex, 2))];
 }
 
 /* ---------- Entrée ---------- */
-$macParam = strtoupper(trim($_GET['mac'] ?? '')); // attendu comme 12 hex sans séparateurs
+$macParam = strtoupper(trim($_GET['mac'] ?? '')); // attendu: 12 hex sans séparateurs
 $snParam  = trim($_GET['sn'] ?? '');
 
 $useMac = false; $useSn = false;
@@ -39,18 +31,18 @@ $flash = ['type'=>null,'msg'=>null];
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'attach_client') {
     $clientId = (int)($_POST['id_client'] ?? 0);
     $snPost   = trim($_POST['sn'] ?? '');
-    $macPost  = trim($_POST['mac'] ?? ''); // peut contenir ":" → on normalise
+    $macPost  = trim($_POST['mac'] ?? '');
 
     $mac = normalizeMac($macPost);
-    $macNorm  = $mac['norm'];   // AABBCCDDEEFF (utile pour vérifs/WHERE ailleurs)
-    $macColon = $mac['colon'];  // AA:BB:CC:DD:EE:FF → stocké dans MacAddress
+    $macNorm  = $mac['norm'];   // AABBCCDDEEFF
+    $macColon = $mac['colon'];  // AA:BB:CC:DD:EE:FF
 
-    if ($clientId <= 0 || !$macNorm) {
-        $flash = ['type'=>'error','msg'=>"Client ou MAC invalide."];
+    // ✅ On accepte SN seul OU MAC seule (au moins un des deux)
+    if ($clientId <= 0 || ($snPost === '' && !$macNorm)) {
+        $flash = ['type'=>'error','msg'=>"Veuillez choisir un client et fournir au moins le N° de série ou la MAC."];
     } else {
         try {
-            // ⚠️ mac_norm est GENERATED ALWAYS → ne JAMAIS l'insérer ni la mettre à jour directement.
-            //   L'unicité est assurée par UNIQUE KEY u_mac/uq_pc_mac (sur mac_norm) et u_serial (sur SerialNumber).
+            // Construire l'INSERT dynamiquement (on n'écrit JAMAIS mac_norm car colonne générée)
             $sql = "
               INSERT INTO photocopieurs_clients (MacAddress, SerialNumber, id_client)
               VALUES (:mac_addr, :sn, :id_client)
@@ -59,13 +51,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 SerialNumber = VALUES(SerialNumber),
                 MacAddress   = VALUES(MacAddress)
             ";
-            $pdo->prepare($sql)->execute([
-                ':mac_addr'  => $macColon,
-                ':sn'        => ($snPost !== '' ? $snPost : null),
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                ':mac_addr'  => $macColon ?: null,                // peut être NULL si MAC inconnue
+                ':sn'        => ($snPost !== '' ? $snPost : null),// peut être NULL si SN inconnu
                 ':id_client' => $clientId
             ]);
 
-            // Recharge pour afficher le nouvel état (client désormais lié)
             header('Location: '.$_SERVER['REQUEST_URI']);
             exit;
 
@@ -93,7 +85,9 @@ try {
 
 /* ---------- En-tête (infos machine) ---------- */
 $latest     = $rows[0] ?? null;
-$macDisplay = $latest['MacAddress']   ?? ($useMac ? implode(':', str_split($macParam,2)) : '—'); // joli avec :
+$macPrettyFromParam = $useMac ? implode(':', str_split($macParam,2)) : null;
+
+$macDisplay = $latest['MacAddress']   ?? ($macPrettyFromParam ?: '—'); // ce qu'on montre à l'écran
 $snDisplay  = $latest['SerialNumber'] ?? ($useSn ? $snParam : '—');
 $model      = $latest['Model']        ?? '—';
 $name       = $latest['Nom']          ?? '—';
@@ -260,8 +254,12 @@ function pctOrIntOrNull($v): ?int {
     <form method="post" class="standard-form" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>">
       <input type="hidden" name="action" value="attach_client">
       <input type="hidden" name="sn"  value="<?= h($snDisplay) ?>">
-      <!-- On envoie la MAC telle qu’affichée; le PHP la normalise systématiquement -->
-      <input type="hidden" name="mac" value="<?= h($macDisplay) ?>">
+
+      <?php
+        // 🟢 IMPORTANT : on envoie la MAC issue du paramètre ?mac si présent (pas l'affichage "—")
+        $macForForm = $macPrettyFromParam ?: $macDisplay;
+      ?>
+      <input type="hidden" name="mac" value="<?= h($macForForm) ?>">
 
       <!-- Recherche instantanée -->
       <div>
@@ -309,7 +307,7 @@ function pctOrIntOrNull($v): ?int {
       const ovl   = document.getElementById('attachOverlay');
       const cancel= document.getElementById('btnAttachCancel');
 
-      // Ouverture uniquement si c'est un <button> (pas de client lié)
+      // Ouvrir le formulaire seulement si pas encore attribué (bouton, pas lien)
       if (btn && btn.tagName.toLowerCase() === 'button') {
         btn.addEventListener('click', openModal);
       }
@@ -320,7 +318,7 @@ function pctOrIntOrNull($v): ?int {
       ovl && ovl.addEventListener('click', closeModal);
       cancel && cancel.addEventListener('click', closeModal);
 
-      /* ---- Recherche instantanée ---- */
+      // Recherche instantanée
       const q = document.getElementById('clientSearch');
       const sel = document.getElementById('clientSelect');
       const noMatch = document.getElementById('noMatch');
@@ -337,14 +335,13 @@ function pctOrIntOrNull($v): ?int {
             if (ok) shown++;
           });
 
+          // Auto-sélection du premier visible
           const firstVisible = opts.find(o => !o.hidden);
           sel.value = firstVisible ? firstVisible.value : '';
           noMatch.style.display = shown ? 'none' : 'block';
         }
 
         q.addEventListener('input', filter);
-
-        // Enter => sélectionner le premier visible
         q.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -352,14 +349,9 @@ function pctOrIntOrNull($v): ?int {
             if (first) sel.value = first.value;
           }
         });
-
-        // Navigation clavier
         q.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); sel.focus(); } });
-        sel.addEventListener('keydown', (e) => {
-          if (e.key === 'ArrowUp' && sel.selectedIndex === 0) { e.preventDefault(); q.focus(); }
-        });
+        sel.addEventListener('keydown', (e) => { if (e.key === 'ArrowUp' && sel.selectedIndex === 0) { e.preventDefault(); q.focus(); } });
 
-        // Premier filtrage
         filter();
       }
     })();
