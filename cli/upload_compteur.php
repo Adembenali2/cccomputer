@@ -1,15 +1,16 @@
 <?php
 declare(strict_types=1);
 
-// =========================
-//  Affichage erreurs utile
-// =========================
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
-// ============================================================
-//  0) Normaliser les env MySQL (utile sur Railway) si besoin
-// ============================================================
+/**
+ * Import SFTP -> compteur_relevee (format CSV Champ,Valeur)
+ * - Déduplication: NOT EXISTS sur (mac_norm, Timestamp)
+ * - Journalisation: import_run
+ */
+
+// ---------- 0) Normaliser éventuellement les env MySQL (Railway) ----------
 (function (): void {
     $needs = !getenv('MYSQLHOST') || !getenv('MYSQLDATABASE') || !getenv('MYSQLUSER');
     if (!$needs) return;
@@ -27,9 +28,7 @@ ini_set('display_errors', '1');
     putenv("MYSQLDATABASE=" . ltrim($p['path'], '/'));
 })();
 
-// =========================================
-//  1) Charger $pdo (doit définir $pdo = PDO)
-// =========================================
+// ---------- 1) Charger la connexion PDO ----------
 $paths = [
     __DIR__ . '/../includes/db.php',
     __DIR__ . '/../../includes/db.php',
@@ -43,34 +42,29 @@ if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
     http_response_code(500);
     exit("❌ Erreur: impossible de charger includes/db.php et obtenir \$pdo\n");
 }
+echo "✅ DB OK\n";
 
-echo "✅ Connexion DB OK\n";
-
-// ==========================
-//  2) Connexion SFTP (env)
-// ==========================
+// ---------- 2) Connexion SFTP ----------
 require __DIR__ . '/../vendor/autoload.php';
 use phpseclib3\Net\SFTP;
 
-$sftp_host   = getenv('SFTP_HOST') ?: 'home298245733.1and1-data.host';
-$sftp_user   = getenv('SFTP_USER') ?: '';
-$sftp_pass   = getenv('SFTP_PASS') ?: '';
-$sftp_port   = (int)(getenv('SFTP_PORT') ?: 22);
-$sftp_root   = getenv('SFTP_PATH') ?: '/';     // répertoire racine à scanner
-$sftp_timeout= (int)(getenv('SFTP_TIMEOUT') ?: 30);
+$sftp_host    = getenv('SFTP_HOST') ?: 'home298245733.1and1-data.host';
+$sftp_user    = getenv('SFTP_USER') ?: '';
+$sftp_pass    = getenv('SFTP_PASS') ?: '';
+$sftp_port    = (int)(getenv('SFTP_PORT') ?: 22);
+$sftp_path    = getenv('SFTP_PATH') ?: '/';
+$sftp_timeout = (int)(getenv('SFTP_TIMEOUT') ?: 30);
 
 $sftp = new SFTP($sftp_host, $sftp_port, $sftp_timeout);
 if (!$sftp->login($sftp_user, $sftp_pass)) {
     http_response_code(500);
     exit("❌ Erreur de connexion SFTP ($sftp_host:$sftp_port)\n");
 }
-echo "✅ SFTP connecté sur $sftp_host:$sftp_port, root='$sftp_root'\n";
+echo "✅ SFTP connecté sur $sftp_host:$sftp_port, path='$sftp_path'\n";
 
-// Dossiers d’archivage (ignorer erreurs si existent déjà)
 @$sftp->mkdir('/processed');
 @$sftp->mkdir('/errors');
 
-// Déplacement sûr (avec suffixe horodaté si collision)
 function sftp_safe_move(SFTP $sftp, string $from, string $toDir): array {
     $basename = basename($from);
     $target   = rtrim($toDir, '/') . '/' . $basename;
@@ -83,40 +77,29 @@ function sftp_safe_move(SFTP $sftp, string $from, string $toDir): array {
     return [false, null];
 }
 
-// =====================================
-//  3) CSV util: clé/valeur + délimiteur
-// =====================================
-/**
- * Lit un CSV "Champ,Valeur" (ou "Champ;Valeur"), 2 colonnes, header optionnel.
- * Retourne un tableau associatif [Champ => Valeur].
- */
+// ---------- 3) CSV utilitaires ----------
+// Parse un CSV Champ,Valeur (ou Champ;Valeur), header "Champ,Valeur" optionnel
 function parse_csv_kv(string $filepath): array {
     $data = [];
+    $h = @fopen($filepath, 'r');
+    if (!$h) return $data;
 
-    // Détecter séparateur sur la 1ère ligne
-    $first = '';
-    $fh = fopen($filepath, 'r');
-    if (!$fh) return $data;
-    $first = fgets($fh) ?: '';
+    $first = fgets($h) ?: '';
     $sep = (substr_count($first, ';') > substr_count($first, ',')) ? ';' : ',';
-    rewind($fh);
+    rewind($h);
 
-    while (($row = fgetcsv($fh, 0, $sep)) !== false) {
+    while (($row = fgetcsv($h, 0, $sep)) !== false) {
         if (count($row) < 2) continue;
         $k = trim((string)$row[0]);
         $v = trim((string)$row[1]);
-
-        // Skip header si présent
-        if (strcasecmp($k, 'Champ') === 0 && strcasecmp($v, 'Valeur') === 0) {
-            continue;
-        }
+        if (strcasecmp($k, 'Champ') === 0 && strcasecmp($v, 'Valeur') === 0) continue; // header
         if ($k !== '') $data[$k] = ($v === '' ? null : $v);
     }
-    fclose($fh);
+    fclose($h);
     return $data;
 }
 
-// Champs attendus (d’après ton exemple)
+// Champs attendus (d’après tes fichiers)
 $FIELDS = [
     'Timestamp','IpAddress','Nom','Model','SerialNumber','MacAddress',
     'Status','TonerBlack','TonerCyan','TonerMagenta','TonerYellow',
@@ -125,166 +108,162 @@ $FIELDS = [
     'MonoPrinted','ColorPrinted','TotalColor','TotalBW'
 ];
 
-echo "🚀 Parcours des fichiers CSV...\n";
+echo "🚀 Scan des CSV…\n";
 
-// ===================================
-//  4) Créer tables si pas existantes
-// ===================================
+// ---------- 4) S’assurer que les tables existent (ton schéma) ----------
 try {
-    // Table métier
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `compteur_relevee` (
-            `Id` INT NOT NULL AUTO_INCREMENT,
-            `Timestamp` DATETIME NOT NULL,
-            `IpAddress` VARCHAR(45) NULL,
-            `Nom` VARCHAR(191) NULL,
-            `Model` VARCHAR(191) NULL,
-            `SerialNumber` VARCHAR(191) NULL,
-            `MacAddress` VARCHAR(32) NOT NULL,
-            `Status` VARCHAR(191) NULL,
-            `TonerBlack` INT NULL,
-            `TonerCyan` INT NULL,
-            `TonerMagenta` INT NULL,
-            `TonerYellow` INT NULL,
-            `TotalPages` INT NULL,
-            `FaxPages` INT NULL,
-            `CopiedPages` INT NULL,
-            `PrintedPages` INT NULL,
-            `BWCopies` INT NULL,
-            `ColorCopies` INT NULL,
-            `MonoCopies` INT NULL,
-            `BichromeCopies` INT NULL,
-            `BWPrinted` INT NULL,
-            `BichromePrinted` INT NULL,
-            `MonoPrinted` INT NULL,
-            `ColorPrinted` INT NULL,
-            `TotalColor` INT NULL,
-            `TotalBW` INT NULL,
-            `DateInsertion` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (`Id`),
-            UNIQUE KEY `uniq_mac_ts` (`MacAddress`,`Timestamp`),
-            KEY `idx_serial_ts` (`SerialNumber`,`Timestamp`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+          `id` int NOT NULL AUTO_INCREMENT,
+          `Timestamp` datetime DEFAULT NULL,
+          `IpAddress` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+          `Nom` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+          `Model` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+          `SerialNumber` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+          `MacAddress` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+          `Status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+          `TonerBlack` int DEFAULT NULL,
+          `TonerCyan` int DEFAULT NULL,
+          `TonerMagenta` int DEFAULT NULL,
+          `TonerYellow` int DEFAULT NULL,
+          `TotalPages` int DEFAULT NULL,
+          `FaxPages` int DEFAULT NULL,
+          `CopiedPages` int DEFAULT NULL,
+          `PrintedPages` int DEFAULT NULL,
+          `BWCopies` int DEFAULT NULL,
+          `ColorCopies` int DEFAULT NULL,
+          `MonoCopies` int DEFAULT NULL,
+          `BichromeCopies` int DEFAULT NULL,
+          `BWPrinted` int DEFAULT NULL,
+          `BichromePrinted` int DEFAULT NULL,
+          `MonoPrinted` int DEFAULT NULL,
+          `ColorPrinted` int DEFAULT NULL,
+          `TotalColor` int DEFAULT NULL,
+          `TotalBW` int DEFAULT NULL,
+          `DateInsertion` datetime DEFAULT NULL,
+          `mac_norm` char(12) COLLATE utf8mb4_general_ci GENERATED ALWAYS AS (replace(upper(`MacAddress`),_utf8mb4':',_utf8mb4'')) STORED,
+          PRIMARY KEY (`id`),
+          KEY `ix_compteur_date` (`Timestamp`),
+          KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     ");
 
-    // Table journal des exécutions
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `import_run` (
-            `id` INT NOT NULL AUTO_INCREMENT,
-            `ran_at` DATETIME NOT NULL,
-            `imported` INT NOT NULL,
-            `skipped` INT NOT NULL,
-            `ok` TINYINT(1) NOT NULL,
-            `msg` TEXT,
-            PRIMARY KEY (`id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+          `id` int NOT NULL AUTO_INCREMENT,
+          `ran_at` datetime NOT NULL,
+          `imported` int NOT NULL,
+          `skipped` int NOT NULL,
+          `ok` tinyint(1) NOT NULL,
+          `msg` text,
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     ");
 } catch (Throwable $e) {
     exit('❌ Erreur CREATE TABLE: '.$e->getMessage()."\n");
 }
 
-// Préparer l'INSERT IGNORE (idempotence grâce à l'unique index)
-$cols_compteur = implode(',', array_map(fn($c) => "`$c`", $FIELDS)) . ',`DateInsertion`';
-$ph_compteur   = ':' . implode(',:', $FIELDS) . ',NOW()';
-$sql_compteur  = "INSERT IGNORE INTO `compteur_relevee` ($cols_compteur) VALUES ($ph_compteur)";
-$st_compteur   = $pdo->prepare($sql_compteur);
+// ---------- 5) Préparer l’INSERT conditionnel (anti-doublon) ----------
+$cols = implode(',', $FIELDS) . ',DateInsertion';
+$placeholders = ':' . implode(',:', $FIELDS) . ',NOW()';
 
-// =========================
-//  5) Traiter les fichiers
-// =========================
-$files_processed     = 0;
-$compteurs_inserted  = 0;
-$files_error         = 0;
+$sqlInsertIfMissing = "
+  INSERT INTO compteur_relevee ($cols)
+  SELECT $placeholders
+  FROM DUAL
+  WHERE NOT EXISTS (
+    SELECT 1 FROM compteur_relevee
+    WHERE mac_norm = REPLACE(UPPER(:_mac_check), ':','')
+      AND Timestamp = :_ts_check
+  )
+";
+$stInsert = $pdo->prepare($sqlInsertIfMissing);
 
-$files = $sftp->nlist($sftp_root);
-if ($files === false) {
-    echo "❌ Impossible de lister '$sftp_root' sur le SFTP\n";
+// ---------- 6) Parcours des fichiers SFTP ----------
+$files_processed = 0;
+$compteurs_inserted = 0;
+$files_error = 0;
+
+$list = $sftp->nlist($sftp_path);
+if ($list === false) {
+    echo "❌ Impossible de lister '$sftp_path'\n";
 } else {
     $found = false;
-    foreach ($files as $entry) {
-        if ($entry === '.' || $entry === '..') continue;
-        if (!preg_match('/^COPIEUR_MAC-([A-F0-9:\-]+)_(\d{8}_\d{6})\.csv$/i', $entry)) continue;
+    foreach ($list as $name) {
+        if ($name === '.' || $name === '..') continue;
+        if (!preg_match('/^COPIEUR_MAC-([A-F0-9:\-]+)_(\d{8}_\d{6})\.csv$/i', $name)) continue;
 
         $found = true;
         $files_processed++;
-        $remote = rtrim($sftp_root, '/') . '/' . ltrim($entry, '/');
 
+        $remote = rtrim($sftp_path, '/') . '/' . ltrim($name, '/');
         $tmp = tempnam(sys_get_temp_dir(), 'csv_');
+
         if (!$sftp->get($remote, $tmp)) {
-            echo "❌ Erreur téléchargement $entry → /errors\n";
+            echo "❌ Download KO: $name → /errors\n";
             sftp_safe_move($sftp, $remote, '/errors');
             @unlink($tmp);
             $files_error++;
             continue;
         }
 
-        $row = parse_csv_kv($tmp);
+        $kv = parse_csv_kv($tmp);
         @unlink($tmp);
 
-        // Construire le jeu de valeurs
-        $values = [];
-        foreach ($FIELDS as $f) { $values[$f] = $row[$f] ?? null; }
+        // Construire les valeurs
+        $vals = [];
+        foreach ($FIELDS as $f) $vals[$f] = $kv[$f] ?? null;
 
-        // Champs requis pour assurer l'unicité et la cohérence
-        if (empty($values['MacAddress']) || empty($values['Timestamp'])) {
-            echo "⚠️ Données manquantes (MacAddress/Timestamp) pour $entry → /errors\n";
+        if (empty($vals['Timestamp']) || empty($vals['MacAddress'])) {
+            echo "⚠️ Manque Timestamp/MacAddress pour $name → /errors\n";
             sftp_safe_move($sftp, $remote, '/errors');
             $files_error++;
             continue;
         }
 
-        // Normaliser Timestamp en DATETIME MySQL
-        $ts = date('Y-m-d H:i:s', strtotime((string)$values['Timestamp']));
-        $values['Timestamp'] = $ts;
+        // Normaliser Timestamp → DATETIME MySQL
+        $vals['Timestamp'] = date('Y-m-d H:i:s', strtotime((string)$vals['Timestamp']));
 
         try {
             $pdo->beginTransaction();
 
-            // binder proprement
             $binds = [];
-            foreach ($FIELDS as $f) { $binds[":$f"] = $values[$f]; }
+            foreach ($FIELDS as $f) $binds[":$f"] = $vals[$f];
+            // paramètres pour la clause NOT EXISTS
+            $binds[':_mac_check'] = $vals['MacAddress'];
+            $binds[':_ts_check']  = $vals['Timestamp'];
 
-            $st_compteur->execute($binds);
+            $stInsert->execute($binds);
 
-            if ($st_compteur->rowCount() === 1) {
+            if ($stInsert->rowCount() === 1) {
                 $compteurs_inserted++;
-                echo "✅ INSÉRÉ: {$values['MacAddress']} @ {$values['Timestamp']}\n";
+                echo "✅ INSÉRÉ: {$vals['MacAddress']} @ {$vals['Timestamp']}\n";
             } else {
-                echo "ℹ️ Déjà présent (IGNORE): {$values['MacAddress']} @ {$values['Timestamp']}\n";
+                echo "ℹ️ Doublon ignoré (mac_norm,Timestamp): {$vals['MacAddress']} @ {$vals['Timestamp']}\n";
             }
 
             $pdo->commit();
 
-            // Archiver le fichier traité
             [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
-            if (!$okMove) {
-                echo "⚠️ Impossible de déplacer $entry vers /processed\n";
-            } else {
-                echo "📦 Archivé: $entry → /processed\n";
-            }
+            if (!$okMove) echo "⚠️ Move → /processed échoué: $name\n";
+            else          echo "📦 Archivé: $name\n";
 
         } catch (Throwable $e) {
             $pdo->rollBack();
-            echo "❌ [PDO] ".$e->getMessage()."\n";
+            echo "❌ PDO: ".$e->getMessage()."\n";
             sftp_safe_move($sftp, $remote, '/errors');
             $files_error++;
         }
     }
 
-    if (!$found) {
-        echo "⚠️ Aucun fichier CSV trouvé dans '$sftp_root'.\n";
-    }
+    if (!$found) echo "⚠️ Aucun CSV trouvé dans '$sftp_path'\n";
 }
 
-// ==========================
-//  6) Journaliser le run
-// ==========================
+// ---------- 7) Journal import_run ----------
 try {
-    $summary = sprintf(
-        "[upload_compteur] files=%d, errors=%d, inserted=%d",
+    $summary = sprintf("[upload_compteur] files=%d, errors=%d, inserted=%d",
         $files_processed, $files_error, $compteurs_inserted
     );
-
     $stmt = $pdo->prepare("
         INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
         VALUES (NOW(), :imported, :skipped, :ok, :msg)
@@ -295,9 +274,9 @@ try {
         ':ok'       => ($files_error === 0 ? 1 : 0),
         ':msg'      => $summary,
     ]);
-    echo "📝 import_run → $summary\n";
+    echo "📝 import_run: $summary\n";
 } catch (Throwable $e) {
-    echo "❌ [IMPORT_RUN] ".$e->getMessage()."\n";
+    echo "❌ import_run INSERT: ".$e->getMessage()."\n";
 }
 
 echo "-----------------------------\n";
