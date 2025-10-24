@@ -24,12 +24,8 @@ COPY composer.json composer.lock* ./
 # 2) Installer les dépendances (génère /var/www/html/vendor)
 RUN composer install --no-dev --prefer-dist --no-progress --no-interaction
 
-# 3) Copier le reste du code (y compris API/, docker-entrypoint.sh, etc.)
+# 3) Copier le reste du code (y compris API/)
 COPY . /var/www/html
 
-# Entrypoint qui adapte le port Apache à $PORT (exigé par Railway pour le service web)
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# Lancement par défaut de Apache (le port est adapté par Start Command dans Railway)
 CMD ["apache2-foreground"]
