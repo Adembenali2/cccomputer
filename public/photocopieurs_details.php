@@ -5,18 +5,24 @@ require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
-/** Normalise: "aa-bb:cc dd.ee ff" -> "AABBCCDDEEFF" (mac_norm) et "AA:BB:CC:DD:EE:FF" (MacAddress) */
+/**
+ * Normalise une MAC.
+ * Retourne:
+ *  - 'norm'  => "AABBCCDDEEFF" (12 hex sans séparateurs)
+ *  - 'colon' => "AA:BB:CC:DD:EE:FF" (pour stockage lisible dans MacAddress)
+ */
 function normalizeMac(?string $mac): array {
   $raw = strtoupper(trim((string)$mac));
   $hex = preg_replace('~[^0-9A-F]~', '', $raw);
   if (strlen($hex) !== 12) return ['norm' => null, 'colon' => null];
-  $norm  = $hex; // AABBCCDDEEFF
-  $pairs = implode(':', str_split($hex, 2)); // AA:BB:CC:DD:EE:FF
-  return ['norm' => $norm, 'colon' => $pairs];
+  return [
+    'norm'  => $hex,
+    'colon' => implode(':', str_split($hex, 2)),
+  ];
 }
 
 /* ---------- Entrée ---------- */
-$macParam = strtoupper(trim($_GET['mac'] ?? ''));
+$macParam = strtoupper(trim($_GET['mac'] ?? '')); // attendu comme 12 hex sans séparateurs
 $snParam  = trim($_GET['sn'] ?? '');
 
 $useMac = false; $useSn = false;
@@ -33,36 +39,36 @@ $flash = ['type'=>null,'msg'=>null];
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'attach_client') {
     $clientId = (int)($_POST['id_client'] ?? 0);
     $snPost   = trim($_POST['sn'] ?? '');
-    $macPost  = trim($_POST['mac'] ?? '');
+    $macPost  = trim($_POST['mac'] ?? ''); // peut contenir ":" → on normalise
 
     $mac = normalizeMac($macPost);
-    $macNorm = $mac['norm'];      // AABBCCDDEEFF
-    $macColon = $mac['colon'];    // AA:BB:CC:DD:EE:FF
+    $macNorm  = $mac['norm'];   // AABBCCDDEEFF (utile pour vérifs/WHERE ailleurs)
+    $macColon = $mac['colon'];  // AA:BB:CC:DD:EE:FF → stocké dans MacAddress
 
     if ($clientId <= 0 || !$macNorm) {
         $flash = ['type'=>'error','msg'=>"Client ou MAC invalide."];
     } else {
         try {
-            // IMPORTANT: nécessite un index unique sur photocopieurs_clients.mac_norm
-            //   ALTER TABLE photocopieurs_clients ADD UNIQUE KEY uq_pc_mac (mac_norm);
+            // ⚠️ mac_norm est GENERATED ALWAYS → ne JAMAIS l'insérer ni la mettre à jour directement.
+            //   L'unicité est assurée par UNIQUE KEY u_mac/uq_pc_mac (sur mac_norm) et u_serial (sur SerialNumber).
             $sql = "
-              INSERT INTO photocopieurs_clients (mac_norm, MacAddress, SerialNumber, id_client)
-              VALUES (:mac_norm, :mac_addr, :sn, :id_client)
+              INSERT INTO photocopieurs_clients (MacAddress, SerialNumber, id_client)
+              VALUES (:mac_addr, :sn, :id_client)
               ON DUPLICATE KEY UPDATE
-                id_client   = VALUES(id_client),
-                SerialNumber= VALUES(SerialNumber),
-                MacAddress  = VALUES(MacAddress)
+                id_client    = VALUES(id_client),
+                SerialNumber = VALUES(SerialNumber),
+                MacAddress   = VALUES(MacAddress)
             ";
             $pdo->prepare($sql)->execute([
-                ':mac_norm'  => $macNorm,
                 ':mac_addr'  => $macColon,
                 ':sn'        => ($snPost !== '' ? $snPost : null),
                 ':id_client' => $clientId
             ]);
 
-            // Recharge la page (nouvel état: attribué)
+            // Recharge pour afficher le nouvel état (client désormais lié)
             header('Location: '.$_SERVER['REQUEST_URI']);
             exit;
+
         } catch (PDOException $e) {
             error_log('attach_client error: '.$e->getMessage());
             $flash = ['type'=>'error','msg'=>"Erreur: impossible d'associer le client."];
@@ -85,7 +91,7 @@ try {
   $rows = [];
 }
 
-/* ---------- En-tête ---------- */
+/* ---------- En-tête (infos machine) ---------- */
 $latest     = $rows[0] ?? null;
 $macDisplay = $latest['MacAddress']   ?? ($useMac ? implode(':', str_split($macParam,2)) : '—'); // joli avec :
 $snDisplay  = $latest['SerialNumber'] ?? ($useSn ? $snParam : '—');
@@ -122,7 +128,7 @@ try {
   $client = null;
 }
 
-/* ---------- Liste clients (pour la popup) ---------- */
+/* ---------- Liste des clients (pour la popup) ---------- */
 $clientsList = [];
 try {
   $clientsList = $pdo->query("
@@ -254,7 +260,7 @@ function pctOrIntOrNull($v): ?int {
     <form method="post" class="standard-form" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>">
       <input type="hidden" name="action" value="attach_client">
       <input type="hidden" name="sn"  value="<?= h($snDisplay) ?>">
-      <!-- On envoie la MAC affichée; le PHP la normalise quoi qu'il arrive -->
+      <!-- On envoie la MAC telle qu’affichée; le PHP la normalise systématiquement -->
       <input type="hidden" name="mac" value="<?= h($macDisplay) ?>">
 
       <!-- Recherche instantanée -->
@@ -268,7 +274,7 @@ function pctOrIntOrNull($v): ?int {
         <label for="clientSelect">Résultats</label>
         <select name="id_client" id="clientSelect" size="8" required
                 style="width:100%; max-height:280px; overflow:auto;">
-          <?php foreach ($clientsList as $c): 
+          <?php foreach ($clientsList as $c):
             $label = sprintf('%s (%s) — %s %s — %s',
               $c['raison_sociale'],
               $c['numero_client'],
@@ -331,15 +337,14 @@ function pctOrIntOrNull($v): ?int {
             if (ok) shown++;
           });
 
-          // Sélection automatique du premier visible
           const firstVisible = opts.find(o => !o.hidden);
           sel.value = firstVisible ? firstVisible.value : '';
-
           noMatch.style.display = shown ? 'none' : 'block';
         }
 
         q.addEventListener('input', filter);
-        // Enter => sélectionne le premier visible
+
+        // Enter => sélectionner le premier visible
         q.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -354,6 +359,7 @@ function pctOrIntOrNull($v): ?int {
           if (e.key === 'ArrowUp' && sel.selectedIndex === 0) { e.preventDefault(); q.focus(); }
         });
 
+        // Premier filtrage
         filter();
       }
     })();
