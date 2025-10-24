@@ -96,11 +96,13 @@ try {
         .client-search-bar { width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; font-size:14px; }
         .popup-header { display:flex; align-items:center; justify-content:space-between; }
 
-        /* Tableau périphériques */
         .table { width:100%; border-collapse: collapse; }
         .table th, .table td { border:1px solid #e5e7eb; padding:8px 10px; font-size:13px; }
         .table th { background:#f3f4f6; text-align:left; }
         .chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
+
+        .dash-note { margin-top:16px; font-size:13px; color:#6b7280; }
+        .dash-card.disabled { opacity: .6; pointer-events: none; }
     </style>
 </head>
 <body class="page-dashboard">
@@ -214,7 +216,22 @@ try {
                 <h3 class="card-title">Historiques</h3>
                 <p class="card-count"><?= htmlspecialchars($nHistorique, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
+
+            <!-- Importer compteurs SFTP -->
+            <div class="dash-card" id="btnImport" role="button" tabindex="0" aria-label="Lancer import SFTP">
+                <div class="card-icon stock" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2">
+                        <path d="M4 4h16v6H4z"/>
+                        <path d="M12 10v10"/>
+                        <path d="M7 15h10"/>
+                    </svg>
+                </div>
+                <h3 class="card-title">Importer compteurs</h3>
+                <p class="card-count" id="importState">Prêt</p>
+            </div>
         </div>
+
+        <div id="lastImport" class="dash-note" aria-live="polite">Dernier import : —</div>
     </div>
 
     <!-- Bouton Support -->
@@ -244,14 +261,9 @@ try {
         <div class="popup-content">
             <!-- Vue LISTE -->
             <div id="clientListView">
-                <input
-                    type="text"
-                    id="clientSearchInput"
-                    class="client-search-bar"
+                <input type="text" id="clientSearchInput" class="client-search-bar"
                     placeholder="Filtrer par nom, raison sociale, prénom ou numéro client…"
-                    autocomplete="off"
-                    aria-label="Rechercher un client"
-                >
+                    autocomplete="off" aria-label="Rechercher un client">
                 <div class="clients-list" id="clientsList">
                     <?php foreach ($clients as $client): ?>
                         <?php
@@ -267,8 +279,7 @@ try {
                             $dRaison = htmlspecialchars(strtolower($client['raison_sociale']   ?? ''), ENT_QUOTES, 'UTF-8');
                             $dNum    = htmlspecialchars(strtolower($client['numero_client']    ?? ''), ENT_QUOTES, 'UTF-8');
                         ?>
-                        <a href="#"
-                           class="client-card"
+                        <a href="#" class="client-card"
                            data-client-id="<?= $cId ?>"
                            data-raison-l="<?= $dRaison ?>"
                            data-nom-l="<?= $dNom ?>"
@@ -306,12 +317,9 @@ try {
                             <div class="cdv-actions"></div>
                         </div>
 
-                        <!-- ACCUEIL -->
                         <div id="cdvTab-home" class="cdv-tab" data-tab="home">
                             <div class="cdv-grid" id="clientFieldsGrid">
-                                <!-- Champs clients – remplis via JS -->
                                 <?php
-                                // Définition de l'ordre et des labels pour l'affichage
                                 $clientFields = [
                                     'numero_client' => 'Numéro client',
                                     'raison_sociale'=> 'Raison sociale',
@@ -373,7 +381,6 @@ try {
                             </div>
                         </div>
 
-                        <!-- Autres onglets (placeholder) -->
                         <div id="cdvTab-call" class="cdv-tab" data-tab="call" style="display:none;">
                             <div class="cdv-field"><div class="lbl">Appels</div><div class="val">À intégrer.</div></div>
                         </div>
@@ -391,7 +398,7 @@ try {
     </div>
 
     <script>
-    // --- Ouverture / fermeture popup ---
+    // Popup Support
     (function() {
         const btn = document.getElementById('supportButton');
         const overlay = document.getElementById('supportOverlay');
@@ -406,7 +413,7 @@ try {
         closeBtn && closeBtn.addEventListener('click', closePopup);
     })();
 
-    // --- Recherche côté client ---
+    // Recherche client
     (function(){
         const input = document.getElementById('clientSearchInput');
         const list = document.getElementById('clientsList');
@@ -426,7 +433,7 @@ try {
         });
     })();
 
-    // --- Fiche client dans le même popup (chargement via AJAX) ---
+    // Fiche client
     (function(){
         const listView   = document.getElementById('clientListView');
         const detailView = document.getElementById('clientDetailView');
@@ -446,7 +453,6 @@ try {
 
         navButtons.forEach(btn => btn.addEventListener('click', function(){ activateTab(this.dataset.tab); }));
 
-        // Remplit la grille des champs client
         function fillClientFields(client){
             const map = {
                 numero_client: client.numero_client,
@@ -477,7 +483,6 @@ try {
                 if(!el) return;
                 let v = map[k];
                 if(!v || v===null) v='—';
-                // rend les PDF cliquables si ce sont des chemins
                 if(k.startsWith('pdf') || k==='pdfcontrat'){
                     if(v !== '—') {
                         const safe = String(v).replace(/"/g,'&quot;');
@@ -489,7 +494,6 @@ try {
             });
         }
 
-        // Remplit la table des appareils
         function fillDevices(devices){
             const tbody = document.getElementById('devicesTbody');
             tbody.innerHTML = '';
@@ -515,13 +519,11 @@ try {
             });
         }
 
-        // Charge les données serveur
         async function loadClientDetail(id){
-            // Affichage provisoire
             document.getElementById('cdvTitle').textContent = 'Chargement…';
             document.getElementById('cdvSub').textContent   = '';
-            fillClientFields({}); // reset
-            fillDevices([]);      // reset
+            fillClientFields({});
+            fillDevices([]);
 
             try{
                 const res = await fetch('/ajax/client_detail.php?id='+encodeURIComponent(id), { credentials:'same-origin' });
@@ -546,7 +548,6 @@ try {
             }
         }
 
-        // Ouvre une fiche depuis la liste
         list.addEventListener('click', function(e){
             const card = e.target.closest('.client-card');
             if(!card) return;
@@ -555,6 +556,85 @@ try {
             showDetail();
             loadClientDetail(id);
         });
+    })();
+
+    // Import SFTP: déclenchement + polling + widget
+    (function(){
+        const btn = document.getElementById('btnImport');
+        const state = document.getElementById('importState');
+        let timer = null, jobId = null;
+
+        async function trigger(){
+            if (!btn) return;
+            btn.classList.add('disabled');
+            state.textContent = 'Planification…';
+            try{
+                const r = await fetch('/ajax/trigger_import.php', { method:'POST', credentials:'same-origin' });
+                const d = await r.json();
+                if(!d.ok) throw new Error(d.message || 'Planification impossible');
+                jobId = d.job_id;
+                state.textContent = 'En cours…';
+                timer = setInterval(check, 2000);
+            } catch(e) {
+                console.error(e);
+                state.textContent = 'Erreur planification';
+                btn.classList.remove('disabled');
+            }
+        }
+
+        async function check(){
+            try{
+                const r = await fetch('/ajax/job_status.php?id=' + jobId, { credentials:'same-origin' });
+                const d = await r.json();
+                if (d.status === 'pending' || d.status === 'running') return;
+
+                clearInterval(timer);
+                if (d.status === 'done') {
+                    const s = d.summary || {};
+                    const rows = s.rows ?? '?';
+                    const files = s.files ?? '?';
+                    const errors = s.errors ?? 0;
+                    state.textContent = errors === 0
+                        ? `Terminé (${rows} lignes / ${files} fichiers)`
+                        : `Terminé avec ${errors} erreur(s)`;
+                } else if (d.status === 'failed') {
+                    state.textContent = 'Échec';
+                    if (d.error) console.error('Job error:', d.error);
+                } else {
+                    state.textContent = 'Inconnu';
+                }
+                btn.classList.remove('disabled');
+                refreshLastImport();
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        btn && btn.addEventListener('click', trigger);
+
+        async function refreshLastImport(){
+            try{
+                const r = await fetch('/ajax/last_import_status.php', { credentials:'same-origin' });
+                const d = await r.json();
+                const el = document.getElementById('lastImport');
+                if (!d || !d.status) { el.textContent = 'Dernier import : —'; return; }
+
+                const s = d.summary || {};
+                const rows = s.rows ?? '?';
+                const files = s.files ?? '?';
+                const errors = s.errors ?? 0;
+
+                let txt = `Dernier import #${d.id} : ${d.status}`;
+                if (d.finished_at) txt += ` — ${d.finished_at}`;
+                if (rows) txt += ` — ${rows} lignes / ${files} fichiers`;
+                if (errors>0) txt += ` — ${errors} erreur(s)`;
+
+                el.textContent = txt;
+                el.style.color = (d.status==='done' && errors===0) ? '#16a34a' :
+                                 (d.status==='failed') ? '#dc2626' : '#6b7280';
+            } catch(e){}
+        }
+        refreshLastImport();
     })();
     </script>
 </body>
