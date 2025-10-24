@@ -579,8 +579,10 @@ try {
 
     // --- Import auto silencieux + badge d’état (en haut à droite) ---
     (function(){
-        // Déclenche si > 2min
+        // Déclenche SFTP si > 2min
         fetch('/ajax/run_import_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
+        // Déclenche IONOS si > 2min  (← AJOUT)
+        fetch('/ajax/run_ionos_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
 
         const badge = document.getElementById('importBadge');
         const ico   = document.getElementById('impIco');
