@@ -1,5 +1,4 @@
 <?php
-// /ajax/job_status.php
 require_once __DIR__ . '/../includes/db.php';
 header('Content-Type: application/json');
 

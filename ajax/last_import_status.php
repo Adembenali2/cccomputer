@@ -1,5 +1,4 @@
 <?php
-// /ajax/last_import_status.php
 require_once __DIR__ . '/../includes/db.php';
 header('Content-Type: application/json');
 
