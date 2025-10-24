@@ -24,7 +24,8 @@ if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
 
 // --------- config URL export IONOS ---------
 // Mets cette URL en variable Railway si tu veux (ex: IONOS_EXPORT_URL)
-$exportUrl = getenv('IONOS_EXPORT_URL') ?: 'https://TON-DOMAINE-IONOS/export_compteurs.php?token=REMPLACE_MOI_PAR_UNE_CLE_LONGUE_ET_SECRETE';
+$exportUrl = getenv('IONOS_EXPORT_URL') ?: 'http://cccomputer.fr/web/export_compteurs.php?token=MaCleHyperSecrete_123456789';
+
 
 // --------- récup JSON ---------
 $ctx = stream_context_create([
