@@ -265,6 +265,30 @@ try {
   <link rel="stylesheet" href="/assets/css/clients.css" />
   <style>
     tr.is-clickable:hover { background: var(--bg-elevated); }
+
+    /* Même taille / même style pour les 2 boutons d'action */
+    .action-btn{
+      padding: 0.55rem 0.9rem;
+      border: 1px solid var(--border-color);
+      background: var(--accent-primary);
+      color: #fff;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 36px;         /* hauteur identique */
+      width: 260px;         /* >>> largeur identique pour les 2 boutons <<< */
+      box-sizing: border-box;
+      white-space: nowrap;
+    }
+
+    /* Sur petits écrans, on laisse respirer */
+    @media (max-width: 480px){
+      .action-btn{ width: 100%; }
+      .filters-row { gap: .5rem; }
+    }
   </style>
 </head>
 <body class="page-clients">
@@ -281,29 +305,23 @@ try {
   <div class="filters-row" style="margin-bottom:1rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
     <input type="text" id="q" placeholder="Filtrer (client, modèle, SN, MAC)…"
            style="flex:1; min-width:240px; padding:0.55rem 0.75rem; border:1px solid var(--border-color); border-radius: var(--radius-md); background:var(--bg-primary); color:var(--text-primary);">
-    <button id="clearQ" class="btn" style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--bg-primary); border-radius:var(--radius-md); cursor:pointer;">
+    <button id="clearQ" class="btn"
+            style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--bg-primary); border-radius:var(--radius-md); cursor:pointer;">
       Effacer
     </button>
 
-    <!-- Bouton Ajouter un client -->
-    <button id="btnAddClient" class="btn btn-primary"
-            style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer;">
+    <!-- Bouton Ajouter un client (même taille) -->
+    <button id="btnAddClient" class="btn btn-primary action-btn">
       + Ajouter un client
     </button>
 
-    <!-- Lien-bouton avec le même style que 'Ajouter un client' -->
+    <!-- Lien-bouton vue 'non attribués' (même taille) -->
     <?php if ($view !== 'unassigned'): ?>
-      <a href="/public/clients.php?view=unassigned"
-         class="btn btn-primary"
-         role="button"
-         style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;">
+      <a href="/public/clients.php?view=unassigned" class="btn btn-primary action-btn" role="button">
         Voir photocopieurs non attribués
       </a>
     <?php else: ?>
-      <a href="/public/clients.php"
-         class="btn btn-primary"
-         role="button"
-         style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;">
+      <a href="/public/clients.php" class="btn btn-primary action-btn" role="button">
         ← Revenir aux attribués
       </a>
     <?php endif; ?>
