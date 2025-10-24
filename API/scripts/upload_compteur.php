@@ -11,16 +11,43 @@ ini_set('display_errors', '0');
  * - UPSERT 1 ligne/jour dans `facture_relevee` (ON DUPLICATE KEY UPDATE)
  * - Archive les fichiers du SFTP en /processed ou /errors
  * - Journalise un résumé dans `import_run`
+ *
+ * NOTE: Ce script n'exige AUCUNE modif de config/db.php.
+ * Il alimente les variables MYSQLHOST/PORT/DATABASE/USER/PASSWORD
+ * à partir de MYSQL_PUBLIC_URL (ou DATABASE_URL) si besoin.
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+// ---------- 0) Normaliser les variables d'env pour ton db.php ----------
+(function (): void {
+    $needs = !getenv('MYSQLHOST') || !getenv('MYSQLDATABASE') || !getenv('MYSQLUSER');
+    if (!$needs) return;
 
-// ---------- 1) Charger $pdo depuis includes/db.php ----------
+    $url = getenv('MYSQL_PUBLIC_URL') ?: getenv('DATABASE_URL') ?: '';
+    if (!$url) return; // on laisse db.php échouer proprement si rien n'est dispo
+
+    $p = parse_url($url);
+    if (!$p || empty($p['host']) || empty($p['user']) || empty($p['path'])) return;
+
+    $host = $p['host'];
+    $port = isset($p['port']) ? (string)$p['port'] : '3306';
+    $user = $p['user'];
+    $pass = $p['pass'] ?? '';
+    $db   = ltrim($p['path'], '/');
+
+    // Alimente les variables attendues par config/db.php
+    putenv("MYSQLHOST={$host}");
+    putenv("MYSQLPORT={$port}");
+    putenv("MYSQLUSER={$user}");
+    putenv("MYSQLPASSWORD={$pass}");
+    putenv("MYSQLDATABASE={$db}");
+})();
+
+// ---------- 1) Charger $pdo depuis config/db.php (inchangé) ----------
 $paths = [
-    __DIR__ . '/../includes/db.php',
     __DIR__ . '/../config/db.php',
-    __DIR__ . '/../../includes/db.php',
+    __DIR__ . '/../includes/db.php',
     __DIR__ . '/../../config/db.php',
+    __DIR__ . '/../../includes/db.php',
 ];
 $ok = false;
 foreach ($paths as $p) {
@@ -28,15 +55,13 @@ foreach ($paths as $p) {
 }
 if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
     http_response_code(500);
-    exit("Erreur: impossible de charger includes/db.php et obtenir \$pdo\n");
+    exit("Erreur: impossible de charger config/db.php/includes/db.php et obtenir \$pdo\n");
 }
 
-// ---------- 2) Connexion SFTP ----------
+// ---------- 2) Connexion SFTP (avec TES identifiants “en dur”) ----------
+require __DIR__ . '/../vendor/autoload.php';
 use phpseclib3\Net\SFTP;
 
-/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
- * SFTP — VRAIES VALEURS FOURNIES
- * <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< */
 $sftp_host = 'home298245733.1and1-data.host';
 $sftp_user = 'acc984891385';
 $sftp_pass = 'RTC@4oEMh?orqP&pgir5rz&f';
@@ -132,10 +157,10 @@ try {
             ok TINYINT(1) NOT NULL,
             msg TEXT,
             PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 } catch (Throwable $e) {
-    // non bloquant
+    echo "[IMPORT_RUN] Erreur CREATE TABLE: " . $e->getMessage() . "\n";
 }
 
 // Compteurs de run (pour import_run)
@@ -249,6 +274,19 @@ try {
         $files_processed, $files_error, $compteurs_inserted, $factures_inserted, $factures_updated
     );
 
+    // S'assure que la table existe (au cas où)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS import_run (
+            id INT NOT NULL AUTO_INCREMENT,
+            ran_at DATETIME NOT NULL,
+            imported INT NOT NULL,
+            skipped INT NOT NULL,
+            ok TINYINT(1) NOT NULL,
+            msg TEXT,
+            PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
     $stmt = $pdo->prepare("
         INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
         VALUES (NOW(), :imported, :skipped, :ok, :msg)
@@ -256,11 +294,12 @@ try {
     $stmt->execute([
         ':imported' => max(0, $files_processed - $files_error),
         ':skipped'  => $files_error,
-        ':ok'       => ($files_error === 0 ? 1 : 0), // 1 si aucun fichier en erreur, sinon 0
+        ':ok'       => ($files_error === 0 ? 1 : 0),
         ':msg'      => $summary,
     ]);
+    echo "[IMPORT_RUN] Ligne insérée.\n";
 } catch (Throwable $e) {
-    // silencieux
+    echo "[IMPORT_RUN] Erreur INSERT: " . $e->getMessage() . "\n";
 }
 
 echo "-----------------------------\n";
