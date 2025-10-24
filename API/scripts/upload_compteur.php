@@ -4,15 +4,14 @@ error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
 /**
- * API/scripts/upload_compteur.php
+ * API/scripts/upload_compteur.php (version "compteur only")
  *
  * - Récupère les CSV sur un SFTP (phpseclib3)
  * - Insère dans `compteur_relevee` (INSERT IGNORE)
- * - UPSERT 1 ligne/jour dans `facture_relevee` (ON DUPLICATE KEY UPDATE)
  * - Archive les fichiers du SFTP en /processed ou /errors
  * - Journalise un résumé dans `import_run`
  *
- * NOTE: Ce script n'exige AUCUNE modif de config/db.php.
+ * NOTE: Ce script n'exige AUCUNE modif de includes/db.php.
  * Il alimente les variables MYSQLHOST/PORT/DATABASE/USER/PASSWORD
  * à partir de MYSQL_PUBLIC_URL (ou DATABASE_URL) si besoin.
  */
@@ -30,11 +29,10 @@ ini_set('display_errors', '0');
 
     $host = $p['host'];
     $port = isset($p['port']) ? (string)$p['port'] : '3306';
-    $user = $p['user'];
-    $pass = $p['pass'] ?? '';
+    $user = isset($p['user']) ? urldecode($p['user']) : '';
+    $pass = isset($p['pass']) ? urldecode($p['pass']) : '';
     $db   = ltrim($p['path'], '/');
 
-    // Alimente les variables attendues par config/db.php
     putenv("MYSQLHOST={$host}");
     putenv("MYSQLPORT={$port}");
     putenv("MYSQLUSER={$user}");
@@ -42,11 +40,9 @@ ini_set('display_errors', '0');
     putenv("MYSQLDATABASE={$db}");
 })();
 
-// ---------- 1) Charger $pdo depuis config/db.php (inchangé) ----------
+// ---------- 1) Charger $pdo depuis includes/db.php ----------
 $paths = [
-    __DIR__ . '/../config/db.php',
     __DIR__ . '/../includes/db.php',
-    __DIR__ . '/../../config/db.php',
     __DIR__ . '/../../includes/db.php',
 ];
 $ok = false;
@@ -55,10 +51,10 @@ foreach ($paths as $p) {
 }
 if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
     http_response_code(500);
-    exit("Erreur: impossible de charger config/db.php/includes/db.php et obtenir \$pdo\n");
+    exit("Erreur: impossible de charger includes/db.php et obtenir \$pdo\n");
 }
 
-// ---------- 2) Connexion SFTP (avec TES identifiants “en dur”) ----------
+// ---------- 2) Connexion SFTP ----------
 require __DIR__ . '/../vendor/autoload.php';
 use phpseclib3\Net\SFTP;
 
@@ -98,7 +94,10 @@ function parse_csv_kv(string $filepath): array {
     if (($h = fopen($filepath, 'r')) !== false) {
         while (($row = fgetcsv($h, 2000, ',')) !== false) {
             if (isset($row[0], $row[1])) {
-                $data[trim($row[0])] = trim((string)$row[1]);
+                // Trim + cast simple
+                $k = trim($row[0]);
+                $v = trim((string)$row[1]);
+                $data[$k] = $v;
             }
         }
         fclose($h);
@@ -118,33 +117,11 @@ $FIELDS = [
 echo "Traitement des nouveaux fichiers CSV...\n";
 
 // ---------- 4) Préparer les requêtes PDO ----------
-/* compteur_relevee : INSERT IGNORE */
+// compteur_relevee : INSERT IGNORE
 $cols_compteur = implode(',', $FIELDS) . ',DateInsertion';
 $ph_compteur   = ':' . implode(',:', $FIELDS) . ',NOW()';
 $sql_compteur  = "INSERT IGNORE INTO compteur_relevee ($cols_compteur) VALUES ($ph_compteur)";
 $st_compteur   = $pdo->prepare($sql_compteur);
-
-/* facture_relevee : UPSERT (1/jour) */
-$cols_facture = $FIELDS;
-$cols_facture[] = 'DateRelevee';
-$cols_facture[] = 'DateInsertion';
-
-$insert_cols_facture = implode(',', $cols_facture);
-$insert_vals_facture = ':' . implode(',:', $cols_facture);
-
-$update_parts = [];
-foreach ($FIELDS as $f) {
-    if ($f === 'MacAddress' || $f === 'Timestamp') continue; // ces champs servent à regrouper
-    $update_parts[] = "$f = VALUES($f)";
-}
-$update_parts[] = "DateInsertion = NOW()";
-
-$sql_facture = "
-    INSERT INTO facture_relevee ($insert_cols_facture)
-    VALUES ($insert_vals_facture)
-    ON DUPLICATE KEY UPDATE " . implode(', ', $update_parts);
-
-$st_facture = $pdo->prepare($sql_facture);
 
 // (Optionnel) créer la table de log si absente (singulier: import_run)
 try {
@@ -166,8 +143,6 @@ try {
 // Compteurs de run (pour import_run)
 $files_processed    = 0;  // fichiers CSV conformes (match regex)
 $compteurs_inserted = 0;  // lignes réellement insérées (INSERT IGNORE) dans compteur_relevee
-$factures_inserted  = 0;  // insert dans facture_relevee (rowCount == 1)
-$factures_updated   = 0;  // update dans facture_relevee (rowCount >= 2)
 $files_error        = 0;  // fichiers envoyés en /errors
 
 // ---------- 5) Lister et traiter les fichiers ----------
@@ -199,9 +174,7 @@ if ($files === false) {
 
         // Construire array des valeurs
         $values = [];
-        foreach ($FIELDS as $f) {
-            $values[$f] = $row[$f] ?? null;
-        }
+        foreach ($FIELDS as $f) $values[$f] = $row[$f] ?? null;
 
         // Contrôle minimal
         if (empty($values['MacAddress']) || empty($values['Timestamp'])) {
@@ -210,8 +183,6 @@ if ($files === false) {
             $files_error++;
             continue;
         }
-
-        $date_relevee = date('Y-m-d', strtotime((string)$values['Timestamp']) ?: time());
 
         // Transaction par fichier
         $pdo->beginTransaction();
@@ -226,25 +197,6 @@ if ($files === false) {
                 echo "Compteur INSÉRÉ pour {$values['MacAddress']} ({$values['Timestamp']})\n";
             } else {
                 echo "Déjà présent: compteur NON réinséré pour {$values['MacAddress']} ({$values['Timestamp']})\n";
-            }
-
-            // 2) facture_relevee (UPSERT)
-            $binds_fact = [];
-            foreach ($FIELDS as $f) $binds_fact[":$f"] = $values[$f];
-            $binds_fact[':DateRelevee']   = $date_relevee;
-            $binds_fact[':DateInsertion'] = date('Y-m-d H:i:s');
-
-            $st_facture->execute($binds_fact);
-
-            $aff = $st_facture->rowCount();
-            if ($aff === 1) {
-                $factures_inserted++;
-                echo "Facture INSÉRÉE pour {$values['MacAddress']} ($date_relevee)\n";
-            } elseif ($aff >= 2) {
-                $factures_updated++;
-                echo "Facture MISE À JOUR pour {$values['MacAddress']} ($date_relevee)\n";
-            } else {
-                echo "Facture: $aff lignes affectées pour {$values['MacAddress']} ($date_relevee)\n";
             }
 
             $pdo->commit();
@@ -270,8 +222,8 @@ if ($files === false) {
 // ---------- 6) Journal du run dans import_run ----------
 try {
     $summary = sprintf(
-        "[upload_compteur] files=%d, errors=%d, cmp_inserted=%d, fac_ins=%d, fac_upd=%d",
-        $files_processed, $files_error, $compteurs_inserted, $factures_inserted, $factures_updated
+        "[upload_compteur] files=%d, errors=%d, cmp_inserted=%d",
+        $files_processed, $files_error, $compteurs_inserted
     );
 
     // S'assure que la table existe (au cas où)
