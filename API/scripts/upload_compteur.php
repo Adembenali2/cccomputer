@@ -10,7 +10,7 @@ ini_set('display_errors', '0');
  * - Insère dans `compteur_relevee` (INSERT IGNORE)
  * - UPSERT 1 ligne/jour dans `facture_relevee` (ON DUPLICATE KEY UPDATE)
  * - Archive les fichiers du SFTP en /processed ou /errors
- * - Journalise un résumé dans `import_runs`
+ * - Journalise un résumé dans `import_run`
  *
  * Variables d'environnement attendues (Railway):
  *   SFTP_HOST, SFTP_PORT (22), SFTP_USER, SFTP_PASS
@@ -36,7 +36,7 @@ foreach ($paths as $p) {
 }
 if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
     http_response_code(500);
-    exit("Erreur: impossible de charger includes/db.php et obtenir \$pdo");
+    exit("Erreur: impossible de charger includes/db.php et obtenir \$pdo\n");
 }
 
 // ---------- 2) Connexion SFTP ----------
@@ -50,7 +50,7 @@ $sftp_pass = getenv('SFTP_PASS') ?: '';
 $sftp = new SFTP($sftp_host, $sftp_port);
 if (!$sftp->login($sftp_user, $sftp_pass)) {
     http_response_code(500);
-    exit("Erreur de connexion SFTP");
+    exit("Erreur de connexion SFTP\n");
 }
 
 // Préparer les dossiers d'archivage
@@ -95,14 +95,14 @@ $FIELDS = [
     'MonoPrinted','ColorPrinted','TotalColor','TotalBW'
 ];
 
-echo "<h2>Traitement des nouveaux fichiers CSV...</h2>";
+echo "Traitement des nouveaux fichiers CSV...\n";
 
 // ---------- 4) Préparer les requêtes PDO ----------
 /* compteur_relevee : INSERT IGNORE */
 $cols_compteur = implode(',', $FIELDS) . ',DateInsertion';
-$ph_compteur = ':' . implode(',:', $FIELDS) . ',NOW()';
-$sql_compteur = "INSERT IGNORE INTO compteur_relevee ($cols_compteur) VALUES ($ph_compteur)";
-$st_compteur  = $pdo->prepare($sql_compteur);
+$ph_compteur   = ':' . implode(',:', $FIELDS) . ',NOW()';
+$sql_compteur  = "INSERT IGNORE INTO compteur_relevee ($cols_compteur) VALUES ($ph_compteur)";
+$st_compteur   = $pdo->prepare($sql_compteur);
 
 /* facture_relevee : UPSERT (1/jour) */
 $cols_facture = $FIELDS;
@@ -126,21 +126,24 @@ $sql_facture = "
 
 $st_facture = $pdo->prepare($sql_facture);
 
-// (Optionnel) créer la table de log si absente
+// (Optionnel) créer la table de log si absente (singulier: import_run)
 try {
     $pdo->exec("
-        CREATE TABLE IF NOT EXISTS import_runs (
-            id INT AUTO_INCREMENT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS import_run (
+            id INT NOT NULL AUTO_INCREMENT,
             ran_at DATETIME NOT NULL,
             imported INT NOT NULL,
             skipped INT NOT NULL,
             ok TINYINT(1) NOT NULL,
-            msg TEXT
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+            msg TEXT,
+            PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     ");
-} catch (Throwable $e) { /* non bloquant */ }
+} catch (Throwable $e) {
+    // non bloquant
+}
 
-// Compteurs de run (pour import_runs)
+// Compteurs de run (pour import_run)
 $files_processed    = 0;  // fichiers CSV conformes (match regex)
 $compteurs_inserted = 0;  // lignes réellement insérées (INSERT IGNORE) dans compteur_relevee
 $factures_inserted  = 0;  // insert dans facture_relevee (rowCount == 1)
@@ -150,7 +153,7 @@ $files_error        = 0;  // fichiers envoyés en /errors
 // ---------- 5) Lister et traiter les fichiers ----------
 $files = $sftp->nlist('/');
 if ($files === false) {
-    echo "<p style='color:red'>Impossible d’ouvrir le dossier racine SFTP</p>";
+    echo "Impossible d’ouvrir le dossier racine SFTP\n";
 } else {
     foreach ($files as $entry) {
         if ($entry === '.' || $entry === '..') continue;
@@ -164,7 +167,7 @@ if ($files === false) {
         $remote = '/' . $entry;
         $tmp = tempnam(sys_get_temp_dir(), 'csv_');
         if (!$sftp->get($remote, $tmp)) {
-            echo "<p style='color:red'>Erreur téléchargement $entry</p>";
+            echo "Erreur téléchargement $entry\n";
             sftp_safe_move($sftp, $remote, '/errors');
             @unlink($tmp);
             $files_error++;
@@ -182,7 +185,7 @@ if ($files === false) {
 
         // Contrôle minimal
         if (empty($values['MacAddress']) || empty($values['Timestamp'])) {
-            echo "<p style='color:orange'>Données manquantes (MacAddress/Timestamp) pour $entry → /errors</p>";
+            echo "Données manquantes (MacAddress/Timestamp) pour $entry → /errors\n";
             sftp_safe_move($sftp, $remote, '/errors');
             $files_error++;
             continue;
@@ -200,9 +203,9 @@ if ($files === false) {
 
             if ($st_compteur->rowCount() === 1) {
                 $compteurs_inserted++;
-                echo "<p style='color:green'>Compteur inséré pour {$values['MacAddress']} ({$values['Timestamp']})</p>";
+                echo "Compteur INSÉRÉ pour {$values['MacAddress']} ({$values['Timestamp']})\n";
             } else {
-                echo "<p style='color:blue'>Déjà présent: compteur NON réinséré pour {$values['MacAddress']} ({$values['Timestamp']})</p>";
+                echo "Déjà présent: compteur NON réinséré pour {$values['MacAddress']} ({$values['Timestamp']})\n";
             }
 
             // 2) facture_relevee (UPSERT)
@@ -216,12 +219,12 @@ if ($files === false) {
             $aff = $st_facture->rowCount();
             if ($aff === 1) {
                 $factures_inserted++;
-                echo "<p style='color:green'>Facture insérée pour {$values['MacAddress']} ($date_relevee)</p>";
+                echo "Facture INSÉRÉE pour {$values['MacAddress']} ($date_relevee)\n";
             } elseif ($aff >= 2) {
                 $factures_updated++;
-                echo "<p style='color:blue'>Facture mise à jour pour {$values['MacAddress']} ($date_relevee)</p>";
+                echo "Facture MISE À JOUR pour {$values['MacAddress']} ($date_relevee)\n";
             } else {
-                echo "<p style='color:purple'>Facture : $aff lignes affectées pour {$values['MacAddress']} ($date_relevee)</p>";
+                echo "Facture: $aff lignes affectées pour {$values['MacAddress']} ($date_relevee)\n";
             }
 
             $pdo->commit();
@@ -229,23 +232,22 @@ if ($files === false) {
             // ARCHIVAGE → /processed
             [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
             if (!$okMove) {
-                echo "<p style='color:orange'>⚠️ Impossible de déplacer $entry vers /processed</p>";
+                echo "⚠️  Impossible de déplacer $entry vers /processed\n";
             } else {
-                echo "<small>Archivé : $entry → /processed</small>";
+                echo "Archivé: $entry → /processed\n";
             }
 
         } catch (Throwable $e) {
             $pdo->rollBack();
-            echo "<p style='color:red'>Erreur DB pour {$values['MacAddress']} ({$values['Timestamp']}) : "
-               . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8')
-               . "</p>";
+            echo "Erreur DB pour {$values['MacAddress']} ({$values['Timestamp']}) : "
+               . $e->getMessage() . "\n";
             sftp_safe_move($sftp, $remote, '/errors');
             $files_error++;
         }
     }
 }
 
-// ---------- 6) Journal du run dans import_runs ----------
+// ---------- 6) Journal du run dans import_run ----------
 try {
     $summary = sprintf(
         "[upload_compteur] files=%d, errors=%d, cmp_inserted=%d, fac_ins=%d, fac_upd=%d",
@@ -253,15 +255,18 @@ try {
     );
 
     $stmt = $pdo->prepare("
-        INSERT INTO import_runs (ran_at, imported, skipped, ok, msg)
+        INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
         VALUES (NOW(), :imported, :skipped, :ok, :msg)
     ");
     $stmt->execute([
         ':imported' => max(0, $files_processed - $files_error),
         ':skipped'  => $files_error,
-        ':ok'       => ($files_error === 0 ? 1 : 1), // mets 0 si tu veux signaler un échec partiel
+        ':ok'       => ($files_error === 0 ? 1 : 0), // 1 si aucun fichier en erreur, sinon 0
         ':msg'      => $summary,
     ]);
-} catch (Throwable $e) { /* silencieux */ }
+} catch (Throwable $e) {
+    // silencieux
+}
 
-echo "<hr>Traitement terminé.";
+echo "-----------------------------\n";
+echo "Traitement terminé.\n";
