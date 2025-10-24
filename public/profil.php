@@ -1,5 +1,5 @@
 <?php
-// /public/profil.php (VERSION CORRIGÉE)
+// /public/profil.php (VERSION CORRIGÉE + icône détails import)
 
 // ÉTAPE 1 : SÉCURITÉ D'ABORD
 require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
@@ -163,6 +163,22 @@ if ($editId > 0) {
     $s->execute([$editId]);
     $editing = $s->fetch(PDO::FETCH_ASSOC) ?: null;
 }
+
+// ——— NOUVEAU : on récupère les 20 derniers imports pour l’icône ———
+$imports = [];
+try {
+    $q = $pdo->query("SELECT id, ran_at, imported, skipped, ok, msg FROM import_run ORDER BY id DESC LIMIT 20");
+    $imports = $q->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} catch (Throwable $e) {
+    $imports = [];
+}
+
+// utilitaire pour décoder proprement msg JSON
+function decode_msg($row) {
+    if (!isset($row['msg'])) return null;
+    $d = json_decode((string)$row['msg'], true);
+    return (json_last_error() === JSON_ERROR_NONE) ? $d : null;
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -173,6 +189,62 @@ if ($editId > 0) {
     <!-- chemins absolus -->
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/profil.css">
+    <style>
+        /* ——— Icône import : discrète et stylée ——— */
+        .page-header { position: relative; }
+        .import-mini {
+            position:absolute; right:0; top:0;
+            display:flex; align-items:center; gap:8px;
+        }
+        .import-mini-btn{
+            display:inline-flex; align-items:center; justify-content:center;
+            width:32px; height:32px; border-radius:999px;
+            background:#fff; border:1px solid #e5e7eb; cursor:pointer;
+            box-shadow:0 4px 10px rgba(0,0,0,.06);
+        }
+        .import-mini-btn:hover{ transform:translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,.08); }
+        .import-mini-btn.ok{ color:#16a34a; }
+        .import-mini-btn.ko{ color:#dc2626; }
+        .import-mini-btn.run{ color:#4338ca; }
+
+        .import-drop{
+            position:absolute; right:0; top:40px; z-index:30;
+            width:min(520px, 92vw);
+            background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+            box-shadow:0 16px 40px rgba(0,0,0,.12);
+            padding:10px;
+            display:none;
+        }
+        .import-drop.open{ display:block; }
+        .import-drop h3{
+            margin:4px 6px 10px; font-size:14px; font-weight:700; color:#111827;
+        }
+        .import-list{ max-height:320px; overflow:auto; padding-right:4px; }
+        .imp-item{
+            display:grid; grid-template-columns: 24px 1fr auto; gap:10px; align-items:center;
+            padding:8px; border-radius:10px;
+        }
+        .imp-item + .imp-item{ border-top:1px solid #f3f4f6; }
+        .imp-ico{
+            width:22px; height:22px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:700;
+        }
+        .imp-ico.ok{ background:#dcfce7; color:#16a34a; }
+        .imp-ico.ko{ background:#fee2e2; color:#dc2626; }
+        .imp-ico.run{ background:#e0e7ff; color:#4338ca; }
+        .imp-main{ min-width:0; }
+        .imp-title{ font-size:13px; font-weight:600; color:#111827; }
+        .imp-sub{ font-size:12px; color:#6b7280; }
+        .imp-badges{ display:flex; gap:6px; }
+        .badge-mini{
+            font-size:11px; padding:2px 6px; border-radius:999px; background:#f3f4f6; color:#374151; border:1px solid #e5e7eb;
+        }
+        .files{
+            margin-top:4px; font-size:12px; color:#374151; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        @media (max-width:640px){
+            .import-drop{ right:6px; left:6px; width:auto; }
+        }
+    </style>
 </head>
 <body>
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -181,6 +253,73 @@ if ($editId > 0) {
     <header class="page-header">
         <h1 class="page-title">Gestion des utilisateurs</h1>
         <p class="page-sub">Page réservée aux administrateurs/dirigeants pour créer, modifier et activer/désactiver des comptes.</p>
+
+        <!-- ——— Icône Import (ouvre panneau des derniers imports) ——— -->
+        <div class="import-mini" id="impMini">
+            <?php
+            // déterminer l'état de l'icône selon le dernier import
+            $last = $imports[0] ?? null;
+            $stateClass = 'run'; $glyph = '⏳'; $title = 'Imports';
+            if ($last) {
+                if ((int)$last['ok'] === 1) { $stateClass = 'ok'; $glyph = '✓'; $title = 'Dernier import OK'; }
+                elseif ((int)$last['ok'] === 0) { $stateClass = 'ko'; $glyph = '!'; $title = 'Dernier import KO'; }
+            }
+            ?>
+            <button class="import-mini-btn <?= h($stateClass) ?>" id="impBtn" type="button" aria-haspopup="true" aria-expanded="false" title="<?= h($title) ?>">
+                <?= h($glyph) ?>
+            </button>
+
+            <div class="import-drop" id="impDrop" role="dialog" aria-label="Derniers imports">
+                <h3>Derniers imports</h3>
+                <div class="import-list">
+                    <?php if (!$imports): ?>
+                        <div class="imp-item">
+                            <div class="imp-ico run">⏳</div>
+                            <div class="imp-main">
+                                <div class="imp-title">Aucun import trouvé</div>
+                                <div class="imp-sub">Démarrez un import depuis le dashboard.</div>
+                            </div>
+                            <div class="imp-badges"></div>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($imports as $row): ?>
+                            <?php
+                                $ok = (int)($row['ok'] ?? 0);
+                                $icoCls = $ok === 1 ? 'ok' : ($ok === 0 ? 'ko' : 'run');
+                                $icoTxt = $ok === 1 ? '✓' : ($ok === 0 ? '!' : '⏳');
+                                $msg = decode_msg($row);
+                                $files = $msg['files'] ?? null;
+                                $filesStr = '';
+                                if (is_array($files) && $files) {
+                                    $filesStr = implode(', ', array_slice($files, 0, 5));
+                                    if (count($files) > 5) $filesStr .= ' …';
+                                }
+                            ?>
+                            <div class="imp-item">
+                                <div class="imp-ico <?= h($icoCls) ?>"><?= h($icoTxt) ?></div>
+                                <div class="imp-main">
+                                    <div class="imp-title">
+                                        <?= $ok===1 ? 'Import réussi' : ($ok===0 ? 'Import échoué' : 'Import en cours') ?>
+                                    </div>
+                                    <div class="imp-sub">
+                                        Le <?= h($row['ran_at'] ?? '') ?> — id #<?= (int)$row['id'] ?>
+                                    </div>
+                                    <?php if ($filesStr !== ''): ?>
+                                        <div class="files" title="<?= h($filesStr) ?>"><?= h($filesStr) ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="imp-badges">
+                                    <span class="badge-mini">ok: <?= h((string)$row['ok']) ?></span>
+                                    <span class="badge-mini">importés: <?= (int)$row['imported'] ?></span>
+                                    <span class="badge-mini">erreurs: <?= (int)$row['skipped'] ?></span>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <!-- ——— fin icône import ——— -->
     </header>
 
     <?php if ($flash && isset($flash['type'])): ?>
@@ -347,6 +486,39 @@ if ($editId > 0) {
     })();
 </script>
 <?php endif; ?>
+
+<script>
+/* ——— JS léger pour l’icône import ——— */
+(function(){
+    const btn  = document.getElementById('impBtn');
+    const drop = document.getElementById('impDrop');
+
+    if (!btn || !drop) return;
+
+    btn.addEventListener('click', function(e){
+        e.preventDefault();
+        const isOpen = drop.classList.contains('open');
+        drop.classList.toggle('open', !isOpen);
+        btn.setAttribute('aria-expanded', String(!isOpen));
+    });
+
+    // fermer au clic hors
+    document.addEventListener('click', function(e){
+        if (!drop.classList.contains('open')) return;
+        if (e.target === btn || btn.contains(e.target) || drop.contains(e.target)) return;
+        drop.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+    });
+
+    // fermer via Échap
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape' && drop.classList.contains('open')) {
+            drop.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+        }
+    });
+})();
+</script>
 
 </body>
 </html>
