@@ -4,7 +4,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/historique.php'; // journalisation
 
-/** Sécurise PDO en mode exceptions **/
+/** PDO en mode exceptions **/
 if (method_exists($pdo, 'setAttribute')) {
     try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
 }
@@ -13,13 +13,18 @@ if (method_exists($pdo, 'setAttribute')) {
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 function pctOrDash($v): string { if ($v === null || $v === '' || !is_numeric($v)) return '—'; $v = max(0, min(100, (int)$v)); return $v.'%'; }
 function old(string $key, string $default=''): string { return htmlspecialchars($_POST[$key] ?? $default, ENT_QUOTES, 'UTF-8'); }
-function currentUserId(): ?int { if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id']; if (isset($_SESSION['user_id'])) return (int)$_SESSION['user_id']; return null; }
+function currentUserId(): ?int {
+    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
+    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
+    return null;
+}
 
-/** Numéro client C12345 **/
+/** Génération numéro client C12345 **/
 function generateClientNumber(PDO $pdo): string {
     $sql = "SELECT LPAD(COALESCE(MAX(CAST(SUBSTRING(numero_client, 2) AS UNSIGNED)), 0) + 1, 5, '0') AS next_num
             FROM clients WHERE numero_client REGEXP '^C[0-9]{5}$'";
-    $next = $pdo->query($sql)->fetchColumn() ?: '00001';
+    $next = $pdo->query($sql)->fetchColumn();
+    if (!$next) $next = '00001';
     return 'C'.$next;
 }
 function nextClientId(PDO $pdo): int { return (int)$pdo->query("SELECT COALESCE(MAX(id),0)+1 FROM clients")->fetchColumn(); }
@@ -82,16 +87,29 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         try {
             $pdo->prepare($sqlInsert)->execute($params);
             $insertedId = (int)$pdo->lastInsertId() ?: null;
+
             $userId  = currentUserId();
             $details = "Client créé: ID=" . ($insertedId ?? 'NULL') . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
             enregistrerAction($pdo, $userId, 'client_ajoute', $details);
+
             header('Location: /public/clients.php?added=1'); exit;
         } catch (PDOException $e) {
             if (isNoDefaultIdError($e)) {
                 try {
                     $id = nextClientId($pdo);
-                    $pdo->prepare(str_replace('INSERT INTO clients (', 'INSERT INTO clients (id, ', $sqlInsert))
-                        ->execute($params + [':id'=>$id]);
+                    $pdo->prepare("
+                        INSERT INTO clients
+                        (id, numero_client, raison_sociale, adresse, code_postal, ville,
+                         adresse_livraison, livraison_identique, siret, numero_tva,
+                         nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
+                         email, parrain, offre)
+                        VALUES
+                        (:id, :numero_client, :raison_sociale, :adresse, :code_postal, :ville,
+                         :adresse_livraison, :livraison_identique, :siret, :numero_tva,
+                         :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
+                         :email, :parrain, :offre)
+                    ")->execute($params + [':id'=>$id]);
+
                     enregistrerAction($pdo, currentUserId(), 'client_ajoute', "Client créé: ID=$id, numero=$numero, raison_sociale=$raison_sociale");
                     header('Location: /public/clients.php?added=1'); exit;
                 } catch (PDOException $eId) {
@@ -118,18 +136,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         $flash = ['type'=>'error','msg'=>implode('<br>', array_map('htmlspecialchars',$errors))];
     }
 }
-if (($_GET['added'] ?? '') === '1') $flash = ['type'=>'success','msg'=>"Client ajouté avec succès."];
+if (($_GET['added'] ?? '') === '1') {
+    $flash = ['type'=>'success','msg'=>"Client ajouté avec succès."];
+}
 
-/* ===== VUE =====
-   - défaut: seulement photocopieurs ATTRIBUÉS
-   - ?view=unassigned : uniquement NON attribués
+/* ===== VUES =====
+   - défaut: 'assigned' → seulement photocopieurs attribués
+   - ?view=unassigned → seulement non attribués
 */
 $view = ($_GET['view'] ?? 'assigned');
 $view = ($view === 'unassigned') ? 'unassigned' : 'assigned';
 
 /** SQL selon la vue **/
 if ($view === 'unassigned') {
-    // Non attribués = (a) relevé récent sans client + (b) ligne dans photocopieurs_clients sans client et sans relevé
+    // Non attribués = relevé sans client + entrée pc sans client et sans relevé
     $sql = "
     WITH v_compteur_last AS (
       SELECT r.*,
@@ -170,7 +190,8 @@ if ($view === 'unassigned') {
       UNION ALL
       SELECT * FROM unassigned_without_read
     ) x
-    ORDER BY COALESCE(x.SerialNumber, x.mac_norm) ASC";
+    ORDER BY COALESCE(x.SerialNumber, x.mac_norm) ASC
+    ";
 } else {
     // Attribués uniquement (avec ou sans relevé)
     $sql = "
@@ -220,14 +241,15 @@ if ($view === 'unassigned') {
     ) x
     ORDER BY
       COALESCE(x.raison_sociale, '—') ASC,
-      COALESCE(x.SerialNumber, x.mac_norm) ASC";
+      COALESCE(x.SerialNumber, x.mac_norm) ASC
+    ";
 }
 
 try {
     $stmt = $pdo->query($sql);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    error_log('clients.php SQL error: '.$e->getMessage());
+    error_log('clients.php SQL error: ' . $e->getMessage());
     $rows = [];
 }
 ?>
@@ -238,11 +260,11 @@ try {
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Clients & Photocopieurs - CCComputer</title>
+
   <link rel="stylesheet" href="/assets/css/main.css" />
   <link rel="stylesheet" href="/assets/css/clients.css" />
   <style>
     tr.is-clickable:hover { background: var(--bg-elevated); }
-    .link-inline { text-decoration: underline; color: var(--accent-primary); }
   </style>
 </head>
 <body class="page-clients">
@@ -263,16 +285,27 @@ try {
       Effacer
     </button>
 
-    <button id="btnAddClient" class="btn btn-primary" style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer;">
+    <!-- Bouton Ajouter un client -->
+    <button id="btnAddClient" class="btn btn-primary"
+            style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer;">
       + Ajouter un client
     </button>
 
+    <!-- Lien-bouton avec le même style que 'Ajouter un client' -->
     <?php if ($view !== 'unassigned'): ?>
-      <!-- Lien simple (pas de bouton) vers la vue non attribués -->
-      <a class="link-inline" href="/public/clients.php?view=unassigned">Voir photocopieurs non attribués</a>
+      <a href="/public/clients.php?view=unassigned"
+         class="btn btn-primary"
+         role="button"
+         style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;">
+        Voir photocopieurs non attribués
+      </a>
     <?php else: ?>
-      <!-- En vue non attribués, proposer un lien de retour discret -->
-      <a class="link-inline" href="/public/clients.php">← Revenir aux attribués</a>
+      <a href="/public/clients.php"
+         class="btn btn-primary"
+         role="button"
+         style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;">
+        ← Revenir aux attribués
+      </a>
     <?php endif; ?>
   </div>
 
@@ -408,6 +441,7 @@ try {
 
   <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form" novalidate>
     <input type="hidden" name="action" value="add_client">
+
     <div class="form-grid-2">
       <div class="card-like">
         <div class="subsection-title">Informations société</div>
@@ -421,14 +455,20 @@ try {
           <div><label>SIRET*</label><input type="text" name="siret" value="<?= old('siret') ?>" required></div>
           <div><label>Numéro TVA</label><input type="text" name="numero_tva" value="<?= old('numero_tva') ?>"></div>
         </div>
+
         <div class="livraison-row">
           <label class="livraison-toggle">
             <input type="checkbox" name="livraison_identique" id="livraison_identique" <?= isset($_POST['livraison_identique']) ? 'checked' : '' ?>>
-            <span class="toggle-box" aria-hidden="true"><svg viewBox="0 0 24 24" class="toggle-check" aria-hidden="true"><path d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.9 9.9-3.242-3.243a1 1 0 1 0-1.414 1.415l3.95 3.95a1 1 0 0 0 1.414 0l10.006-10.008z"></path></svg></span>
+            <span class="toggle-box" aria-hidden="true">
+              <svg viewBox="0 0 24 24" class="toggle-check" aria-hidden="true">
+                <path d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.9 9.9-3.242-3.243a1 1 0 1 0-1.414 1.415l3.95 3.95a1 1 0 0 0 1.414 0l10.006-10.008z"></path>
+              </svg>
+            </span>
             <span class="livraison-emoji" aria-hidden="true">📦</span>
             <span class="livraison-text">Adresse de livraison identique</span>
           </label>
         </div>
+
         <label for="adresse_livraison" class="adresse-livraison-label">Adresse de livraison</label>
         <input type="text" name="adresse_livraison" id="adresse_livraison" value="<?= old('adresse_livraison') ?>" placeholder="Laisser vide si identique">
       </div>
@@ -496,7 +536,7 @@ try {
       });
     });
 
-    // Filtre
+    // Filtre rapide
     const q = document.getElementById('q');
     const clear = document.getElementById('clearQ');
     if (q){
