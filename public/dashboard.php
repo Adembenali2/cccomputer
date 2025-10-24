@@ -97,17 +97,33 @@ try {
         .table th { background:#f3f4f6; text-align:left; }
         .chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
 
-        /* Etat import */
-        .import-status {
+        /* —— Badge d’état d’import (discret en haut à droite) —— */
+        .dashboard-header { position: relative; }
+        .import-badge {
+            position:absolute; right:0; top:2px;
             display:flex; align-items:center; gap:8px;
-            background:#fff; border:1px solid #e5e7eb; border-radius:10px;
-            padding:8px 12px; margin: 10px 0 0;
+            background:rgba(255,255,255,.85);
+            -webkit-backdrop-filter:saturate(180%) blur(6px);
+            backdrop-filter:saturate(180%) blur(6px);
+            border:1px solid #e5e7eb;
+            box-shadow: 0 4px 12px rgba(0,0,0,.06);
+            border-radius:999px;
+            padding:6px 10px;
+            font-size:12px; color:#374151;
+            user-select:none;
         }
-        .import-icon { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; }
-        .import-icon.ok { background:#dcfce7; color:#16a34a; }
-        .import-icon.running { background:#e0e7ff; color:#4338ca; }
-        .import-icon.fail { background:#fee2e2; color:#dc2626; }
-        .import-text { font-size:13px; color:#374151; }
+        .import-badge .ico {
+            width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center;
+            border-radius:999px; font-weight:700; line-height:1;
+        }
+        .import-badge .ico.ok { background:#dcfce7; color:#16a34a; }
+        .import-badge .ico.run { background:#e0e7ff; color:#4338ca; }
+        .import-badge .ico.fail{ background:#fee2e2; color:#dc2626; }
+        .import-badge .txt { white-space:nowrap; max-width:40vw; overflow:hidden; text-overflow:ellipsis; }
+        @media (max-width: 640px){
+            .import-badge .txt { display:none; } /* sur mobile: on garde juste l’icône */
+        }
+        .import-badge[hidden]{ display:none !important; }
     </style>
 </head>
 <body class="page-dashboard">
@@ -116,6 +132,12 @@ try {
     <div class="dashboard-wrapper">
         <div class="dashboard-header">
             <h2 class="dashboard-title">Tableau de Bord</h2>
+
+            <!-- Badge d’état d’import -->
+            <div class="import-badge" id="importBadge" aria-live="polite" title="État du dernier import">
+                <span class="ico run" id="impIco">⏳</span>
+                <span class="txt" id="impTxt">Import : vérification…</span>
+            </div>
         </div>
 
         <div class="dashboard-grid">
@@ -221,14 +243,6 @@ try {
                 <h3 class="card-title">Historiques</h3>
                 <p class="card-count"><?= htmlspecialchars($nHistorique, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
-        </div>
-
-        <!-- Bandeau état import -->
-        <div class="import-status" id="importStatus" aria-live="polite" title="État du dernier import">
-            <span class="import-icon ok" id="impOk" style="display:none">✓</span>
-            <span class="import-icon running" id="impRun" style="display:none">⏳</span>
-            <span class="import-icon fail" id="impFail" style="display:none">!</span>
-            <span class="import-text" id="importText">Import : —</span>
         </div>
     </div>
 
@@ -563,58 +577,55 @@ try {
         });
     })();
 
-    // --- Import auto silencieux + état icône ---
+    // --- Import auto silencieux + badge d’état (en haut à droite) ---
     (function(){
-        // 1) déclenche (si > 2min)
+        // Déclenche si > 2min
         fetch('/ajax/run_import_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
 
-        const elText = document.getElementById('importText');
-        const icoOk  = document.getElementById('impOk');
-        const icoRun = document.getElementById('impRun');
-        const icoKo  = document.getElementById('impFail');
+        const badge = document.getElementById('importBadge');
+        const ico   = document.getElementById('impIco');
+        const txt   = document.getElementById('impTxt');
 
-        function showState({ok, recent, ran_at, imported, files}) {
-            // reset
-            icoOk.style.display = 'none';
-            icoRun.style.display = 'none';
-            icoKo.style.display = 'none';
+        function setState(state, label, titleFiles) {
+            // state: 'ok' | 'run' | 'fail' | 'none'
+            ico.classList.remove('ok','run','fail');
+            if (state === 'ok') { ico.textContent = '✓'; ico.classList.add('ok'); }
+            else if (state === 'run') { ico.textContent = '⏳'; ico.classList.add('run'); }
+            else if (state === 'fail') { ico.textContent = '!'; ico.classList.add('fail'); }
+            else { ico.textContent = '⏳'; ico.classList.add('run'); }
 
-            if (ok === 1) {
-                icoOk.style.display = 'inline-flex';
-                elText.textContent = `Import OK — ${imported} fichier(s) — ${ran_at}` + (recent ? ' (récent)' : '');
-            } else if (ok === 0) {
-                icoKo.style.display = 'inline-flex';
-                elText.textContent = `Import KO — voir logs — ${ran_at}`;
-            } else {
-                // aucun run
-                icoRun.style.display = 'inline-flex';
-                elText.textContent = 'Import : —';
-            }
-
-            // Astuce: on met la liste des fichiers en title si dispo
-            const status = document.getElementById('importStatus');
-            if (files && Array.isArray(files) && files.length) {
-                status.title = 'Fichiers ajoutés: ' + files.join(', ');
+            if (label) txt.textContent = label;
+            if (titleFiles && Array.isArray(titleFiles) && titleFiles.length) {
+                badge.title = 'Fichiers ajoutés : ' + titleFiles.join(', ');
             }
         }
 
-        async function refresh() {
+        async function refresh(){
             try{
                 const r = await fetch('/ajax/last_import_status.php', {credentials:'same-origin'});
                 if (!r.ok) throw new Error('HTTP '+r.status);
                 const d = await r.json();
+
                 if (!d || !d.has_run) {
-                    showState({ok:null});
+                    setState('none', 'Import : —');
                     return;
                 }
+
                 const files = (d.summary && d.summary.files) ? d.summary.files : null;
-                showState({ok:d.ok, recent:d.recent, ran_at:d.ran_at, imported:d.imported, files});
-            } catch(e) {
-                // silencieux
+
+                if (d.ok === 1) {
+                    const label = `Import OK — ${d.imported} fichier(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    setState('ok', label, files);
+                } else {
+                    const label = `Import KO — ${d.ran_at}`;
+                    setState('fail', label, files);
+                }
+            } catch(e){
+                setState('fail', 'Import : erreur de lecture');
             }
         }
 
-        // rafraîchir au chargement puis toutes les 20s
+        // 1er affichage puis polling léger
         refresh();
         setInterval(refresh, 20000);
     })();
