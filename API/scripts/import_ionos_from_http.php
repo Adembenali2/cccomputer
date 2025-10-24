@@ -1,7 +1,8 @@
 <?php
 /**
  * API/scripts/import_ionos_from_http.php
- * Consomme le JSON d'export (hébergé chez IONOS) et insère/MAJ dans compteur_relevee (Railway).
+ * Récupère les compteurs depuis IONOS (JSON export) et les insère / met à jour
+ * dans la table compteur_relevee hébergée sur Railway.
  */
 
 declare(strict_types=1);
@@ -16,16 +17,21 @@ $paths = [
     __DIR__ . '/../config/db.php',
 ];
 $ok = false;
-foreach ($paths as $p) { if (is_file($p)) { require_once $p; $ok=true; break; } }
+foreach ($paths as $p) {
+    if (is_file($p)) {
+        require_once $p;
+        $ok = true;
+        break;
+    }
+}
 if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
     fwrite(STDERR, "Impossible de charger includes/db.php et obtenir \$pdo\n");
     exit(1);
 }
 
 // --------- config URL export IONOS ---------
-// Mets cette URL en variable Railway si tu veux (ex: IONOS_EXPORT_URL)
+// Tu peux aussi définir cette URL dans les variables Railway : IONOS_EXPORT_URL
 $exportUrl = getenv('IONOS_EXPORT_URL') ?: 'http://cccomputer.fr/web/export_compteurs.php?token=MaCleHyperSecrete_123456789';
-
 
 // --------- récup JSON ---------
 $ctx = stream_context_create([
@@ -50,8 +56,8 @@ echo "Reçus depuis IONOS: " . count($items) . " éléments\n";
 
 // --------- helpers ---------
 function normMac(?string $mac): ?string {
-    if ($mac===null) return null;
-    $m = strtoupper(preg_replace('/[^0-9A-F]/i','',$mac));
+    if ($mac === null) return null;
+    $m = strtoupper(preg_replace('/[^0-9A-F]/i', '', $mac));
     return $m !== '' ? $m : null;
 }
 function iOrNull($v): ?int {
@@ -59,21 +65,24 @@ function iOrNull($v): ?int {
     return (int)$v;
 }
 
-// --------- index d’unicité (une seule fois) ---------
+// --------- index d’unicité ---------
 try {
+    // On garde l'index pour éviter les doublons
     $pdo->exec("ALTER TABLE `compteur_relevee` ADD UNIQUE KEY `uniq_mac_ts` (`mac_norm`,`Timestamp`)");
-    echo "Index uniq_mac_ts créé\n";
-} catch (Throwable $e) { /* ignore si déjà là */ }
+    echo "Index uniq_mac_ts vérifié\n";
+} catch (Throwable $e) {
+    // ignoré si déjà présent
+}
 
-// --------- UPSERT ---------
+// --------- UPSERT (sans mac_norm) ---------
 $sql = "
 INSERT INTO compteur_relevee
-    (mac_norm, MacAddress, `Timestamp`,
+    (MacAddress, `Timestamp`,
      TotalBW, TotalColor, TotalPages,
      TonerBlack, TonerCyan, TonerMagenta, TonerYellow,
      Status, SerialNumber, Model, Nom)
 VALUES
-    (:mac_norm, :mac_addr, :ts,
+    (:mac_addr, :ts,
      :tot_bw, :tot_col, :tot_pages,
      :t_k, :t_c, :t_m, :t_y,
      :status, :sn, :model, :nom)
@@ -91,13 +100,17 @@ $ins = $pdo->prepare($sql);
 
 // --------- Import ---------
 $pdo->beginTransaction();
-$imported=0; $skipped=0;
+$imported = 0;
+$skipped = 0;
 
 try {
     foreach ($items as $r) {
-        $mac   = isset($r['mac']) ? (string)$r['mac'] : '';
-        $macN  = normMac($mac);
-        if (!$macN) { $skipped++; continue; }
+        $mac  = isset($r['mac']) ? (string)$r['mac'] : '';
+        $macN = normMac($mac);
+        if (!$macN) {
+            $skipped++;
+            continue;
+        }
 
         $tsStr = (string)($r['date'] ?? '');
         $tsSql = date('Y-m-d H:i:s', strtotime($tsStr) ?: time());
@@ -106,10 +119,9 @@ try {
         $totCol = iOrNull($r['totalCouleur'] ?? null);
         $totAll = ($totBW ?? 0) + ($totCol ?? 0);
 
-        $t = $r['toners'] ?? ['k'=>null,'c'=>null,'m'=>null,'y'=>null];
+        $t = $r['toners'] ?? ['k' => null, 'c' => null, 'm' => null, 'y' => null];
 
         $ins->execute([
-            ':mac_norm'  => $macN,
             ':mac_addr'  => $mac ?: null,
             ':ts'        => $tsSql,
             ':tot_bw'    => $totBW,
@@ -127,10 +139,11 @@ try {
 
         $imported++;
     }
+
     $pdo->commit();
-    echo "Import terminé. Insérés/MAJ: $imported — Ignorés: $skipped\n";
+    echo "✅ Import terminé. Insérés/MAJ: $imported — Ignorés: $skipped\n";
 } catch (Throwable $e) {
     $pdo->rollBack();
-    fwrite(STDERR, "Erreur pendant l'import: ".$e->getMessage()."\n");
+    fwrite(STDERR, "Erreur pendant l'import: " . $e->getMessage() . "\n");
     exit(1);
 }
