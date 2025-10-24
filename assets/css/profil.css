@@ -1,7 +1,15 @@
-
 /* Hérite des variables de main.css */
 .page-profil .page-sub { color: var(--text-secondary); margin-top: -0.5rem; }
 
+/* S'assurer que le header contient le bouton en haut à droite sans chevauchement du titre */
+.page-profil .page-header {
+  position: relative;
+  padding-right: 56px; /* réserve la place de l'icône */
+  overflow: visible;   /* pour que le panneau puisse dépasser */
+  z-index: 0;
+}
+
+/* Flash */
 .flash { border:1px solid var(--border-color); border-radius: var(--radius-md); padding: .75rem 1rem; margin: 1rem 0; box-shadow: var(--shadow-sm); background: var(--bg-primary); }
 .flash.success { border-color: #16a34a; }
 .flash.error { border-color: #dc2626; }
@@ -60,3 +68,86 @@
   .table-responsive { border: none; padding: 0; background: transparent; }
 }
 
+/* =========================================================
+   ——— Icône Import (extrait du <style> inline de profil.php)
+   ========================================================= */
+.page-profil .import-mini {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10; /* au-dessus du header interne */
+}
+
+/* Bouton circulaire — surface tactile >= 44px */
+.page-profil .import-mini-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:44px; height:44px; /* >44px pour mobile */
+  border-radius:999px;
+  background:#fff; border:1px solid #e5e7eb; cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.06);
+  font-size: 18px;
+  line-height: 1;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.page-profil .import-mini-btn:hover{ transform:translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,.08); }
+.page-profil .import-mini-btn.ok{ color:#16a34a; }
+.page-profil .import-mini-btn.ko{ color:#dc2626; }
+.page-profil .import-mini-btn.run{ color:#4338ca; }
+
+/* Panneau déroulant */
+.page-profil .import-drop{
+  position:absolute;
+  right:0; top:48px; z-index:30;
+  width:min(520px, 92vw);
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+  box-shadow:0 16px 40px rgba(0,0,0,.12);
+  padding:10px;
+  display:none;
+}
+.page-profil .import-drop.open{ display:block; }
+.page-profil .import-drop h3{
+  margin:4px 6px 10px; font-size:14px; font-weight:700; color:#111827;
+}
+.page-profil .import-list{ max-height:320px; overflow:auto; padding-right:4px; }
+
+/* Items */
+.page-profil .imp-item{
+  display:grid; grid-template-columns: 28px 1fr auto; gap:10px; align-items:center;
+  padding:8px; border-radius:10px;
+}
+.page-profil .imp-item + .imp-item{ border-top:1px solid #f3f4f6; }
+.page-profil .imp-ico{
+  width:24px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:700;
+}
+.page-profil .imp-ico.ok{ background:#dcfce7; color:#16a34a; }
+.page-profil .imp-ico.ko{ background:#fee2e2; color:#dc2626; }
+.page-profil .imp-ico.run{ background:#e0e7ff; color:#4338ca; }
+.page-profil .imp-main{ min-width:0; }
+.page-profil .imp-title{ font-size:13px; font-weight:600; color:#111827; }
+.page-profil .imp-sub{ font-size:12px; color:#6b7280; }
+.page-profil .imp-badges{ display:flex; gap:6px; }
+.page-profil .badge-mini{
+  font-size:11px; padding:2px 6px; border-radius:999px; background:#f3f4f6; color:#374151; border:1px solid #e5e7eb;
+}
+.page-profil .files{
+  margin-top:4px; font-size:12px; color:#374151; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* ——— Ajustements mobiles (évite tout “disparaît” derrière d’autres éléments) ——— */
+@media (max-width: 640px){
+  .page-profil .import-drop{
+    right:6px; left:6px; width:auto;  /* s’étire plein écran avec marges */
+    max-width: none;
+  }
+  .page-profil .import-mini{
+    z-index: 50; /* passe au-dessus de presque tout */
+  }
+}
+
+/* Si votre header global est positionné (fixed/sticky) dans header.php,
+   vous pouvez décommenter la règle suivante pour forcer le drop devant :
+   .site-header, header, .app-header { z-index: 20; } */
