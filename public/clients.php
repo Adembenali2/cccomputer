@@ -194,103 +194,170 @@ if (($_GET['added'] ?? '') === '1') {
     $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
 }
 
-/** Requête principale (inclut aussi les clients sans photocopieur) **/
-$sql = "
-WITH v_compteur_last AS (
-  SELECT r.*,
-         ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
-  FROM compteur_relevee r
-),
-v_last AS (
-  SELECT
-    *,
-    TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
-  FROM v_compteur_last
-  WHERE rn = 1
-),
+/* ====== VUE (attribués vs non attribués) ====== */
+$view = ($_GET['view'] ?? 'assigned');
+$view = ($view === 'unassigned') ? 'unassigned' : 'assigned';
 
--- Photocopieurs ayant un dernier relevé (avec client si lié)
-blk_releve AS (
-  SELECT
-    COALESCE(pc.mac_norm, v.mac_norm)                                 AS mac_norm,
-    COALESCE(pc.SerialNumber, v.SerialNumber)                          AS SerialNumber,
-    COALESCE(pc.MacAddress,  v.MacAddress)                             AS MacAddress,
-    v.Model,
-    v.Nom,
-    v.`Timestamp`                                                      AS last_ts,
-    v.age_hours                                                        AS last_age_hours,
-    v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
-    v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
-    c.id                                                               AS client_id,
-    c.numero_client,
-    c.raison_sociale,
-    c.nom_dirigeant,
-    c.prenom_dirigeant,
-    c.telephone1
-  FROM v_last v
-  LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = v.mac_norm
-  LEFT JOIN clients c               ON c.id = pc.id_client
-),
+/** Requêtes SQL **/
+if ($view === 'unassigned') {
+    // 1) dernières relevés sans client
+    // 2) + entrées photocopieurs_clients sans client (et peut-être sans relevé)
+    $sql = "
+    WITH v_compteur_last AS (
+      SELECT r.*,
+             ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+      FROM compteur_relevee r
+    ),
+    v_last AS (
+      SELECT *, TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
+      FROM v_compteur_last WHERE rn = 1
+    ),
+    unassigned_with_read AS (
+      SELECT
+        v.mac_norm,
+        v.SerialNumber,
+        v.MacAddress,
+        v.Model, v.Nom,
+        v.`Timestamp`    AS last_ts,
+        v.age_hours      AS last_age_hours,
+        v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
+        v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
+        NULL AS client_id,
+        NULL AS numero_client,
+        NULL AS raison_sociale,
+        NULL AS nom_dirigeant,
+        NULL AS prenom_dirigeant,
+        NULL AS telephone1
+      FROM v_last v
+      LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = v.mac_norm
+      WHERE pc.id_client IS NULL
+    ),
+    unassigned_without_read AS (
+      SELECT
+        pc.mac_norm,
+        pc.SerialNumber,
+        pc.MacAddress,
+        NULL AS Model, NULL AS Nom,
+        NULL AS last_ts,
+        NULL AS last_age_hours,
+        NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
+        NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+        NULL AS client_id,
+        NULL AS numero_client,
+        NULL AS raison_sociale,
+        NULL AS nom_dirigeant,
+        NULL AS prenom_dirigeant,
+        NULL AS telephone1
+      FROM photocopieurs_clients pc
+      LEFT JOIN v_last v ON v.mac_norm = pc.mac_norm
+      WHERE pc.id_client IS NULL
+        AND v.mac_norm IS NULL -- évite doublon avec les 'with_read'
+    )
+    SELECT * FROM (
+      SELECT * FROM unassigned_with_read
+      UNION ALL
+      SELECT * FROM unassigned_without_read
+    ) x
+    ORDER BY COALESCE(x.SerialNumber, x.mac_norm) ASC
+    ";
+} else {
+    // Vue par défaut: attribués (et on garde le reste du tableau complet comme avant)
+    $sql = "
+    WITH v_compteur_last AS (
+      SELECT r.*,
+             ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+      FROM compteur_relevee r
+    ),
+    v_last AS (
+      SELECT *,
+             TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
+      FROM v_compteur_last
+      WHERE rn = 1
+    ),
 
--- Photocopieurs sans relevé (avec client si lié)
-blk_sans_releve AS (
-  SELECT
-    pc.mac_norm,
-    pc.SerialNumber,
-    pc.MacAddress,
-    NULL AS Model,
-    NULL AS Nom,
-    NULL AS last_ts,
-    NULL AS last_age_hours,
-    NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
-    NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
-    c.id AS client_id,
-    c.numero_client,
-    c.raison_sociale,
-    c.nom_dirigeant,
-    c.prenom_dirigeant,
-    c.telephone1
-  FROM photocopieurs_clients pc
-  LEFT JOIN clients c  ON c.id = pc.id_client
-  LEFT JOIN v_last v   ON v.mac_norm = pc.mac_norm
-  WHERE v.mac_norm IS NULL
-),
+    -- Photocopieurs ayant un dernier relevé (avec client si lié)
+    blk_releve AS (
+      SELECT
+        COALESCE(pc.mac_norm, v.mac_norm)                                 AS mac_norm,
+        COALESCE(pc.SerialNumber, v.SerialNumber)                          AS SerialNumber,
+        COALESCE(pc.MacAddress,  v.MacAddress)                             AS MacAddress,
+        v.Model,
+        v.Nom,
+        v.`Timestamp`                                                      AS last_ts,
+        v.age_hours                                                        AS last_age_hours,
+        v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
+        v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
+        c.id                                                               AS client_id,
+        c.numero_client,
+        c.raison_sociale,
+        c.nom_dirigeant,
+        c.prenom_dirigeant,
+        c.telephone1
+      FROM v_last v
+      LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = v.mac_norm
+      LEFT JOIN clients c               ON c.id = pc.id_client
+    ),
 
--- Clients sans aucun photocopieur attribué
-clients_sans_machine AS (
-  SELECT
-    NULL AS mac_norm,
-    NULL AS SerialNumber,
-    NULL AS MacAddress,
-    NULL AS Model,
-    NULL AS Nom,
-    NULL AS last_ts,
-    NULL AS last_age_hours,
-    NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
-    NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
-    c.id AS client_id,
-    c.numero_client,
-    c.raison_sociale,
-    c.nom_dirigeant,
-    c.prenom_dirigeant,
-    c.telephone1
-  FROM clients c
-  LEFT JOIN photocopieurs_clients pc ON pc.id_client = c.id
-  WHERE pc.id_client IS NULL
-)
+    -- Photocopieurs sans relevé (avec client si lié)
+    blk_sans_releve AS (
+      SELECT
+        pc.mac_norm,
+        pc.SerialNumber,
+        pc.MacAddress,
+        NULL AS Model,
+        NULL AS Nom,
+        NULL AS last_ts,
+        NULL AS last_age_hours,
+        NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
+        NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+        c.id AS client_id,
+        c.numero_client,
+        c.raison_sociale,
+        c.nom_dirigeant,
+        c.prenom_dirigeant,
+        c.telephone1
+      FROM photocopieurs_clients pc
+      LEFT JOIN clients c  ON c.id = pc.id_client
+      LEFT JOIN v_last v   ON v.mac_norm = pc.mac_norm
+      WHERE v.mac_norm IS NULL
+    ),
 
-SELECT *
-FROM (
-  SELECT * FROM blk_releve
-  UNION ALL
-  SELECT * FROM blk_sans_releve
-  UNION ALL
-  SELECT * FROM clients_sans_machine
-) x
-ORDER BY
-  COALESCE(x.raison_sociale, '— sans client —') ASC,
-  COALESCE(x.SerialNumber, x.mac_norm) ASC
-";
+    -- Clients sans aucun photocopieur attribué
+    clients_sans_machine AS (
+      SELECT
+        NULL AS mac_norm,
+        NULL AS SerialNumber,
+        NULL AS MacAddress,
+        NULL AS Model,
+        NULL AS Nom,
+        NULL AS last_ts,
+        NULL AS last_age_hours,
+        NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
+        NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+        c.id AS client_id,
+        c.numero_client,
+        c.raison_sociale,
+        c.nom_dirigeant,
+        c.prenom_dirigeant,
+        c.telephone1
+      FROM clients c
+      LEFT JOIN photocopieurs_clients pc ON pc.id_client = c.id
+      WHERE pc.id_client IS NULL
+    )
+
+    SELECT *
+    FROM (
+      SELECT * FROM blk_releve
+      UNION ALL
+      SELECT * FROM blk_sans_releve
+      UNION ALL
+      SELECT * FROM clients_sans_machine
+    ) x
+    ORDER BY
+      COALESCE(x.raison_sociale, '— sans client —') ASC,
+      COALESCE(x.SerialNumber, x.mac_norm) ASC
+    ";
+}
 
 try {
     $stmt = $pdo->query($sql);
@@ -312,8 +379,9 @@ try {
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/clients.css" />
     <style>
-      /* Optionnel: effet hover pour lignes cliquables */
       tr.is-clickable:hover { background: var(--bg-elevated); }
+      .btn-toggle { padding:0.55rem 0.9rem; border:1px solid var(--border-color); border-radius:var(--radius-md); cursor:pointer; background:var(--bg-primary); color:var(--text-primary); }
+      .btn-toggle.is-active { background: var(--accent-primary); color:#fff; border-color: var(--accent-primary); }
     </style>
 </head>
 <body class="page-clients">
@@ -321,19 +389,30 @@ try {
 
     <div class="page-container">
         <div class="page-header">
-            <h2 class="page-title">Photocopieurs par client (dernier relevé)</h2>
+            <h2 class="page-title">
+              <?= $view==='unassigned' ? 'Photocopieurs NON attribués' : 'Photocopieurs par client (dernier relevé)' ?>
+            </h2>
         </div>
 
-        <!-- Barre de filtres + bouton Ajouter -->
-        <div class="filters-row" style="margin-bottom:1rem; display:flex; gap:0.75rem; align-items:center;">
+        <!-- Barre de filtres + boutons -->
+        <div class="filters-row" style="margin-bottom:1rem; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
             <input type="text" id="q" placeholder="Filtrer (client, modèle, SN, MAC)…"
-                   style="flex:1; padding:0.55rem 0.75rem; border:1px solid var(--border-color); border-radius: var(--radius-md); background:var(--bg-primary); color:var(--text-primary);">
-            <button id="clearQ" class="btn" style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--bg-primary); border-radius:var(--radius-md); cursor:pointer;">
-                Effacer
-            </button>
+                   style="flex:1; min-width:240px; padding:0.55rem 0.75rem; border:1px solid var(--border-color); border-radius: var(--radius-md); background:var(--bg-primary); color:var(--text-primary);">
+            <button id="clearQ" class="btn-toggle">Effacer</button>
+
+            <!-- Bouton Ajouter un client -->
             <button id="btnAddClient" class="btn btn-primary" style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer;">
                 + Ajouter un client
             </button>
+
+            <!-- Toggle Attribués / Non attribués -->
+            <a href="/public/clients.php"
+               class="btn-toggle <?= $view!=='unassigned' ? 'is-active' : '' ?>"
+               title="Voir les photocopieurs attribués (vue par défaut)">Voir attribués</a>
+
+            <a href="/public/clients.php?view=unassigned"
+               class="btn-toggle <?= $view==='unassigned' ? 'is-active' : '' ?>"
+               title="Voir uniquement les photocopieurs non attribués">Voir photocopieurs non attribués</a>
         </div>
 
         <!-- Flash message -->
@@ -360,7 +439,8 @@ try {
                 </thead>
                 <tbody>
                 <?php foreach ($rows as $r):
-                    $raison  = $r['raison_sociale'] ?: '— sans client —';
+                    // Si vue unassigned: pas de client
+                    $raison  = $r['raison_sociale'] ?: ($view==='unassigned' ? '— non attribué —' : '— sans client —');
                     $numero  = $r['numero_client']   ?: '';
                     $dirNom  = trim(($r['nom_dirigeant'] ?? '').' '.($r['prenom_dirigeant'] ?? ''));
                     $tel     = $r['telephone1'] ?: '';
@@ -389,18 +469,17 @@ try {
 
                     $rowHref = $macNorm ? '/public/photocopieurs_details.php?mac=' . urlencode($macNorm) : '';
 
-                    // ----- Alerte : pas de relevé depuis >= 48h (2 jours) -----
+                    // Alerte si pas de relevé récent
                     $hasMachine = ($macNorm || $sn || $modele);
                     $isAlert = false;
                     if ($hasMachine) {
                         if (!$lastTsRaw) {
-                            $isAlert = true; // jamais reçu
+                            $isAlert = true;
                         } elseif ($ageHours !== null && $ageHours >= 48) {
-                            $isAlert = true; // en retard >= 2 jours
+                            $isAlert = true;
                         }
                     }
 
-                    // classes de ligne
                     $rowClasses = [];
                     if ($rowHref)  $rowClasses[] = 'is-clickable';
                     if ($isAlert)  $rowClasses[] = 'row-alert';
@@ -416,8 +495,8 @@ try {
                             </div>
                         </td>
 
-                        <td data-th="Dirigeant"><?= h($dirNom ?: '—') ?></td>
-                        <td data-th="Téléphone"><?= h($tel ?: '—') ?></td>
+                        <td data-th="Dirigeant"><?= h(($dirNom ?: ($view==='unassigned' ? '—' : '—'))) ?></td>
+                        <td data-th="Téléphone"><?= h(($tel ?: '—')) ?></td>
 
                         <td data-th="Photocopieur">
                             <div class="machine-cell">
@@ -468,7 +547,9 @@ try {
             </table>
 
             <?php if (!$rows): ?>
-                <div style="padding:1rem; color:var(--text-secondary);">Aucune donnée à afficher.</div>
+                <div style="padding:1rem; color:var(--text-secondary);">
+                  <?= $view==='unassigned' ? "Aucun photocopieur non attribué." : "Aucune donnée à afficher." ?>
+                </div>
             <?php endif; ?>
         </div>
     </div>
@@ -668,6 +749,22 @@ try {
             if (href) window.location.assign(href);
           });
         });
+
+        // Filtre rapide
+        const q = document.getElementById('q');
+        const clear = document.getElementById('clearQ');
+        if (q) {
+          const rows = Array.from(document.querySelectorAll('table#tbl tbody tr'));
+          function applyFilter(){
+            const v = (q.value || '').trim().toLowerCase();
+            rows.forEach(tr => {
+              const t = (tr.getAttribute('data-search') || '').toLowerCase();
+              tr.style.display = !v || t.includes(v) ? '' : 'none';
+            });
+          }
+          q.addEventListener('input', applyFilter);
+          clear && clear.addEventListener('click', () => { q.value=''; applyFilter(); q.focus(); });
+        }
       })();
     </script>
 </body>
