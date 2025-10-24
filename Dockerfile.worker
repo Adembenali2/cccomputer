@@ -1,0 +1,23 @@
+# Dockerfile.worker — image pour exécuter un script PHP en cron
+FROM php:8.3-cli
+
+# Extensions nécessaires pour MySQL
+RUN docker-php-ext-install pdo pdo_mysql
+
+# Outils pour composer (git + unzip) puis installation de composer
+RUN apt-get update && apt-get install -y git unzip && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/shivammathur/composer:latest /usr/bin/composer /usr/bin/composer
+
+# Dossier de travail
+WORKDIR /app
+
+# 1/ Copier uniquement les manifests Composer et installer les dépendances (phpseclib, etc.)
+COPY composer.json composer.lock* ./
+RUN composer install --no-dev --no-interaction --prefer-dist --no-ansi --no-progress
+
+# 2/ Copier le code de l’app (scripts, includes, etc.)
+COPY . /app
+
+# Par défaut, on lance le worker SFTP -> Railway DB
+# (remplace la cible ici si tu veux exécuter un autre script)
+CMD ["php", "API/scripts/upload_compteur.php"]
