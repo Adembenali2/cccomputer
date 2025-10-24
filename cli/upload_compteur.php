@@ -7,7 +7,7 @@ ini_set('display_errors', '1');
 /**
  * Import SFTP -> compteur_relevee (format CSV Champ,Valeur)
  * - Déduplication: NOT EXISTS sur (mac_norm, Timestamp)
- * - Journalisation: import_run
+ * - Journalisation: import_run (msg = JSON avec fichiers ajoutés)
  */
 
 // ---------- 0) Normaliser éventuellement les env MySQL (Railway) ----------
@@ -25,7 +25,7 @@ ini_set('display_errors', '1');
     putenv("MYSQLPORT=" . ($p['port'] ?? '3306'));
     putenv("MYSQLUSER=" . urldecode($p['user']));
     putenv("MYSQLPASSWORD=" . (isset($p['pass']) ? urldecode($p['pass']) : ''));
-    putenv("MYSQLDATABASE=" . ltrim($p['path'], '/'));
+    putenv("MYSQLDATABASE" . '=' . ltrim($p['path'], '/'));
 })();
 
 // ---------- 1) Charger la connexion PDO ----------
@@ -78,7 +78,6 @@ function sftp_safe_move(SFTP $sftp, string $from, string $toDir): array {
 }
 
 // ---------- 3) CSV utilitaires ----------
-// Parse un CSV Champ,Valeur (ou Champ;Valeur), header "Champ,Valeur" optionnel
 function parse_csv_kv(string $filepath): array {
     $data = [];
     $h = @fopen($filepath, 'r');
@@ -92,14 +91,13 @@ function parse_csv_kv(string $filepath): array {
         if (count($row) < 2) continue;
         $k = trim((string)$row[0]);
         $v = trim((string)$row[1]);
-        if (strcasecmp($k, 'Champ') === 0 && strcasecmp($v, 'Valeur') === 0) continue; // header
+        if (strcasecmp($k, 'Champ') === 0 && strcasecmp($v, 'Valeur') === 0) continue;
         if ($k !== '') $data[$k] = ($v === '' ? null : $v);
     }
     fclose($h);
     return $data;
 }
 
-// Champs attendus (d’après tes fichiers)
 $FIELDS = [
     'Timestamp','IpAddress','Nom','Model','SerialNumber','MacAddress',
     'Status','TonerBlack','TonerCyan','TonerMagenta','TonerYellow',
@@ -110,7 +108,7 @@ $FIELDS = [
 
 echo "🚀 Scan des CSV…\n";
 
-// ---------- 4) S’assurer que les tables existent (ton schéma) ----------
+// ---------- 4) S’assurer que les tables existent ----------
 try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `compteur_relevee` (
@@ -183,6 +181,7 @@ $stInsert = $pdo->prepare($sqlInsertIfMissing);
 $files_processed = 0;
 $compteurs_inserted = 0;
 $files_error = 0;
+$inserted_files = [];   // ← on liste les fichiers réellement insérés
 
 $list = $sftp->nlist($sftp_path);
 if ($list === false) {
@@ -237,9 +236,10 @@ if ($list === false) {
 
             if ($stInsert->rowCount() === 1) {
                 $compteurs_inserted++;
-                echo "✅ INSÉRÉ: {$vals['MacAddress']} @ {$vals['Timestamp']}\n";
+                $inserted_files[] = $name; // ← on retient ce fichier
+                echo "✅ INSÉRÉ: {$vals['MacAddress']} @ {$vals['Timestamp']} (file: $name)\n";
             } else {
-                echo "ℹ️ Doublon ignoré (mac_norm,Timestamp): {$vals['MacAddress']} @ {$vals['Timestamp']}\n";
+                echo "ℹ️ Doublon ignoré (mac_norm,Timestamp): {$vals['MacAddress']} @ {$vals['Timestamp']} (file: $name)\n";
             }
 
             $pdo->commit();
@@ -261,9 +261,19 @@ if ($list === false) {
 
 // ---------- 7) Journal import_run ----------
 try {
-    $summary = sprintf("[upload_compteur] files=%d, errors=%d, inserted=%d",
-        $files_processed, $files_error, $compteurs_inserted
-    );
+    // Résumé JSON dans msg (on tronque la liste si trop longue)
+    $filesForMsg = $inserted_files;
+    if (count($filesForMsg) > 50) {
+        $filesForMsg = array_slice($filesForMsg, 0, 50);
+        $filesForMsg[] = '...';
+    }
+    $msgJson = json_encode([
+        'processed' => $files_processed,
+        'errors'    => $files_error,
+        'inserted'  => $compteurs_inserted,
+        'files'     => $filesForMsg
+    ], JSON_UNESCAPED_UNICODE);
+
     $stmt = $pdo->prepare("
         INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
         VALUES (NOW(), :imported, :skipped, :ok, :msg)
@@ -272,9 +282,9 @@ try {
         ':imported' => max(0, $files_processed - $files_error),
         ':skipped'  => $files_error,
         ':ok'       => ($files_error === 0 ? 1 : 0),
-        ':msg'      => $summary,
+        ':msg'      => $msgJson,
     ]);
-    echo "📝 import_run: $summary\n";
+    echo "📝 import_run: inserted=$compteurs_inserted, files=$files_processed, errors=$files_error\n";
 } catch (Throwable $e) {
     echo "❌ import_run INSERT: ".$e->getMessage()."\n";
 }

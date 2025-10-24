@@ -7,7 +7,6 @@ require_once __DIR__ . '/../includes/db.php';
 // ==================================================================
 // Historique des actions (requêtes SQL réelles)
 // ==================================================================
-// 1. Nombre total d'historiques
 try {
     $stmt = $pdo->query("SELECT COUNT(*) FROM historique");
     $nHistorique = (string)$stmt->fetchColumn();
@@ -16,7 +15,6 @@ try {
     $nHistorique = 'Erreur';
 }
 
-// 2. Historique par jour (si tu l’utilises côté JS/graph)
 try {
     $sql = "SELECT DATE(date_action) AS date, COUNT(*) AS total_historique
             FROM historique
@@ -34,8 +32,6 @@ try {
 $nb_paiements_en_attente = 3;
 $nb_sav_a_traiter        = 5;
 $nb_livraisons_a_faire   = 8;
-
-// Classe de couleur pour le compteur Paiements
 $payClass = ($nb_paiements_en_attente > 0) ? 'count-bad' : 'count-ok';
 
 // ==================================================================
@@ -101,8 +97,17 @@ try {
         .table th { background:#f3f4f6; text-align:left; }
         .chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
 
-        .dash-note { margin-top:16px; font-size:13px; color:#6b7280; }
-        .dash-card.disabled { opacity: .6; pointer-events: none; }
+        /* Etat import */
+        .import-status {
+            display:flex; align-items:center; gap:8px;
+            background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+            padding:8px 12px; margin: 10px 0 0;
+        }
+        .import-icon { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; }
+        .import-icon.ok { background:#dcfce7; color:#16a34a; }
+        .import-icon.running { background:#e0e7ff; color:#4338ca; }
+        .import-icon.fail { background:#fee2e2; color:#dc2626; }
+        .import-text { font-size:13px; color:#374151; }
     </style>
 </head>
 <body class="page-dashboard">
@@ -216,25 +221,18 @@ try {
                 <h3 class="card-title">Historiques</h3>
                 <p class="card-count"><?= htmlspecialchars($nHistorique, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
-
-            <!-- Importer compteurs SFTP -->
-            <div class="dash-card" id="btnImport" role="button" tabindex="0" aria-label="Lancer import SFTP">
-                <div class="card-icon stock" aria-hidden="true">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2">
-                        <path d="M4 4h16v6H4z"/>
-                        <path d="M12 10v10"/>
-                        <path d="M7 15h10"/>
-                    </svg>
-                </div>
-                <h3 class="card-title">Importer compteurs</h3>
-                <p class="card-count" id="importState">Prêt</p>
-            </div>
         </div>
 
-        <div id="lastImport" class="dash-note" aria-live="polite">Dernier import : —</div>
+        <!-- Bandeau état import -->
+        <div class="import-status" id="importStatus" aria-live="polite" title="État du dernier import">
+            <span class="import-icon ok" id="impOk" style="display:none">✓</span>
+            <span class="import-icon running" id="impRun" style="display:none">⏳</span>
+            <span class="import-icon fail" id="impFail" style="display:none">!</span>
+            <span class="import-text" id="importText">Import : —</span>
+        </div>
     </div>
 
-    <!-- Bouton Support -->
+    <!-- Bouton Support (inchangé) -->
     <a href="#" class="support-btn" id="supportButton" aria-label="Support client">
         <span class="support-badge"><?= (int)$nbClients ?></span>
         <svg width="32" height="32" viewBox="0 0 24 24"
@@ -250,7 +248,7 @@ try {
         </svg>
     </a>
 
-    <!-- Popup Support -->
+    <!-- Popup Support (inchangé) -->
     <div class="popup-overlay" id="supportOverlay"></div>
     <div class="support-popup" id="supportPopup" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
         <div class="popup-header">
@@ -261,9 +259,14 @@ try {
         <div class="popup-content">
             <!-- Vue LISTE -->
             <div id="clientListView">
-                <input type="text" id="clientSearchInput" class="client-search-bar"
+                <input
+                    type="text"
+                    id="clientSearchInput"
+                    class="client-search-bar"
                     placeholder="Filtrer par nom, raison sociale, prénom ou numéro client…"
-                    autocomplete="off" aria-label="Rechercher un client">
+                    autocomplete="off"
+                    aria-label="Rechercher un client"
+                >
                 <div class="clients-list" id="clientsList">
                     <?php foreach ($clients as $client): ?>
                         <?php
@@ -279,7 +282,8 @@ try {
                             $dRaison = htmlspecialchars(strtolower($client['raison_sociale']   ?? ''), ENT_QUOTES, 'UTF-8');
                             $dNum    = htmlspecialchars(strtolower($client['numero_client']    ?? ''), ENT_QUOTES, 'UTF-8');
                         ?>
-                        <a href="#" class="client-card"
+                        <a href="#"
+                           class="client-card"
                            data-client-id="<?= $cId ?>"
                            data-raison-l="<?= $dRaison ?>"
                            data-nom-l="<?= $dNom ?>"
@@ -317,6 +321,7 @@ try {
                             <div class="cdv-actions"></div>
                         </div>
 
+                        <!-- ACCUEIL -->
                         <div id="cdvTab-home" class="cdv-tab" data-tab="home">
                             <div class="cdv-grid" id="clientFieldsGrid">
                                 <?php
@@ -398,7 +403,7 @@ try {
     </div>
 
     <script>
-    // Popup Support
+    // --- Ouverture / fermeture popup ---
     (function() {
         const btn = document.getElementById('supportButton');
         const overlay = document.getElementById('supportOverlay');
@@ -413,7 +418,7 @@ try {
         closeBtn && closeBtn.addEventListener('click', closePopup);
     })();
 
-    // Recherche client
+    // --- Recherche côté client ---
     (function(){
         const input = document.getElementById('clientSearchInput');
         const list = document.getElementById('clientsList');
@@ -433,7 +438,7 @@ try {
         });
     })();
 
-    // Fiche client
+    // --- Fiche client (inchangé) ---
     (function(){
         const listView   = document.getElementById('clientListView');
         const detailView = document.getElementById('clientDetailView');
@@ -558,83 +563,60 @@ try {
         });
     })();
 
-    // Import SFTP: déclenchement + polling + widget
+    // --- Import auto silencieux + état icône ---
     (function(){
-        const btn = document.getElementById('btnImport');
-        const state = document.getElementById('importState');
-        let timer = null, jobId = null;
+        // 1) déclenche (si > 2min)
+        fetch('/ajax/run_import_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
 
-        async function trigger(){
-            if (!btn) return;
-            btn.classList.add('disabled');
-            state.textContent = 'Planification…';
-            try{
-                const r = await fetch('/ajax/trigger_import.php', { method:'POST', credentials:'same-origin' });
-                const d = await r.json();
-                if(!d.ok) throw new Error(d.message || 'Planification impossible');
-                jobId = d.job_id;
-                state.textContent = 'En cours…';
-                timer = setInterval(check, 2000);
-            } catch(e) {
-                console.error(e);
-                state.textContent = 'Erreur planification';
-                btn.classList.remove('disabled');
+        const elText = document.getElementById('importText');
+        const icoOk  = document.getElementById('impOk');
+        const icoRun = document.getElementById('impRun');
+        const icoKo  = document.getElementById('impFail');
+
+        function showState({ok, recent, ran_at, imported, files}) {
+            // reset
+            icoOk.style.display = 'none';
+            icoRun.style.display = 'none';
+            icoKo.style.display = 'none';
+
+            if (ok === 1) {
+                icoOk.style.display = 'inline-flex';
+                elText.textContent = `Import OK — ${imported} fichier(s) — ${ran_at}` + (recent ? ' (récent)' : '');
+            } else if (ok === 0) {
+                icoKo.style.display = 'inline-flex';
+                elText.textContent = `Import KO — voir logs — ${ran_at}`;
+            } else {
+                // aucun run
+                icoRun.style.display = 'inline-flex';
+                elText.textContent = 'Import : —';
+            }
+
+            // Astuce: on met la liste des fichiers en title si dispo
+            const status = document.getElementById('importStatus');
+            if (files && Array.isArray(files) && files.length) {
+                status.title = 'Fichiers ajoutés: ' + files.join(', ');
             }
         }
 
-        async function check(){
+        async function refresh() {
             try{
-                const r = await fetch('/ajax/job_status.php?id=' + jobId, { credentials:'same-origin' });
+                const r = await fetch('/ajax/last_import_status.php', {credentials:'same-origin'});
+                if (!r.ok) throw new Error('HTTP '+r.status);
                 const d = await r.json();
-                if (d.status === 'pending' || d.status === 'running') return;
-
-                clearInterval(timer);
-                if (d.status === 'done') {
-                    const s = d.summary || {};
-                    const rows = s.rows ?? '?';
-                    const files = s.files ?? '?';
-                    const errors = s.errors ?? 0;
-                    state.textContent = errors === 0
-                        ? `Terminé (${rows} lignes / ${files} fichiers)`
-                        : `Terminé avec ${errors} erreur(s)`;
-                } else if (d.status === 'failed') {
-                    state.textContent = 'Échec';
-                    if (d.error) console.error('Job error:', d.error);
-                } else {
-                    state.textContent = 'Inconnu';
+                if (!d || !d.has_run) {
+                    showState({ok:null});
+                    return;
                 }
-                btn.classList.remove('disabled');
-                refreshLastImport();
+                const files = (d.summary && d.summary.files) ? d.summary.files : null;
+                showState({ok:d.ok, recent:d.recent, ran_at:d.ran_at, imported:d.imported, files});
             } catch(e) {
-                console.error(e);
+                // silencieux
             }
         }
 
-        btn && btn.addEventListener('click', trigger);
-
-        async function refreshLastImport(){
-            try{
-                const r = await fetch('/ajax/last_import_status.php', { credentials:'same-origin' });
-                const d = await r.json();
-                const el = document.getElementById('lastImport');
-                if (!d || !d.status) { el.textContent = 'Dernier import : —'; return; }
-
-                const s = d.summary || {};
-                const rows = s.rows ?? '?';
-                const files = s.files ?? '?';
-                const errors = s.errors ?? 0;
-
-                let txt = `Dernier import #${d.id} : ${d.status}`;
-                if (d.finished_at) txt += ` — ${d.finished_at}`;
-                if (rows) txt += ` — ${rows} lignes / ${files} fichiers`;
-                if (errors>0) txt += ` — ${errors} erreur(s)`;
-
-                el.textContent = txt;
-                el.style.color = (d.status==='done' && errors===0) ? '#16a34a' :
-                                 (d.status==='failed') ? '#dc2626' : '#6b7280';
-            } catch(e){}
-        }
-        refreshLastImport();
+        // rafraîchir au chargement puis toutes les 20s
+        refresh();
+        setInterval(refresh, 20000);
     })();
     </script>
 </body>
