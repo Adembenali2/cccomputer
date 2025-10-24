@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur créé avec succès."];
         }
         elseif ($action === 'update') {
-            $id = (int)$_POST['id'];
+            $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('Identifiant manquant.');
 
             // Empêche un admin/dirigeant de changer son propre rôle
@@ -186,10 +186,65 @@ function decode_msg($row) {
     <meta charset="UTF-8">
     <title>Gestion des utilisateurs</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <!-- chemins absolus -->
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/profil.css">
+    <style>
+        /* ——— Icône import : discrète et stylée ——— */
+        .page-header { position: relative; }
+        .import-mini {
+            position:absolute; right:0; top:0;
+            display:flex; align-items:center; gap:8px;
+        }
+        .import-mini-btn{
+            display:inline-flex; align-items:center; justify-content:center;
+            width:32px; height:32px; border-radius:999px;
+            background:#fff; border:1px solid #e5e7eb; cursor:pointer;
+            box-shadow:0 4px 10px rgba(0,0,0,.06);
+        }
+        .import-mini-btn:hover{ transform:translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,.08); }
+        .import-mini-btn.ok{ color:#16a34a; }
+        .import-mini-btn.ko{ color:#dc2626; }
+        .import-mini-btn.run{ color:#4338ca; }
+
+        .import-drop{
+            position:absolute; right:0; top:40px; z-index:30;
+            width:min(520px, 92vw);
+            background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+            box-shadow:0 16px 40px rgba(0,0,0,.12);
+            padding:10px;
+            display:none;
+        }
+        .import-drop.open{ display:block; }
+        .import-drop h3{
+            margin:4px 6px 10px; font-size:14px; font-weight:700; color:#111827;
+        }
+        .import-list{ max-height:320px; overflow:auto; padding-right:4px; }
+        .imp-item{
+            display:grid; grid-template-columns: 24px 1fr auto; gap:10px; align-items:center;
+            padding:8px; border-radius:10px;
+        }
+        .imp-item + .imp-item{ border-top:1px solid #f3f4f6; }
+        .imp-ico{
+            width:22px; height:22px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:700;
+        }
+        .imp-ico.ok{ background:#dcfce7; color:#16a34a; }
+        .imp-ico.ko{ background:#fee2e2; color:#dc2626; }
+        .imp-ico.run{ background:#e0e7ff; color:#4338ca; }
+        .imp-main{ min-width:0; }
+        .imp-title{ font-size:13px; font-weight:600; color:#111827; }
+        .imp-sub{ font-size:12px; color:#6b7280; }
+        .imp-badges{ display:flex; gap:6px; }
+        .badge-mini{
+            font-size:11px; padding:2px 6px; border-radius:999px; background:#f3f4f6; color:#374151; border:1px solid #e5e7eb;
+        }
+        .files{
+            margin-top:4px; font-size:12px; color:#374151; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        @media (max-width:640px){
+            .import-drop{ right:6px; left:6px; width:auto; }
+        }
+    </style>
 </head>
 <body>
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -210,15 +265,7 @@ function decode_msg($row) {
                 elseif ((int)$last['ok'] === 0) { $stateClass = 'ko'; $glyph = '!'; $title = 'Dernier import KO'; }
             }
             ?>
-            <button
-                class="import-mini-btn <?= h($stateClass) ?>"
-                id="impBtn"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded="false"
-                aria-controls="impDrop"
-                title="<?= h($title) ?>"
-            >
+            <button class="import-mini-btn <?= h($stateClass) ?>" id="impBtn" type="button" aria-haspopup="true" aria-expanded="false" title="<?= h($title) ?>">
                 <?= h($glyph) ?>
             </button>
 
