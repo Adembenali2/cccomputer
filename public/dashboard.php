@@ -4,6 +4,11 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
+// --- CSRF pour les actions POST depuis le dashboard (import) ---
+if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
+if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
+$csrf = $_SESSION['csrf'];
+
 // ==================================================================
 // Historique des actions (requêtes SQL réelles)
 // ==================================================================
@@ -101,6 +106,13 @@ try {
         .table th, .table td { border:1px solid #e5e7eb; padding:8px 10px; font-size:13px; }
         .table th { background:#f3f4f6; text-align:left; }
         .chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
+
+        /* Modal import */
+        #importModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9999; }
+        #importModal .box { background:#fff; border-radius:12px; max-width:920px; width:92%; margin:4rem auto; padding:16px; box-shadow:0 12px 40px rgba(0,0,0,.2); }
+        #importModal .box h3 { margin:0; }
+        #importModal .box pre { background:#0e0e0e; color:#d8d8d8; padding:12px; border-radius:8px; max-height:60vh; overflow:auto; white-space:pre-wrap; }
+        #importModal .close { border:none; background:#ef4444; color:#fff; padding:6px 10px; border-radius:8px; cursor:pointer; }
     </style>
 </head>
 <body class="page-dashboard">
@@ -163,7 +175,19 @@ try {
                 <p class="card-count"><?= (int)$nbClients ?></p>
             </div>
 
-            <!-- Stock -->
+            <!-- Import Compteurs (nouvelle carte) -->
+            <div class="dash-card" id="runImportCard" tabindex="0" role="button" aria-label="Lancer l'import compteurs">
+                <div class="card-icon stock" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        <polyline points="3.27,6.96 12,12.01 20.73,6.96"/>
+                    </svg>
+                </div>
+                <h3 class="card-title">Import Compteurs</h3>
+                <p class="card-count">Exécuter</p>
+            </div>
+
+            <!-- Stock (existant) -->
             <div class="dash-card" data-href="../api/scripts/import_ionos_compteurs.php" tabindex="0" role="button" aria-label="Accéder au stock">
                 <div class="card-icon stock" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2">
@@ -309,9 +333,7 @@ try {
                         <!-- ACCUEIL -->
                         <div id="cdvTab-home" class="cdv-tab" data-tab="home">
                             <div class="cdv-grid" id="clientFieldsGrid">
-                                <!-- Champs clients – remplis via JS -->
                                 <?php
-                                // Définition de l'ordre et des labels pour l'affichage
                                 $clientFields = [
                                     'numero_client' => 'Numéro client',
                                     'raison_sociale'=> 'Raison sociale',
@@ -390,8 +412,19 @@ try {
         </div>
     </div>
 
+    <!-- Modal logs import (nouveau) -->
+    <div id="importModal">
+      <div class="box">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <h3>Logs import compteurs</h3>
+          <button id="importClose" class="close">Fermer</button>
+        </div>
+        <pre id="importLogs">— en attente —</pre>
+      </div>
+    </div>
+
     <script>
-    // --- Ouverture / fermeture popup ---
+    // --- Ouverture / fermeture popup Support ---
     (function() {
         const btn = document.getElementById('supportButton');
         const overlay = document.getElementById('supportOverlay');
@@ -446,7 +479,6 @@ try {
 
         navButtons.forEach(btn => btn.addEventListener('click', function(){ activateTab(this.dataset.tab); }));
 
-        // Remplit la grille des champs client
         function fillClientFields(client){
             const map = {
                 numero_client: client.numero_client,
@@ -477,7 +509,6 @@ try {
                 if(!el) return;
                 let v = map[k];
                 if(!v || v===null) v='—';
-                // rend les PDF cliquables si ce sont des chemins
                 if(k.startsWith('pdf') || k==='pdfcontrat'){
                     if(v !== '—') {
                         const safe = String(v).replace(/"/g,'&quot;');
@@ -489,7 +520,6 @@ try {
             });
         }
 
-        // Remplit la table des appareils
         function fillDevices(devices){
             const tbody = document.getElementById('devicesTbody');
             tbody.innerHTML = '';
@@ -515,13 +545,11 @@ try {
             });
         }
 
-        // Charge les données serveur
         async function loadClientDetail(id){
-            // Affichage provisoire
             document.getElementById('cdvTitle').textContent = 'Chargement…';
             document.getElementById('cdvSub').textContent   = '';
-            fillClientFields({}); // reset
-            fillDevices([]);      // reset
+            fillClientFields({});
+            fillDevices([]);
 
             try{
                 const res = await fetch('/ajax/client_detail.php?id='+encodeURIComponent(id), { credentials:'same-origin' });
@@ -546,15 +574,67 @@ try {
             }
         }
 
-        // Ouvre une fiche depuis la liste
-        list.addEventListener('click', function(e){
-            const card = e.target.closest('.client-card');
-            if(!card) return;
-            e.preventDefault();
-            const id = card.dataset.clientId;
-            showDetail();
-            loadClientDetail(id);
-        });
+        const list = document.getElementById('clientsList');
+        if (list) {
+            list.addEventListener('click', function(e){
+                const card = e.target.closest('.client-card');
+                if(!card) return;
+                e.preventDefault();
+                const id = card.dataset.clientId;
+                (function showDetail(){ 
+                    document.getElementById('clientListView').style.display='none'; 
+                    const dv=document.getElementById('clientDetailView'); 
+                    dv.style.display='block'; dv.setAttribute('aria-hidden','false'); 
+                    document.getElementById('popupTitle').textContent='Fiche Client'; 
+                })();
+                loadClientDetail(id);
+            });
+        }
+
+        const backBtn = document.getElementById('cdvBackBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', function(e){
+                e.preventDefault();
+                document.getElementById('clientDetailView').style.display='none';
+                document.getElementById('clientDetailView').setAttribute('aria-hidden','true');
+                document.getElementById('clientListView').style.display='block';
+                document.getElementById('popupTitle').textContent='Liste des Clients';
+            });
+        }
+    })();
+
+    // --- Lancement de l'import depuis la carte + affichage des logs (NOUVEAU) ---
+    (function(){
+      const card   = document.getElementById('runImportCard');
+      const modal  = document.getElementById('importModal');
+      const closeB = document.getElementById('importClose');
+      const logsEl = document.getElementById('importLogs');
+      if (!card || !modal || !closeB || !logsEl) return;
+
+      function openModal(){ modal.style.display = 'block'; }
+      function closeModal(){ modal.style.display = 'none'; }
+
+      closeB.addEventListener('click', closeModal);
+      modal.addEventListener('click', (e)=>{ if(e.target === modal) closeModal(); });
+
+      async function runImport(){
+        logsEl.textContent = 'Démarrage…';
+        openModal();
+        try {
+          const res = await fetch('/run-import.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ csrf: '<?= htmlspecialchars($csrf, ENT_QUOTES, "UTF-8") ?>' })
+          });
+          const text = await res.text();
+          logsEl.textContent = text || '(aucune sortie)';
+        } catch (err) {
+          logsEl.textContent = 'Erreur: ' + (err && err.message || err);
+        }
+      }
+
+      card.addEventListener('click', runImport);
+      card.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') { e.preventDefault(); runImport(); } });
     })();
     </script>
 </body>
