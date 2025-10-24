@@ -48,8 +48,23 @@ function isNoDefaultIdError(PDOException $e): bool {
     return in_array($code, [1364, 1048], true);
 }
 
-/** Traitement POST (ajout client) **/
+/* ============================================================
+   AJOUT : normalisation MAC + handler d'attribution
+   ============================================================ */
+
+/** Normalise une MAC (AA:BB:CC:DD:EE:FF) */
+function normalizeMac(?string $mac): ?string {
+    if (!$mac) return null;
+    $hex = preg_replace('~[^0-9a-fA-F]~', '', $mac);
+    if (strlen($hex) !== 12) return null;
+    $hex = strtoupper($hex);
+    return implode(':', str_split($hex, 2));
+}
+
+/** Flash par défaut **/
 $flash = ['type' => null, 'msg' => null];
+
+/** Traitement POST (ajout client) **/
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'add_client') {
     $raison_sociale      = trim($_POST['raison_sociale'] ?? '');
     $adresse             = trim($_POST['adresse'] ?? '');
@@ -194,7 +209,93 @@ if (($_GET['added'] ?? '') === '1') {
     $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
 }
 
-/** Requête principale (inclut aussi les clients sans photocopieur) **/
+/** Traitement POST (attribuer une machine à un client) **/
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'assign_machine') {
+    $clientId = (int)($_POST['client_id'] ?? 0);
+    $macInput = trim($_POST['mac'] ?? '');
+    $macNorm  = normalizeMac($macInput);
+
+    if ($clientId <= 0) {
+        $flash = ['type' => 'error', 'msg' => "Client invalide."];
+    } elseif (!$macNorm) {
+        $flash = ['type' => 'error', 'msg' => "Adresse MAC invalide."];
+    } else {
+        try {
+            // Vérifie si la machine existe déjà
+            $stmt = $pdo->prepare("SELECT mac_norm FROM photocopieurs_clients WHERE mac_norm = :mac");
+            $stmt->execute([':mac' => $macNorm]);
+            $exists = (bool)$stmt->fetchColumn();
+
+            if ($exists) {
+                // Ré-attribue à un autre client si nécessaire
+                $stmt = $pdo->prepare("UPDATE photocopieurs_clients SET id_client = :cid WHERE mac_norm = :mac");
+                $stmt->execute([':cid' => $clientId, ':mac' => $macNorm]);
+            } else {
+                // Crée l’entrée
+                $stmt = $pdo->prepare("
+                    INSERT INTO photocopieurs_clients (mac_norm, MacAddress, id_client)
+                    VALUES (:mac, :mac, :cid)
+                ");
+                $stmt->execute([':mac' => $macNorm, ':cid' => $clientId]);
+            }
+
+            // Journalise
+            enregistrerAction($pdo, currentUserId(), 'machine_attribuee', "mac=$macNorm → client_id=$clientId");
+
+            header('Location: /public/clients.php?assigned=1');
+            exit;
+
+        } catch (PDOException $e) {
+            if ((int)($e->errorInfo[1] ?? 0) === 1062) {
+                $flash = ['type' => 'error', 'msg' => "Cette machine est déjà attribuée à un client."];
+            } else {
+                error_log('assign_machine error: '.$e->getMessage());
+                $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible d'attribuer la machine."];
+            }
+        }
+    }
+}
+if (($_GET['assigned'] ?? '') === '1') {
+    $flash = ['type' => 'success', 'msg' => "Photocopieur attribué avec succès."];
+}
+
+/* CONSEIL SCHÉMA (à exécuter une fois dans MySQL) :
+ALTER TABLE photocopieurs_clients
+  ADD UNIQUE KEY uq_pc_mac (mac_norm);
+*/
+
+/* ============================================================
+   Préparer la liste des machines non attribuées (pour le modal)
+   ============================================================ */
+$unassigned = [];
+try {
+    $q = "
+        WITH v_compteur_last AS (
+          SELECT r.*,
+                 ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+          FROM compteur_relevee r
+        ),
+        v_last AS (
+          SELECT * FROM v_compteur_last WHERE rn = 1
+        )
+        SELECT
+          COALESCE(pc.mac_norm, v.mac_norm) AS mac_norm,
+          COALESCE(pc.MacAddress, v.MacAddress) AS MacAddress,
+          COALESCE(pc.SerialNumber, v.SerialNumber) AS SerialNumber,
+          v.Model, v.Nom
+        FROM v_last v
+        LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = v.mac_norm
+        WHERE pc.id_client IS NULL
+        ORDER BY COALESCE(v.Model,'') ASC, COALESCE(v.SerialNumber, v.mac_norm) ASC
+    ";
+    $unassigned = $pdo->query($q)->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) {
+    $unassigned = [];
+}
+
+/* ============================================================
+   Requête principale (inclut clients sans photocopieur)
+   ============================================================ */
 $sql = "
 WITH v_compteur_last AS (
   SELECT r.*,
@@ -314,6 +415,7 @@ try {
     <style>
       /* Optionnel: effet hover pour lignes cliquables */
       tr.is-clickable:hover { background: var(--bg-elevated); }
+      .btn.btn-sm { padding: 0.2rem 0.5rem; font-size: 0.85rem; border:1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-primary); cursor: pointer; }
     </style>
 </head>
 <body class="page-clients">
@@ -412,6 +514,21 @@ try {
                                 <div class="client-raison"><?= h($raison) ?></div>
                                 <?php if ($numero): ?>
                                   <div class="client-num"><?= h($numero) ?></div>
+                                <?php endif; ?>
+
+                                <?php
+                                // Permet d'attribuer d'autres machines : bouton toujours visible si le client existe
+                                $canAssign = (bool)$r['client_id'];
+                                if ($canAssign):
+                                ?>
+                                  <div style="margin-top:0.35rem">
+                                    <button class="btn btn-sm"
+                                            data-open-assign="1"
+                                            data-client-id="<?= (int)$r['client_id'] ?>"
+                                            data-client-name="<?= h($raison) ?>">
+                                      + Attribuer un photocopieur
+                                    </button>
+                                  </div>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -594,6 +711,51 @@ try {
       </form>
     </div>
 
+    <!-- ===== Popup "Attribuer un photocopieur" ===== -->
+    <div id="assignModalOverlay" class="popup-overlay" aria-hidden="true"></div>
+    <div id="assignModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="assignModalTitle" style="display:none;">
+      <div class="modal-header">
+        <h3 id="assignModalTitle">Attribuer un photocopieur</h3>
+        <button type="button" id="btnCloseAssign" class="icon-btn icon-btn--close" aria-label="Fermer">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+
+      <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form">
+        <input type="hidden" name="action" value="assign_machine">
+        <input type="hidden" name="client_id" id="assign_client_id" value="">
+
+        <div class="card-like">
+          <div class="subsection-title">Client</div>
+          <div id="assign_client_label" style="font-weight:600"></div>
+        </div>
+
+        <div class="card-like">
+          <div class="subsection-title">Photocopieur</div>
+
+          <label>Choisir parmi les machines détectées (non attribuées)</label>
+          <select id="assign_select_detected" class="w-100" style="margin-bottom:0.75rem">
+            <option value="">— Sélectionner —</option>
+            <?php foreach ($unassigned as $u):
+                $lab = trim(($u['Model'] ?: 'Modèle ?') . ' · SN:' . ($u['SerialNumber'] ?: '—') . ' · ' . ($u['mac_norm'] ?: $u['MacAddress']));
+            ?>
+              <option value="<?= h($u['mac_norm'] ?: $u['MacAddress']) ?>"><?= h($lab) ?></option>
+            <?php endforeach; ?>
+          </select>
+
+          <div style="text-align:center; margin:0.5rem 0;">ou</div>
+
+          <label>Entrer la MAC manuellement</label>
+          <input type="text" name="mac" id="assign_mac_input" placeholder="AA:BB:CC:DD:EE:FF">
+          <div class="modal-hint">La MAC sera normalisée automatiquement.</div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="submit" class="fiche-action-btn">Attribuer</button>
+        </div>
+      </form>
+    </div>
+
     <!-- JS -->
     <script src="/assets/js/clients.js"></script>
 
@@ -602,7 +764,7 @@ try {
       window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode(($flash['type']==='error' && ($_POST['action'] ?? '')==='add_client') ? true : false) ?>;
     </script>
 
-    <!-- Gestion popup -->
+    <!-- Gestion popup "Ajouter client" -->
     <script>
       (function(){
         const overlay = document.getElementById('clientModalOverlay');
@@ -668,6 +830,59 @@ try {
             if (href) window.location.assign(href);
           });
         });
+
+        // Empêche la propagation quand on clique le bouton d'assignation
+        document.querySelectorAll('[data-open-assign="1"]').forEach(btn => {
+          btn.addEventListener('click', (e) => e.stopPropagation());
+        });
+      })();
+    </script>
+
+    <!-- JS modal "Attribuer un photocopieur" -->
+    <script>
+      (function(){
+        const overlay = document.getElementById('assignModalOverlay');
+        const modal   = document.getElementById('assignModal');
+        const closeBtn= document.getElementById('btnCloseAssign');
+        const cidInp  = document.getElementById('assign_client_id');
+        const lab     = document.getElementById('assign_client_label');
+        const sel     = document.getElementById('assign_select_detected');
+        const macInp  = document.getElementById('assign_mac_input');
+
+        function openAssign(clientId, clientName){
+          document.body.classList.add('modal-open');
+          overlay.setAttribute('aria-hidden','false');
+          overlay.style.display = 'block';
+          modal.style.display   = 'block';
+          cidInp.value = clientId;
+          lab.textContent = clientName || ('Client #' + clientId);
+          if (sel) sel.value = '';
+          macInp.value = '';
+          macInp.focus();
+        }
+        function closeAssign(){
+          document.body.classList.remove('modal-open');
+          overlay.setAttribute('aria-hidden','true');
+          overlay.style.display = 'none';
+          modal.style.display   = 'none';
+        }
+
+        // Ouvre sur clic bouton
+        document.querySelectorAll('[data-open-assign="1"]').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.preventDefault();
+            openAssign(btn.getAttribute('data-client-id'), btn.getAttribute('data-client-name'));
+          });
+        });
+
+        // Sync select -> input
+        sel && sel.addEventListener('change', () => {
+          if (sel.value) macInp.value = sel.value;
+        });
+
+        // Fermetures
+        closeBtn && closeBtn.addEventListener('click', closeAssign);
+        overlay  && overlay.addEventListener('click', closeAssign);
       })();
     </script>
 </body>
