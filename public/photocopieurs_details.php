@@ -5,13 +5,23 @@ require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
+/** Normalise: "aa-bb:cc dd.ee ff" -> "AABBCCDDEEFF" (mac_norm) et "AA:BB:CC:DD:EE:FF" (MacAddress) */
+function normalizeMac(?string $mac): array {
+  $raw = strtoupper(trim((string)$mac));
+  $hex = preg_replace('~[^0-9A-F]~', '', $raw);
+  if (strlen($hex) !== 12) return ['norm' => null, 'colon' => null];
+  $norm  = $hex; // AABBCCDDEEFF
+  $pairs = implode(':', str_split($hex, 2)); // AA:BB:CC:DD:EE:FF
+  return ['norm' => $norm, 'colon' => $pairs];
+}
+
 /* ---------- Entrée ---------- */
 $macParam = strtoupper(trim($_GET['mac'] ?? ''));
 $snParam  = trim($_GET['sn'] ?? '');
 
 $useMac = false; $useSn = false;
-if ($macParam !== '' && preg_match('/^[0-9A-F]{12}$/', $macParam))      $useMac = true;
-elseif ($snParam !== '')                                                $useSn  = true;
+if ($macParam !== '' && preg_match('/^[0-9A-F]{12}$/', $macParam)) $useMac = true;
+elseif ($snParam !== '')                                           $useSn  = true;
 else {
   http_response_code(400);
   echo "<!doctype html><meta charset='utf-8'><p>Paramètre manquant ou invalide. Utilisez ?mac=001122AABBCC (12 hex) ou ?sn=SERIAL.</p>";
@@ -23,26 +33,34 @@ $flash = ['type'=>null,'msg'=>null];
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'attach_client') {
     $clientId = (int)($_POST['id_client'] ?? 0);
     $snPost   = trim($_POST['sn'] ?? '');
-    $macPost  = strtoupper(trim($_POST['mac'] ?? ''));
+    $macPost  = trim($_POST['mac'] ?? '');
 
-    $macNorm = preg_replace('/[^0-9A-F]/', '', strtoupper($macPost ?? ''));
-    if ($clientId <= 0 || $macNorm === '') {
+    $mac = normalizeMac($macPost);
+    $macNorm = $mac['norm'];      // AABBCCDDEEFF
+    $macColon = $mac['colon'];    // AA:BB:CC:DD:EE:FF
+
+    if ($clientId <= 0 || !$macNorm) {
         $flash = ['type'=>'error','msg'=>"Client ou MAC invalide."];
     } else {
         try {
+            // IMPORTANT: nécessite un index unique sur photocopieurs_clients.mac_norm
+            //   ALTER TABLE photocopieurs_clients ADD UNIQUE KEY uq_pc_mac (mac_norm);
             $sql = "
-              INSERT INTO photocopieurs_clients (id_client, SerialNumber, MacAddress)
-              VALUES (:id_client, :sn, :mac)
+              INSERT INTO photocopieurs_clients (mac_norm, MacAddress, SerialNumber, id_client)
+              VALUES (:mac_norm, :mac_addr, :sn, :id_client)
               ON DUPLICATE KEY UPDATE
-                id_client = VALUES(id_client),
-                SerialNumber = VALUES(SerialNumber),
-                MacAddress = VALUES(MacAddress)
+                id_client   = VALUES(id_client),
+                SerialNumber= VALUES(SerialNumber),
+                MacAddress  = VALUES(MacAddress)
             ";
             $pdo->prepare($sql)->execute([
-                ':id_client' => $clientId,
-                ':sn'  => $snPost !== '' ? $snPost : null,
-                ':mac' => $macPost
+                ':mac_norm'  => $macNorm,
+                ':mac_addr'  => $macColon,
+                ':sn'        => ($snPost !== '' ? $snPost : null),
+                ':id_client' => $clientId
             ]);
+
+            // Recharge la page (nouvel état: attribué)
             header('Location: '.$_SERVER['REQUEST_URI']);
             exit;
         } catch (PDOException $e) {
@@ -69,7 +87,7 @@ try {
 
 /* ---------- En-tête ---------- */
 $latest     = $rows[0] ?? null;
-$macDisplay = $latest['MacAddress']   ?? ($useMac ? $macParam : '—');
+$macDisplay = $latest['MacAddress']   ?? ($useMac ? implode(':', str_split($macParam,2)) : '—'); // joli avec :
 $snDisplay  = $latest['SerialNumber'] ?? ($useSn ? $snParam : '—');
 $model      = $latest['Model']        ?? '—';
 $name       = $latest['Nom']          ?? '—';
@@ -146,6 +164,7 @@ function pctOrIntOrNull($v): ?int {
       <?php if ($client && ($client['id'] ?? null)): ?>
         <a href="/public/client_fiche.php?id=<?= (int)$client['id'] ?>" class="btn btn-primary" id="btn-espace-client">Espace client</a>
       <?php else: ?>
+        <!-- Pas encore attribué → ouvre le formulaire d’attribution -->
         <button type="button" class="btn btn-primary" id="btn-espace-client">Espace client</button>
       <?php endif; ?>
     </div>
@@ -235,6 +254,7 @@ function pctOrIntOrNull($v): ?int {
     <form method="post" class="standard-form" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>">
       <input type="hidden" name="action" value="attach_client">
       <input type="hidden" name="sn"  value="<?= h($snDisplay) ?>">
+      <!-- On envoie la MAC affichée; le PHP la normalise quoi qu'il arrive -->
       <input type="hidden" name="mac" value="<?= h($macDisplay) ?>">
 
       <!-- Recherche instantanée -->
@@ -313,38 +333,27 @@ function pctOrIntOrNull($v): ?int {
 
           // Sélection automatique du premier visible
           const firstVisible = opts.find(o => !o.hidden);
-          if (firstVisible) {
-            sel.value = firstVisible.value;
-          } else {
-            sel.value = '';
-          }
+          sel.value = firstVisible ? firstVisible.value : '';
 
           noMatch.style.display = shown ? 'none' : 'block';
         }
 
         q.addEventListener('input', filter);
-        // Enter sélectionne le premier visible
+        // Enter => sélectionne le premier visible
         q.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
-            const first = Array.from(sel.options).find(o => !o.hidden);
-            if (first) { sel.value = first.value; }
+            const first = opts.find(o => !o.hidden);
+            if (first) sel.value = first.value;
           }
         });
 
-        // Navigation clavier dans la liste avec flèches depuis l'input
-        q.addEventListener('keydown', (e) => {
-          if (e.key === 'ArrowDown') { e.preventDefault(); sel.focus(); }
-        });
-
-        // Quand on revient du select sur l'input
+        // Navigation clavier
+        q.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); sel.focus(); } });
         sel.addEventListener('keydown', (e) => {
-          if (e.key === 'ArrowUp' && sel.selectedIndex === 0) {
-            e.preventDefault(); q.focus();
-          }
+          if (e.key === 'ArrowUp' && sel.selectedIndex === 0) { e.preventDefault(); q.focus(); }
         });
 
-        // Premier filtrage au chargement
         filter();
       }
     })();
