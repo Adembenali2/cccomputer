@@ -1,7 +1,0 @@
-.git
-node_modules
-vendor/**/.git
-storage/*
-*.log
-.DS_Store
-.env*
