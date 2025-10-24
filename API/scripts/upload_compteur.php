@@ -1,43 +1,33 @@
 <?php
 declare(strict_types=1);
+
+// ✅ Affiche toutes les erreurs PHP et PDO dans Railway
 error_reporting(E_ALL);
-ini_set('display_errors', '0');
+ini_set('display_errors', '1');
 
 /**
- * API/scripts/upload_compteur.php (version "compteur only")
- *
- * - Récupère les CSV sur un SFTP (phpseclib3)
- * - Insère dans `compteur_relevee` (INSERT IGNORE)
- * - Archive les fichiers du SFTP en /processed ou /errors
- * - Journalise un résumé dans `import_run`
- *
- * NOTE: Ce script n'exige AUCUNE modif de includes/db.php.
- * Il alimente les variables MYSQLHOST/PORT/DATABASE/USER/PASSWORD
- * à partir de MYSQL_PUBLIC_URL (ou DATABASE_URL) si besoin.
+ * upload_compteur.php (version avec logs détaillés)
+ * - Connexion SFTP
+ * - Import CSV compteur_relevee
+ * - Log dans import_run
  */
 
-// ---------- 0) Normaliser les variables d'env pour ton db.php ----------
+// ---------- 0) Normaliser les variables d'env pour db.php ----------
 (function (): void {
     $needs = !getenv('MYSQLHOST') || !getenv('MYSQLDATABASE') || !getenv('MYSQLUSER');
     if (!$needs) return;
 
     $url = getenv('MYSQL_PUBLIC_URL') ?: getenv('DATABASE_URL') ?: '';
-    if (!$url) return; // on laisse db.php échouer proprement si rien n'est dispo
+    if (!$url) return;
 
     $p = parse_url($url);
     if (!$p || empty($p['host']) || empty($p['user']) || empty($p['path'])) return;
 
-    $host = $p['host'];
-    $port = isset($p['port']) ? (string)$p['port'] : '3306';
-    $user = isset($p['user']) ? urldecode($p['user']) : '';
-    $pass = isset($p['pass']) ? urldecode($p['pass']) : '';
-    $db   = ltrim($p['path'], '/');
-
-    putenv("MYSQLHOST={$host}");
-    putenv("MYSQLPORT={$port}");
-    putenv("MYSQLUSER={$user}");
-    putenv("MYSQLPASSWORD={$pass}");
-    putenv("MYSQLDATABASE={$db}");
+    putenv("MYSQLHOST={$p['host']}");
+    putenv("MYSQLPORT=" . ($p['port'] ?? '3306'));
+    putenv("MYSQLUSER=" . urldecode($p['user']));
+    putenv("MYSQLPASSWORD=" . (isset($p['pass']) ? urldecode($p['pass']) : ''));
+    putenv("MYSQLDATABASE=" . ltrim($p['path'], '/'));
 })();
 
 // ---------- 1) Charger $pdo depuis includes/db.php ----------
@@ -47,12 +37,18 @@ $paths = [
 ];
 $ok = false;
 foreach ($paths as $p) {
-    if (is_file($p)) { require_once $p; $ok = true; break; }
+    if (is_file($p)) {
+        require_once $p;
+        $ok = true;
+        break;
+    }
 }
 if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
     http_response_code(500);
-    exit("Erreur: impossible de charger includes/db.php et obtenir \$pdo\n");
+    exit("❌ Erreur: impossible de charger includes/db.php et obtenir \$pdo\n");
 }
+
+echo "✅ Connexion à la base établie.\n";
 
 // ---------- 2) Connexion SFTP ----------
 require __DIR__ . '/../vendor/autoload.php';
@@ -66,23 +62,22 @@ $sftp_port = 22;
 $sftp = new SFTP($sftp_host, $sftp_port);
 if (!$sftp->login($sftp_user, $sftp_pass)) {
     http_response_code(500);
-    exit("Erreur de connexion SFTP\n");
+    exit("❌ Erreur de connexion SFTP\n");
 }
 
-// Préparer les dossiers d'archivage
+echo "✅ Connexion SFTP établie.\n";
+
+// ---------- Création dossiers SFTP ----------
 @$sftp->mkdir('/processed');
 @$sftp->mkdir('/errors');
 
-// Safe move sur le SFTP (avec fallback si fichier existe)
 function sftp_safe_move(SFTP $sftp, string $from, string $toDir): array {
     $basename = basename($from);
     $target   = rtrim($toDir, '/') . '/' . $basename;
     if ($sftp->rename($from, $target)) return [true, $target];
 
-    $alt = rtrim($toDir, '/') . '/'
-         . pathinfo($basename, PATHINFO_FILENAME)
-         . '_' . date('Ymd_His') . '.'
-         . pathinfo($basename, PATHINFO_EXTENSION);
+    $alt = rtrim($toDir, '/') . '/' . pathinfo($basename, PATHINFO_FILENAME)
+         . '_' . date('Ymd_His') . '.' . pathinfo($basename, PATHINFO_EXTENSION);
     if ($sftp->rename($from, $alt)) return [true, $alt];
 
     return [false, null];
@@ -94,10 +89,7 @@ function parse_csv_kv(string $filepath): array {
     if (($h = fopen($filepath, 'r')) !== false) {
         while (($row = fgetcsv($h, 2000, ',')) !== false) {
             if (isset($row[0], $row[1])) {
-                // Trim + cast simple
-                $k = trim($row[0]);
-                $v = trim((string)$row[1]);
-                $data[$k] = $v;
+                $data[trim($row[0])] = trim((string)$row[1]);
             }
         }
         fclose($h);
@@ -105,7 +97,6 @@ function parse_csv_kv(string $filepath): array {
     return $data;
 }
 
-// Champs attendus
 $FIELDS = [
     'Timestamp','IpAddress','Nom','Model','SerialNumber','MacAddress',
     'Status','TonerBlack','TonerCyan','TonerMagenta','TonerYellow',
@@ -114,16 +105,14 @@ $FIELDS = [
     'MonoPrinted','ColorPrinted','TotalColor','TotalBW'
 ];
 
-echo "Traitement des nouveaux fichiers CSV...\n";
+echo "🚀 Traitement des fichiers CSV...\n";
 
-// ---------- 4) Préparer les requêtes PDO ----------
-// compteur_relevee : INSERT IGNORE
+// ---------- 4) Requêtes PDO ----------
 $cols_compteur = implode(',', $FIELDS) . ',DateInsertion';
 $ph_compteur   = ':' . implode(',:', $FIELDS) . ',NOW()';
 $sql_compteur  = "INSERT IGNORE INTO compteur_relevee ($cols_compteur) VALUES ($ph_compteur)";
 $st_compteur   = $pdo->prepare($sql_compteur);
 
-// (Optionnel) créer la table de log si absente (singulier: import_run)
 try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS import_run (
@@ -137,32 +126,29 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 } catch (Throwable $e) {
-    echo "[IMPORT_RUN] Erreur CREATE TABLE: " . $e->getMessage() . "\n";
+    echo "⚠️ [IMPORT_RUN] Erreur CREATE TABLE: " . $e->getMessage() . "\n";
 }
 
-// Compteurs de run (pour import_run)
-$files_processed    = 0;  // fichiers CSV conformes (match regex)
-$compteurs_inserted = 0;  // lignes réellement insérées (INSERT IGNORE) dans compteur_relevee
-$files_error        = 0;  // fichiers envoyés en /errors
+$files_processed = 0;
+$compteurs_inserted = 0;
+$files_error = 0;
 
-// ---------- 5) Lister et traiter les fichiers ----------
+// ---------- 5) Parcours fichiers ----------
 $files = $sftp->nlist('/');
 if ($files === false) {
-    echo "Impossible d’ouvrir le dossier racine SFTP\n";
+    echo "❌ Impossible d’ouvrir le dossier racine SFTP\n";
 } else {
+    $found = false;
     foreach ($files as $entry) {
         if ($entry === '.' || $entry === '..') continue;
+        if (!preg_match('/^COPIEUR_MAC-([A-F0-9\-]+)_(\d{8}_\d{6})\.csv$/i', $entry)) continue;
 
-        // Exemple: COPIEUR_MAC-XX-XX-XX-XX-XX-XX_YYYYMMDD_HHMMSS.csv
-        if (!preg_match('/^COPIEUR_MAC-([A-F0-9\-]+)_(\d{8}_\d{6})\.csv$/i', $entry)) {
-            continue;
-        }
+        $found = true;
         $files_processed++;
-
         $remote = '/' . $entry;
         $tmp = tempnam(sys_get_temp_dir(), 'csv_');
         if (!$sftp->get($remote, $tmp)) {
-            echo "Erreur téléchargement $entry\n";
+            echo "❌ Erreur téléchargement $entry\n";
             sftp_safe_move($sftp, $remote, '/errors');
             @unlink($tmp);
             $files_error++;
@@ -172,72 +158,57 @@ if ($files === false) {
         $row = parse_csv_kv($tmp);
         @unlink($tmp);
 
-        // Construire array des valeurs
         $values = [];
         foreach ($FIELDS as $f) $values[$f] = $row[$f] ?? null;
 
-        // Contrôle minimal
         if (empty($values['MacAddress']) || empty($values['Timestamp'])) {
-            echo "Données manquantes (MacAddress/Timestamp) pour $entry → /errors\n";
+            echo "⚠️ Données manquantes (MacAddress/Timestamp) pour $entry → /errors\n";
             sftp_safe_move($sftp, $remote, '/errors');
             $files_error++;
             continue;
         }
 
-        // Transaction par fichier
-        $pdo->beginTransaction();
         try {
-            // 1) compteur_relevee (INSERT IGNORE)
+            $pdo->beginTransaction();
             $binds = [];
             foreach ($FIELDS as $f) $binds[":$f"] = $values[$f];
             $st_compteur->execute($binds);
 
             if ($st_compteur->rowCount() === 1) {
                 $compteurs_inserted++;
-                echo "Compteur INSÉRÉ pour {$values['MacAddress']} ({$values['Timestamp']})\n";
+                echo "✅ Compteur INSÉRÉ pour {$values['MacAddress']} ({$values['Timestamp']})\n";
             } else {
-                echo "Déjà présent: compteur NON réinséré pour {$values['MacAddress']} ({$values['Timestamp']})\n";
+                echo "ℹ️ Déjà présent: compteur NON réinséré pour {$values['MacAddress']} ({$values['Timestamp']})\n";
             }
 
             $pdo->commit();
 
-            // ARCHIVAGE → /processed
             [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
             if (!$okMove) {
-                echo "⚠️  Impossible de déplacer $entry vers /processed\n";
+                echo "⚠️ Impossible de déplacer $entry vers /processed\n";
             } else {
-                echo "Archivé: $entry → /processed\n";
+                echo "📦 Archivé: $entry → /processed\n";
             }
 
         } catch (Throwable $e) {
             $pdo->rollBack();
-            echo "Erreur DB pour {$values['MacAddress']} ({$values['Timestamp']}) : "
-               . $e->getMessage() . "\n";
+            echo "❌ [ERREUR PDO] " . $e->getMessage() . "\n";
             sftp_safe_move($sftp, $remote, '/errors');
             $files_error++;
         }
     }
+
+    if (!$found) {
+        echo "⚠️ Aucun fichier CSV trouvé sur le SFTP.\n";
+    }
 }
 
-// ---------- 6) Journal du run dans import_run ----------
+// ---------- 6) Journal du run ----------
 try {
     $summary = sprintf(
         "[upload_compteur] files=%d, errors=%d, cmp_inserted=%d",
         $files_processed, $files_error, $compteurs_inserted
     );
-
-    // S'assure que la table existe (au cas où)
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS import_run (
-            id INT NOT NULL AUTO_INCREMENT,
-            ran_at DATETIME NOT NULL,
-            imported INT NOT NULL,
-            skipped INT NOT NULL,
-            ok TINYINT(1) NOT NULL,
-            msg TEXT,
-            PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
 
     $stmt = $pdo->prepare("
         INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
@@ -249,10 +220,10 @@ try {
         ':ok'       => ($files_error === 0 ? 1 : 0),
         ':msg'      => $summary,
     ]);
-    echo "[IMPORT_RUN] Ligne insérée.\n";
+    echo "📝 [IMPORT_RUN] Ligne insérée: $summary\n";
 } catch (Throwable $e) {
-    echo "[IMPORT_RUN] Erreur INSERT: " . $e->getMessage() . "\n";
+    echo "❌ [IMPORT_RUN] Erreur INSERT: " . $e->getMessage() . "\n";
 }
 
 echo "-----------------------------\n";
-echo "Traitement terminé.\n";
+echo "✅ Traitement terminé.\n";
