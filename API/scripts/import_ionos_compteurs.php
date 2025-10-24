@@ -1,19 +1,18 @@
 <?php
 /**
  * scripts/import_ionos_compteurs.php
- * Importe les compteurs et niveaux de toner depuis IONOS
- * vers la table `compteur_relevee` de la base Railway.
+ * Importe les compteurs & niveaux de toner depuis IONOS
+ * vers la table `compteur_relevee` (même connexion PDO que db.php).
  *
- * Variables d'environnement attendues :
- * - Railway : MYSQLHOST, MYSQLPORT, MYSQLDATABASE, MYSQLUSER, MYSQLPASSWORD
- * - IONOS   : IONOS_HOST, IONOS_PORT, IONOS_DB, IONOS_USER, IONOS_PASS
+ * Nécessite côté Railway :
+ *   IONOS_HOST, IONOS_PORT, IONOS_DB, IONOS_USER, IONOS_PASS
  */
 
 declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-// ---------- Helpers génériques ----------
+// ---------- Helpers ----------
 function println(string $s = ''): void { echo $s . PHP_EOL; }
 function fail(string $s, int $code = 1): void { fwrite(STDERR, $s . PHP_EOL); exit($code); }
 
@@ -27,34 +26,31 @@ function iOrNull($v): ?int {
     return (int)$v;
 }
 
-// ---------- Connexion DB Railway (cible) ----------
-$host = getenv('MYSQLHOST') ?: '';
-$port = (string)(getenv('MYSQLPORT') ?: '3306');
-$db   = getenv('MYSQLDATABASE') ?: '';
-$user = getenv('MYSQLUSER') ?: '';
-$pass = getenv('MYSQLPASSWORD') ?: '';
-$charset = 'utf8mb4';
+// ---------- Charger db.php (réutiliser $pdo existant) ----------
+$tryDbPaths = [
+    __DIR__ . '/../includes/db.php',          // API/includes
+    __DIR__ . '/../../includes/db.php',       // racine/includes (souvent le cas)
+    __DIR__ . '/../config/db.php',            // API/config
+    __DIR__ . '/../../config/db.php',         // racine/config
+];
 
-if ($host === '' || $db === '' || $user === '') {
-    fail("Variables d'environnement Railway manquantes : MYSQLHOST / MYSQLDATABASE / MYSQLUSER (et MYSQLPASSWORD si besoin).");
+$loadedDb = false;
+foreach ($tryDbPaths as $p) {
+    if (is_file($p)) { require_once $p; $loadedDb = true; break; }
+}
+if (!$loadedDb) {
+    fail("Impossible de charger db.php. Chemins testés :\n - " . implode("\n - ", $tryDbPaths));
+}
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    fail("La connexion \$pdo n'a pas été initialisée par db.php.");
 }
 
-$dsnRailway = "mysql:host={$host};port={$port};dbname={$db};charset={$charset}";
-try {
-    $pdo = new PDO($dsnRailway, $user, $pass, [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
-} catch (Throwable $e) {
-    fail("Connexion Railway échouée : " . $e->getMessage());
-}
-
-// ---------- Connexion DB IONOS (source) ----------
+// ---------- Connexion DB IONOS (source) via variables d'environnement ----------
 $ionosHost = getenv('IONOS_HOST') ?: 'db550618985.db.1and1.com';
 $ionosPort = (string)(getenv('IONOS_PORT') ?: '3306');
 $ionosDb   = getenv('IONOS_DB')   ?: 'db550618985';
 $ionosUser = getenv('IONOS_USER') ?: 'dbo550618985';
-$ionosPass = getenv('IONOS_PASS') ?: ''; // <- mets la valeur dans Railway Variables
+$ionosPass = getenv('IONOS_PASS') ?: ''; // à définir dans Railway
 
 $dsnIonos = "mysql:host={$ionosHost};port={$ionosPort};dbname={$ionosDb};charset=utf8";
 try {
@@ -66,20 +62,15 @@ try {
     fail("Connexion IONOS échouée : " . $e->getMessage());
 }
 
-// ---------- (Optionnel) S'assurer de l'unicité (mac_norm, Timestamp) ----------
+// ---------- (Optionnel) Assurer l'unicité (mac_norm, Timestamp) ----------
 try {
-    // MySQL n'a pas de IF NOT EXISTS pour les index -> on tente/catche
     $pdo->exec("ALTER TABLE `compteur_relevee` ADD UNIQUE KEY `uniq_mac_ts` (`mac_norm`,`Timestamp`)");
     println("Index unique `uniq_mac_ts` créé (mac_norm, Timestamp).");
 } catch (Throwable $e) {
-    // Probablement déjà créé ; on ignore
+    // déjà présent -> ignore
 }
 
-// ---------- Récup toners (depuis consommable.tmp_arr) ----------
-/**
- * Retourne les derniers niveaux de toner pour un ref_client
- * au format : ['k'=>?int,'c'=>?int,'m'=>?int,'y'=>?int]
- */
+// ---------- Extraction des niveaux de toner depuis consommable.tmp_arr ----------
 function getLatestTonersForRefClient(PDO $pdoIonos, string $refClient): array {
     $sql = "SELECT tmp_arr, `date` FROM consommable WHERE ref_client = :ref ORDER BY `date` DESC LIMIT 50";
     $stmt = $pdoIonos->prepare($sql);
@@ -104,7 +95,6 @@ function getLatestTonersForRefClient(PDO $pdoIonos, string $refClient): array {
             $tJaune  = $arr['toner_jaune']   ?? null;
             $tDate   = $arr['tdate'] ?? ($arr['cdate'] ?? ($arr['date'] ?? null));
 
-            // Utilise soit tdate/cdate soit la date de la ligne consommable
             $ts = $tDate ? strtotime((string)$tDate) : (strtotime((string)$row['date']) ?: 0);
             if ($ts === false) $ts = 0;
 
@@ -123,10 +113,9 @@ function getLatestTonersForRefClient(PDO $pdoIonos, string $refClient): array {
         }
     }
 
-    // clamp (sécurité)
     foreach ($best as $color => $v) {
         if ($v === null) continue;
-        $best[$color] = max(-100, min(100, (int)$v));
+        $best[$color] = max(-100, min(100, (int)$v)); // clamp sécurité
     }
     return $best;
 }
@@ -141,7 +130,7 @@ if (!$ionosRows) {
     exit(0);
 }
 
-// ---------- Prépare l'UPSERT cible ----------
+// ---------- UPSERT dans compteur_relevee (PDO de db.php) ----------
 $insertSql = "
 INSERT INTO compteur_relevee
     (mac_norm, MacAddress, `Timestamp`,
@@ -202,10 +191,10 @@ try {
             ':tot_pages' => $totAll,
             ':t_k'       => $t['k'],
             ':t_c'       => $t['c'],
-            ':t_m'       => $t['m'],
+            ':t_m'       => $t['m'],   // <-- TonerMagenta alimenté ici
             ':t_y'       => $t['y'],
             ':status'    => $status,
-            ':sn'        => null, // pas disponibles côté IONOS
+            ':sn'        => null,      // non dispo côté IONOS
             ':model'     => null,
             ':nom'       => null,
         ]);
