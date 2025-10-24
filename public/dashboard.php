@@ -579,10 +579,10 @@ try {
 
     // --- Import auto silencieux + badge d’état (en haut à droite) ---
     (function(){
-        // Déclenche SFTP si > 2min
-        fetch('/ajax/run_import_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
-        // Déclenche IONOS si > 2min  (← AJOUT)
-        fetch('/ajax/run_ionos_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
+        // Déclenche SFTP si > 2min  (dossier /import)
+        fetch('/import/run_import_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
+        // Déclenche IONOS si > 2min  (dossier /import)
+        fetch('/import/run_ionos_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
 
         const badge = document.getElementById('importBadge');
         const ico   = document.getElementById('impIco');
@@ -604,7 +604,8 @@ try {
 
         async function refresh(){
             try{
-                const r = await fetch('/ajax/last_import_status.php', {credentials:'same-origin'});
+                // Statut depuis /import
+                const r = await fetch('/import/last_import.php', {credentials:'same-origin'});
                 if (!r.ok) throw new Error('HTTP '+r.status);
                 const d = await r.json();
 
@@ -616,7 +617,7 @@ try {
                 const files = (d.summary && d.summary.files) ? d.summary.files : null;
 
                 if (d.ok === 1) {
-                    const label = `Import OK — ${d.imported} fichier(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    const label = `Import OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
                     setState('ok', label, files);
                 } else {
                     const label = `Import KO — ${d.ran_at}`;
