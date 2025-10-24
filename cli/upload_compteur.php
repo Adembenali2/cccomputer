@@ -6,11 +6,13 @@ ini_set('display_errors', '1');
 
 /**
  * Import SFTP -> compteur_relevee (format CSV Champ,Valeur)
+ * - Traite AU MAX un lot de N fichiers (par défaut 20) par exécution
+ * - Priorité aux fichiers les plus anciens (mtime croissant)
  * - Déduplication: NOT EXISTS sur (mac_norm, Timestamp)
  * - Journalisation: import_run (msg = JSON avec fichiers ajoutés)
  */
 
-// ---------- 0) Normaliser éventuellement les env MySQL (Railway) ----------
+// ---------- 0) Normaliser les env MySQL (Railway) si besoin ----------
 (function (): void {
     $needs = !getenv('MYSQLHOST') || !getenv('MYSQLDATABASE') || !getenv('MYSQLUSER');
     if (!$needs) return;
@@ -25,10 +27,10 @@ ini_set('display_errors', '1');
     putenv("MYSQLPORT=" . ($p['port'] ?? '3306'));
     putenv("MYSQLUSER=" . urldecode($p['user']));
     putenv("MYSQLPASSWORD=" . (isset($p['pass']) ? urldecode($p['pass']) : ''));
-    putenv("MYSQLDATABASE" . '=' . ltrim($p['path'], '/'));
+    putenv("MYSQLDATABASE=" . ltrim($p['path'], '/'));
 })();
 
-// ---------- 1) Charger la connexion PDO ----------
+// ---------- 1) Connexion PDO ----------
 $paths = [
     __DIR__ . '/../includes/db.php',
     __DIR__ . '/../../includes/db.php',
@@ -55,12 +57,14 @@ $sftp_port    = (int)(getenv('SFTP_PORT') ?: 22);
 $sftp_path    = getenv('SFTP_PATH') ?: '/';
 $sftp_timeout = (int)(getenv('SFTP_TIMEOUT') ?: 30);
 
+$BATCH_SIZE   = max(1, (int)(getenv('IMPORT_BATCH_SIZE') ?: 20)); // ← limite par run
+
 $sftp = new SFTP($sftp_host, $sftp_port, $sftp_timeout);
 if (!$sftp->login($sftp_user, $sftp_pass)) {
     http_response_code(500);
     exit("❌ Erreur de connexion SFTP ($sftp_host:$sftp_port)\n");
 }
-echo "✅ SFTP connecté sur $sftp_host:$sftp_port, path='$sftp_path'\n";
+echo "✅ SFTP connecté sur $sftp_host:$sftp_port, path='$sftp_path' — lot max: $BATCH_SIZE\n";
 
 @$sftp->mkdir('/processed');
 @$sftp->mkdir('/errors');
@@ -105,8 +109,6 @@ $FIELDS = [
     'ColorCopies','MonoCopies','BichromeCopies','BWPrinted','BichromePrinted',
     'MonoPrinted','ColorPrinted','TotalColor','TotalBW'
 ];
-
-echo "🚀 Scan des CSV…\n";
 
 // ---------- 4) S’assurer que les tables existent ----------
 try {
@@ -177,91 +179,108 @@ $sqlInsertIfMissing = "
 ";
 $stInsert = $pdo->prepare($sqlInsertIfMissing);
 
-// ---------- 6) Parcours des fichiers SFTP ----------
+// ---------- 6) Sélectionner AU PLUS $BATCH_SIZE fichiers, les plus anciens ----------
+echo "🔎 Listing SFTP…\n";
+
+/** On utilise rawlist pour récupérer les mtime, puis on trie ASC et on coupe à $BATCH_SIZE */
+$raw = $sftp->rawlist($sftp_path);
+if ($raw === false || !is_array($raw)) {
+    echo "❌ Impossible de lister '$sftp_path'\n";
+    $raw = [];
+}
+
+$pattern = '/^COPIEUR_MAC-([A-F0-9:\-]+)_(\d{8}_\d{6})\.csv$/i';
+$candidates = [];
+foreach ($raw as $name => $meta) {
+    if ($name === '.' || $name === '..') continue;
+    if (is_array($meta) && isset($meta['type']) && $meta['type'] !== 1) continue; // 1 = fichier
+    if (!preg_match($pattern, (string)$name)) continue;
+
+    $mtime = is_array($meta) && isset($meta['mtime']) ? (int)$meta['mtime'] : 0;
+    $candidates[] = [
+        'name' => (string)$name,
+        'path' => rtrim($sftp_path, '/') . '/' . ltrim((string)$name, '/'),
+        'mtime'=> $mtime,
+    ];
+}
+
+/** Trier par mtime croissant (plus anciens d'abord) et limiter à $BATCH_SIZE */
+usort($candidates, function($a, $b){ return ($a['mtime'] <=> $b['mtime']); });
+$selected = array_slice($candidates, 0, $BATCH_SIZE);
+
+$total_available = count($candidates);
+echo "📂 Fichiers candidats: $total_available — On va traiter: ".count($selected)." (lot max: $BATCH_SIZE)\n";
+
+// ---------- 7) Traiter le lot sélectionné ----------
 $files_processed = 0;
 $compteurs_inserted = 0;
 $files_error = 0;
-$inserted_files = [];   // ← on liste les fichiers réellement insérés
+$inserted_files = [];
 
-$list = $sftp->nlist($sftp_path);
-if ($list === false) {
-    echo "❌ Impossible de lister '$sftp_path'\n";
-} else {
-    $found = false;
-    foreach ($list as $name) {
-        if ($name === '.' || $name === '..') continue;
-        if (!preg_match('/^COPIEUR_MAC-([A-F0-9:\-]+)_(\d{8}_\d{6})\.csv$/i', $name)) continue;
+foreach ($selected as $file) {
+    $name   = $file['name'];
+    $remote = $file['path'];
+    $files_processed++;
 
-        $found = true;
-        $files_processed++;
-
-        $remote = rtrim($sftp_path, '/') . '/' . ltrim($name, '/');
-        $tmp = tempnam(sys_get_temp_dir(), 'csv_');
-
-        if (!$sftp->get($remote, $tmp)) {
-            echo "❌ Download KO: $name → /errors\n";
-            sftp_safe_move($sftp, $remote, '/errors');
-            @unlink($tmp);
-            $files_error++;
-            continue;
-        }
-
-        $kv = parse_csv_kv($tmp);
+    $tmp = tempnam(sys_get_temp_dir(), 'csv_');
+    if (!$sftp->get($remote, $tmp)) {
+        echo "❌ Download KO: $name → /errors\n";
+        sftp_safe_move($sftp, $remote, '/errors');
         @unlink($tmp);
-
-        // Construire les valeurs
-        $vals = [];
-        foreach ($FIELDS as $f) $vals[$f] = $kv[$f] ?? null;
-
-        if (empty($vals['Timestamp']) || empty($vals['MacAddress'])) {
-            echo "⚠️ Manque Timestamp/MacAddress pour $name → /errors\n";
-            sftp_safe_move($sftp, $remote, '/errors');
-            $files_error++;
-            continue;
-        }
-
-        // Normaliser Timestamp → DATETIME MySQL
-        $vals['Timestamp'] = date('Y-m-d H:i:s', strtotime((string)$vals['Timestamp']));
-
-        try {
-            $pdo->beginTransaction();
-
-            $binds = [];
-            foreach ($FIELDS as $f) $binds[":$f"] = $vals[$f];
-            // paramètres pour la clause NOT EXISTS
-            $binds[':_mac_check'] = $vals['MacAddress'];
-            $binds[':_ts_check']  = $vals['Timestamp'];
-
-            $stInsert->execute($binds);
-
-            if ($stInsert->rowCount() === 1) {
-                $compteurs_inserted++;
-                $inserted_files[] = $name; // ← on retient ce fichier
-                echo "✅ INSÉRÉ: {$vals['MacAddress']} @ {$vals['Timestamp']} (file: $name)\n";
-            } else {
-                echo "ℹ️ Doublon ignoré (mac_norm,Timestamp): {$vals['MacAddress']} @ {$vals['Timestamp']} (file: $name)\n";
-            }
-
-            $pdo->commit();
-
-            [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
-            if (!$okMove) echo "⚠️ Move → /processed échoué: $name\n";
-            else          echo "📦 Archivé: $name\n";
-
-        } catch (Throwable $e) {
-            $pdo->rollBack();
-            echo "❌ PDO: ".$e->getMessage()."\n";
-            sftp_safe_move($sftp, $remote, '/errors');
-            $files_error++;
-        }
+        $files_error++;
+        continue;
     }
 
-    if (!$found) echo "⚠️ Aucun CSV trouvé dans '$sftp_path'\n";
+    $kv = parse_csv_kv($tmp);
+    @unlink($tmp);
+
+    $vals = [];
+    foreach ($FIELDS as $f) $vals[$f] = $kv[$f] ?? null;
+
+    if (empty($vals['Timestamp']) || empty($vals['MacAddress'])) {
+        echo "⚠️ Manque Timestamp/MacAddress pour $name → /errors\n";
+        sftp_safe_move($sftp, $remote, '/errors');
+        $files_error++;
+        continue;
+    }
+
+    // Normaliser Timestamp
+    $vals['Timestamp'] = date('Y-m-d H:i:s', strtotime((string)$vals['Timestamp']));
+
+    try {
+        $pdo->beginTransaction();
+
+        $binds = [];
+        foreach ($FIELDS as $f) $binds[":$f"] = $vals[$f];
+        $binds[':_mac_check'] = $vals['MacAddress'];
+        $binds[':_ts_check']  = $vals['Timestamp'];
+
+        $stInsert->execute($binds);
+
+        if ($stInsert->rowCount() === 1) {
+            $compteurs_inserted++;
+            $inserted_files[] = $name;
+            echo "✅ INSÉRÉ: {$vals['MacAddress']} @ {$vals['Timestamp']} (file: $name)\n";
+        } else {
+            echo "ℹ️ Doublon ignoré: {$vals['MacAddress']} @ {$vals['Timestamp']} (file: $name)\n";
+        }
+
+        $pdo->commit();
+
+        [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
+        if (!$okMove) echo "⚠️ Move → /processed échoué: $name\n";
+        else          echo "📦 Archivé: $name\n";
+
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        echo "❌ PDO: ".$e->getMessage()."\n";
+        sftp_safe_move($sftp, $remote, '/errors');
+        $files_error++;
+    }
 }
 
-// ---------- 7) Journal import_run ----------
+// ---------- 8) Journal import_run ----------
 try {
-    // Résumé JSON dans msg (on tronque la liste si trop longue)
     $filesForMsg = $inserted_files;
     if (count($filesForMsg) > 50) {
         $filesForMsg = array_slice($filesForMsg, 0, 50);
@@ -271,7 +290,9 @@ try {
         'processed' => $files_processed,
         'errors'    => $files_error,
         'inserted'  => $compteurs_inserted,
-        'files'     => $filesForMsg
+        'files'     => $filesForMsg,
+        'batch'     => $BATCH_SIZE,
+        'remaining_estimate' => max(0, $total_available - $files_processed) // juste indicatif
     ], JSON_UNESCAPED_UNICODE);
 
     $stmt = $pdo->prepare("
@@ -284,10 +305,10 @@ try {
         ':ok'       => ($files_error === 0 ? 1 : 0),
         ':msg'      => $msgJson,
     ]);
-    echo "📝 import_run: inserted=$compteurs_inserted, files=$files_processed, errors=$files_error\n";
+    echo "📝 import_run: inserted=$compteurs_inserted, files=$files_processed, errors=$files_error, remaining≈".max(0,$total_available - $files_processed)."\n";
 } catch (Throwable $e) {
     echo "❌ import_run INSERT: ".$e->getMessage()."\n";
 }
 
 echo "-----------------------------\n";
-echo "✅ Fin traitement.\n";
+echo "✅ Fin traitement (lot partiel).\n";
