@@ -11,19 +11,11 @@ ini_set('display_errors', '0');
  * - UPSERT 1 ligne/jour dans `facture_relevee` (ON DUPLICATE KEY UPDATE)
  * - Archive les fichiers du SFTP en /processed ou /errors
  * - Journalise un résumé dans `import_run`
- *
- * Variables d'environnement attendues (Railway):
- *   SFTP_HOST, SFTP_PORT (22), SFTP_USER, SFTP_PASS
- *
- * Remarques:
- * - `mac_norm` est une colonne générée dans `compteur_relevee`: on n'y touche pas.
- * - Pour que l'UPSERT fonctionne dans `facture_relevee`, il faut une contrainte UNIQUE
- *   (par ex. UNIQUE (MacAddress, DateRelevee)).
  */
 
 require __DIR__ . '/../vendor/autoload.php';
 
-// ---------- 1) Charger $pdo depuis includes/db.php (Railway) ----------
+// ---------- 1) Charger $pdo depuis includes/db.php ----------
 $paths = [
     __DIR__ . '/../includes/db.php',
     __DIR__ . '/../config/db.php',
@@ -42,10 +34,13 @@ if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
 // ---------- 2) Connexion SFTP ----------
 use phpseclib3\Net\SFTP;
 
-$sftp_host = getenv('SFTP_HOST') ?: 'home298245733.1and1-data.host';
-$sftp_port = (int)(getenv('SFTP_PORT') ?: '22');
-$sftp_user = getenv('SFTP_USER') ?: '';
-$sftp_pass = getenv('SFTP_PASS') ?: '';
+/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+ * SFTP — VRAIES VALEURS FOURNIES
+ * <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< */
+$sftp_host = 'home298245733.1and1-data.host';
+$sftp_user = 'acc984891385';
+$sftp_pass = 'RTC@4oEMh?orqP&pgir5rz&f';
+$sftp_port = 22;
 
 $sftp = new SFTP($sftp_host, $sftp_port);
 if (!$sftp->login($sftp_user, $sftp_pass)) {
