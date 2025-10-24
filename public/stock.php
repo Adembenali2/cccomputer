@@ -48,7 +48,7 @@
     <div class="splash-container">
         <div class="card splash-card p-4 p-md-5">
 
-            <a href="/stcok/dashboard_stock.php" class="navbar-brand animated-logo">
+            <a href="/stcok/accueil.php" class="navbar-brand animated-logo">
                 
                 <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" fill="currentColor" class="bi bi-box-seam-fill" viewBox="0 0 16 16">
                     <path fill-rule="evenodd" d="M15.528 2.973a.75.75 0 0 1 .472.696v8.662a.75.75 0 0 1-.472.696l-7.25 2.9a.75.75 0 0 1-.557 0l-7.25-2.9A.75.75 0 0 1 0 12.331V3.669a.75.75 0 0 1 .471-.696L7.721.023a.75.75 0 0 1 .557 0l7.25 2.9zM8 8.5l-5 2v2.669l5 2V8.5zM8 1l-5 2v3.5l5 2v-7zM15 5.5l-5-2v7l5-2V5.5z"/>
