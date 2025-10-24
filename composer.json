@@ -1,13 +1,6 @@
 {
-  "name": "cccomputer/batch",
-  "type": "project",
   "require": {
     "php": ">=8.0",
     "phpseclib/phpseclib": "^3.0"
-  },
-  "autoload": {
-    "psr-4": {
-      "": "API/"
-    }
   }
 }
