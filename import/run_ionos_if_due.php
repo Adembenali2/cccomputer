@@ -3,10 +3,10 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
-// Attrape les fatales
+// Attrape les fatales (parse error, require manquant, etc.)
 register_shutdown_function(function () {
     $e = error_get_last();
-    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
         http_response_code(500);
         echo json_encode([
             'error'   => 'FATAL in run_ionos_if_due.php',
@@ -23,10 +23,10 @@ try {
 
     // ——— Détection robuste du worker ———
     $workerCandidates = [
-        $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php',
-        $projectRoot . '/API/Scripts/ionos_to_compteur.php',
+        $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php', // chemin attendu
+        $projectRoot . '/API/Scripts/ionos_to_compteur.php', // variations de casse
         $projectRoot . '/API/scripts/ionos_to_compteur.php',
-        $projectRoot . '/import/ionos_to_compteur.php',
+        $projectRoot . '/import/ionos_to_compteur.php',      // si placé dans /import
     ];
 
     $worker = null;
@@ -34,7 +34,7 @@ try {
         if (is_file($cand)) { $worker = $cand; break; }
     }
 
-    // Vérifs
+    // Fichier DB (shim includes → config/db.php)
     $includesDb = $projectRoot . '/includes/db.php';
     if (!is_file($includesDb)) {
         http_response_code(500);
@@ -42,20 +42,22 @@ try {
             'error'       => 'includes/db.php not found',
             'projectRoot' => $projectRoot,
             'path'        => $includesDb
-        ]);
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
+
     if (!$worker) {
         http_response_code(500);
         echo json_encode([
             'error'       => 'ionos_to_compteur.php not found',
             'tried'       => $workerCandidates,
             'projectRoot' => $projectRoot
-        ]);
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
 
-    require_once $includesDb; // crée $pdo
+    // Connexion DB cible (Railway)
+    require_once $includesDb; // doit exposer $pdo
 
     // Anti-bouclage (20s par défaut)
     $pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (
@@ -74,25 +76,25 @@ try {
             'ran'      => false,
             'reason'   => 'not_due',
             'last_run' => $last
-        ]);
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
 
-    // Marquer le run
+    // Marquer le run (NOW)
     $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
 
-    // Limite batch
+    // Limite batch (priorité à env, sinon GET/POST, sinon 10)
     $limit = (int)(getenv('IONOS_BATCH_LIMIT') ?: ($_GET['limit'] ?? $_POST['limit'] ?? 10));
-    if ($limit <= 0) $limit = 10;
+    if ($limit <= 0) { $limit = 10; }
     putenv('IONOS_BATCH_LIMIT=' . (string)$limit);
 
     // Lancer le worker et capturer toute sortie/erreur
     ob_start();
     try {
-        require $worker; // doit ECHO un JSON puis exit
+        require $worker; // le worker doit echo un JSON puis exit;
         $out = ob_get_clean();
-        // si le worker n'a pas exit, on renvoie ce qu'il a produit
         if ($out !== '') {
+            // si le worker n'a pas exit, on renvoie ce qu'il a produit
             echo $out;
         }
     } catch (Throwable $we) {
@@ -112,4 +114,5 @@ try {
     echo json_encode([
         'error'  => 'run_ionos_if_due.php crash',
         'detail' => $e->getMessage()
-    ],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
