@@ -3,9 +3,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
-if (method_exists($pdo, 'setAttribute')) {
-  try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
-}
+try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
 
 /* Helpers */
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
@@ -44,21 +42,32 @@ try {
       ON pc.mac_norm = v.mac_norm
     WHERE v.rn = 1
       AND pc.id_client IS NULL
-    ORDER BY v.Model IS NULL, v.Model, v.SerialNumber, v.MacAddress
+    ORDER BY
+      v.Model IS NULL, v.Model,
+      v.SerialNumber IS NULL, v.SerialNumber,
+      v.MacAddress
   ";
   $stmt = $pdo->query($sql);
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
   foreach ($rows as $r) {
     $model   = trim($r['Model'] ?? '');
-    $marque  = $model !== '' ? strtok($model, ' ') : '—';
+    // Marque = premier token non vide (gère espaces multiples)
+    $parts   = preg_split('/\s+/', $model);
+    $marque  = ($parts && $parts[0] !== '') ? $parts[0] : '—';
 
     $raw     = strtoupper(trim((string)($r['raw_status'] ?? '')));
-    $okVals  = ['OK','ONLINE','NORMAL','READY','PRINT'];
+    $okVals  = ['OK','ONLINE','NORMAL','READY','PRINT','IDLE','STANDBY','SLEEP','AVAILABLE'];
     $isDown  = ($raw !== '' && !in_array($raw, $okVals, true));
 
     $statut  = $isDown ? 'en panne' : 'stock';
     $empl    = 'dépôt';
+
+    // Formatage lisible, localisable ensuite côté JS si besoin
+    $lastTs = null;
+    if (!empty($r['last_ts'])) {
+      try { $lastTs = (new DateTime($r['last_ts']))->format('Y-m-d H:i:s'); } catch (\Throwable $e) { $lastTs = (string)$r['last_ts']; }
+    }
 
     $copiers[] = [
       'id'              => $r['mac_norm'],                 // identifiant unique pour le popup
@@ -70,7 +79,7 @@ try {
       'compteur_color'  => is_numeric($r['TotalColor']) ? (int)$r['TotalColor'] : null,
       'statut'          => $statut,
       'emplacement'     => $empl,
-      'last_ts'         => $r['last_ts'] ?: null,
+      'last_ts'         => $lastTs,
     ];
   }
 } catch (PDOException $e) {
@@ -317,10 +326,20 @@ $sectionImages = [
     scored.sort((a,b)=> b.score - a.score || a.idx - b.idx);
     scored.forEach(x => mason.appendChild(x.el));
   }
+
+  // Normalisation sans accents
+  function norm(s){
+    return (s||'')
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'');
+  }
+
   function applyFilter(){
-    const v = (q.value||'').trim().toLowerCase();
+    const v = norm(q.value||'');
     document.querySelectorAll('.tbl-stock tbody tr').forEach(tr=>{
-      const t = (tr.getAttribute('data-search')||'').toLowerCase();
+      const t = norm(tr.getAttribute('data-search')||'');
       tr.style.display = !v || t.includes(v) ? '' : 'none';
     });
     reorderSections();
@@ -336,10 +355,27 @@ $sectionImages = [
 // --- Datasets pour popup ---
 const DATASETS = <?= json_encode($datasets, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
 
-function addField(grid, label, value){
+// Helpers d’affichage sûrs (évite XSS)
+function escapeText(s){ return (s == null) ? '—' : String(s); }
+function addField(grid, label, value, {html=false}={}){
   const card = document.createElement('div');
   card.className = 'field-card';
-  card.innerHTML = `<div class="lbl">${label}</div><div class="val">${value ?? '—'}</div>`;
+
+  const lbl = document.createElement('div');
+  lbl.className = 'lbl';
+  lbl.textContent = label;
+
+  const val = document.createElement('div');
+  val.className = 'val';
+  if (html) {
+    // autoriser explicitement du HTML (ex: badge état)
+    val.innerHTML = value ?? '—';
+  } else {
+    val.textContent = escapeText(value);
+  }
+
+  card.appendChild(lbl);
+  card.appendChild(val);
   grid.appendChild(card);
 }
 function badgeEtat(e){
@@ -356,8 +392,45 @@ function badgeEtat(e){
   const grid    = document.getElementById('detailGrid');
   const titleEl = document.getElementById('modalTitle');
 
-  function open(){ document.body.classList.add('modal-open'); overlay.setAttribute('aria-hidden','false'); overlay.style.display='block'; modal.style.display='block'; }
-  function closeFn(){ document.body.classList.remove('modal-open'); overlay.setAttribute('aria-hidden','true'); overlay.style.display='none'; modal.style.display='none'; }
+  let lastFocused = null;
+
+  function focusFirst(){
+    const focusables = modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
+    if (focusables.length) focusables[0].focus();
+  }
+
+  function trapFocus(e){
+    if (e.key !== 'Tab') return;
+    const focusables = [...modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')];
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last  = focusables[focusables.length-1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+
+  function onKeydown(e){
+    if (e.key === 'Escape') closeFn();
+    if (e.key === 'Tab') trapFocus(e);
+  }
+
+  function open(){
+    lastFocused = document.activeElement;
+    document.body.classList.add('modal-open');
+    overlay.setAttribute('aria-hidden','false');
+    overlay.style.display='block';
+    modal.style.display='block';
+    document.addEventListener('keydown', onKeydown);
+    focusFirst();
+  }
+  function closeFn(){
+    document.body.classList.remove('modal-open');
+    overlay.setAttribute('aria-hidden','true');
+    overlay.style.display='none';
+    modal.style.display='none';
+    document.removeEventListener('keydown', onKeydown);
+    if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+  }
   close.addEventListener('click', closeFn);
   overlay.addEventListener('click', closeFn);
 
@@ -375,7 +448,7 @@ function badgeEtat(e){
       addField(grid, 'Emplacement', row.emplacement);
       if (row.last_ts) addField(grid, 'Dernière relève', row.last_ts);
     } else if (type === 'lcd') {
-      addField(grid, 'État', badgeEtat(row.etat));
+      addField(grid, 'État', badgeEtat(row.etat), {html:true});
       addField(grid, 'Référence', row.reference);
       addField(grid, 'Marque', row.marque);
       addField(grid, 'Modèle', row.modele);
@@ -385,7 +458,7 @@ function badgeEtat(e){
       addField(grid, 'Prix', row.prix!=null ? new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(row.prix) : '—');
       addField(grid, 'Quantité', row.qty);
     } else if (type === 'pc') {
-      addField(grid, 'État', badgeEtat(row.etat));
+      addField(grid, 'État', badgeEtat(row.etat), {html:true});
       addField(grid, 'Référence', row.reference);
       addField(grid, 'Marque', row.marque);
       addField(grid, 'Modèle', row.modele);
@@ -401,8 +474,10 @@ function badgeEtat(e){
     }
   }
 
+  // Rendre les lignes focusables + activation clavier
   document.querySelectorAll('.click-rows tbody tr[data-type][data-id]').forEach(tr=>{
     tr.style.cursor = 'pointer';
+    tr.tabIndex = 0;
     tr.addEventListener('click', ()=>{
       const type = tr.getAttribute('data-type');
       const id   = tr.getAttribute('data-id');
@@ -411,6 +486,9 @@ function badgeEtat(e){
       if (!row) return;
       renderDetails(type, row);
       open();
+    });
+    tr.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.click(); }
     });
   });
 })();

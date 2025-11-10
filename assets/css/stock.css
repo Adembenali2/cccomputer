@@ -114,6 +114,17 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-secondary); background: var(--bg-primary);
 }
 
+/* Accessibilité: focus visible sur lignes cliquables */
+.click-rows tbody tr {
+  cursor: pointer;
+  outline: none;
+}
+.click-rows tbody tr:focus {
+  outline: 2px solid var(--brand, #3b82f6);
+  outline-offset: -2px;
+  background: var(--bg-tertiary);
+}
+
 /* ===== Modal ===== */
 .modal-open { overflow: hidden; }
 .modal-overlay {
@@ -169,4 +180,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 .field-card .val {
   margin-top: .25rem; font-weight: 700; color: var(--text-primary);
+}
+
+/* Préférence OS : réduire les animations si présentes ailleurs */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
