@@ -15,12 +15,13 @@ function stateBadge(?string $etat): string {
 }
 
 /* =========================================================
-   PHOTOCOPIEURS DEPUIS LA BDD
+   PHOTOCOPIEURS DEPUIS LA BDD — UNIQUEMENT NON ATTRIBUÉS
    - 1 ligne par machine (mac_norm unique)
-   - dernière relève = row_number() over (partition by mac_norm order by Timestamp desc) = 1
-   - statut: "attribué à un client" si présent dans photocopieurs_clients.id_client, sinon "stock"
-   - "en panne" si Status de la relève n’est pas OK/ONLINE/NORMAL
-   - emplacement: "chez client" si attribué, sinon "dépôt"
+   - on prend la DERNIÈRE relève par mac_norm
+   - on filtre: pc.id_client IS NULL  => non relié à un client
+   - statut: "en panne" si Status ∉ {OK, ONLINE, NORMAL, READY, PRINT}
+             sinon "stock"
+   - emplacement: toujours "dépôt" (puisqu’ils ne sont pas chez un client)
    ========================================================= */
 $copiers = [];
 try {
@@ -40,12 +41,12 @@ try {
       v.`Timestamp`     AS last_ts,
       v.TotalBW,
       v.TotalColor,
-      v.Status          AS raw_status,
-      pc.id_client      AS attributed_client_id
+      v.Status          AS raw_status
     FROM v_compteur_last v
     LEFT JOIN photocopieurs_clients pc
       ON pc.mac_norm = v.mac_norm
     WHERE v.rn = 1
+      AND pc.id_client IS NULL
     ORDER BY v.Model IS NULL, v.Model, v.SerialNumber, v.MacAddress
   ";
   $stmt = $pdo->query($sql);
@@ -53,16 +54,14 @@ try {
 
   foreach ($rows as $r) {
     $model   = trim($r['Model'] ?? '');
-    // Heuristique "Marque" : premier mot du modèle si disponible (ex: "Kyocera TASKalfa 2553ci" -> "Kyocera")
     $marque  = $model !== '' ? strtok($model, ' ') : '—';
 
     $raw     = strtoupper(trim((string)($r['raw_status'] ?? '')));
     $okVals  = ['OK','ONLINE','NORMAL','READY','PRINT'];
     $isDown  = ($raw !== '' && !in_array($raw, $okVals, true));
 
-    $isAttrib = !empty($r['attributed_client_id']);
-    $statut   = $isDown ? 'en panne' : ($isAttrib ? 'attribué à un client' : 'stock');
-    $empl     = $isAttrib ? 'chez client' : 'dépôt';
+    $statut  = $isDown ? 'en panne' : 'stock';
+    $empl    = 'dépôt';
 
     $copiers[] = [
       'id'              => $r['mac_norm'],                 // identifiant unique pour le popup
@@ -78,12 +77,12 @@ try {
     ];
   }
 } catch (PDOException $e) {
-  error_log('stock.php (photocopieurs) SQL error: '.$e->getMessage());
+  error_log('stock.php (photocopieurs non attribués) SQL error: '.$e->getMessage());
   $copiers = [];
 }
 
 /* =========================================================
-   AUTRES CATEGORIES (toujours sans BDD pour l’instant)
+   AUTRES CATEGORIES (mock pour l’instant)
    ========================================================= */
 $lcd = [
   ['id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A','modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP','prix'=>129.90,'qty'=>12],
@@ -113,7 +112,7 @@ $papiers = [
 /* Datasets pour le popup (photocopieurs, lcd, pc) */
 $datasets = ['copiers'=>$copiers, 'lcd'=>$lcd, 'pc'=>$pc];
 
-/* Images pour les titres */
+/* Images pour les titres (tu peux placer de vraies images à ces chemins) */
 $sectionImages = [
   'photocopieurs' => '/assets/img/stock/photocopieurs.jpg',
   'lcd'           => '/assets/img/stock/lcd.jpg',
@@ -146,6 +145,7 @@ $sectionImages = [
     <input type="text" id="q" placeholder="Filtrer partout (réf., modèle, SN, MAC, CPU…)" aria-label="Filtrer" />
   </div>
 
+  <!-- Masonry 2 colonnes -->
   <div id="stockMasonry" class="stock-masonry">
     <!-- Toners -->
     <section class="card-section" data-section="toners">
@@ -199,7 +199,7 @@ $sectionImages = [
       </div>
     </section>
 
-    <!-- Photocopieurs (depuis BDD) -->
+    <!-- Photocopieurs (depuis BDD, non attribués) -->
     <section class="card-section" data-section="photocopieurs">
       <div class="section-head">
         <div class="head-left">
@@ -220,7 +220,7 @@ $sectionImages = [
               <td data-th="Statut"><span class="chip"><?= h($r['statut']) ?></span></td>
             </tr>
           <?php endforeach; if (empty($copiers)): ?>
-            <tr><td colspan="3">— Aucun photocopieur —</td></tr>
+            <tr><td colspan="3">— Aucun photocopieur non attribué —</td></tr>
           <?php endif; ?>
           </tbody>
         </table>
@@ -285,7 +285,7 @@ $sectionImages = [
   </div><!-- /#stockMasonry -->
 </div><!-- /.page-container -->
 
-<!-- ===== Modal détails ===== -->
+<!-- ===== Modal détails (Photocopieurs / LCD / PC) ===== -->
 <div id="detailOverlay" class="modal-overlay" aria-hidden="true"></div>
 <div id="detailModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" style="display:none;">
   <div class="modal-header">
