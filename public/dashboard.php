@@ -403,7 +403,8 @@ try {
     // --- Import auto silencieux + badge (tick 20s, batch 10 + 10) ---
     (function(){
         const SFTP_URL  = '/import/run_import_if_due.php';  // public
-        const IONOS_URL = '/import/trigger_ionos.php';      // proxy public -> import/run_ionos_if_due.php
+        // ⚠️ IONOS passe maintenant par l’endpoint “tout-en-un” /import/ionos_sync.php
+        const IONOS_URL = '/import/ionos_sync.php';
 
         const badge = document.getElementById('importBadge');
         const ico   = document.getElementById('impIco');
@@ -411,9 +412,9 @@ try {
 
         function setState(state, label, titleFiles) {
             ico.classList.remove('ok','run','fail');
-            if (state === 'ok') { ico.textContent = '✓'; ico.classList.add('ok'); }
+            if (state === 'ok')   { ico.textContent = '✓'; ico.classList.add('ok'); }
             else if (state === 'run') { ico.textContent = '⏳'; ico.classList.add('run'); }
-            else if (state === 'fail') { ico.textContent = '!'; ico.classList.add('fail'); }
+            else if (state === 'fail'){ ico.textContent = '!';  ico.classList.add('fail'); }
             else { ico.textContent = '⏳'; ico.classList.add('run'); }
 
             if (label) txt.textContent = label;
@@ -424,7 +425,11 @@ try {
 
         async function callJSON(url){
             try{
-                const res = await fetch(url, {method:'POST', credentials:'same-origin'});
+                const res = await fetch(url, {
+                    method:'POST',
+                    credentials:'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                });
                 const text = await res.text();
                 let data = null; try{ data = text ? JSON.parse(text) : null; }catch(e){}
                 if(!res.ok){
@@ -464,10 +469,12 @@ try {
         }
 
         async function tick(){
+            // Lance SFTP (batch 10) + IONOS (latest, batch 10). L’endpoint IONOS ignore si "not_due".
             const [sftp, ionos] = await Promise.allSettled([
-                callJSON(SFTP_URL+'?limit=10'),
-                callJSON(IONOS_URL+'?limit=10'),
+                callJSON(SFTP_URL + '?limit=10'),
+                callJSON(IONOS_URL + '?limit=10') // mode=latest par défaut dans ionos_sync.php
             ]);
+            // Petite latence pour laisser le worker écrire dans import_run
             setTimeout(refresh, 1500);
         }
 

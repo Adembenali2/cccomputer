@@ -7,6 +7,7 @@ if (method_exists($pdo, 'setAttribute')) {
   try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
 }
 
+/* Helpers */
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 function stateBadge(?string $etat): string {
   $e = strtoupper(trim((string)$etat));
@@ -15,13 +16,9 @@ function stateBadge(?string $etat): string {
 }
 
 /* =========================================================
-   PHOTOCOPIEURS DEPUIS LA BDD — UNIQUEMENT NON ATTRIBUÉS
-   - 1 ligne par machine (mac_norm unique)
-   - on prend la DERNIÈRE relève par mac_norm
-   - on filtre: pc.id_client IS NULL  => non relié à un client
-   - statut: "en panne" si Status ∉ {OK, ONLINE, NORMAL, READY, PRINT}
-             sinon "stock"
-   - emplacement: toujours "dépôt" (puisqu’ils ne sont pas chez un client)
+   PHOTOCOPIEURS — UNIQUEMENT NON ATTRIBUÉS (depuis BDD)
+   - 1 ligne par machine (mac_norm), dernière relève
+   - pc.id_client IS NULL => non relié à un client
    ========================================================= */
 $copiers = [];
 try {
@@ -82,6 +79,18 @@ try {
 }
 
 /* =========================================================
+   PAPIER — depuis la BDD (vue v_paper_stock)
+   ========================================================= */
+$papers = [];
+try {
+  $stmt = $pdo->query("SELECT paper_id, marque, modele, poids, qty_stock FROM v_paper_stock ORDER BY marque, modele, poids");
+  $papers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+  error_log('stock papier SQL: '.$e->getMessage());
+  $papers = [];
+}
+
+/* =========================================================
    AUTRES CATEGORIES (mock pour l’instant)
    ========================================================= */
 $lcd = [
@@ -103,16 +112,10 @@ $toners = [
   ['id'=>'tn-y-307','marque'=>'Ricoh','modele'=>'MPC307-Y','couleur'=>'Jaune','qty'=>0],
 ];
 
-$papiers = [
-  ['id'=>'pap-a4-80','qty'=>120,'marque'=>'Navigator','poids'=>'80g','modele'=>'A4'],
-  ['id'=>'pap-a3-90','qty'=>30,'marque'=>'Clairefontaine','poids'=>'90g','modele'=>'A3'],
-  ['id'=>'pap-a4-recyc','qty'=>15,'marque'=>'RecycPaper','poids'=>'80g','modele'=>'A4 Recyclé'],
-];
-
-/* Datasets pour le popup (photocopieurs, lcd, pc) */
+/* Datasets pour la modale (on n’ouvre qu’à partir de ces trois) */
 $datasets = ['copiers'=>$copiers, 'lcd'=>$lcd, 'pc'=>$pc];
 
-/* Images pour les titres (tu peux placer de vraies images à ces chemins) */
+/* Images titres (adapter les chemins si besoin) */
 $sectionImages = [
   'photocopieurs' => '/assets/img/stock/photocopieurs.jpg',
   'lcd'           => '/assets/img/stock/lcd.jpg',
@@ -173,7 +176,7 @@ $sectionImages = [
       </div>
     </section>
 
-    <!-- Papier -->
+    <!-- Papier (depuis BDD) -->
     <section class="card-section" data-section="papier">
       <div class="section-head">
         <div class="head-left">
@@ -185,13 +188,13 @@ $sectionImages = [
         <table class="tbl-stock tbl-compact">
           <thead><tr><th>Qté</th><th>Modèle</th><th>Poids</th></tr></thead>
           <tbody>
-          <?php foreach ($papiers as $p): ?>
-            <tr data-search="<?= h(strtolower($p['marque'].' '.$p['modele'].' '.$p['poids'])) ?>">
-              <td data-th="Qté" class="td-metric"><?= (int)$p['qty'] ?></td>
-              <td data-th="Modèle"><?= h($p['modele']) ?></td>
-              <td data-th="Poids"><?= h($p['poids']) ?></td>
+          <?php foreach ($papers as $p): ?>
+            <tr data-search="<?= h(strtolower(($p['marque']??'').' '.($p['modele']??'').' '.($p['poids']??''))) ?>">
+              <td data-th="Qté" class="td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
+              <td data-th="Modèle"><?= h($p['modele'] ?? '—') ?></td>
+              <td data-th="Poids"><?= h($p['poids'] ?? '—') ?></td>
             </tr>
-          <?php endforeach; if (empty($papiers)): ?>
+          <?php endforeach; if (empty($papers)): ?>
             <tr><td colspan="3">— Aucun papier —</td></tr>
           <?php endif; ?>
           </tbody>
@@ -199,7 +202,7 @@ $sectionImages = [
       </div>
     </section>
 
-    <!-- Photocopieurs (depuis BDD, non attribués) -->
+    <!-- Photocopieurs (non attribués, BDD) -->
     <section class="card-section" data-section="photocopieurs">
       <div class="section-head">
         <div class="head-left">
@@ -285,7 +288,7 @@ $sectionImages = [
   </div><!-- /#stockMasonry -->
 </div><!-- /.page-container -->
 
-<!-- ===== Modal détails (Photocopieurs / LCD / PC) ===== -->
+<!-- ===== Modale détails (Photocopieurs / LCD / PC) ===== -->
 <div id="detailOverlay" class="modal-overlay" aria-hidden="true"></div>
 <div id="detailModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" style="display:none;">
   <div class="modal-header">
