@@ -123,19 +123,6 @@ try {
             .import-badge .txt { display:none; }
         }
         .import-badge[hidden]{ display:none !important; }
-
-        /* Bloc IONOS (Live) */
-        .panel {
-            margin-top: 14px;
-            border:1px solid #e5e7eb; border-radius:12px; background:#fff;
-            padding: 12px;
-        }
-        .panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-        .btn { display:inline-flex; align-items:center; gap:6px; padding:8px 10px; border:1px solid #e5e7eb; background:#f9fafb; border-radius:8px; cursor:pointer; }
-        .btn:hover { background:#f3f4f6; }
-        .muted { color:#6b7280; font-size:12px; }
-        .loading { opacity:.7; pointer-events:none; }
-        .responsive-table { overflow:auto; max-height: 440px; border-top:1px solid #e5e7eb; }
     </style>
 </head>
 <body class="page-dashboard">
@@ -145,7 +132,7 @@ try {
         <div class="dashboard-header">
             <h2 class="dashboard-title">Tableau de Bord</h2>
 
-            <div class="import-badge" id="importBadge" aria-live="polite" title="État du dernier import (SFTP)">
+            <div class="import-badge" id="importBadge" aria-live="polite" title="État du dernier import SFTP">
                 <span class="ico run" id="impIco">⏳</span>
                 <span class="txt" id="impTxt">Import SFTP : vérification…</span>
             </div>
@@ -250,51 +237,6 @@ try {
                 <p class="card-count"><?= htmlspecialchars($nHistorique, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
         </div>
-
-        <!-- Panneau IONOS (live) -->
-        <div class="panel" id="ionosLivePanel">
-            <div class="panel-header">
-                <div>
-                    <strong>Parc IONOS (Live)</strong><br>
-                    <span class="muted">Lecture directe de la base IONOS, sans import.</span>
-                </div>
-                <div>
-                    <button class="btn" id="btnReloadIonos" type="button" title="Recharger depuis IONOS">
-                        🔄 Recharger
-                    </button>
-                    <select id="ionosLimit" class="btn" title="Nombre max d'appareils">
-                        <option value="25">25</option>
-                        <option value="50" selected>50</option>
-                        <option value="100">100</option>
-                    </select>
-                </div>
-            </div>
-            <div class="responsive-table">
-                <table class="table" aria-describedby="ionosHelp">
-                    <thead>
-                        <tr>
-                            <th>Client</th>
-                            <th>Modèle</th>
-                            <th>Série</th>
-                            <th>IP</th>
-                            <th>MAC</th>
-                            <th>Statut</th>
-                            <th>Toner K</th>
-                            <th>Toner C</th>
-                            <th>Toner M</th>
-                            <th>Toner Y</th>
-                            <th>NB</th>
-                            <th>Couleur</th>
-                            <th>Dernier relevé</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ionosLiveTbody">
-                        <tr><td colspan="13">Chargement…</td></tr>
-                    </tbody>
-                </table>
-                <p id="ionosHelp" class="muted" style="padding:8px;">Les pourcentages de toner proviennent du dernier snapshot disponible côté IONOS.</p>
-            </div>
-        </div>
     </div>
 
     <script>
@@ -352,8 +294,8 @@ try {
         const backBtn = document.getElementById('cdvBackBtn');
         if (backBtn) backBtn.addEventListener('click', function(e){ e.preventDefault(); showList(); });
 
-        const navButtons = detailView ? detailView.querySelectorAll('.cdv-nav-btn[data-tab]') : [];
-        navButtons && navButtons.forEach(btn => btn.addEventListener('click', function(){ activateTab(this.dataset.tab); }));
+        const navButtonsEls = detailView ? detailView.querySelectorAll('.cdv-nav-btn[data-tab]') : [];
+        navButtonsEls && navButtonsEls.forEach(btn => btn.addEventListener('click', function(){ activateTab(this.dataset.tab); }));
 
         function fillClientFields(client){
             const map = {
@@ -436,7 +378,8 @@ try {
 
     // --- Import auto silencieux SFTP + badge (tick 20s, batch 10) ---
     (function(){
-        const SFTP_URL  = '/import/run_import_if_due.php';  // public (ton endpoint existant)
+        // Seul import conservé : SFTP
+        const SFTP_URL  = '/import/run_import_if_due.php';
 
         const badge = document.getElementById('importBadge');
         const ico   = document.getElementById('impIco');
@@ -497,73 +440,13 @@ try {
         }
 
         async function tick(){
-            await callJSON(SFTP_URL + '?limit=10');
+            await callJSON(SFTP_URL + '?limit=10'); // on ne déclenche QUE le SFTP
             setTimeout(refresh, 1500);
         }
 
         tick();        // premier run
         refresh();     // premier badge
         setInterval(tick, 20000); // toutes les 20s
-    })();
-
-    // --- IONOS (LIVE) : lecture directe via /ajax/ionos_live.php ---
-    (function(){
-        const tbody   = document.getElementById('ionosLiveTbody');
-        const btn     = document.getElementById('btnReloadIonos');
-        const limitEl = document.getElementById('ionosLimit');
-
-        async function loadIonos(){
-            try{
-                tbody.innerHTML = '<tr><td colspan="13">Chargement…</td></tr>';
-                btn && btn.classList.add('loading');
-
-                const limit = parseInt(limitEl.value || '50', 10);
-                const res = await fetch(`/ajax/ionos_live.php?limit=${encodeURIComponent(limit)}`, { credentials:'same-origin' });
-                const text = await res.text();
-                let data = null; try{ data = text ? JSON.parse(text) : null; }catch(e){}
-
-                if(!res.ok || !data || !data.ok){
-                    const msg = (data && data.error) ? data.error : (text || ('HTTP '+res.status));
-                    tbody.innerHTML = `<tr><td colspan="13">Erreur : ${String(msg)}</td></tr>`;
-                    return;
-                }
-
-                const items = data.devices || [];
-                if(items.length === 0){
-                    tbody.innerHTML = '<tr><td colspan="13">Aucune donnée.</td></tr>';
-                    return;
-                }
-
-                const esc = (v)=> (v==null?'—':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;'));
-                tbody.innerHTML = items.map(d => `
-                    <tr>
-                        <td>${esc(d.Nom)}</td>
-                        <td>${esc(d.Model)}</td>
-                        <td>${esc(d.SerialNumber)}</td>
-                        <td>${esc(d.IpAddress)}</td>
-                        <td>${esc(d.MacAddress)}</td>
-                        <td>${esc(d.Status||'—')}</td>
-                        <td>${d.TonerBlack!=null? esc(d.TonerBlack)+'%':'—'}</td>
-                        <td>${d.TonerCyan!=null? esc(d.TonerCyan)+'%':'—'}</td>
-                        <td>${d.TonerMagenta!=null? esc(d.TonerMagenta)+'%':'—'}</td>
-                        <td>${d.TonerYellow!=null? esc(d.TonerYellow)+'%':'—'}</td>
-                        <td>${esc(d.TotalBW)}</td>
-                        <td>${esc(d.TotalColor)}</td>
-                        <td>${esc(d.Timestamp)}</td>
-                    </tr>
-                `).join('');
-            }catch(err){
-                tbody.innerHTML = `<tr><td colspan="13">Erreur : ${String(err)}</td></tr>`;
-            }finally{
-                btn && btn.classList.remove('loading');
-            }
-        }
-
-        btn && btn.addEventListener('click', loadIonos);
-        limitEl && limitEl.addEventListener('change', loadIonos);
-
-        // 1er chargement
-        loadIonos();
     })();
     </script>
 </body>
