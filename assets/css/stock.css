@@ -1,7 +1,5 @@
 /* =========================================================
    Stock — disposition dynamique (masonry 2 colonnes)
-   - Pas de hauteurs fixes : chaque section prend sa taille
-   - Réordonné en JS selon le contenu visible
    ========================================================= */
 
 html, body { max-width: 100%; overflow-x: hidden; }
@@ -29,10 +27,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-primary);
 }
 
-/* === Masonry 2 colonnes ===
-   On utilise column-count pour un effet masonry natif.
-   Le JS réordonne les <section> dans le DOM pour mettre le plus rempli en premier.
-*/
+/* === Masonry 2 colonnes === */
 .stock-masonry {
   column-count: 2;
   column-gap: .75rem;
@@ -41,12 +36,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .stock-masonry { column-count: 1; }
 }
 
-/* Chaque section est un bloc évitant la casse entre colonnes */
+/* Carte/section */
 .card-section {
   display: inline-block;          /* requis avec column-count */
   width: 100%;
   margin: 0 0 .75rem;
-  break-inside: avoid;            /* évite la coupure d'une section entre colonnes */
+  break-inside: avoid;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -85,7 +80,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   padding: .5rem .6rem;
   border-bottom: 1px solid var(--border-color);
   text-align: left;
-  position: sticky; top: 0; z-index: 1; /* sticky OK dans block */
+  position: sticky; top: 0; z-index: 1;
 }
 .tbl-stock tbody td{
   padding: .5rem .6rem;
