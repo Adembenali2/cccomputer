@@ -1,5 +1,5 @@
 <?php
-// /public/import/trigger_ionos.php
+// /import/trigger_ionos.php
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
@@ -9,18 +9,13 @@ try {
     echo json_encode(['error'=>'POST only']); exit;
   }
 
-  // (Option) Sécurité par token
-  $expected = getenv('IMPORT_TOKEN') ?: null;
-  if ($expected) {
-    $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    if (!preg_match('~^Bearer\s+(.+)$~i', $auth, $m) || !hash_equals($expected, trim($m[1]))) {
-      http_response_code(401);
-      echo json_encode(['error'=>'Unauthorized']); exit;
-    }
-  }
+  // Limite batch transmise au runner
+  $limit = (int)($_GET['limit'] ?? $_POST['limit'] ?? 10);
+  if ($limit <= 0) $limit = 10;
+  putenv('IONOS_BATCH_LIMIT='.(string)$limit);
 
-  // Délègue au runner hors public
-  $runner = dirname(__DIR__, 2) . 'run_ionos_if_due.php';
+  // ⬅️ Runner est dans le MÊME dossier /import
+  $runner = __DIR__ . '/run_ionos_if_due.php';
   if (!is_file($runner)) {
     http_response_code(500);
     echo json_encode(['error'=>'Runner not found','path'=>$runner]); exit;
