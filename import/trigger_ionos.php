@@ -20,7 +20,7 @@ try {
   }
 
   // Délègue au runner hors public
-  $runner = dirname(__DIR__, 2) . '/import/run_ionos_if_due.php';
+  $runner = dirname(__DIR__, 2) . 'run_ionos_if_due.php';
   if (!is_file($runner)) {
     http_response_code(500);
     echo json_encode(['error'=>'Runner not found','path'=>$runner]); exit;
