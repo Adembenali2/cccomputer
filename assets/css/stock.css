@@ -1,0 +1,149 @@
+/* =========================================================
+   Stock (mêmes patterns visuels que clients.css)
+   - Desktop : tableau
+   - Mobile  : cartes
+   ========================================================= */
+
+/* Empêche toute barre horizontale globale */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Wrapper principal identique */
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+/* En-tête de page (mêmes classes que clients) */
+.page-header { margin-bottom: 1rem; }
+.page-title  { margin: 0; font-size: 1.5rem; font-weight: 800; }
+.page-subtitle { margin: .25rem 0 0 0; color: var(--text-secondary); }
+
+/* Barre de filtres */
+.filters-row {
+  margin-bottom: 1rem;
+  display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+}
+.filters-row input[type="text"]{
+  flex: 1; min-width: 240px;
+  padding: .55rem .75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Onglets familles */
+.tabs { display:flex; gap:.5rem; flex-wrap:wrap; }
+.tab-btn{
+  padding:.5rem .8rem;
+  border:1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  cursor:pointer;
+  transition: background-color .15s ease, border-color .15s ease, transform .06s ease;
+}
+.tab-btn:hover { background: var(--bg-secondary); }
+.tab-btn:active { transform: scale(0.98); }
+.tab-btn[aria-selected="true"]{ border-color: var(--accent-primary); }
+
+/* Sous-onglets A/B/C */
+.subtabs { display:flex; gap:.4rem; flex-wrap:wrap; margin:.25rem 0 1rem 0; }
+.subtab-btn{
+  padding:.35rem .6rem;
+  border:1px solid var(--border-color);
+  border-radius:.5rem;
+  background:var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight:600;
+  cursor:pointer;
+}
+.subtab-btn[aria-selected="true"]{ border-color: var(--accent-primary); background:var(--bg-primary); }
+
+/* Table (desktop) */
+.table-wrapper {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.tbl-stock {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+}
+.tbl-stock thead th{
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+.tbl-stock tbody td{
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.tbl-stock tbody tr:hover { background: var(--bg-secondary); }
+
+.td-metric { font-weight: 700; text-align: right; }
+
+/* Étiquettes */
+.chip {
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:.75rem;
+  border:1px solid var(--border-color);
+  background:var(--bg-primary);
+  color: var(--text-secondary);
+}
+
+/* ------- Responsive : mode cartes ------- */
+@media (max-width: 900px) {
+  .tbl-stock thead {
+    position: absolute;
+    left: -9999px;
+    height: 0;
+    overflow: hidden;
+  }
+  .tbl-stock, .tbl-stock tbody, .tbl-stock tr, .tbl-stock td {
+    display: block; width: 100%;
+  }
+  .tbl-stock tbody tr {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    background: var(--bg-primary);
+    margin: 0.75rem 0;
+    overflow: hidden;
+  }
+  .tbl-stock tbody td {
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 0.95rem;
+    position: relative;
+  }
+  .tbl-stock tbody td::before {
+    content: attr(data-th);
+    display: block;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-bottom: 0.2rem;
+    letter-spacing: .02em;
+  }
+  .td-metric { text-align: left; }
+}
+
+/* Petits écrans */
+@media (max-width: 480px) {
+  .filters-row input { font-size: 0.95rem; }
+}
