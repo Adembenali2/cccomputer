@@ -9,24 +9,13 @@ function stateBadge(?string $etat): string {
   return '<span class="state state-'.$e.'">'.$e.'</span>';
 }
 
-/* =========================================
-   Données (toujours sans BDD pour l’instant)
-   ========================================= */
+/* ===== Données d’exemple (à brancher BDD ensuite) ===== */
 
 /* Photocopieurs — pas d’état, pas de quantité (unique) */
 $copiers = [
-  [
-    'id'=>'cop-001','mac'=>'10:AA:22:BB:33:CC','marque'=>'Kyocera','modele'=>'TASKalfa 2553ci',
-    'sn'=>'KYO2553-001','compteur_bw'=>45213,'compteur_color'=>18322,'statut'=>'stock','emplacement'=>'dépôt',
-  ],
-  [
-    'id'=>'cop-005','mac'=>'00:25:96:FF:EE:11','marque'=>'Ricoh','modele'=>'MP C307',
-    'sn'=>'RICOH307-005','compteur_bw'=>9812,'compteur_color'=>5230,'statut'=>'attribué à un client','emplacement'=>'chez client',
-  ],
-  [
-    'id'=>'cop-012','mac'=>'1C:4D:70:AB:44:21','marque'=>'Canon','modele'=>'iR-ADV C3520',
-    'sn'=>'CAN3520-012','compteur_bw'=>71322,'compteur_color'=>44110,'statut'=>'en panne','emplacement'=>'dépôt',
-  ],
+  ['id'=>'cop-001','mac'=>'10:AA:22:BB:33:CC','marque'=>'Kyocera','modele'=>'TASKalfa 2553ci','sn'=>'KYO2553-001','compteur_bw'=>45213,'compteur_color'=>18322,'statut'=>'stock','emplacement'=>'dépôt'],
+  ['id'=>'cop-005','mac'=>'00:25:96:FF:EE:11','marque'=>'Ricoh','modele'=>'MP C307','sn'=>'RICOH307-005','compteur_bw'=>9812,'compteur_color'=>5230,'statut'=>'attribué à un client','emplacement'=>'chez client'],
+  ['id'=>'cop-012','mac'=>'1C:4D:70:AB:44:21','marque'=>'Canon','modele'=>'iR-ADV C3520','sn'=>'CAN3520-012','compteur_bw'=>71322,'compteur_color'=>44110,'statut'=>'en panne','emplacement'=>'dépôt'],
 ];
 
 /* LCD */
@@ -58,14 +47,10 @@ $papiers = [
   ['id'=>'pap-a4-recyc','qty'=>15,'marque'=>'RecycPaper','poids'=>'80g','modele'=>'A4 Recyclé'],
 ];
 
-/* Datasets pour le popup */
-$datasets = [
-  'copiers' => $copiers,
-  'lcd'     => $lcd,
-  'pc'      => $pc,
-];
+/* Datasets pour popup */
+$datasets = ['copiers'=>$copiers, 'lcd'=>$lcd, 'pc'=>$pc];
 
-/* Images pour les têtes de section */
+/* Images pour les titres */
 $sectionImages = [
   'photocopieurs' => '/assets/img/stock/photocopieurs.jpg',
   'lcd'           => '/assets/img/stock/lcd.jpg',
@@ -91,17 +76,17 @@ $sectionImages = [
 <div class="page-container">
   <div class="page-header">
     <h2 class="page-title">Stock</h2>
-    <p class="page-subtitle">Vue condensée — clique un **Photocopieur / PC / LCD** pour voir tous les détails.</p>
+    <p class="page-subtitle">Disposition <strong>dynamique</strong> : la section la plus remplie se place en premier, les autres s’imbriquent pour former un bloc compact.</p>
   </div>
 
   <div class="filters-row">
     <input type="text" id="q" placeholder="Filtrer partout (réf., modèle, SN, MAC, CPU…)" aria-label="Filtrer" />
   </div>
 
-  <!-- Layout 2 colonnes : gauche (toner, papier) / droite (photocopieurs, lcd, pc) -->
-  <div class="stock-grid">
-    <!-- GAUCHE -->
-    <section class="card-section left tall">
+  <!-- Masonry 2 colonnes -->
+  <div id="stockMasonry" class="stock-masonry">
+    <!-- Toners -->
+    <section class="card-section" data-section="toners">
       <div class="section-head">
         <div class="head-left">
           <img src="<?= h($sectionImages['toners']) ?>" class="section-icon" alt="Toners" loading="lazy" onerror="this.style.display='none'">
@@ -126,7 +111,8 @@ $sectionImages = [
       </div>
     </section>
 
-    <section class="card-section left short">
+    <!-- Papier -->
+    <section class="card-section" data-section="papier">
       <div class="section-head">
         <div class="head-left">
           <img src="<?= h($sectionImages['papier']) ?>" class="section-icon" alt="Papier" loading="lazy" onerror="this.style.display='none'">
@@ -151,8 +137,8 @@ $sectionImages = [
       </div>
     </section>
 
-    <!-- DROITE -->
-    <section class="card-section right top">
+    <!-- Photocopieurs -->
+    <section class="card-section" data-section="photocopieurs">
       <div class="section-head">
         <div class="head-left">
           <img src="<?= h($sectionImages['photocopieurs']) ?>" class="section-icon" alt="Photocopieurs" loading="lazy" onerror="this.style.display='none'">
@@ -179,7 +165,8 @@ $sectionImages = [
       </div>
     </section>
 
-    <section class="card-section right middle">
+    <!-- LCD -->
+    <section class="card-section" data-section="lcd">
       <div class="section-head">
         <div class="head-left">
           <img src="<?= h($sectionImages['lcd']) ?>" class="section-icon" alt="Écrans LCD" loading="lazy" onerror="this.style.display='none'">
@@ -206,7 +193,8 @@ $sectionImages = [
       </div>
     </section>
 
-    <section class="card-section right bottom">
+    <!-- PC -->
+    <section class="card-section" data-section="pc">
       <div class="section-head">
         <div class="head-left">
           <img src="<?= h($sectionImages['pc']) ?>" class="section-icon" alt="PC reconditionnés" loading="lazy" onerror="this.style.display='none'">
@@ -232,7 +220,7 @@ $sectionImages = [
         </table>
       </div>
     </section>
-  </div><!-- /.stock-grid -->
+  </div><!-- /#stockMasonry -->
 </div><!-- /.page-container -->
 
 <!-- ===== Modal détails (Photocopieurs / LCD / PC) ===== -->
@@ -248,21 +236,50 @@ $sectionImages = [
 </div>
 
 <script>
-// Filtre global
+// --- Filtre global + réordonnancement ---
 (function(){
   const q = document.getElementById('q');
-  if (!q) return;
-  function apply(){
+  const mason = document.getElementById('stockMasonry');
+
+  function visibleRowCount(section){
+    // compte les lignes visibles (non masquées par display:none)
+    const rows = section.querySelectorAll('tbody tr');
+    let n = 0;
+    rows.forEach(r => { if (r.style.display !== 'none') n++; });
+    return n;
+  }
+
+  function reorderSections(){
+    const sections = Array.from(mason.querySelectorAll('.card-section'));
+    // calcule un score (nb de lignes visibles). Si égalité, on garde l’ordre initial.
+    const scored = sections.map((s, i)=>({el:s, score: visibleRowCount(s), idx:i}));
+    scored.sort((a,b)=> b.score - a.score || a.idx - b.idx);
+    // ré-injecte dans l’ordre -> masonry 2 colonnes mettra le plus gros en haut gauche
+    scored.forEach(x => mason.appendChild(x.el));
+  }
+
+  function applyFilter(){
     const v = (q.value||'').trim().toLowerCase();
     document.querySelectorAll('.tbl-stock tbody tr').forEach(tr=>{
       const t = (tr.getAttribute('data-search')||'').toLowerCase();
       tr.style.display = !v || t.includes(v) ? '' : 'none';
     });
+    reorderSections();
   }
-  q.addEventListener('input', apply);
+
+  q && q.addEventListener('input', applyFilter);
+
+  // Au premier affichage
+  reorderSections();
+
+  // Si une table change de hauteur (images, polices…), on réévalue rapidement
+  if ('ResizeObserver' in window){
+    const ro = new ResizeObserver(()=> reorderSections());
+    mason.querySelectorAll('.card-section').forEach(sec => ro.observe(sec));
+  }
 })();
 
-// Datasets pour popup
+// --- Datasets pour popup ---
 const DATASETS = <?= json_encode($datasets, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
 
 function addField(grid, label, value){
@@ -277,6 +294,7 @@ function badgeEtat(e){
   return `<span class="state state-${e}">${e}</span>`;
 }
 
+// --- Modal détails (Photocopieurs / LCD / PC) ---
 (function(){
   const overlay = document.getElementById('detailOverlay');
   const modal   = document.getElementById('detailModal');
@@ -292,7 +310,6 @@ function badgeEtat(e){
   function renderDetails(type, row){
     grid.innerHTML = '';
     titleEl.textContent = `${row.modele ?? row.reference ?? 'Détails'} — ${type.toUpperCase()}`;
-
     if (type === 'copiers') {
       addField(grid, 'Marque', row.marque);
       addField(grid, 'Modèle', row.modele);

@@ -1,6 +1,7 @@
 /* =========================================================
-   Stock — vue condensée (3 infos) + popup + icônes photos
-   Disposition : gauche (Toners, Papier) / droite (Photocopieurs, LCD, PC)
+   Stock — disposition dynamique (masonry 2 colonnes)
+   - Pas de hauteurs fixes : chaque section prend sa taille
+   - Réordonné en JS selon le contenu visible
    ========================================================= */
 
 html, body { max-width: 100%; overflow-x: hidden; }
@@ -28,58 +29,48 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-primary);
 }
 
-/* === Grille === */
-.stock-grid {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: .75rem;
-  min-height: calc(100vh - 170px);
+/* === Masonry 2 colonnes ===
+   On utilise column-count pour un effet masonry natif.
+   Le JS réordonne les <section> dans le DOM pour mettre le plus rempli en premier.
+*/
+.stock-masonry {
+  column-count: 2;
+  column-gap: .75rem;
+}
+@media (max-width: 1024px) {
+  .stock-masonry { column-count: 1; }
 }
 
+/* Chaque section est un bloc évitant la casse entre colonnes */
 .card-section {
+  display: inline-block;          /* requis avec column-count */
+  width: 100%;
+  margin: 0 0 .75rem;
+  break-inside: avoid;            /* évite la coupure d'une section entre colonnes */
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
   min-width: 0;
 }
 
-/* Hauteurs calibrées (scroll interne au besoin) */
-.card-section.left.tall { height: 52vh; }
-.card-section.left.short{ height: 42vh; }
-.card-section.right.top    { height: 32vh; }
-.card-section.right.middle { height: 30vh; }
-.card-section.right.bottom { height: 32vh; }
-
-/* Tête de section */
+/* Tête de section + icône */
 .section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   padding: .55rem .75rem;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
 }
-.head-left {
-  display: flex; align-items: center; gap: .55rem;
-}
+.head-left { display: flex; align-items: center; gap: .55rem; }
 .section-title { margin: 0; font-size: 1.05rem; font-weight: 800; }
-
-/* Icône photo devant le titre */
 .section-icon{
-  width: 34px; height: 34px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 1px 2px rgba(0,0,0,.06);
-  background: var(--bg-primary);
+  width: 34px; height: 34px; object-fit: cover;
+  border-radius: 8px; border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px rgba(0,0,0,.06); background: var(--bg-primary);
 }
 
-/* Tables */
-.table-wrapper { overflow: auto; flex: 1; }
-
+/* Tableaux */
+.table-wrapper { overflow-x: auto; }
 .tbl-stock {
   width: 100%;
   border-collapse: separate;
@@ -94,7 +85,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   padding: .5rem .6rem;
   border-bottom: 1px solid var(--border-color);
   text-align: left;
-  position: sticky; top: 0; z-index: 1;
+  position: sticky; top: 0; z-index: 1; /* sticky OK dans block */
 }
 .tbl-stock tbody td{
   padding: .5rem .6rem;
@@ -106,28 +97,26 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .td-metric { font-weight: 700; text-align: right; }
 .td-metric.is-zero { color: #b91c1c; font-weight: 800; }
 
-/* Compact (3 colonnes) */
+/* Compact (3 colonnes visibles) */
 .tbl-compact thead th, .tbl-compact tbody td { font-size: .95rem; }
 
-/* Badges état */
+/* Badges état + chip */
 .state {
   display:inline-flex; align-items:center; justify-content:center;
   min-width: 1.6rem; height: 1.35rem; padding: 0 .4rem;
   border-radius: 999px; font-weight: 800; font-size: .8rem;
   border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: var(--bg-primary); color: var(--text-primary);
 }
 .state-A { background: #dcfce7; color: #166534; border-color: #86efac; }
 .state-B { background: #fef9c3; color: #854d0e; border-color: #fde68a; }
 .state-C { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 .state-na { background: var(--bg-secondary); color: var(--text-muted); }
 
-/* Chips statut */
 .chip {
   display:inline-block; padding:2px 8px; border-radius:999px;
-  font-size:.78rem; border:1px solid var(--border-color); color: var(--text-secondary);
-  background: var(--bg-primary);
+  font-size:.78rem; border:1px solid var(--border-color);
+  color: var(--text-secondary); background: var(--bg-primary);
 }
 
 /* ===== Modal ===== */
@@ -169,10 +158,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 .modal-body { overflow: auto; padding: .8rem .9rem; }
 
-.detail-grid {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .6rem;
-}
+.detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
 @media (max-width: 800px) { .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .detail-grid { grid-template-columns: 1fr; } }
 
@@ -188,11 +174,4 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 .field-card .val {
   margin-top: .25rem; font-weight: 700; color: var(--text-primary);
-}
-
-/* Responsive “secours” */
-@media (max-width: 1100px) {
-  .stock-grid { grid-template-columns: 1fr; }
-  .card-section { height: auto; }
-  .table-wrapper { max-height: 45vh; }
 }
