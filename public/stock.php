@@ -10,88 +10,40 @@ function stateBadge(?string $etat): string {
 }
 
 /* =========================================
-   Données “réelles” (sans BDD pour l’instant)
+   Données (toujours sans BDD pour l’instant)
    ========================================= */
 
 /* Photocopieurs — pas d’état, pas de quantité (unique) */
 $copiers = [
   [
-    'id'=>'cop-001',
-    'mac'=>'10:AA:22:BB:33:CC',
-    'marque'=>'Kyocera',
-    'modele'=>'TASKalfa 2553ci',
-    'sn'=>'KYO2553-001',
-    'compteur_bw'=>45213,
-    'compteur_color'=>18322,
-    'statut'=>'stock', /* stock | en panne | attribué à un client */
-    'emplacement'=>'dépôt', /* dépôt | chez client */
+    'id'=>'cop-001','mac'=>'10:AA:22:BB:33:CC','marque'=>'Kyocera','modele'=>'TASKalfa 2553ci',
+    'sn'=>'KYO2553-001','compteur_bw'=>45213,'compteur_color'=>18322,'statut'=>'stock','emplacement'=>'dépôt',
   ],
   [
-    'id'=>'cop-005',
-    'mac'=>'00:25:96:FF:EE:11',
-    'marque'=>'Ricoh',
-    'modele'=>'MP C307',
-    'sn'=>'RICOH307-005',
-    'compteur_bw'=>9812,
-    'compteur_color'=>5230,
-    'statut'=>'attribué à un client',
-    'emplacement'=>'chez client',
+    'id'=>'cop-005','mac'=>'00:25:96:FF:EE:11','marque'=>'Ricoh','modele'=>'MP C307',
+    'sn'=>'RICOH307-005','compteur_bw'=>9812,'compteur_color'=>5230,'statut'=>'attribué à un client','emplacement'=>'chez client',
   ],
   [
-    'id'=>'cop-012',
-    'mac'=>'1C:4D:70:AB:44:21',
-    'marque'=>'Canon',
-    'modele'=>'iR-ADV C3520',
-    'sn'=>'CAN3520-012',
-    'compteur_bw'=>71322,
-    'compteur_color'=>44110,
-    'statut'=>'en panne',
-    'emplacement'=>'dépôt',
+    'id'=>'cop-012','mac'=>'1C:4D:70:AB:44:21','marque'=>'Canon','modele'=>'iR-ADV C3520',
+    'sn'=>'CAN3520-012','compteur_bw'=>71322,'compteur_color'=>44110,'statut'=>'en panne','emplacement'=>'dépôt',
   ],
 ];
 
-/* LCD — Marque / Référence / État / Modèle / Taille / Résolution / Connectique / Prix / Quantité */
+/* LCD */
 $lcd = [
-  [
-    'id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A',
-    'modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP',
-    'prix'=>129.90,'qty'=>12
-  ],
-  [
-    'id'=>'lcd-27b-004','marque'=>'LG','reference'=>'LCD-27B-004','etat'=>'B',
-    'modele'=>'27UL500','taille'=>27,'resolution'=>'3840x2160','connectique'=>'HDMI',
-    'prix'=>219.90,'qty'=>4
-  ],
-  [
-    'id'=>'lcd-22c-020','marque'=>'HP','reference'=>'LCD-22C-020','etat'=>'C',
-    'modele'=>'Z22n G2','taille'=>22,'resolution'=>'1920x1080','connectique'=>'DP',
-    'prix'=>79.90,'qty'=>6
-  ],
+  ['id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A','modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP','prix'=>129.90,'qty'=>12],
+  ['id'=>'lcd-27b-004','marque'=>'LG','reference'=>'LCD-27B-004','etat'=>'B','modele'=>'27UL500','taille'=>27,'resolution'=>'3840x2160','connectique'=>'HDMI','prix'=>219.90,'qty'=>4],
+  ['id'=>'lcd-22c-020','marque'=>'HP','reference'=>'LCD-22C-020','etat'=>'C','modele'=>'Z22n G2','taille'=>22,'resolution'=>'1920x1080','connectique'=>'DP','prix'=>79.90,'qty'=>6],
 ];
 
-/* PC — Etat / Référence / Marque / Modèle / CPU / RAM / Stockage / OS / GPU / Réseau / Ports / Prix / Quantité */
+/* PC */
 $pc = [
-  [
-    'id'=>'pc-a-001','etat'=>'A','reference'=>'PC-A-001','marque'=>'Lenovo','modele'=>'ThinkCentre M720',
-    'cpu'=>'i5-9500','ram'=>'16 Go','stockage'=>'512 Go SSD','os'=>'Windows 11 Pro',
-    'gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6',
-    'prix'=>349.00,'qty'=>5
-  ],
-  [
-    'id'=>'pc-b-010','etat'=>'B','reference'=>'PC-B-010','marque'=>'Dell','modele'=>'OptiPlex 7060',
-    'cpu'=>'i5-8500','ram'=>'8 Go','stockage'=>'256 Go SSD','os'=>'Windows 10 Pro',
-    'gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6',
-    'prix'=>279.00,'qty'=>10
-  ],
-  [
-    'id'=>'pc-c-015','etat'=>'C','reference'=>'PC-C-015','marque'=>'Lenovo','modele'=>'ThinkPad T460',
-    'cpu'=>'i5-6300U','ram'=>'8 Go','stockage'=>'240 Go SSD','os'=>'Windows 10 Pro',
-    'gpu'=>'Intel HD 520','reseau'=>'Wi-Fi/BT','ports'=>'USB 3.0 x3',
-    'prix'=>189.00,'qty'=>7
-  ],
+  ['id'=>'pc-a-001','etat'=>'A','reference'=>'PC-A-001','marque'=>'Lenovo','modele'=>'ThinkCentre M720','cpu'=>'i5-9500','ram'=>'16 Go','stockage'=>'512 Go SSD','os'=>'Windows 11 Pro','gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6','prix'=>349.00,'qty'=>5],
+  ['id'=>'pc-b-010','etat'=>'B','reference'=>'PC-B-010','marque'=>'Dell','modele'=>'OptiPlex 7060','cpu'=>'i5-8500','ram'=>'8 Go','stockage'=>'256 Go SSD','os'=>'Windows 10 Pro','gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6','prix'=>279.00,'qty'=>10],
+  ['id'=>'pc-c-015','etat'=>'C','reference'=>'PC-C-015','marque'=>'Lenovo','modele'=>'ThinkPad T460','cpu'=>'i5-6300U','ram'=>'8 Go','stockage'=>'240 Go SSD','os'=>'Windows 10 Pro','gpu'=>'Intel HD 520','reseau'=>'Wi-Fi/BT','ports'=>'USB 3.0 x3','prix'=>189.00,'qty'=>7],
 ];
 
-/* Toners — Marque / Modèle / Couleur / Quantité */
+/* Toners */
 $toners = [
   ['id'=>'tn-k-2553','marque'=>'Kyocera','modele'=>'TK-8345K','couleur'=>'Noir','qty'=>14],
   ['id'=>'tn-c-2553','marque'=>'Kyocera','modele'=>'TK-8345C','couleur'=>'Cyan','qty'=>6],
@@ -99,18 +51,27 @@ $toners = [
   ['id'=>'tn-y-307','marque'=>'Ricoh','modele'=>'MPC307-Y','couleur'=>'Jaune','qty'=>0],
 ];
 
-/* Papier — Quantité / Marque / Poids */
+/* Papier */
 $papiers = [
   ['id'=>'pap-a4-80','qty'=>120,'marque'=>'Navigator','poids'=>'80g','modele'=>'A4'],
   ['id'=>'pap-a3-90','qty'=>30,'marque'=>'Clairefontaine','poids'=>'90g','modele'=>'A3'],
   ['id'=>'pap-a4-recyc','qty'=>15,'marque'=>'RecycPaper','poids'=>'80g','modele'=>'A4 Recyclé'],
 ];
 
-/* Datasets pour le popup (seulement copiers, lcd, pc) */
+/* Datasets pour le popup */
 $datasets = [
   'copiers' => $copiers,
   'lcd'     => $lcd,
   'pc'      => $pc,
+];
+
+/* Images pour les têtes de section */
+$sectionImages = [
+  'photocopieurs' => '/assets/img/stock/photocopieurs.jpg',
+  'lcd'           => '/assets/img/stock/lcd.jpg',
+  'pc'            => '/assets/img/stock/pc.jpg',
+  'toners'        => '/assets/img/stock/toners.jpg',
+  'papier'        => '/assets/img/stock/papier.jpg',
 ];
 ?>
 <!DOCTYPE html>
@@ -141,14 +102,15 @@ $datasets = [
   <div class="stock-grid">
     <!-- GAUCHE -->
     <section class="card-section left tall">
-      <div class="section-head"><h3 class="section-title">Toners</h3></div>
+      <div class="section-head">
+        <div class="head-left">
+          <img src="<?= h($sectionImages['toners']) ?>" class="section-icon" alt="Toners" loading="lazy" onerror="this.style.display='none'">
+          <h3 class="section-title">Toners</h3>
+        </div>
+      </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact">
-          <thead>
-            <tr>
-              <th>Couleur</th><th>Modèle</th><th>Qté</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Couleur</th><th>Modèle</th><th>Qté</th></tr></thead>
           <tbody>
           <?php foreach ($toners as $t): ?>
             <tr data-search="<?= h(strtolower($t['marque'].' '.$t['modele'].' '.$t['couleur'])) ?>">
@@ -165,14 +127,15 @@ $datasets = [
     </section>
 
     <section class="card-section left short">
-      <div class="section-head"><h3 class="section-title">Papier</h3></div>
+      <div class="section-head">
+        <div class="head-left">
+          <img src="<?= h($sectionImages['papier']) ?>" class="section-icon" alt="Papier" loading="lazy" onerror="this.style.display='none'">
+          <h3 class="section-title">Papier</h3>
+        </div>
+      </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact">
-          <thead>
-            <tr>
-              <th>Qté</th><th>Modèle</th><th>Poids</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Qté</th><th>Modèle</th><th>Poids</th></tr></thead>
           <tbody>
           <?php foreach ($papiers as $p): ?>
             <tr data-search="<?= h(strtolower($p['marque'].' '.$p['modele'].' '.$p['poids'])) ?>">
@@ -190,14 +153,15 @@ $datasets = [
 
     <!-- DROITE -->
     <section class="card-section right top">
-      <div class="section-head"><h3 class="section-title">Photocopieurs</h3></div>
+      <div class="section-head">
+        <div class="head-left">
+          <img src="<?= h($sectionImages['photocopieurs']) ?>" class="section-icon" alt="Photocopieurs" loading="lazy" onerror="this.style.display='none'">
+          <h3 class="section-title">Photocopieurs</h3>
+        </div>
+      </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact click-rows">
-          <thead>
-            <tr>
-              <th>Modèle</th><th>N° Série</th><th>Statut</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Modèle</th><th>N° Série</th><th>Statut</th></tr></thead>
           <tbody>
           <?php foreach ($copiers as $r): ?>
             <tr
@@ -216,14 +180,15 @@ $datasets = [
     </section>
 
     <section class="card-section right middle">
-      <div class="section-head"><h3 class="section-title">LCD</h3></div>
+      <div class="section-head">
+        <div class="head-left">
+          <img src="<?= h($sectionImages['lcd']) ?>" class="section-icon" alt="Écrans LCD" loading="lazy" onerror="this.style.display='none'">
+          <h3 class="section-title">LCD</h3>
+        </div>
+      </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact click-rows">
-          <thead>
-            <tr>
-              <th>État</th><th>Modèle</th><th>Qté</th>
-            </tr>
-          </thead>
+          <thead><tr><th>État</th><th>Modèle</th><th>Qté</th></tr></thead>
           <tbody>
           <?php foreach ($lcd as $row): ?>
             <tr
@@ -242,14 +207,15 @@ $datasets = [
     </section>
 
     <section class="card-section right bottom">
-      <div class="section-head"><h3 class="section-title">PC reconditionnés</h3></div>
+      <div class="section-head">
+        <div class="head-left">
+          <img src="<?= h($sectionImages['pc']) ?>" class="section-icon" alt="PC reconditionnés" loading="lazy" onerror="this.style.display='none'">
+          <h3 class="section-title">PC reconditionnés</h3>
+        </div>
+      </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact click-rows">
-          <thead>
-            <tr>
-              <th>État</th><th>Modèle</th><th>Qté</th>
-            </tr>
-          </thead>
+          <thead><tr><th>État</th><th>Modèle</th><th>Qté</th></tr></thead>
           <tbody>
           <?php foreach ($pc as $row): ?>
             <tr
