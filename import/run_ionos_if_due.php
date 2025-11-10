@@ -3,42 +3,71 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
+// Attrape les fatales
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        http_response_code(500);
+        echo json_encode([
+            'error'   => 'FATAL in run_ionos_if_due.php',
+            'type'    => $e['type'],
+            'message' => $e['message'],
+            'file'    => $e['file'],
+            'line'    => $e['line'],
+        ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    }
+});
+
 try {
-  $projectRoot = dirname(__DIR__); // racine du projet
+    $projectRoot = dirname(__DIR__); // racine du projet, d'après ta capture
 
-  // Connexion DB DEST (Railway) — même que le front
-  require_once $projectRoot . '/includes/db.php'; // $pdo
+    // Vérif chemins (debug visible dans la réponse)
+    $paths = [
+        'projectRoot' => $projectRoot,
+        'includes_db' => $projectRoot . '/includes/db.php',
+        'worker'      => $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php',
+    ];
+    if (!is_file($paths['includes_db'])) {
+        http_response_code(500);
+        echo json_encode(['error' => 'includes/db.php not found', 'paths' => $paths]);
+        exit;
+    }
+    if (!is_file($paths['worker'])) {
+        http_response_code(500);
+        echo json_encode(['error' => 'ionos_to_compteur.php not found', 'paths' => $paths]);
+        exit;
+    }
 
-  // Anti-bouclage: 20s par défaut
-  $pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (k VARCHAR(64) PRIMARY KEY, v TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-  $INTERVAL = (int)(getenv('IONOS_IMPORT_INTERVAL_SEC') ?: 20);
-  $key = 'ionos_last_run';
+    // Connexion DB cible (Railway)
+    require_once $paths['includes_db']; // crée $pdo
 
-  $last = $pdo->query("SELECT v FROM app_kv WHERE k='{$key}'")->fetchColumn();
-  $due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
-  if (!$due) {
-    echo json_encode(['ran'=>false,'reason'=>'not_due','last_run'=>$last]); exit;
-  }
+    // Anti-bouclage 20s
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (k VARCHAR(64) PRIMARY KEY, v TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    $INTERVAL = (int)(getenv('IONOS_IMPORT_INTERVAL_SEC') ?: 20);
+    $key = 'ionos_last_run';
 
-  // Marque le run (évite double exécution)
-  $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
+    $last = $pdo->query("SELECT v FROM app_kv WHERE k='{$key}'")->fetchColumn();
+    $due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
 
-  // Batch (priorité env, sinon GET/POST via trigger, sinon 10)
-  $limit = (int)(getenv('IONOS_BATCH_LIMIT') ?: ($_GET['limit'] ?? $_POST['limit'] ?? 10));
-  if ($limit <= 0) $limit = 10;
-  putenv('IONOS_BATCH_LIMIT='.(string)$limit);
+    if (!$due) {
+        echo json_encode(['ran'=>false,'reason'=>'not_due','last_run'=>$last]); exit;
+    }
 
-  // ⬅️ Worker IONOS depuis la racine
-  $worker = $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php';
-  if (!is_file($worker)) {
-    http_response_code(500);
-    echo json_encode(['error'=>'Worker not found','path'=>$worker]); exit;
-  }
+    // Marquer le run
+    $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
 
-  // Le worker émet son propre JSON et fait exit
-  require $worker;
+    // Limite
+    $limit = (int)(getenv('IONOS_BATCH_LIMIT') ?: ($_GET['limit'] ?? $_POST['limit'] ?? 10));
+    if ($limit <= 0) $limit = 10;
+    putenv('IONOS_BATCH_LIMIT=' . (string)$limit);
+
+    // Inclure le worker : il doit echo un JSON puis exit
+    require $paths['worker'];
 
 } catch (Throwable $e) {
-  http_response_code(500);
-  echo json_encode(['error'=>'run_ionos_if_due.php crash','detail'=>$e->getMessage()]);
+    http_response_code(500);
+    echo json_encode([
+        'error'  => 'run_ionos_if_due.php crash',
+        'detail' => $e->getMessage()
+    ]);
 }
