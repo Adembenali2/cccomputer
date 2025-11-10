@@ -3,39 +3,36 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 /**
- * Ce script lit les données IONOS (printer_info, last_compteur, consommable.tmp_arr)
- * et alimente ta base "table_plus" :
- *  - last_compteur (UPSERT par mac)
- *  - compteur_relevee (INSERT si pas déjà présent grâce à ux_mac_ts)
+ * Lit IONOS (printer_info, last_compteur, consommable.tmp_arr)
+ * et insère dans table_plus.compteur_relevee :
+ * - Timestamp, TotalBW/TotalColor (depuis last_compteur)
+ * - Model/Serial/IP/Nom=refClient (depuis printer_info)
+ * - TonerBlack/Cyan/Magenta/Yellow (dernière valeur par printer_id depuis consommable.tmp_arr)
  *
- * PRÉREQUIS ENV :
- *  SOURCE_* = accès DB IONOS
- *  DEST_*   = accès DB table_plus
+ * Anti-doublon: vérifie existence par (mac_norm, Timestamp) avant insertion.
  */
 
 function pdoFromEnv(string $prefix): PDO {
-    $host = getenv($prefix.'_HOST') ?: 'db550618985.db.1and1.com';
+    $host = getenv($prefix.'_HOST') ?: '';
     $port = (int)(getenv($prefix.'_PORT') ?: 3306);
     $db   = getenv($prefix.'_NAME') ?: '';
     $user = getenv($prefix.'_USER') ?: '';
     $pass = getenv($prefix.'_PASS') ?: '';
     $dsn  = "mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4";
-
     $opts = [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
+        PDO::ATTR_EMULATE_PREPARES => false,
     ];
-    // SSL (facultatif) : $opts[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
     return new PDO($dsn, $user, $pass, $opts);
 }
 
 function mac_norm(?string $mac): ?string {
     if (!$mac) return null;
-    $m = strtoupper(preg_replace('~[^0-9A-F]~', '', $mac));
-    return $m !== '' ? $m : null; // ex: "00:26:73:14:E1:27" -> "00267314E127"
+    $m = strtoupper(preg_replace('~[^0-9A-F]~', '', $mac)); // retire ":" "-" etc.
+    return $m !== '' ? $m : null;
 }
-function clamp(?int $v, int $min = 0, int $max = 100): ?int {
+function clamp(?int $v, int $min=0, int $max=100): ?int {
     if ($v === null) return null;
     return max($min, min($max, $v));
 }
@@ -47,34 +44,63 @@ function toIntOrNull($v): ?int {
 }
 
 try {
+    // Connexions
     $src = pdoFromEnv('SOURCE'); // IONOS
     $dst = pdoFromEnv('DEST');   // table_plus
 
-    // ----------------------------
-    // 1) RÉFÉRENTIEL imprimantes (IONOS.printer_info)
-    // ----------------------------
-    $map = []; // mac_norm => [refClient, modele, serial, ip, pid]
-    $byPid = []; // pid (printer_info.id) => mac_norm
-
-    $qPI = $src->query("SELECT id, refClient, modele, serialNum, addressIP, mac, etat FROM printer_info");
-    while ($r = $qPI->fetch()) {
+    // ---------------------------
+    // 1) Référentiel imprimantes (IONOS.printer_info)
+    // ---------------------------
+    $mapByMac = [];   // mac_norm => info
+    $mapPidMac = [];  // pid (printer_info.id) => mac_norm
+    $q = $src->query("SELECT id, refClient, modele, serialNum, addressIP, mac, etat FROM printer_info");
+    while ($r = $q->fetch()) {
         $macN = mac_norm($r['mac'] ?? null);
         if (!$macN) continue;
-        $map[$macN] = [
-            'refClient' => (string)$r['refClient'],
-            'modele'    => (string)$r['modele'],
-            'serial'    => (string)$r['serialNum'],
-            'ip'        => (string)$r['addressIP'],
+        $mapByMac[$macN] = [
+            'refClient' => (string)($r['refClient'] ?? ''),
+            'modele'    => (string)($r['modele'] ?? ''),
+            'serial'    => (string)($r['serialNum'] ?? ''),
+            'ip'        => (string)($r['addressIP'] ?? ''),
             'etat'      => isset($r['etat']) ? (int)$r['etat'] : null,
             'pid'       => (int)$r['id'],
         ];
-        $byPid[(int)$r['id']] = $macN;
+        $mapPidMac[(int)$r['id']] = $macN;
     }
 
-    // ----------------------------
-    // 2) DERNIERS COMPTEURS (IONOS.last_compteur) groupés par MAC
-    // ----------------------------
-    // On prend la dernière ligne (max(date)) par MAC
+    // ---------------------------
+    // 2) Derniers toners par printer_id (IONOS.consommable.tmp_arr)
+    // ---------------------------
+    $lastTonerByPid = []; // pid => ['ts','tb','tc','tm','ty']
+    $qc = $src->query("SELECT tmp_arr FROM consommable WHERE tmp_arr IS NOT NULL AND tmp_arr <> 'a:0:{}'");
+    while ($r = $qc->fetch()) {
+        $arr = @unserialize((string)$r['tmp_arr'], ['allowed_classes'=>false]);
+        if (!is_array($arr) || !$arr) continue;
+        $ent = end($arr);
+        if (!is_array($ent)) continue;
+        $pid = isset($ent['printer_id']) ? (int)$ent['printer_id'] : null;
+        if (!$pid) continue;
+
+        $ts = null;
+        foreach ([$ent['tdate'] ?? null, $ent['cdate'] ?? null] as $cand) {
+            if (!$cand) continue;
+            $k = strtotime((string)$cand);
+            if ($k !== false) { $ts = date('Y-m-d H:i:s', $k); break; }
+        }
+        $tb = clamp(toIntOrNull($ent['toner_noir']    ?? null));
+        $tc = clamp(toIntOrNull($ent['toner_cyan']    ?? null));
+        $tm = clamp(toIntOrNull($ent['toner_magenta'] ?? null));
+        $ty = clamp(toIntOrNull($ent['toner_jaune']   ?? null));
+
+        $prev = $lastTonerByPid[$pid]['ts'] ?? null;
+        if (!$prev || ($ts && $ts > $prev)) {
+            $lastTonerByPid[$pid] = ['ts'=>$ts,'tb'=>$tb,'tc'=>$tc,'tm'=>$tm,'ty'=>$ty];
+        }
+    }
+
+    // ---------------------------
+    // 3) Dernier compteur NB/Couleur par MAC (IONOS.last_compteur)
+    // ---------------------------
     $sqlLC = "
         SELECT lc.ref_client, lc.mac, lc.pid, lc.etat, lc.date, lc.totalNB, lc.totalCouleur
         FROM last_compteur lc
@@ -86,22 +112,16 @@ try {
     ";
     $rowsLC = $src->query($sqlLC)->fetchAll();
 
-    // Prépare UPSERT last_compteur (DEST)
-    $upLast = $dst->prepare("
-        INSERT INTO last_compteur (ref_client, mac, pid, etat, date, totalNB, totalCouleur)
-        VALUES (:ref_client, :mac, :pid, :etat, :date, :nb, :clr)
-        ON DUPLICATE KEY UPDATE
-          ref_client = VALUES(ref_client),
-          pid        = VALUES(pid),
-          etat       = VALUES(etat),
-          date       = VALUES(date),
-          totalNB    = VALUES(totalNB),
-          totalCouleur = VALUES(totalCouleur)
+    // Prépare requêtes destination
+    // existence par mac_norm + Timestamp
+    $selExists = $dst->prepare("
+        SELECT id FROM compteur_relevee
+        WHERE mac_norm = :macn AND Timestamp = :ts
+        LIMIT 1
     ");
 
-    // Prépare INSERT compteur_relevee (DEST)
-    $insCR = $dst->prepare("
-        INSERT IGNORE INTO compteur_relevee
+    $ins = $dst->prepare("
+        INSERT INTO compteur_relevee
         (Timestamp, IpAddress, Nom, Model, SerialNumber, MacAddress, Status,
          TonerBlack, TonerCyan, TonerMagenta, TonerYellow,
          TotalPages, FaxPages, CopiedPages, PrintedPages,
@@ -116,113 +136,66 @@ try {
          NULL, NULL, NULL, NULL,
          :total_color, :total_bw, NOW())
     ");
-    // NB: INSERT IGNORE s’appuie sur ux_mac_ts pour ignorer les doublons
 
-    // ----------------------------
-    // 3) NIVEAUX DE TONER (IONOS.consommable.tmp_arr)
-    // ----------------------------
-    // On extrait la DERNIÈRE entrée par printer_id quand dispo
-    $qCons = $src->query("
-        SELECT id, ref_client, tmp_arr
-        FROM consommable
-        WHERE tmp_arr IS NOT NULL AND tmp_arr <> 'a:0:{}'
-    ");
-    $lastTonerByPid = []; // pid => [ts, tb, tc, tm, ty]
-    while ($r = $qCons->fetch()) {
-        $arr = @unserialize((string)$r['tmp_arr'], ['allowed_classes' => false]);
-        if (!is_array($arr) || !$arr) continue;
-        $entry = end($arr);
-        if (!is_array($entry)) continue;
-        $pid = isset($entry['printer_id']) ? (int)$entry['printer_id'] : null;
-        if (!$pid) continue;
-
-        // date (tdate|cdate)
-        $ts = null;
-        foreach ([$entry['tdate'] ?? null, $entry['cdate'] ?? null] as $cand) {
-            if (!$cand) continue;
-            $k = strtotime((string)$cand);
-            if ($k !== false) { $ts = date('Y-m-d H:i:s', $k); break; }
-        }
-        // toner
-        $tb = clamp(toIntOrNull($entry['toner_noir']    ?? null));
-        $tc = clamp(toIntOrNull($entry['toner_cyan']    ?? null));
-        $tm = clamp(toIntOrNull($entry['toner_magenta'] ?? null));
-        $ty = clamp(toIntOrNull($entry['toner_jaune']   ?? null));
-
-        // garde le plus récent par pid
-        $prev = $lastTonerByPid[$pid]['ts'] ?? null;
-        if (!$prev || ($ts && $ts > $prev)) {
-            $lastTonerByPid[$pid] = ['ts'=>$ts, 'tb'=>$tb, 'tc'=>$tc, 'tm'=>$tm, 'ty'=>$ty];
-        }
-    }
-
-    // ----------------------------
-    // 4) Écriture DEST (UPSERT last_compteur + INSERT compteur_relevee)
-    // ----------------------------
     $dst->beginTransaction();
 
-    $writtenLast = 0; $writtenCR = 0; $skipped = [];
+    $inserted = 0; $skipped = [];
     foreach ($rowsLC as $r) {
-        $mac         = (string)$r['mac'];
-        $macN        = mac_norm($mac);
-        if (!$macN) { $skipped[] = ['mac'=>$mac, 'reason'=>'mac_invalid']; continue; }
+        $macRaw = (string)$r['mac'];
+        $macN   = mac_norm($macRaw);
+        if (!$macN) { $skipped[] = ['mac'=>$macRaw,'reason'=>'mac_invalid']; continue; }
 
-        $pid         = (int)$r['pid'];
-        $refClient   = (string)$r['ref_client'];
-        $etat        = isset($r['etat']) ? (int)$r['etat'] : null;
-        $ts          = (string)$r['date'];
-        $totalBW     = (int)$r['totalNB'];
-        $totalColor  = (int)$r['totalCouleur'];
+        $ts         = (string)$r['date'];
+        $pid        = (int)$r['pid'];
+        $refClient  = (string)$r['ref_client'];
+        $etat       = isset($r['etat']) ? (int)$r['etat'] : null;
+        $totalBW    = (int)$r['totalNB'];
+        $totalColor = (int)$r['totalCouleur'];
 
-        // UPSERT last_compteur
-        $upLast->execute([
-            ':ref_client' => $refClient,
-            ':mac' => $mac,
-            ':pid' => $pid,
-            ':etat'=> $etat,
-            ':date'=> $ts,
-            ':nb'  => $totalBW,
-            ':clr' => $totalColor,
-        ]);
-        $writtenLast++;
+        // anti-doublon (si pas de contrainte UNIQUE en base)
+        $selExists->execute([':macn'=>$macN, ':ts'=>$ts]);
+        if ($selExists->fetchColumn()) {
+            $skipped[] = ['mac'=>$macRaw,'ts'=>$ts,'reason'=>'exists'];
+            continue;
+        }
 
-        // Détails imprimante (si présents dans printer_info)
-        $ref = $map[$macN] ?? null;
-        $ip     = $ref['ip']     ?? null;
-        $model  = $ref['modele'] ?? null;
-        $serial = $ref['serial'] ?? null;
-        $status = ($etat === null) ? null : (string)$etat; // tu peux mapper 0/1/… en libellé
+        // enrichissement printer_info
+        $ref   = $mapByMac[$macN] ?? null;
+        $ip    = $ref['ip']     ?? null;
+        $model = $ref['modele'] ?? null;
+        $serial= $ref['serial'] ?? null;
+        // status lisible (option)
+        $status = is_null($etat) ? null : ($etat ? 'ONLINE' : 'OFFLINE');
 
-        // Toners (dernière mesure par pid si on a)
+        // derniers toners par pid
         $t = $lastTonerByPid[$pid] ?? null;
         $tb = $t['tb'] ?? null;
         $tc = $t['tc'] ?? null;
         $tm = $t['tm'] ?? null;
         $ty = $t['ty'] ?? null;
 
-        // INSERT compteur_relevee (IGNORE si doublon)
-        $insCR->execute([
-            ':ts' => $ts,
-            ':ip' => $ip,
-            ':nom'=> $refClient ?: null, // Nom=refClient pour affichage
-            ':model' => $model,
-            ':serial'=> $serial,
-            ':mac'   => $mac,
-            ':status'=> $status,
-            ':tb' => $tb, ':tc' => $tc, ':tm' => $tm, ':ty' => $ty,
-            ':total_color' => $totalColor,
-            ':total_bw'    => $totalBW,
+        // insertion
+        $ins->execute([
+            ':ts'=>$ts,
+            ':ip'=>$ip,
+            ':nom'=>$refClient ?: null,
+            ':model'=>$model,
+            ':serial'=>$serial,
+            ':mac'=>$macRaw,
+            ':status'=>$status,
+            ':tb'=>$tb, ':tc'=>$tc, ':tm'=>$tm, ':ty'=>$ty,
+            ':total_color'=>$totalColor,
+            ':total_bw'=>$totalBW,
         ]);
-        $writtenCR += (int)$insCR->rowCount(); // 1 si inséré, 0 si IGNORE
+        $inserted++;
     }
 
     $dst->commit();
 
     echo json_encode([
-        'ok' => 1,
-        'last_compteur_upserts' => $writtenLast,
-        'compteur_relevee_inserts' => $writtenCR,
-        'skipped' => $skipped,
+        'ok'=>1,
+        'inserted'=>$inserted,
+        'skipped'=>$skipped,
     ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 
 } catch (Throwable $e) {
