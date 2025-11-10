@@ -14,60 +14,86 @@ register_shutdown_function(function () {
             'message' => $e['message'],
             'file'    => $e['file'],
             'line'    => $e['line'],
-        ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 });
 
 try {
-    $projectRoot = dirname(__DIR__); // racine du projet, d'après ta capture
+    $projectRoot = dirname(__DIR__); // racine du projet
 
-    // Vérif chemins (debug visible dans la réponse)
-    $paths = [
-        'projectRoot' => $projectRoot,
-        'includes_db' => $projectRoot . '/includes/db.php',
-        'worker'      => $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php',
+    // ——— Détection robuste du worker ———
+    $workerCandidates = [
+        $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php', // chemin attendu initialement
+        $projectRoot . '/API/Scripts/ionos_to_compteur.php', // variations de casse fréquentes
+        $projectRoot . '/API/scripts/ionos_to_compteur.php',
+        $projectRoot . '/import/ionos_to_compteur.php',       // si placé dans /import
     ];
-    if (!is_file($paths['includes_db'])) {
+
+    $worker = null;
+    foreach ($workerCandidates as $cand) {
+        if (is_file($cand)) { $worker = $cand; break; }
+    }
+
+    // Vérifs chemins indispensables
+    $includesDb = $projectRoot . '/includes/db.php';
+    if (!is_file($includesDb)) {
         http_response_code(500);
-        echo json_encode(['error' => 'includes/db.php not found', 'paths' => $paths]);
+        echo json_encode([
+            'error'       => 'includes/db.php not found',
+            'projectRoot' => $projectRoot,
+            'path'        => $includesDb
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
-    if (!is_file($paths['worker'])) {
+    if (!$worker) {
         http_response_code(500);
-        echo json_encode(['error' => 'ionos_to_compteur.php not found', 'paths' => $paths]);
+        echo json_encode([
+            'error'       => 'ionos_to_compteur.php not found',
+            'tried'       => $workerCandidates,
+            'projectRoot' => $projectRoot
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
 
     // Connexion DB cible (Railway)
-    require_once $paths['includes_db']; // crée $pdo
+    require_once $includesDb; // crée $pdo
 
-    // Anti-bouclage 20s
-    $pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (k VARCHAR(64) PRIMARY KEY, v TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    // Anti-bouclage (20s par défaut)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (
+        k VARCHAR(64) PRIMARY KEY,
+        v TEXT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
     $INTERVAL = (int)(getenv('IONOS_IMPORT_INTERVAL_SEC') ?: 20);
-    $key = 'ionos_last_run';
+    $key      = 'ionos_last_run';
 
     $last = $pdo->query("SELECT v FROM app_kv WHERE k='{$key}'")->fetchColumn();
     $due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
 
     if (!$due) {
-        echo json_encode(['ran'=>false,'reason'=>'not_due','last_run'=>$last]); exit;
+        echo json_encode([
+            'ran'      => false,
+            'reason'   => 'not_due',
+            'last_run' => $last
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
     // Marquer le run
     $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
 
-    // Limite
+    // Limite batch (priorité à env, sinon GET/POST, sinon 10)
     $limit = (int)(getenv('IONOS_BATCH_LIMIT') ?: ($_GET['limit'] ?? $_POST['limit'] ?? 10));
     if ($limit <= 0) $limit = 10;
     putenv('IONOS_BATCH_LIMIT=' . (string)$limit);
 
-    // Inclure le worker : il doit echo un JSON puis exit
-    require $paths['worker'];
+    // Lancer le worker : il doit echo un JSON puis exit
+    require $worker;
 
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode([
         'error'  => 'run_ionos_if_due.php crash',
         'detail' => $e->getMessage()
-    ]);
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }

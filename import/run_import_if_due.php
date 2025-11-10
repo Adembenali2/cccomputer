@@ -2,17 +2,30 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
-require_once dirname(__DIR__) . '/../includes/auth.php';
-require_once dirname(__DIR__) . '/../includes/db.php';
+$projectRoot = dirname(__DIR__); // ← racine du projet (pas besoin de remonter plus)
+require_once $projectRoot . '/includes/auth.php';
+require_once $projectRoot . '/includes/db.php';
 
-$pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (k VARCHAR(64) PRIMARY KEY, v TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+/**
+ * Table KV pour anti-bouclage
+ */
+$pdo->exec("
+  CREATE TABLE IF NOT EXISTS app_kv (
+    k VARCHAR(64) PRIMARY KEY,
+    v TEXT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+");
+
 $INTERVAL = (int)(getenv('SFTP_IMPORT_INTERVAL_SEC') ?: 20);
-$key = 'sftp_last_run';
+$key      = 'sftp_last_run';
 
-$last = $pdo->query("SELECT v FROM app_kv WHERE k='${key}'")->fetchColumn();
-$due = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
+$last = $pdo->query("SELECT v FROM app_kv WHERE k='{$key}'")->fetchColumn();
+$due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
 
-if (!$due) { echo json_encode(['ran'=>false,'reason'=>'not_due','last_run'=>$last]); exit; }
+if (!$due) {
+  echo json_encode(['ran' => false, 'reason' => 'not_due', 'last_run' => $last], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
 
 $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
 
@@ -20,17 +33,29 @@ $limit = (int)($_POST['limit'] ?? $_GET['limit'] ?? 10);
 if ($limit <= 0) $limit = 10;
 
 $php = PHP_BINARY ?: 'php';
-$cmd = escapeshellcmd($php).' '.escapeshellarg(__DIR__.'/upload_compteur.php');
-$desc=[1=>['pipe','w'],2=>['pipe','w']];
+$cmd = escapeshellcmd($php) . ' ' . escapeshellarg(__DIR__ . '/upload_compteur.php');
+$desc = [
+  1 => ['pipe', 'w'],
+  2 => ['pipe', 'w'],
+];
 
 // passe le batch au worker SFTP
 $env = $_ENV + $_SERVER + ['SFTP_BATCH_LIMIT' => (string)$limit];
 
-$proc=proc_open($cmd,$desc,$pipes,__DIR__,$env);
-$out=$err=''; $code=null;
-if(is_resource($proc)){
-  $out=stream_get_contents($pipes[1]); fclose($pipes[1]);
-  $err=stream_get_contents($pipes[2]); fclose($pipes[2]);
-  $code=proc_close($proc);
+$proc = proc_open($cmd, $desc, $pipes, __DIR__, $env);
+$out = $err = '';
+$code = null;
+
+if (is_resource($proc)) {
+  $out  = stream_get_contents($pipes[1]); fclose($pipes[1]);
+  $err  = stream_get_contents($pipes[2]); fclose($pipes[2]);
+  $code = proc_close($proc);
 }
-echo json_encode(['ran'=>true,'stdout'=>trim($out),'stderr'=>trim($err),'last_run'=>date('Y-m-d H:i:s'),'code'=>$code]);
+
+echo json_encode([
+  'ran'      => true,
+  'stdout'   => trim($out),
+  'stderr'   => trim($err),
+  'last_run' => date('Y-m-d H:i:s'),
+  'code'     => $code
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
