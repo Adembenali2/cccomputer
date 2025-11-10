@@ -3,7 +3,6 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
-// Attrape les fatales (parse error, require manquant, etc.)
 register_shutdown_function(function () {
     $e = error_get_last();
     if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
@@ -19,100 +18,77 @@ register_shutdown_function(function () {
 });
 
 try {
-    $projectRoot = dirname(__DIR__); // racine du projet
+    $projectRoot = dirname(__DIR__);
 
-    // ——— Détection robuste du worker ———
-    $workerCandidates = [
-        $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php', // chemin attendu
-        $projectRoot . '/API/Scripts/ionos_to_compteur.php', // variations de casse
-        $projectRoot . '/API/scripts/ionos_to_compteur.php',
-        $projectRoot . '/import/ionos_to_compteur.php',      // si placé dans /import
-    ];
+    // --- paramètres ---
+    $mode   = strtolower((string)($_GET['mode'] ?? $_POST['mode'] ?? 'latest')); // latest | backfill
+    $force  = (int)($_GET['force'] ?? $_POST['force'] ?? 0);                     // 1 pour bypass anti-bouclage
+    $limit  = (int)(getenv('IONOS_BATCH_LIMIT') ?: ($_GET['limit'] ?? $_POST['limit'] ?? 10));
+    if ($limit <= 0) $limit = 10;
+    putenv('IONOS_BATCH_LIMIT=' . (string)$limit);
 
-    $worker = null;
-    foreach ($workerCandidates as $cand) {
-        if (is_file($cand)) { $worker = $cand; break; }
+    // --- worker à utiliser ---
+    $workerCandidates = [];
+    if ($mode === 'backfill') {
+        $workerCandidates = [
+            $projectRoot . '/API/SCRIPTS/ionos_backfill_all.php',
+            $projectRoot . '/API/Scripts/ionos_backfill_all.php',
+            $projectRoot . '/API/scripts/ionos_backfill_all.php',
+            $projectRoot . '/import/ionos_backfill_all.php',
+        ];
+    } else {
+        $workerCandidates = [
+            $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php', // dernier relevé par MAC
+            $projectRoot . '/API/Scripts/ionos_to_compteur.php',
+            $projectRoot . '/API/scripts/ionos_to_compteur.php',
+            $projectRoot . '/import/ionos_to_compteur.php',
+        ];
     }
+    $worker = null;
+    foreach ($workerCandidates as $cand) { if (is_file($cand)) { $worker = $cand; break; } }
 
-    // Fichier DB (shim includes → config/db.php)
+    // --- DB destination ---
     $includesDb = $projectRoot . '/includes/db.php';
     if (!is_file($includesDb)) {
         http_response_code(500);
-        echo json_encode([
-            'error'       => 'includes/db.php not found',
-            'projectRoot' => $projectRoot,
-            'path'        => $includesDb
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
+        echo json_encode(['error'=>'includes/db.php not found','path'=>$includesDb]); exit;
     }
+    require_once $includesDb; // $pdo
 
     if (!$worker) {
         http_response_code(500);
-        echo json_encode([
-            'error'       => 'ionos_to_compteur.php not found',
-            'tried'       => $workerCandidates,
-            'projectRoot' => $projectRoot
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
+        echo json_encode(['error'=>'worker not found','mode'=>$mode,'tried'=>$workerCandidates]); exit;
     }
 
-    // Connexion DB cible (Railway)
-    require_once $includesDb; // doit exposer $pdo
-
-    // Anti-bouclage (20s par défaut)
-    $pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (
-        k VARCHAR(64) PRIMARY KEY,
-        v TEXT NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-
+    // --- anti-bouclage (désactivable via force=1) ---
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (k VARCHAR(64) PRIMARY KEY, v TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
     $INTERVAL = (int)(getenv('IONOS_IMPORT_INTERVAL_SEC') ?: 20);
-    $key      = 'ionos_last_run';
+    $key      = $mode === 'backfill' ? 'ionos_backfill_last_run' : 'ionos_last_run';
 
     $last = $pdo->query("SELECT v FROM app_kv WHERE k='{$key}'")->fetchColumn();
-    $due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
+    $due  = $force ? true : ((time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL);
 
     if (!$due) {
-        echo json_encode([
-            'ran'      => false,
-            'reason'   => 'not_due',
-            'last_run' => $last
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
+        echo json_encode(['ran'=>false,'reason'=>'not_due','last_run'=>$last,'mode'=>$mode]); exit;
     }
-
-    // Marquer le run (NOW)
     $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
 
-    // Limite batch (priorité à env, sinon GET/POST, sinon 10)
-    $limit = (int)(getenv('IONOS_BATCH_LIMIT') ?: ($_GET['limit'] ?? $_POST['limit'] ?? 10));
-    if ($limit <= 0) { $limit = 10; }
-    putenv('IONOS_BATCH_LIMIT=' . (string)$limit);
-
-    // Lancer le worker et capturer toute sortie/erreur
+    // --- exécuter le worker (il echo un JSON et peut exit) ---
     ob_start();
     try {
-        require $worker; // le worker doit echo un JSON puis exit;
+        require $worker;
         $out = ob_get_clean();
-        if ($out !== '') {
-            // si le worker n'a pas exit, on renvoie ce qu'il a produit
-            echo $out;
-        }
+        if ($out !== '') echo $out;
     } catch (Throwable $we) {
         $out = ob_get_clean();
         http_response_code(500);
         echo json_encode([
-            'error'       => 'worker exception',
-            'worker'      => $worker,
-            'message'     => $we->getMessage(),
-            'trace'       => $we->getTraceAsString(),
-            'bufferedOut' => $out,
+            'error'=>'worker exception','mode'=>$mode,'worker'=>$worker,
+            'message'=>$we->getMessage(),'bufferedOut'=>$out
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
 } catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode([
-        'error'  => 'run_ionos_if_due.php crash',
-        'detail' => $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['error'=>'run_ionos_if_due.php crash','detail'=>$e->getMessage()]);
 }
