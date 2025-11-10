@@ -1,19 +1,16 @@
 /* =========================================================
-   Stock — 5 tableaux visibles en même temps
-   - Colonne GAUCHE : Toners (haut) + Papier (bas)
-   - Colonne DROITE : Photocopieurs (haut) + LCD (milieu) + PC (bas)
-   - Sans scroll page : cartes à hauteur fixe, scroll interne si besoin
+   Stock — vue condensée (3 infos par tableau) + popup détails
    ========================================================= */
 
 html, body { max-width: 100%; overflow-x: hidden; }
 
 .page-container {
-  max-width: 1400px; /* un peu plus large pour tout caser */
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 1.0rem 1.0rem;
+  padding: 1rem;
 }
 
-.page-header { margin-bottom: 0.75rem; }
+.page-header { margin-bottom: .5rem; }
 .page-title  { margin: 0; font-size: 1.4rem; font-weight: 800; }
 .page-subtitle { margin: .25rem 0 0 0; color: var(--text-secondary); }
 
@@ -30,16 +27,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-primary);
 }
 
-/* === Grille principale === */
+/* === Grille 2 colonnes : gauche / droite === */
 .stock-grid {
   display: grid;
-  grid-template-columns: 1fr 1.4fr; /* gauche / droite */
+  grid-template-columns: 1fr 1.4fr;
   gap: .75rem;
-  /* on réserve une hauteur "plein écran moins header" */
-  min-height: calc(100vh - 180px);
+  min-height: calc(100vh - 170px);
 }
 
-/* Cartes */
 .card-section {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
@@ -50,16 +45,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
   min-width: 0;
 }
 
-/* Colonne gauche : 2 cartes empilées */
+/* Hauteurs pour tout voir sans scroller la page (scroll interne si besoin) */
 .card-section.left.tall { height: 52vh; }
 .card-section.left.short{ height: 42vh; }
 
-/* Colonne droite : 3 cartes empilées */
 .card-section.right.top    { height: 32vh; }
 .card-section.right.middle { height: 30vh; }
 .card-section.right.bottom { height: 32vh; }
 
-/* Tête de section */
 .section-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: .55rem .75rem;
@@ -68,11 +61,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 .section-title { margin: 0; font-size: 1.05rem; font-weight: 800; }
 
-/* Tableaux */
 .table-wrapper {
-  overflow: auto; /* scroll interne si ça déborde */
+  overflow: auto;
   flex: 1;
 }
+
 .tbl-stock {
   width: 100%;
   border-collapse: separate;
@@ -87,7 +80,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   padding: .5rem .6rem;
   border-bottom: 1px solid var(--border-color);
   text-align: left;
-  position: sticky; top: 0; z-index: 1; /* header collant dans la carte */
+  position: sticky; top: 0; z-index: 1;
 }
 .tbl-stock tbody td{
   padding: .5rem .6rem;
@@ -97,8 +90,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 .tbl-stock tbody tr:hover { background: var(--bg-secondary); }
 .td-metric { font-weight: 700; text-align: right; }
+.td-metric.is-zero { color: #b91c1c; font-weight: 800; }
 
-/* État A/B/C (badge) */
+/* compact = 3 colonnes + typo un poil plus grande */
+.tbl-compact thead th, .tbl-compact tbody td { font-size: .95rem; }
+
+/* État A/B/C */
 .state {
   display:inline-flex; align-items:center; justify-content:center;
   min-width: 1.6rem; height: 1.35rem; padding: 0 .4rem;
@@ -107,15 +104,94 @@ html, body { max-width: 100%; overflow-x: hidden; }
   background: var(--bg-primary);
   color: var(--text-primary);
 }
-.state-A { background: #dcfce7; color: #166534; border-color: #86efac; }  /* vert - neuf */
-.state-B { background: #fef9c3; color: #854d0e; border-color: #fde68a; }  /* jaune - moyen */
-.state-C { background: #fee2e2; color: #991b1b; border-color: #fecaca; }  /* rouge - usé */
+.state-A { background: #dcfce7; color: #166534; border-color: #86efac; }
+.state-B { background: #fef9c3; color: #854d0e; border-color: #fde68a; }
+.state-C { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 .state-na { background: var(--bg-secondary); color: var(--text-muted); }
 
-/* Quantité 0 en rouge vif */
-.td-metric.is-zero { color: #b91c1c; font-weight: 800; }
+/* ============ Modal détails ============ */
+.modal-open { overflow: hidden; }
 
-/* Responsif minimal (si écran étroit, on autorise la page à scroller) */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  display: none;
+  z-index: 900;
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(980px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 1.1rem;
+  box-shadow: 0 10px 40px rgba(31,41,55,0.18), 0 1.5px 3px rgba(0,0,0,0.06);
+  display: none;
+  z-index: 1000;
+}
+
+.modal-header {
+  display: flex; align-items: center; justify-content: center;
+  padding: .65rem .85rem .55rem; position: relative;
+  border-bottom: 1px solid var(--border-color);
+}
+.modal-header h3 { margin: 0; font-size: 1.1rem; font-weight: 800; }
+.icon-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: .35rem .6rem;
+  cursor: pointer;
+  transition: background-color .2s ease, transform .06s ease;
+}
+.icon-btn:hover { background: var(--bg-tertiary); }
+.icon-btn--close {
+  position: absolute; right: .6rem; top: .5rem;
+  width: 34px; height: 34px; border-radius: 999px; font-size: 1.1rem;
+  display: grid; place-items: center;
+}
+
+.modal-body {
+  overflow: auto;
+  padding: .8rem .9rem;
+}
+
+/* Grille des champs */
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .6rem;
+}
+@media (max-width: 800px) {
+  .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .detail-grid { grid-template-columns: 1fr; }
+}
+
+.field-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: .75rem;
+  padding: .55rem .6rem;
+}
+.field-card .lbl {
+  font-size: .72rem; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.field-card .val {
+  margin-top: .25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Responsif : si écran trop étroit, on autorise la page à scroller */
 @media (max-width: 1100px) {
   .stock-grid { grid-template-columns: 1fr; }
   .card-section { height: auto; }
