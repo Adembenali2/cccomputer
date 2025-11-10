@@ -23,6 +23,13 @@ $lcd = [
   ['id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A','modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP','prix'=>129.90,'qty'=>12],
   ['id'=>'lcd-27b-004','marque'=>'LG','reference'=>'LCD-27B-004','etat'=>'B','modele'=>'27UL500','taille'=>27,'resolution'=>'3840x2160','connectique'=>'HDMI','prix'=>219.90,'qty'=>4],
   ['id'=>'lcd-22c-020','marque'=>'HP','reference'=>'LCD-22C-020','etat'=>'C','modele'=>'Z22n G2','taille'=>22,'resolution'=>'1920x1080','connectique'=>'DP','prix'=>79.90,'qty'=>6],
+['id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A','modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP','prix'=>129.90,'qty'=>12],
+  ['id'=>'lcd-27b-004','marque'=>'LG','reference'=>'LCD-27B-004','etat'=>'B','modele'=>'27UL500','taille'=>27,'resolution'=>'3840x2160','connectique'=>'HDMI','prix'=>219.90,'qty'=>4],
+  ['id'=>'lcd-22c-020','marque'=>'HP','reference'=>'LCD-22C-020','etat'=>'C','modele'=>'Z22n G2','taille'=>22,'resolution'=>'1920x1080','connectique'=>'DP','prix'=>79.90,'qty'=>6],
+   ['id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A','modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP','prix'=>129.90,'qty'=>12],
+  ['id'=>'lcd-27b-004','marque'=>'LG','reference'=>'LCD-27B-004','etat'=>'B','modele'=>'27UL500','taille'=>27,'resolution'=>'3840x2160','connectique'=>'HDMI','prix'=>219.90,'qty'=>4],
+  ['id'=>'lcd-22c-020','marque'=>'HP','reference'=>'LCD-22C-020','etat'=>'C','modele'=>'Z22n G2','taille'=>22,'resolution'=>'1920x1080','connectique'=>'DP','prix'=>79.90,'qty'=>6],
+  
 ];
 
 /* PC */
