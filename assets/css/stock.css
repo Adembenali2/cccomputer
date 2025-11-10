@@ -1,22 +1,24 @@
 /* =========================================================
-   Stock — tout visible d’emblée (aucun onglet à cliquer)
-   Style aligné sur clients.php
+   Stock — 5 tableaux visibles en même temps
+   - Colonne GAUCHE : Toners (haut) + Papier (bas)
+   - Colonne DROITE : Photocopieurs (haut) + LCD (milieu) + PC (bas)
+   - Sans scroll page : cartes à hauteur fixe, scroll interne si besoin
    ========================================================= */
 
 html, body { max-width: 100%; overflow-x: hidden; }
 
 .page-container {
-  max-width: 1200px;
+  max-width: 1400px; /* un peu plus large pour tout caser */
   margin: 0 auto;
-  padding: 1.25rem;
+  padding: 1.0rem 1.0rem;
 }
 
-.page-header { margin-bottom: 1rem; }
-.page-title  { margin: 0; font-size: 1.5rem; font-weight: 800; }
+.page-header { margin-bottom: 0.75rem; }
+.page-title  { margin: 0; font-size: 1.4rem; font-weight: 800; }
 .page-subtitle { margin: .25rem 0 0 0; color: var(--text-secondary); }
 
 .filters-row {
-  margin-bottom: 1rem;
+  margin-bottom: .75rem;
   display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
 }
 .filters-row input[type="text"]{
@@ -28,118 +30,94 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-primary);
 }
 
-.section-title {
-  margin: 1.25rem 0 .5rem 0;
-  font-size: 1.15rem;
-  font-weight: 800;
-}
-
-.section-grid {
+/* === Grille principale === */
+.stock-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
-@media (max-width: 980px) {
-  .section-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 640px) {
-  .section-grid { grid-template-columns: 1fr; }
+  grid-template-columns: 1fr 1.4fr; /* gauche / droite */
+  gap: .75rem;
+  /* on réserve une hauteur "plein écran moins header" */
+  min-height: calc(100vh - 180px);
 }
 
+/* Cartes */
 .card-section {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
+/* Colonne gauche : 2 cartes empilées */
+.card-section.left.tall { height: 52vh; }
+.card-section.left.short{ height: 42vh; }
+
+/* Colonne droite : 3 cartes empilées */
+.card-section.right.top    { height: 32vh; }
+.card-section.right.middle { height: 30vh; }
+.card-section.right.bottom { height: 32vh; }
+
+/* Tête de section */
 .section-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: .6rem .8rem;
+  padding: .55rem .75rem;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
 }
-.pill {
-  display: inline-block;
-  padding: .2rem .6rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: .8rem;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
-.muted { color: var(--text-secondary); font-size: .9rem; }
+.section-title { margin: 0; font-size: 1.05rem; font-weight: 800; }
 
-/* Table (desktop) */
-.table-wrapper { overflow: hidden; }
+/* Tableaux */
+.table-wrapper {
+  overflow: auto; /* scroll interne si ça déborde */
+  flex: 1;
+}
 .tbl-stock {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: auto;
 }
-.tbl-stock thead th {
+.tbl-stock thead th{
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-weight: 700;
-  font-size: 0.9rem;
-  padding: 0.65rem 0.75rem;
+  font-size: .9rem;
+  padding: .5rem .6rem;
   border-bottom: 1px solid var(--border-color);
   text-align: left;
+  position: sticky; top: 0; z-index: 1; /* header collant dans la carte */
 }
-.tbl-stock tbody td {
-  padding: 0.65rem 0.75rem;
+.tbl-stock tbody td{
+  padding: .5rem .6rem;
   border-bottom: 1px solid var(--border-color);
   vertical-align: top;
+  white-space: nowrap;
 }
 .tbl-stock tbody tr:hover { background: var(--bg-secondary); }
-
 .td-metric { font-weight: 700; text-align: right; }
 
-.chip {
-  display:inline-block;
-  padding:2px 8px;
-  border-radius:999px;
-  font-size:.75rem;
-  border:1px solid var(--border-color);
-  background:var(--bg-primary);
-  color: var(--text-secondary);
+/* État A/B/C (badge) */
+.state {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width: 1.6rem; height: 1.35rem; padding: 0 .4rem;
+  border-radius: 999px; font-weight: 800; font-size: .8rem;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
+.state-A { background: #dcfce7; color: #166534; border-color: #86efac; }  /* vert - neuf */
+.state-B { background: #fef9c3; color: #854d0e; border-color: #fde68a; }  /* jaune - moyen */
+.state-C { background: #fee2e2; color: #991b1b; border-color: #fecaca; }  /* rouge - usé */
+.state-na { background: var(--bg-secondary); color: var(--text-muted); }
 
-/* Responsive : tableaux -> cartes */
-@media (max-width: 900px) {
-  .tbl-stock thead {
-    position: absolute;
-    left: -9999px;
-    height: 0;
-    overflow: hidden;
-  }
-  .tbl-stock, .tbl-stock tbody, .tbl-stock tr, .tbl-stock td {
-    display: block; width: 100%;
-  }
-  .tbl-stock tbody tr {
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    background: var(--bg-primary);
-    margin: 0.75rem;
-    overflow: hidden;
-  }
-  .tbl-stock tbody td {
-    border: none;
-    border-bottom: 1px solid var(--border-color);
-    padding: 0.75rem 0.95rem;
-    position: relative;
-  }
-  .tbl-stock tbody td::before {
-    content: attr(data-th);
-    display: block;
-    font-size: 0.76rem;
-    color: var(--text-muted);
-    margin-bottom: 0.2rem;
-    letter-spacing: .02em;
-  }
-  .td-metric { text-align: left; }
+/* Quantité 0 en rouge vif */
+.td-metric.is-zero { color: #b91c1c; font-weight: 800; }
+
+/* Responsif minimal (si écran étroit, on autorise la page à scroller) */
+@media (max-width: 1100px) {
+  .stock-grid { grid-template-columns: 1fr; }
+  .card-section { height: auto; }
+  .table-wrapper { max-height: 45vh; }
 }
