@@ -28,17 +28,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 /* === Masonry 2 colonnes === */
-.stock-masonry {
-  column-count: 2;
-  column-gap: .75rem;
-}
-@media (max-width: 1024px) {
-  .stock-masonry { column-count: 1; }
-}
+.stock-masonry { column-count: 2; column-gap: .75rem; }
+@media (max-width: 1024px) { .stock-masonry { column-count: 1; } }
 
 /* Carte/section */
 .card-section {
-  display: inline-block;          /* requis avec column-count */
+  display: inline-block;
   width: 100%;
   margin: 0 0 .75rem;
   break-inside: avoid;
@@ -64,14 +59,28 @@ html, body { max-width: 100%; overflow-x: hidden; }
   box-shadow: 0 1px 2px rgba(0,0,0,.06); background: var(--bg-primary);
 }
 
-/* Tableaux */
+/* ================== TABLES ================== */
 .table-wrapper { overflow-x: auto; }
+
+/* Aligner colonnes = même grille thead/tbody
+   -> table-layout: fixed + <colgroup> pour chaque table */
 .tbl-stock {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: auto;
+  table-layout: fixed;
 }
+
+/* Largeurs par rôle de colonne (réutilisées via <col class="...">) */
+.col-qty     { width: 88px; }
+.col-poids   { width: 120px; }
+.col-couleur { width: 140px; }
+.col-statut  { width: 120px; }
+.col-etat    { width: 88px; }
+.col-sn      { width: 220px; }
+/* Les modèles prennent le reste */
+.col-modele  { width: auto; }
+
 .tbl-stock thead th{
   background: var(--bg-tertiary);
   color: var(--text-secondary);
@@ -87,12 +96,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
   border-bottom: 1px solid var(--border-color);
   vertical-align: top;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* important pour fixed layout */
 }
 .tbl-stock tbody tr:hover { background: var(--bg-secondary); }
 .td-metric { font-weight: 700; text-align: right; }
 .td-metric.is-zero { color: #b91c1c; font-weight: 800; }
 
-/* Compact (3 colonnes visibles) */
+/* Compact */
 .tbl-compact thead th, .tbl-compact tbody td { font-size: .95rem; }
 
 /* Badges état + chip */
@@ -115,14 +126,34 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 /* Accessibilité: focus visible sur lignes cliquables */
-.click-rows tbody tr {
-  cursor: pointer;
-  outline: none;
-}
+.click-rows tbody tr { cursor: pointer; outline: none; }
 .click-rows tbody tr:focus {
   outline: 2px solid var(--brand, #3b82f6);
   outline-offset: -2px;
   background: var(--bg-tertiary);
+}
+
+/* ===== Mobile: tableau aux étiquettes (lisible <= 640px) ===== */
+@media (max-width: 640px) {
+  .tbl-stock thead { display: none; }
+  .tbl-stock, .tbl-stock tbody, .tbl-stock tr, .tbl-stock td { display: block; width: 100%; }
+  .tbl-stock tbody tr { padding: .35rem .45rem; }
+  .tbl-stock tbody td {
+    display: grid;
+    grid-template-columns: 44% 56%;
+    gap: .25rem .5rem;
+    white-space: normal;
+  }
+  .tbl-stock tbody td::before {
+    content: attr(data-th);
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: none;
+  }
+  .td-metric { text-align: right; }
+  /* enlever les cols widths qui n'ont plus de sens en mobile */
+  .tbl-stock colgroup { display: none; }
 }
 
 /* ===== Modal ===== */
@@ -182,7 +213,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   margin-top: .25rem; font-weight: 700; color: var(--text-primary);
 }
 
-/* Préférence OS : réduire les animations si présentes ailleurs */
+/* Préférence OS : réduire les animations */
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }

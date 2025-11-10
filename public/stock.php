@@ -15,8 +15,6 @@ function stateBadge(?string $etat): string {
 
 /* =========================================================
    PHOTOCOPIEURS — UNIQUEMENT NON ATTRIBUÉS (depuis BDD)
-   - 1 ligne par machine (mac_norm), dernière relève
-   - pc.id_client IS NULL => non relié à un client
    ========================================================= */
 $copiers = [];
 try {
@@ -52,7 +50,6 @@ try {
 
   foreach ($rows as $r) {
     $model   = trim($r['Model'] ?? '');
-    // Marque = premier token non vide (gère espaces multiples)
     $parts   = preg_split('/\s+/', $model);
     $marque  = ($parts && $parts[0] !== '') ? $parts[0] : '—';
 
@@ -63,14 +60,13 @@ try {
     $statut  = $isDown ? 'en panne' : 'stock';
     $empl    = 'dépôt';
 
-    // Formatage lisible, localisable ensuite côté JS si besoin
     $lastTs = null;
     if (!empty($r['last_ts'])) {
       try { $lastTs = (new DateTime($r['last_ts']))->format('Y-m-d H:i:s'); } catch (\Throwable $e) { $lastTs = (string)$r['last_ts']; }
     }
 
     $copiers[] = [
-      'id'              => $r['mac_norm'],                 // identifiant unique pour le popup
+      'id'              => $r['mac_norm'],
       'mac'             => $r['MacAddress'] ?: '',
       'marque'          => $marque,
       'modele'          => $model ?: ($r['Nom'] ?: '—'),
@@ -100,7 +96,7 @@ try {
 }
 
 /* =========================================================
-   AUTRES CATEGORIES (mock pour l’instant)
+   AUTRES CATEGORIES (mock)
    ========================================================= */
 $lcd = [
   ['id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A','modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP','prix'=>129.90,'qty'=>12],
@@ -121,10 +117,8 @@ $toners = [
   ['id'=>'tn-y-307','marque'=>'Ricoh','modele'=>'MPC307-Y','couleur'=>'Jaune','qty'=>0],
 ];
 
-/* Datasets pour la modale (on n’ouvre qu’à partir de ces trois) */
 $datasets = ['copiers'=>$copiers, 'lcd'=>$lcd, 'pc'=>$pc];
 
-/* Images titres (adapter les chemins si besoin) */
 $sectionImages = [
   'photocopieurs' => '/assets/img/stock/photocopieurs.jpg',
   'lcd'           => '/assets/img/stock/lcd.jpg',
@@ -169,12 +163,15 @@ $sectionImages = [
       </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact">
+          <colgroup>
+            <col class="col-couleur"><col class="col-modele"><col class="col-qty">
+          </colgroup>
           <thead><tr><th>Couleur</th><th>Modèle</th><th>Qté</th></tr></thead>
           <tbody>
           <?php foreach ($toners as $t): ?>
             <tr data-search="<?= h(strtolower($t['marque'].' '.$t['modele'].' '.$t['couleur'])) ?>">
-              <td data-th="Couleur"><?= h($t['couleur']) ?></td>
-              <td data-th="Modèle"><?= h($t['modele']) ?></td>
+              <td data-th="Couleur" title="<?= h($t['couleur']) ?>"><?= h($t['couleur']) ?></td>
+              <td data-th="Modèle"  title="<?= h($t['modele']) ?>"><?= h($t['modele']) ?></td>
               <td data-th="Qté" class="td-metric <?= (int)$t['qty']===0?'is-zero':'' ?>"><?= (int)$t['qty'] ?></td>
             </tr>
           <?php endforeach; if (empty($toners)): ?>
@@ -195,13 +192,16 @@ $sectionImages = [
       </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact">
+          <colgroup>
+            <col class="col-qty"><col class="col-modele"><col class="col-poids">
+          </colgroup>
           <thead><tr><th>Qté</th><th>Modèle</th><th>Poids</th></tr></thead>
           <tbody>
           <?php foreach ($papers as $p): ?>
             <tr data-search="<?= h(strtolower(($p['marque']??'').' '.($p['modele']??'').' '.($p['poids']??''))) ?>">
-              <td data-th="Qté" class="td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
-              <td data-th="Modèle"><?= h($p['modele'] ?? '—') ?></td>
-              <td data-th="Poids"><?= h($p['poids'] ?? '—') ?></td>
+              <td data-th="Qté"     class="td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
+              <td data-th="Modèle"  title="<?= h($p['modele'] ?? '—') ?>"><?= h($p['modele'] ?? '—') ?></td>
+              <td data-th="Poids"   title="<?= h($p['poids'] ?? '—') ?>"><?= h($p['poids'] ?? '—') ?></td>
             </tr>
           <?php endforeach; if (empty($papers)): ?>
             <tr><td colspan="3">— Aucun papier —</td></tr>
@@ -221,14 +221,17 @@ $sectionImages = [
       </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact click-rows">
+          <colgroup>
+            <col class="col-modele"><col class="col-sn"><col class="col-statut">
+          </colgroup>
           <thead><tr><th>Modèle</th><th>N° Série</th><th>Statut</th></tr></thead>
           <tbody>
           <?php foreach ($copiers as $r): ?>
             <tr
               data-type="copiers" data-id="<?= h($r['id']) ?>"
               data-search="<?= h(strtolower(($r['modele']??'').' '.($r['sn']??'').' '.($r['marque']??'').' '.($r['mac']??'').' '.($r['statut']??'').' '.($r['emplacement']??''))) ?>">
-              <td data-th="Modèle"><strong><?= h($r['modele']) ?></strong></td>
-              <td data-th="N° Série"><?= h($r['sn']) ?></td>
+              <td data-th="Modèle"  title="<?= h($r['modele']) ?>"><strong><?= h($r['modele']) ?></strong></td>
+              <td data-th="N° Série" title="<?= h($r['sn']) ?>"><?= h($r['sn']) ?></td>
               <td data-th="Statut"><span class="chip"><?= h($r['statut']) ?></span></td>
             </tr>
           <?php endforeach; if (empty($copiers)): ?>
@@ -249,6 +252,9 @@ $sectionImages = [
       </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact click-rows">
+          <colgroup>
+            <col class="col-etat"><col class="col-modele"><col class="col-qty">
+          </colgroup>
           <thead><tr><th>État</th><th>Modèle</th><th>Qté</th></tr></thead>
           <tbody>
           <?php foreach ($lcd as $row): ?>
@@ -256,7 +262,7 @@ $sectionImages = [
               data-type="lcd" data-id="<?= h($row['id']) ?>"
               data-search="<?= h(strtolower($row['modele'].' '.$row['reference'].' '.$row['marque'].' '.$row['resolution'].' '.$row['connectique'])) ?>">
               <td data-th="État"><?= stateBadge($row['etat']) ?></td>
-              <td data-th="Modèle"><strong><?= h($row['modele']) ?></strong></td>
+              <td data-th="Modèle" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
               <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
             </tr>
           <?php endforeach; if (empty($lcd)): ?>
@@ -277,6 +283,9 @@ $sectionImages = [
       </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact click-rows">
+          <colgroup>
+            <col class="col-etat"><col class="col-modele"><col class="col-qty">
+          </colgroup>
           <thead><tr><th>État</th><th>Modèle</th><th>Qté</th></tr></thead>
           <tbody>
           <?php foreach ($pc as $row): ?>
@@ -284,7 +293,7 @@ $sectionImages = [
               data-type="pc" data-id="<?= h($row['id']) ?>"
               data-search="<?= h(strtolower($row['modele'].' '.$row['reference'].' '.$row['marque'].' '.$row['cpu'].' '.$row['os'].' '.$row['ram'].' '.$row['stockage'])) ?>">
               <td data-th="État"><?= stateBadge($row['etat']) ?></td>
-              <td data-th="Modèle"><strong><?= h($row['modele']) ?></strong></td>
+              <td data-th="Modèle" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
               <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
             </tr>
           <?php endforeach; if (empty($pc)): ?>
@@ -310,7 +319,7 @@ $sectionImages = [
 </div>
 
 <script>
-// --- Filtre global + réordonnancement (masonry) ---
+/* ===== Filtre + réordonnancement ===== */
 (function(){
   const q = document.getElementById('q');
   const mason = document.getElementById('stockMasonry');
@@ -326,16 +335,9 @@ $sectionImages = [
     scored.sort((a,b)=> b.score - a.score || a.idx - b.idx);
     scored.forEach(x => mason.appendChild(x.el));
   }
-
-  // Normalisation sans accents
   function norm(s){
-    return (s||'')
-      .toString()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g,'');
+    return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   }
-
   function applyFilter(){
     const v = norm(q.value||'');
     document.querySelectorAll('.tbl-stock tbody tr').forEach(tr=>{
@@ -352,31 +354,18 @@ $sectionImages = [
   }
 })();
 
-// --- Datasets pour popup ---
+/* ===== Datasets popup ===== */
 const DATASETS = <?= json_encode($datasets, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
 
-// Helpers d’affichage sûrs (évite XSS)
+/* Helpers sûrs (XSS) */
 function escapeText(s){ return (s == null) ? '—' : String(s); }
 function addField(grid, label, value, {html=false}={}){
   const card = document.createElement('div');
   card.className = 'field-card';
-
-  const lbl = document.createElement('div');
-  lbl.className = 'lbl';
-  lbl.textContent = label;
-
-  const val = document.createElement('div');
-  val.className = 'val';
-  if (html) {
-    // autoriser explicitement du HTML (ex: badge état)
-    val.innerHTML = value ?? '—';
-  } else {
-    val.textContent = escapeText(value);
-  }
-
-  card.appendChild(lbl);
-  card.appendChild(val);
-  grid.appendChild(card);
+  const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = label;
+  const val = document.createElement('div'); val.className = 'val';
+  if (html) val.innerHTML = value ?? '—'; else val.textContent = escapeText(value);
+  card.appendChild(lbl); card.appendChild(val); grid.appendChild(card);
 }
 function badgeEtat(e){
   e = String(e||'').toUpperCase();
@@ -384,7 +373,7 @@ function badgeEtat(e){
   return `<span class="state state-${e}">${e}</span>`;
 }
 
-// --- Modal détails (Photocopieurs / LCD / PC) ---
+/* ===== Modal détails ===== */
 (function(){
   const overlay = document.getElementById('detailOverlay');
   const modal   = document.getElementById('detailModal');
@@ -393,41 +382,30 @@ function badgeEtat(e){
   const titleEl = document.getElementById('modalTitle');
 
   let lastFocused = null;
-
   function focusFirst(){
-    const focusables = modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
-    if (focusables.length) focusables[0].focus();
+    const f = modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
+    if (f.length) f[0].focus();
   }
-
   function trapFocus(e){
     if (e.key !== 'Tab') return;
-    const focusables = [...modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')];
-    if (!focusables.length) return;
-    const first = focusables[0];
-    const last  = focusables[focusables.length-1];
+    const f = [...modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')];
+    if (!f.length) return;
+    const first = f[0], last = f[f.length-1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
-
-  function onKeydown(e){
-    if (e.key === 'Escape') closeFn();
-    if (e.key === 'Tab') trapFocus(e);
-  }
-
+  function onKeydown(e){ if (e.key === 'Escape') closeFn(); if (e.key === 'Tab') trapFocus(e); }
   function open(){
     lastFocused = document.activeElement;
     document.body.classList.add('modal-open');
     overlay.setAttribute('aria-hidden','false');
-    overlay.style.display='block';
-    modal.style.display='block';
-    document.addEventListener('keydown', onKeydown);
-    focusFirst();
+    overlay.style.display='block'; modal.style.display='block';
+    document.addEventListener('keydown', onKeydown); focusFirst();
   }
   function closeFn(){
     document.body.classList.remove('modal-open');
     overlay.setAttribute('aria-hidden','true');
-    overlay.style.display='none';
-    modal.style.display='none';
+    overlay.style.display='none'; modal.style.display='none';
     document.removeEventListener('keydown', onKeydown);
     if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
   }
@@ -474,7 +452,6 @@ function badgeEtat(e){
     }
   }
 
-  // Rendre les lignes focusables + activation clavier
   document.querySelectorAll('.click-rows tbody tr[data-type][data-id]').forEach(tr=>{
     tr.style.cursor = 'pointer';
     tr.tabIndex = 0;
@@ -484,8 +461,7 @@ function badgeEtat(e){
       const rows = (DATASETS[type]||[]);
       const row  = rows.find(r=>String(r.id)===String(id));
       if (!row) return;
-      renderDetails(type, row);
-      open();
+      renderDetails(type, row); open();
     });
     tr.addEventListener('keydown', (e)=>{
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.click(); }
