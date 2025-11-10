@@ -23,10 +23,10 @@ try {
 
     // ——— Détection robuste du worker ———
     $workerCandidates = [
-        $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php', // chemin attendu initialement
-        $projectRoot . '/API/Scripts/ionos_to_compteur.php', // variations de casse fréquentes
+        $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php', // chemin attendu
+        $projectRoot . '/API/Scripts/ionos_to_compteur.php', // variations de casse
         $projectRoot . '/API/scripts/ionos_to_compteur.php',
-        $projectRoot . '/import/ionos_to_compteur.php',       // si placé dans /import
+        $projectRoot . '/import/ionos_to_compteur.php',      // si tu le places dans /import
     ];
 
     $worker = null;
@@ -34,7 +34,7 @@ try {
         if (is_file($cand)) { $worker = $cand; break; }
     }
 
-    // Vérifs chemins indispensables
+    // DB (passe via includes → config/db.php)
     $includesDb = $projectRoot . '/includes/db.php';
     if (!is_file($includesDb)) {
         http_response_code(500);
@@ -42,7 +42,7 @@ try {
             'error'       => 'includes/db.php not found',
             'projectRoot' => $projectRoot,
             'path'        => $includesDb
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ]);
         exit;
     }
     if (!$worker) {
@@ -51,11 +51,10 @@ try {
             'error'       => 'ionos_to_compteur.php not found',
             'tried'       => $workerCandidates,
             'projectRoot' => $projectRoot
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ]);
         exit;
     }
 
-    // Connexion DB cible (Railway)
     require_once $includesDb; // crée $pdo
 
     // Anti-bouclage (20s par défaut)
@@ -75,7 +74,7 @@ try {
             'ran'      => false,
             'reason'   => 'not_due',
             'last_run' => $last
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ]);
         exit;
     }
 
@@ -95,5 +94,5 @@ try {
     echo json_encode([
         'error'  => 'run_ionos_if_due.php crash',
         'detail' => $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    ]);
 }

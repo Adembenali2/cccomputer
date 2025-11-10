@@ -3,7 +3,6 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
-// Attrape les fatales (parse error, require manquant, etc.)
 register_shutdown_function(function () {
     $e = error_get_last();
     if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
@@ -14,7 +13,7 @@ register_shutdown_function(function () {
             'message' => $e['message'],
             'file'    => $e['file'],
             'line'    => $e['line'],
-        ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 });
 
@@ -24,12 +23,10 @@ try {
         echo json_encode(['error' => 'POST only']); exit;
     }
 
-    // Limite batch
     $limit = (int)($_GET['limit'] ?? $_POST['limit'] ?? 10);
     if ($limit <= 0) $limit = 10;
     putenv('IONOS_BATCH_LIMIT=' . (string)$limit);
 
-    // Runner dans le même dossier /import
     $runner = __DIR__ . '/run_ionos_if_due.php';
     if (!is_file($runner)) {
         http_response_code(500);
