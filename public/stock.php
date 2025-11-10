@@ -9,86 +9,104 @@ function stateBadge(?string $etat): string {
   return '<span class="state state-'.$e.'">'.$e.'</span>';
 }
 
-/* =============================
-   Données factices (sans BDD)
-   ============================= */
+/* =========================================
+   Données “réelles” (sans BDD pour l’instant)
+   ========================================= */
 
-// Photocopieurs — (beaucoup d'infos, popup activé)
+/* Photocopieurs — pas d’état, pas de quantité (unique) */
 $copiers = [
   [
-    'id'=>'cop-001','etat'=>'A','ref'=>'COP-001','marque'=>'Kyocera','modele'=>'TASKalfa 2553ci',
-    'sn'=>'KYO2553-001','mac'=>'10:AA:22:BB:33:CC','compteur_bw'=>45213,'compteur_color'=>18322,
-    'statut'=>'Stock','qty'=>2,'emplacement'=>'Entrepôt A1','commentaire'=>'RAS'
+    'id'=>'cop-001',
+    'mac'=>'10:AA:22:BB:33:CC',
+    'marque'=>'Kyocera',
+    'modele'=>'TASKalfa 2553ci',
+    'sn'=>'KYO2553-001',
+    'compteur_bw'=>45213,
+    'compteur_color'=>18322,
+    'statut'=>'stock', /* stock | en panne | attribué à un client */
+    'emplacement'=>'dépôt', /* dépôt | chez client */
   ],
   [
-    'id'=>'cop-005','etat'=>'B','ref'=>'COP-005','marque'=>'Ricoh','modele'=>'MP C307',
-    'sn'=>'RICOH307-005','mac'=>'00:25:96:FF:EE:11','compteur_bw'=>9812,'compteur_color'=>5230,
-    'statut'=>'Réservé','qty'=>1,'emplacement'=>'Entrepôt B3','commentaire'=>'A nettoyer'
+    'id'=>'cop-005',
+    'mac'=>'00:25:96:FF:EE:11',
+    'marque'=>'Ricoh',
+    'modele'=>'MP C307',
+    'sn'=>'RICOH307-005',
+    'compteur_bw'=>9812,
+    'compteur_color'=>5230,
+    'statut'=>'attribué à un client',
+    'emplacement'=>'chez client',
   ],
   [
-    'id'=>'cop-012','etat'=>'C','ref'=>'COP-012','marque'=>'Canon','modele'=>'iR-ADV C3520',
-    'sn'=>'CAN3520-012','mac'=>'1C:4D:70:AB:44:21','compteur_bw'=>71322,'compteur_color'=>44110,
-    'statut'=>'Stock','qty'=>1,'emplacement'=>'Entrepôt C2','commentaire'=>'Traces d’usage'
+    'id'=>'cop-012',
+    'mac'=>'1C:4D:70:AB:44:21',
+    'marque'=>'Canon',
+    'modele'=>'iR-ADV C3520',
+    'sn'=>'CAN3520-012',
+    'compteur_bw'=>71322,
+    'compteur_color'=>44110,
+    'statut'=>'en panne',
+    'emplacement'=>'dépôt',
   ],
 ];
 
-// LCD — (beaucoup d'infos, popup activé)
+/* LCD — Marque / Référence / État / Modèle / Taille / Résolution / Connectique / Prix / Quantité */
 $lcd = [
   [
-    'id'=>'lcd-24a-001','etat'=>'A','ref'=>'LCD-24A-001','marque'=>'Dell','modele'=>'U2415',
-    'taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP','qty'=>12,'prix'=>129.90,
-    'garantie'=>'3 mois','commentaire'=>'Dalle parfaite'
+    'id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A',
+    'modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP',
+    'prix'=>129.90,'qty'=>12
   ],
   [
-    'id'=>'lcd-27b-004','etat'=>'B','ref'=>'LCD-27B-004','marque'=>'LG','modele'=>'27UL500',
-    'taille'=>27,'resolution'=>'3840x2160','connectique'=>'HDMI','qty'=>4,'prix'=>219.90,
-    'garantie'=>'1 mois','commentaire'=>'Micro rayure pied'
+    'id'=>'lcd-27b-004','marque'=>'LG','reference'=>'LCD-27B-004','etat'=>'B',
+    'modele'=>'27UL500','taille'=>27,'resolution'=>'3840x2160','connectique'=>'HDMI',
+    'prix'=>219.90,'qty'=>4
   ],
   [
-    'id'=>'lcd-22c-020','etat'=>'C','ref'=>'LCD-22C-020','marque'=>'HP','modele'=>'Z22n G2',
-    'taille'=>22,'resolution'=>'1920x1080','connectique'=>'DP','qty'=>6,'prix'=>79.90,
-    'garantie'=>'—','commentaire'=>'Coins du cadre usés'
+    'id'=>'lcd-22c-020','marque'=>'HP','reference'=>'LCD-22C-020','etat'=>'C',
+    'modele'=>'Z22n G2','taille'=>22,'resolution'=>'1920x1080','connectique'=>'DP',
+    'prix'=>79.90,'qty'=>6
   ],
 ];
 
-// PC reconditionnés — (beaucoup d'infos, popup activé)
+/* PC — Etat / Référence / Marque / Modèle / CPU / RAM / Stockage / OS / GPU / Réseau / Ports / Prix / Quantité */
 $pc = [
   [
-    'id'=>'pc-a-001','etat'=>'A','ref'=>'PC-A-001','marque'=>'Lenovo','modele'=>'ThinkCentre M720',
+    'id'=>'pc-a-001','etat'=>'A','reference'=>'PC-A-001','marque'=>'Lenovo','modele'=>'ThinkCentre M720',
     'cpu'=>'i5-9500','ram'=>'16 Go','stockage'=>'512 Go SSD','os'=>'Windows 11 Pro',
-    'gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6','qty'=>5,'prix'=>349.00,
-    'garantie'=>'6 mois','commentaire'=>'Châssis très propre'
+    'gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6',
+    'prix'=>349.00,'qty'=>5
   ],
   [
-    'id'=>'pc-b-010','etat'=>'B','ref'=>'PC-B-010','marque'=>'Dell','modele'=>'OptiPlex 7060',
+    'id'=>'pc-b-010','etat'=>'B','reference'=>'PC-B-010','marque'=>'Dell','modele'=>'OptiPlex 7060',
     'cpu'=>'i5-8500','ram'=>'8 Go','stockage'=>'256 Go SSD','os'=>'Windows 10 Pro',
-    'gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6','qty'=>10,'prix'=>279.00,
-    'garantie'=>'3 mois','commentaire'=>'Micro rayures façade'
+    'gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6',
+    'prix'=>279.00,'qty'=>10
   ],
   [
-    'id'=>'pc-c-015','etat'=>'C','ref'=>'PC-C-015','marque'=>'Lenovo','modele'=>'ThinkPad T460',
+    'id'=>'pc-c-015','etat'=>'C','reference'=>'PC-C-015','marque'=>'Lenovo','modele'=>'ThinkPad T460',
     'cpu'=>'i5-6300U','ram'=>'8 Go','stockage'=>'240 Go SSD','os'=>'Windows 10 Pro',
-    'gpu'=>'Intel HD 520','reseau'=>'Wi-Fi/BT','ports'=>'USB 3.0 x3','qty'=>7,'prix'=>189.00,
-    'garantie'=>'1 mois','commentaire'=>'Batterie moyenne'
+    'gpu'=>'Intel HD 520','reseau'=>'Wi-Fi/BT','ports'=>'USB 3.0 x3',
+    'prix'=>189.00,'qty'=>7
   ],
 ];
 
-// Toners — (3 infos seulement, pas de popup)
+/* Toners — Marque / Modèle / Couleur / Quantité */
 $toners = [
-  ['id'=>'tn-k-2553','modele'=>'TK-8345K','couleur'=>'Noir','qty'=>14],
-  ['id'=>'tn-c-2553','modele'=>'TK-8345C','couleur'=>'Cyan','qty'=>6],
-  ['id'=>'tn-m-307','modele'=>'MPC307-M','couleur'=>'Magenta','qty'=>3],
-  ['id'=>'tn-y-307','modele'=>'MPC307-Y','couleur'=>'Jaune','qty'=>0],
+  ['id'=>'tn-k-2553','marque'=>'Kyocera','modele'=>'TK-8345K','couleur'=>'Noir','qty'=>14],
+  ['id'=>'tn-c-2553','marque'=>'Kyocera','modele'=>'TK-8345C','couleur'=>'Cyan','qty'=>6],
+  ['id'=>'tn-m-307','marque'=>'Ricoh','modele'=>'MPC307-M','couleur'=>'Magenta','qty'=>3],
+  ['id'=>'tn-y-307','marque'=>'Ricoh','modele'=>'MPC307-Y','couleur'=>'Jaune','qty'=>0],
 ];
 
-// Papier — (3 infos seulement, pas de popup)
+/* Papier — Quantité / Marque / Poids */
 $papiers = [
-  ['id'=>'pap-a4-80','modele'=>'A4','poids'=>'80g','qty'=>120],
-  ['id'=>'pap-a3-90','modele'=>'A3','poids'=>'90g','qty'=>30],
-  ['id'=>'pap-a4-recyc','modele'=>'A4 Recyclé','poids'=>'80g','qty'=>15],
+  ['id'=>'pap-a4-80','qty'=>120,'marque'=>'Navigator','poids'=>'80g','modele'=>'A4'],
+  ['id'=>'pap-a3-90','qty'=>30,'marque'=>'Clairefontaine','poids'=>'90g','modele'=>'A3'],
+  ['id'=>'pap-a4-recyc','qty'=>15,'marque'=>'RecycPaper','poids'=>'80g','modele'=>'A4 Recyclé'],
 ];
 
-// Pour JS (datasets popup)
+/* Datasets pour le popup (seulement copiers, lcd, pc) */
 $datasets = [
   'copiers' => $copiers,
   'lcd'     => $lcd,
@@ -112,16 +130,16 @@ $datasets = [
 <div class="page-container">
   <div class="page-header">
     <h2 class="page-title">Stock</h2>
-    <p class="page-subtitle">Vue condensée — cliquez un **Photocopieur / PC / LCD** pour voir tous les détails.</p>
+    <p class="page-subtitle">Vue condensée — clique un **Photocopieur / PC / LCD** pour voir tous les détails.</p>
   </div>
 
   <div class="filters-row">
     <input type="text" id="q" placeholder="Filtrer partout (réf., modèle, SN, MAC, CPU…)" aria-label="Filtrer" />
   </div>
 
-  <!-- Grille 2 colonnes : gauche (Toner, Papier) / droite (Photocopieurs, LCD, PC) -->
+  <!-- Layout 2 colonnes : gauche (toner, papier) / droite (photocopieurs, lcd, pc) -->
   <div class="stock-grid">
-    <!-- Gauche -->
+    <!-- GAUCHE -->
     <section class="card-section left tall">
       <div class="section-head"><h3 class="section-title">Toners</h3></div>
       <div class="table-wrapper">
@@ -133,7 +151,7 @@ $datasets = [
           </thead>
           <tbody>
           <?php foreach ($toners as $t): ?>
-            <tr data-search="<?= h(strtolower($t['couleur'].' '.$t['modele'])) ?>">
+            <tr data-search="<?= h(strtolower($t['marque'].' '.$t['modele'].' '.$t['couleur'])) ?>">
               <td data-th="Couleur"><?= h($t['couleur']) ?></td>
               <td data-th="Modèle"><?= h($t['modele']) ?></td>
               <td data-th="Qté" class="td-metric <?= (int)$t['qty']===0?'is-zero':'' ?>"><?= (int)$t['qty'] ?></td>
@@ -157,7 +175,7 @@ $datasets = [
           </thead>
           <tbody>
           <?php foreach ($papiers as $p): ?>
-            <tr data-search="<?= h(strtolower($p['modele'].' '.$p['poids'])) ?>">
+            <tr data-search="<?= h(strtolower($p['marque'].' '.$p['modele'].' '.$p['poids'])) ?>">
               <td data-th="Qté" class="td-metric"><?= (int)$p['qty'] ?></td>
               <td data-th="Modèle"><?= h($p['modele']) ?></td>
               <td data-th="Poids"><?= h($p['poids']) ?></td>
@@ -170,25 +188,24 @@ $datasets = [
       </div>
     </section>
 
-    <!-- Droite -->
+    <!-- DROITE -->
     <section class="card-section right top">
       <div class="section-head"><h3 class="section-title">Photocopieurs</h3></div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact click-rows">
           <thead>
             <tr>
-              <th>État</th><th>Modèle</th><th>Qté</th>
+              <th>Modèle</th><th>N° Série</th><th>Statut</th>
             </tr>
           </thead>
           <tbody>
           <?php foreach ($copiers as $r): ?>
             <tr
               data-type="copiers" data-id="<?= h($r['id']) ?>"
-              data-search="<?= h(strtolower($r['modele'].' '.$r['ref'].' '.$r['sn'].' '.$r['mac'].' '.$r['marque'])) ?>"
-            >
-              <td data-th="État"><?= stateBadge($r['etat']) ?></td>
+              data-search="<?= h(strtolower($r['modele'].' '.$r['sn'].' '.$r['marque'].' '.$r['mac'].' '.$r['statut'].' '.$r['emplacement'])) ?>">
               <td data-th="Modèle"><strong><?= h($r['modele']) ?></strong></td>
-              <td data-th="Qté" class="td-metric"><?= (int)$r['qty'] ?></td>
+              <td data-th="N° Série"><?= h($r['sn']) ?></td>
+              <td data-th="Statut"><span class="chip"><?= h($r['statut']) ?></span></td>
             </tr>
           <?php endforeach; if (empty($copiers)): ?>
             <tr><td colspan="3">— Aucun photocopieur —</td></tr>
@@ -211,8 +228,7 @@ $datasets = [
           <?php foreach ($lcd as $row): ?>
             <tr
               data-type="lcd" data-id="<?= h($row['id']) ?>"
-              data-search="<?= h(strtolower($row['modele'].' '.$row['ref'].' '.$row['marque'].' '.$row['resolution'])) ?>"
-            >
+              data-search="<?= h(strtolower($row['modele'].' '.$row['reference'].' '.$row['marque'].' '.$row['resolution'].' '.$row['connectique'])) ?>">
               <td data-th="État"><?= stateBadge($row['etat']) ?></td>
               <td data-th="Modèle"><strong><?= h($row['modele']) ?></strong></td>
               <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
@@ -238,8 +254,7 @@ $datasets = [
           <?php foreach ($pc as $row): ?>
             <tr
               data-type="pc" data-id="<?= h($row['id']) ?>"
-              data-search="<?= h(strtolower($row['modele'].' '.$row['ref'].' '.$row['marque'].' '.$row['cpu'].' '.$row['os'])) ?>"
-            >
+              data-search="<?= h(strtolower($row['modele'].' '.$row['reference'].' '.$row['marque'].' '.$row['cpu'].' '.$row['os'].' '.$row['ram'].' '.$row['stockage'])) ?>">
               <td data-th="État"><?= stateBadge($row['etat']) ?></td>
               <td data-th="Modèle"><strong><?= h($row['modele']) ?></strong></td>
               <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
@@ -254,9 +269,7 @@ $datasets = [
   </div><!-- /.stock-grid -->
 </div><!-- /.page-container -->
 
-<!-- =============================
-     Modal détails (Photocopieurs / LCD / PC)
-     ============================= -->
+<!-- ===== Modal détails (Photocopieurs / LCD / PC) ===== -->
 <div id="detailOverlay" class="modal-overlay" aria-hidden="true"></div>
 <div id="detailModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" style="display:none;">
   <div class="modal-header">
@@ -264,14 +277,12 @@ $datasets = [
     <button type="button" id="modalClose" class="icon-btn icon-btn--close" aria-label="Fermer">×</button>
   </div>
   <div class="modal-body">
-    <div class="detail-grid" id="detailGrid">
-      <!-- rempli dynamiquement -->
-    </div>
+    <div class="detail-grid" id="detailGrid"></div>
   </div>
 </div>
 
 <script>
-// === Filtre global ===
+// Filtre global
 (function(){
   const q = document.getElementById('q');
   if (!q) return;
@@ -285,10 +296,9 @@ $datasets = [
   q.addEventListener('input', apply);
 })();
 
-// === Datasets pour popup ===
+// Datasets pour popup
 const DATASETS = <?= json_encode($datasets, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
 
-// Helpers rendu champs
 function addField(grid, label, value){
   const card = document.createElement('div');
   card.className = 'field-card';
@@ -301,7 +311,6 @@ function badgeEtat(e){
   return `<span class="state state-${e}">${e}</span>`;
 }
 
-// === Modal ===
 (function(){
   const overlay = document.getElementById('detailOverlay');
   const modal   = document.getElementById('detailModal');
@@ -316,13 +325,9 @@ function badgeEtat(e){
 
   function renderDetails(type, row){
     grid.innerHTML = '';
-    // Titre
-    titleEl.textContent = `${row.modele ?? row.ref ?? 'Détails'} — ${type.toUpperCase()}`;
+    titleEl.textContent = `${row.modele ?? row.reference ?? 'Détails'} — ${type.toUpperCase()}`;
 
-    // Champs par type
     if (type === 'copiers') {
-      addField(grid, 'État', badgeEtat(row.etat));
-      addField(grid, 'Référence', row.ref);
       addField(grid, 'Marque', row.marque);
       addField(grid, 'Modèle', row.modele);
       addField(grid, 'N° Série', row.sn);
@@ -330,12 +335,10 @@ function badgeEtat(e){
       addField(grid, 'Compteur N&B', new Intl.NumberFormat('fr-FR').format(row.compteur_bw||0));
       addField(grid, 'Compteur Couleur', new Intl.NumberFormat('fr-FR').format(row.compteur_color||0));
       addField(grid, 'Statut', row.statut);
-      addField(grid, 'Quantité', row.qty);
       addField(grid, 'Emplacement', row.emplacement);
-      addField(grid, 'Commentaire', row.commentaire);
     } else if (type === 'lcd') {
       addField(grid, 'État', badgeEtat(row.etat));
-      addField(grid, 'Référence', row.ref);
+      addField(grid, 'Référence', row.reference);
       addField(grid, 'Marque', row.marque);
       addField(grid, 'Modèle', row.modele);
       addField(grid, 'Taille', (row.taille?row.taille+'"':'—'));
@@ -343,11 +346,9 @@ function badgeEtat(e){
       addField(grid, 'Connectique', row.connectique);
       addField(grid, 'Prix', row.prix!=null ? new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(row.prix) : '—');
       addField(grid, 'Quantité', row.qty);
-      addField(grid, 'Garantie', row.garantie);
-      addField(grid, 'Commentaire', row.commentaire);
     } else if (type === 'pc') {
       addField(grid, 'État', badgeEtat(row.etat));
-      addField(grid, 'Référence', row.ref);
+      addField(grid, 'Référence', row.reference);
       addField(grid, 'Marque', row.marque);
       addField(grid, 'Modèle', row.modele);
       addField(grid, 'CPU', row.cpu);
@@ -359,14 +360,11 @@ function badgeEtat(e){
       addField(grid, 'Ports', row.ports);
       addField(grid, 'Prix', row.prix!=null ? new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(row.prix) : '—');
       addField(grid, 'Quantité', row.qty);
-      addField(grid, 'Garantie', row.garantie);
-      addField(grid, 'Commentaire', row.commentaire);
     }
   }
 
-  // Lignes cliquables
   document.querySelectorAll('.click-rows tbody tr[data-type][data-id]').forEach(tr=>{
-    tr.style.cursor='pointer';
+    tr.style.cursor = 'pointer';
     tr.addEventListener('click', ()=>{
       const type = tr.getAttribute('data-type');
       const id   = tr.getAttribute('data-id');

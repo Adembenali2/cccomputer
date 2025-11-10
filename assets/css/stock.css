@@ -1,5 +1,6 @@
 /* =========================================================
-   Stock — vue condensée (3 infos par tableau) + popup détails
+   Stock — vue condensée (3 infos) + popup détails
+   Disposition : gauche (Toners, Papier) / droite (Photocopieurs, LCD, PC)
    ========================================================= */
 
 html, body { max-width: 100%; overflow-x: hidden; }
@@ -27,7 +28,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-primary);
 }
 
-/* === Grille 2 colonnes : gauche / droite === */
+/* === Grille === */
 .stock-grid {
   display: grid;
   grid-template-columns: 1fr 1.4fr;
@@ -45,10 +46,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
   min-width: 0;
 }
 
-/* Hauteurs pour tout voir sans scroller la page (scroll interne si besoin) */
+/* Hauteurs calibrées (scroll interne au besoin) */
 .card-section.left.tall { height: 52vh; }
 .card-section.left.short{ height: 42vh; }
-
 .card-section.right.top    { height: 32vh; }
 .card-section.right.middle { height: 30vh; }
 .card-section.right.bottom { height: 32vh; }
@@ -61,10 +61,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 .section-title { margin: 0; font-size: 1.05rem; font-weight: 800; }
 
-.table-wrapper {
-  overflow: auto;
-  flex: 1;
-}
+.table-wrapper { overflow: auto; flex: 1; }
 
 .tbl-stock {
   width: 100%;
@@ -92,10 +89,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .td-metric { font-weight: 700; text-align: right; }
 .td-metric.is-zero { color: #b91c1c; font-weight: 800; }
 
-/* compact = 3 colonnes + typo un poil plus grande */
+/* Compact (3 colonnes) */
 .tbl-compact thead th, .tbl-compact tbody td { font-size: .95rem; }
 
-/* État A/B/C */
+/* Badges état */
 .state {
   display:inline-flex; align-items:center; justify-content:center;
   min-width: 1.6rem; height: 1.35rem; padding: 0 .4rem;
@@ -109,32 +106,29 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .state-C { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 .state-na { background: var(--bg-secondary); color: var(--text-muted); }
 
-/* ============ Modal détails ============ */
-.modal-open { overflow: hidden; }
+/* Chips statut */
+.chip {
+  display:inline-block; padding:2px 8px; border-radius:999px;
+  font-size:.78rem; border:1px solid var(--border-color); color: var(--text-secondary);
+  background: var(--bg-primary);
+}
 
+/* ===== Modal ===== */
+.modal-open { overflow: hidden; }
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,.45);
-  display: none;
-  z-index: 900;
-  backdrop-filter: blur(2px);
+  display: none; z-index: 900; backdrop-filter: blur(2px);
 }
-
 .modal {
-  position: fixed;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
   width: min(980px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  overflow: hidden;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 1.1rem;
+  overflow: hidden; background: var(--bg-primary);
+  border: 1px solid var(--border-color); border-radius: 1.1rem;
   box-shadow: 0 10px 40px rgba(31,41,55,0.18), 0 1.5px 3px rgba(0,0,0,0.06);
-  display: none;
-  z-index: 1000;
+  display: none; z-index: 1000;
 }
-
 .modal-header {
   display: flex; align-items: center; justify-content: center;
   padding: .65rem .85rem .55rem; position: relative;
@@ -156,24 +150,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
   width: 34px; height: 34px; border-radius: 999px; font-size: 1.1rem;
   display: grid; place-items: center;
 }
+.modal-body { overflow: auto; padding: .8rem .9rem; }
 
-.modal-body {
-  overflow: auto;
-  padding: .8rem .9rem;
-}
-
-/* Grille des champs */
 .detail-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: .6rem;
 }
-@media (max-width: 800px) {
-  .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 520px) {
-  .detail-grid { grid-template-columns: 1fr; }
-}
+@media (max-width: 800px) { .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .detail-grid { grid-template-columns: 1fr; } }
 
 .field-card {
   background: var(--bg-secondary);
@@ -186,12 +170,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-muted);
 }
 .field-card .val {
-  margin-top: .25rem;
-  font-weight: 700;
-  color: var(--text-primary);
+  margin-top: .25rem; font-weight: 700; color: var(--text-primary);
 }
 
-/* Responsif : si écran trop étroit, on autorise la page à scroller */
+/* Responsive “secours” : on passe 1 colonne et on laisse scroller toute la page */
 @media (max-width: 1100px) {
   .stock-grid { grid-template-columns: 1fr; }
   .card-section { height: auto; }
