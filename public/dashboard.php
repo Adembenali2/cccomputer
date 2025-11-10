@@ -121,7 +121,7 @@ try {
         .import-badge .ico.fail{ background:#fee2e2; color:#dc2626; }
         .import-badge .txt { white-space:nowrap; max-width:40vw; overflow:hidden; text-overflow:ellipsis; }
         @media (max-width: 640px){
-            .import-badge .txt { display:none; } /* sur mobile: on garde juste l’icône */
+            .import-badge .txt { display:none; }
         }
         .import-badge[hidden]{ display:none !important; }
     </style>
@@ -577,19 +577,16 @@ try {
         });
     })();
 
-    // --- Import auto silencieux + badge d’état (en haut à droite) ---
+    // --- Import auto silencieux + badge d’état (MÀJ : tick 20s, batch 10+10) ---
     (function(){
-        // Déclenche SFTP si > 2min  (dossier /import)
-        fetch('/import/run_import_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
-        // Déclenche IONOS si > 2min  (dossier /import)
-        fetch('/import/run_ionos_if_due.php', {method:'POST', credentials:'same-origin'}).catch(()=>{});
+        const SFTP_URL  = '/import/run_import_if_due.php';  // public
+        const IONOS_URL = '/import/trigger_ionos.php';      // proxy public -> import/run_ionos_if_due.php
 
         const badge = document.getElementById('importBadge');
         const ico   = document.getElementById('impIco');
         const txt   = document.getElementById('impTxt');
 
         function setState(state, label, titleFiles) {
-            // state: 'ok' | 'run' | 'fail' | 'none'
             ico.classList.remove('ok','run','fail');
             if (state === 'ok') { ico.textContent = '✓'; ico.classList.add('ok'); }
             else if (state === 'run') { ico.textContent = '⏳'; ico.classList.add('run'); }
@@ -604,7 +601,6 @@ try {
 
         async function refresh(){
             try{
-                // Statut depuis /import
                 const r = await fetch('/import/last_import.php', {credentials:'same-origin'});
                 if (!r.ok) throw new Error('HTTP '+r.status);
                 const d = await r.json();
@@ -628,9 +624,19 @@ try {
             }
         }
 
-        // 1er affichage puis polling léger
+        async function tick(){
+            // Déclenche SFTP (max 10 fichiers) + IONOS (max 10 compteurs)
+            fetch(SFTP_URL+'?limit=10', {method:'POST', credentials:'same-origin'}).catch(()=>{});
+            fetch(IONOS_URL+'?limit=10', {method:'POST', credentials:'same-origin'}).catch(()=>{});
+            // maj du badge après un petit délai
+            setTimeout(refresh, 1500);
+        }
+
+        // premier run immédiat
+        tick();
         refresh();
-        setInterval(refresh, 20000);
+        // toutes les 20 secondes
+        setInterval(tick, 20000);
     })();
     </script>
 </body>
