@@ -23,10 +23,10 @@ try {
 
     // ——— Détection robuste du worker ———
     $workerCandidates = [
-        $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php', // chemin attendu
-        $projectRoot . '/API/Scripts/ionos_to_compteur.php', // variations de casse
+        $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php',
+        $projectRoot . '/API/Scripts/ionos_to_compteur.php',
         $projectRoot . '/API/scripts/ionos_to_compteur.php',
-        $projectRoot . '/import/ionos_to_compteur.php',      // si tu le places dans /import
+        $projectRoot . '/import/ionos_to_compteur.php',
     ];
 
     $worker = null;
@@ -34,7 +34,7 @@ try {
         if (is_file($cand)) { $worker = $cand; break; }
     }
 
-    // DB (passe via includes → config/db.php)
+    // Vérifs
     $includesDb = $projectRoot . '/includes/db.php';
     if (!is_file($includesDb)) {
         http_response_code(500);
@@ -81,18 +81,35 @@ try {
     // Marquer le run
     $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
 
-    // Limite batch (priorité à env, sinon GET/POST, sinon 10)
+    // Limite batch
     $limit = (int)(getenv('IONOS_BATCH_LIMIT') ?: ($_GET['limit'] ?? $_POST['limit'] ?? 10));
     if ($limit <= 0) $limit = 10;
     putenv('IONOS_BATCH_LIMIT=' . (string)$limit);
 
-    // Lancer le worker : il doit echo un JSON puis exit
-    require $worker;
+    // Lancer le worker et capturer toute sortie/erreur
+    ob_start();
+    try {
+        require $worker; // doit ECHO un JSON puis exit
+        $out = ob_get_clean();
+        // si le worker n'a pas exit, on renvoie ce qu'il a produit
+        if ($out !== '') {
+            echo $out;
+        }
+    } catch (Throwable $we) {
+        $out = ob_get_clean();
+        http_response_code(500);
+        echo json_encode([
+            'error'       => 'worker exception',
+            'worker'      => $worker,
+            'message'     => $we->getMessage(),
+            'trace'       => $we->getTraceAsString(),
+            'bufferedOut' => $out,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
 
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode([
         'error'  => 'run_ionos_if_due.php crash',
         'detail' => $e->getMessage()
-    ]);
-}
+    ],
