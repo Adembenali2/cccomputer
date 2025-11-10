@@ -1,15 +1,15 @@
 <?php
-// import/run_ionos_if_due.php
+// /import/run_ionos_if_due.php
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 try {
   $projectRoot = dirname(__DIR__);
 
-  // ⬅️ IMPORTANT : ta stack côté front utilise includes/db.php
+  // Utilise la même connexion que le front
   require_once $projectRoot . '/includes/db.php'; // $pdo Railway
 
-  // tables de suivi
+  // Tables de suivi
   $pdo->exec("CREATE TABLE IF NOT EXISTS app_kv (k VARCHAR(64) PRIMARY KEY, v TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
   $pdo->exec("CREATE TABLE IF NOT EXISTS sftp_jobs (
     id INT NOT NULL AUTO_INCREMENT,
@@ -29,7 +29,7 @@ try {
     PRIMARY KEY (id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-  // rate-limit 20s (ou env)
+  // Rate-limit (20s par défaut)
   $INTERVAL = (int)(getenv('IONOS_IMPORT_INTERVAL_SEC') ?: 20);
   $key = 'ionos_last_run';
   $last = $pdo->query("SELECT v FROM app_kv WHERE k='{$key}'")->fetchColumn();
@@ -38,16 +38,16 @@ try {
     echo json_encode(['ran'=>false,'reason'=>'not_due','last_run'=>$last]); exit;
   }
 
-  // crée un job 'running'
+  // MàJ last run + job running
   $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
   $pdo->prepare("INSERT INTO sftp_jobs(status, started_at) VALUES('running', NOW())")->execute();
   $jobId = (int)$pdo->lastInsertId();
 
-  // batch size (par défaut 10)
+  // Batch limit (défaut 10)
   $limit = (int)($_POST['limit'] ?? $_GET['limit'] ?? 10);
   if ($limit <= 0) $limit = 10;
 
-  // lance le worker
+  // Lance le worker
   $php    = PHP_BINARY ?: 'php';
   $script = $projectRoot . '/API/SCRIPTS/ionos_to_compteur.php';
   if (!is_file($script)) {
@@ -83,7 +83,6 @@ try {
   ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 
 } catch (Throwable $e) {
-  // Essaie d’écrire une trace lisible côté client
   http_response_code(500);
   echo json_encode(['error'=>'run_ionos_if_due.php crash','detail'=>$e->getMessage()]);
 }

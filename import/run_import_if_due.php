@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
+
 require_once dirname(__DIR__) . '/../includes/auth.php';
 require_once dirname(__DIR__) . '/../includes/db.php';
 
@@ -22,7 +23,7 @@ $php = PHP_BINARY ?: 'php';
 $cmd = escapeshellcmd($php).' '.escapeshellarg(__DIR__.'/upload_compteur.php');
 $desc=[1=>['pipe','w'],2=>['pipe','w']];
 
-// Passe le batch au worker SFTP
+// passe le batch au worker SFTP
 $env = $_ENV + $_SERVER + ['SFTP_BATCH_LIMIT' => (string)$limit];
 
 $proc=proc_open($cmd,$desc,$pipes,__DIR__,$env);

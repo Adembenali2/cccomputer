@@ -1,10 +1,10 @@
 <?php
-// API/SCRIPTS/ionos_to_compteur.php
+// /API/SCRIPTS/ionos_to_compteur.php
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 $projectRoot = dirname(__DIR__, 2);
-require_once $projectRoot . '/config/db.php'; // $pdo = Railway (DEST)
+require_once $projectRoot . '/includes/db.php'; // $pdo = Railway (DEST)
 
 function pdo_ionos(): PDO {
   $host = getenv('IONOS_HOST') ?: 'db550618985.db.1and1.com';
@@ -44,6 +44,11 @@ try {
     triggered_by INT DEFAULT NULL,
     PRIMARY KEY (id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+  // tenter d'ajouter l'unicité (ignorer l'erreur si déjà là)
+  try {
+    $dst->exec("ALTER TABLE compteur_relevee ADD UNIQUE KEY ux_mac_ts (mac_norm, Timestamp)");
+  } catch (Throwable $ignored) {}
 
   // curseur
   $cur = $dst->query("SELECT last_ts, last_mac FROM ionos_cursor WHERE id=1")->fetch() ?: ['last_ts'=>null,'last_mac'=>null];
@@ -86,7 +91,7 @@ try {
     if (!$prev || ($ts && $ts > $prev)) $lastTonerByPid[$pid] = ['ts'=>$ts,'tb'=>$tb,'tc'=>$tc,'tm'=>$tm,'ty'=>$ty];
   }
 
-  // 3) dernières relèves par mac (après curseur), limitées à N, tri asc (date, mac)
+  // 3) dernières relèves par mac (après curseur), tri asc (date, mac), limitées à N
   $latest = $src->query("SELECT mac, MAX(date) AS max_date FROM last_compteur GROUP BY mac")->fetchAll();
   $rows = [];
   $st = $src->prepare("SELECT ref_client, mac, pid, etat, date, totalNB, totalCouleur FROM last_compteur WHERE mac=:mac AND date=:d");
@@ -104,7 +109,7 @@ try {
   });
   if (count($rows) > $LIMIT) $rows = array_slice($rows, 0, $LIMIT);
 
-  // 4) insert IGNORE dans compteur_relevee (unicité mac_norm+Timestamp en BDD)
+  // 4) insert IGNORE dans compteur_relevee (grâce à UNIQUE (mac_norm, Timestamp))
   $dst->beginTransaction();
   $ins = $dst->prepare("
     INSERT IGNORE INTO compteur_relevee

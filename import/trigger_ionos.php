@@ -1,16 +1,15 @@
 <?php
-// public/import/trigger_ionos.php
+// /public/import/trigger_ionos.php
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-  // POST only
   if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     http_response_code(405);
     echo json_encode(['error'=>'POST only']); exit;
   }
 
-  // (Option) Token
+  // (Option) Sécurité par token
   $expected = getenv('IMPORT_TOKEN') ?: null;
   if ($expected) {
     $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
@@ -20,7 +19,7 @@ try {
     }
   }
 
-  // délègue au runner hors public
+  // Délègue au runner hors public
   $runner = dirname(__DIR__, 2) . '/import/run_ionos_if_due.php';
   if (!is_file($runner)) {
     http_response_code(500);

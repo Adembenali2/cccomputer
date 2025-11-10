@@ -97,7 +97,6 @@ try {
         .table th { background:#f3f4f6; text-align:left; }
         .chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
 
-        /* —— Badge d’état d’import (discret en haut à droite) —— */
         .dashboard-header { position: relative; }
         .import-badge {
             position:absolute; right:0; top:2px;
@@ -133,7 +132,6 @@ try {
         <div class="dashboard-header">
             <h2 class="dashboard-title">Tableau de Bord</h2>
 
-            <!-- Badge d’état d’import -->
             <div class="import-badge" id="importBadge" aria-live="polite" title="État du dernier import">
                 <span class="ico run" id="impIco">⏳</span>
                 <span class="txt" id="impTxt">Import : vérification…</span>
@@ -141,7 +139,7 @@ try {
         </div>
 
         <div class="dashboard-grid">
-            <!-- Paiements -->
+            <!-- Cartes inchangées -->
             <div class="dash-card" data-href="paiements.php" tabindex="0" role="button" aria-label="Voir les paiements en attente">
                 <div class="card-icon payments" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
@@ -153,7 +151,6 @@ try {
                 <p class="card-count <?= htmlspecialchars($payClass, ENT_QUOTES, 'UTF-8') ?>"><?= (int)$nb_paiements_en_attente ?></p>
             </div>
 
-            <!-- SAV -->
             <div class="dash-card" data-href="sav.php" tabindex="0" role="button" aria-label="Accéder au SAV">
                 <div class="card-icon sav" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
@@ -164,7 +161,6 @@ try {
                 <p class="card-count"><?= (int)$nb_sav_a_traiter ?></p>
             </div>
 
-            <!-- Livraisons -->
             <div class="dash-card" data-href="livraison.php" tabindex="0" role="button" aria-label="Accéder aux livraisons">
                 <div class="card-icon deliveries" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
@@ -178,7 +174,6 @@ try {
                 <p class="card-count"><?= (int)$nb_livraisons_a_faire ?></p>
             </div>
 
-            <!-- Clients -->
             <div class="dash-card" data-href="clients.php" tabindex="0" role="button" aria-label="Accéder aux clients">
                 <div class="card-icon clients" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2">
@@ -192,7 +187,6 @@ try {
                 <p class="card-count"><?= (int)$nbClients ?></p>
             </div>
 
-            <!-- Stock -->
             <div class="dash-card" data-href="stock.php" tabindex="0" role="button" aria-label="Accéder au stock">
                 <div class="card-icon stock" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2">
@@ -232,7 +226,6 @@ try {
                 </div>
             </div>
 
-            <!-- Historiques -->
             <div class="dash-card" data-href="historique.php" tabindex="0" role="button" aria-label="Accéder aux historiques">
                 <div class="card-icon history" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
@@ -243,176 +236,6 @@ try {
                 <h3 class="card-title">Historiques</h3>
                 <p class="card-count"><?= htmlspecialchars($nHistorique, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
-        </div>
-    </div>
-
-    <!-- Bouton Support (inchangé) -->
-    <a href="#" class="support-btn" id="supportButton" aria-label="Support client">
-        <span class="support-badge"><?= (int)$nbClients ?></span>
-        <svg width="32" height="32" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" stroke-width="2.4"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="8" r="5" fill="currentColor" fill-opacity="0.22"/>
-        <path d="M3.5 10a8.5 8.5 0 0 1 17 0"/>
-        <rect x="1.5" y="9" width="5" height="8" rx="2.5" ry="2.5"/>
-        <rect x="17.5" y="9" width="5" height="8" rx="2.5" ry="2.5"/>
-        <path d="M18.5 16.5a3.5 3.5 0 0 1-3.5 3.5H11"/>
-        <circle cx="10.5" cy="20" r="0.9" fill="currentColor"/>
-        <path d="M4 22a8 4 0 0 1 16 0"/>
-        </svg>
-    </a>
-
-    <!-- Popup Support (inchangé) -->
-    <div class="popup-overlay" id="supportOverlay"></div>
-    <div class="support-popup" id="supportPopup" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
-        <div class="popup-header">
-            <h3 class="popup-title" id="popupTitle">Liste des Clients</h3>
-            <button class="close-btn" id="closePopup" aria-label="Fermer la fenêtre">&times;</button>
-        </div>
-
-        <div class="popup-content">
-            <!-- Vue LISTE -->
-            <div id="clientListView">
-                <input
-                    type="text"
-                    id="clientSearchInput"
-                    class="client-search-bar"
-                    placeholder="Filtrer par nom, raison sociale, prénom ou numéro client…"
-                    autocomplete="off"
-                    aria-label="Rechercher un client"
-                >
-                <div class="clients-list" id="clientsList">
-                    <?php foreach ($clients as $client): ?>
-                        <?php
-                            $cId     = (int)($client['id'] ?? 0);
-                            $raison  = htmlspecialchars($client['raison_sociale']   ?? '', ENT_QUOTES, 'UTF-8');
-                            $nom     = htmlspecialchars($client['nom_dirigeant']    ?? '', ENT_QUOTES, 'UTF-8');
-                            $prenom  = htmlspecialchars($client['prenom_dirigeant'] ?? '', ENT_QUOTES, 'UTF-8');
-                            $numero  = htmlspecialchars($client['numero_client']    ?? '', ENT_QUOTES, 'UTF-8');
-                            $email   = htmlspecialchars($client['email']            ?? '', ENT_QUOTES, 'UTF-8');
-
-                            $dNom    = htmlspecialchars(strtolower($client['nom_dirigeant']    ?? ''), ENT_QUOTES, 'UTF-8');
-                            $dPrenom = htmlspecialchars(strtolower($client['prenom_dirigeant'] ?? ''), ENT_QUOTES, 'UTF-8');
-                            $dRaison = htmlspecialchars(strtolower($client['raison_sociale']   ?? ''), ENT_QUOTES, 'UTF-8');
-                            $dNum    = htmlspecialchars(strtolower($client['numero_client']    ?? ''), ENT_QUOTES, 'UTF-8');
-                        ?>
-                        <a href="#"
-                           class="client-card"
-                           data-client-id="<?= $cId ?>"
-                           data-raison-l="<?= $dRaison ?>"
-                           data-nom-l="<?= $dNom ?>"
-                           data-prenom-l="<?= $dPrenom ?>"
-                           data-numero-l="<?= $dNum ?>"
-                           aria-label="Ouvrir la fiche du client <?= $raison ?>">
-                            <div class="client-info">
-                                <strong><?= $raison ?></strong>
-                                <span><?= $nom ?> <?= $prenom ?></span>
-                                <span><?= $numero ?></span>
-                                <span><?= $email ?></span>
-                            </div>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <!-- Vue FICHE -->
-            <div id="clientDetailView" class="client-detail-view" aria-hidden="true">
-                <div class="cdv-wrap">
-                    <aside class="cdv-sidebar" role="tablist" aria-label="Sections de la fiche client">
-                        <button class="cdv-nav-btn cdv-back" id="cdvBackBtn" type="button">← Retour à la liste</button>
-                        <button class="cdv-nav-btn" data-tab="home" role="tab" aria-selected="true">Accueil</button>
-                        <button class="cdv-nav-btn" data-tab="call" role="tab" aria-selected="false">Appel</button>
-                        <button class="cdv-nav-btn" data-tab="sav" role="tab" aria-selected="false">SAV</button>
-                        <button class="cdv-nav-btn" data-tab="buy" role="tab" aria-selected="false">Achat</button>
-                    </aside>
-
-                    <section class="cdv-main">
-                        <div class="cdv-header">
-                            <div>
-                                <div class="cdv-title" id="cdvTitle">Client</div>
-                                <div class="cdv-sub" id="cdvSub"></div>
-                            </div>
-                            <div class="cdv-actions"></div>
-                        </div>
-
-                        <!-- ACCUEIL -->
-                        <div id="cdvTab-home" class="cdv-tab" data-tab="home">
-                            <div class="cdv-grid" id="clientFieldsGrid">
-                                <?php
-                                $clientFields = [
-                                    'numero_client' => 'Numéro client',
-                                    'raison_sociale'=> 'Raison sociale',
-                                    'adresse'       => 'Adresse',
-                                    'code_postal'   => 'Code postal',
-                                    'ville'         => 'Ville',
-                                    'adresse_livraison' => 'Adresse livraison',
-                                    'livraison_identique'=> 'Livraison identique',
-                                    'siret'         => 'SIRET',
-                                    'numero_tva'    => 'N° TVA',
-                                    'depot_mode'    => 'Mode de paiement',
-                                    'nom_dirigeant' => 'Nom dirigeant',
-                                    'prenom_dirigeant' => 'Prénom dirigeant',
-                                    'telephone1'    => 'Téléphone 1',
-                                    'telephone2'    => 'Téléphone 2',
-                                    'email'         => 'Email',
-                                    'parrain'       => 'Parrain',
-                                    'offre'         => 'Offre',
-                                    'date_creation' => 'Date création',
-                                    'date_dajout'   => 'Date d’ajout',
-                                    'pdf1' => 'PDF 1', 'pdf2' => 'PDF 2', 'pdf3' => 'PDF 3', 'pdf4' => 'PDF 4', 'pdf5' => 'PDF 5',
-                                    'pdfcontrat'    => 'Contrat (PDF)',
-                                    'iban'          => 'IBAN',
-                                ];
-                                foreach ($clientFields as $key => $label): ?>
-                                    <div class="cdv-field" data-field="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>">
-                                        <div class="lbl"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></div>
-                                        <div class="val" id="cf-<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>">—</div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-
-                            <div class="cdv-field" style="margin-top:10px;">
-                                <div class="lbl">Matériels & derniers compteurs</div>
-                                <div class="val">
-                                    <div id="devicesWrapper">
-                                        <table class="table" id="devicesTable">
-                                            <thead>
-                                                <tr>
-                                                    <th>Serial</th>
-                                                    <th>MAC</th>
-                                                    <th>Modèle</th>
-                                                    <th>Statut</th>
-                                                    <th>Toner K</th>
-                                                    <th>C</th>
-                                                    <th>M</th>
-                                                    <th>Y</th>
-                                                    <th>Total BW</th>
-                                                    <th>Total Couleur</th>
-                                                    <th>Dernière relève</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="devicesTbody">
-                                                <tr><td colspan="11">Aucun appareil lié.</td></tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="cdvTab-call" class="cdv-tab" data-tab="call" style="display:none;">
-                            <div class="cdv-field"><div class="lbl">Appels</div><div class="val">À intégrer.</div></div>
-                        </div>
-                        <div id="cdvTab-sav" class="cdv-tab" data-tab="sav" style="display:none;">
-                            <div class="cdv-field"><div class="lbl">SAV</div><div class="val">À intégrer.</div></div>
-                        </div>
-                        <div id="cdvTab-buy" class="cdv-tab" data-tab="buy" style="display:none;">
-                            <div class="cdv-field"><div class="lbl">Achats</div><div class="val">À intégrer.</div></div>
-                        </div>
-                    </section>
-                </div>
-            </div>
-            <!-- /Vue FICHE -->
         </div>
     </div>
 
@@ -577,7 +400,7 @@ try {
         });
     })();
 
-    // --- Import auto silencieux + badge d’état (MÀJ : tick 20s, batch 10+10) ---
+    // --- Import auto silencieux + badge (tick 20s, batch 10 + 10) ---
     (function(){
         const SFTP_URL  = '/import/run_import_if_due.php';  // public
         const IONOS_URL = '/import/trigger_ionos.php';      // proxy public -> import/run_ionos_if_due.php
@@ -596,6 +419,22 @@ try {
             if (label) txt.textContent = label;
             if (titleFiles && Array.isArray(titleFiles) && titleFiles.length) {
                 badge.title = 'Fichiers ajoutés : ' + titleFiles.join(', ');
+            }
+        }
+
+        async function callJSON(url){
+            try{
+                const res = await fetch(url, {method:'POST', credentials:'same-origin'});
+                const text = await res.text();
+                let data = null; try{ data = text ? JSON.parse(text) : null; }catch(e){}
+                if(!res.ok){
+                    console.error(`[IMPORT] ${url} → ${res.status} ${res.statusText}`, data || text);
+                    return { ok:false, status:res.status, body:(data||text) };
+                }
+                return { ok:true, status:res.status, body:data };
+            }catch(err){
+                console.error(`[IMPORT] ${url} → fetch failed`, err);
+                return { ok:false, error:String(err) };
             }
         }
 
@@ -625,18 +464,16 @@ try {
         }
 
         async function tick(){
-            // Déclenche SFTP (max 10 fichiers) + IONOS (max 10 compteurs)
-            fetch(SFTP_URL+'?limit=10', {method:'POST', credentials:'same-origin'}).catch(()=>{});
-            fetch(IONOS_URL+'?limit=10', {method:'POST', credentials:'same-origin'}).catch(()=>{});
-            // maj du badge après un petit délai
+            const [sftp, ionos] = await Promise.allSettled([
+                callJSON(SFTP_URL+'?limit=10'),
+                callJSON(IONOS_URL+'?limit=10'),
+            ]);
             setTimeout(refresh, 1500);
         }
 
-        // premier run immédiat
-        tick();
-        refresh();
-        // toutes les 20 secondes
-        setInterval(tick, 20000);
+        tick();        // premier run
+        refresh();     // premier badge
+        setInterval(tick, 20000); // toutes les 20s
     })();
     </script>
 </body>
