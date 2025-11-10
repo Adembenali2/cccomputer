@@ -1,13 +1,11 @@
 <?php
 // /public/stock.php
 require_once __DIR__ . '/../includes/auth.php';
-// Pas de DB ici : architecture & données factices uniquement
 
 /** Helpers **/
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
-/** Données factices (à remplacer plus tard par la BDD) **/
-// LCD regroupés par état A/B/C
+/** Données factices (à brancher sur BDD plus tard) **/
 $lcd = [
   'A' => [
     ['ref'=>'LCD-24A-001','marque'=>'Dell','modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','qty'=>12,'prix'=>129.90],
@@ -21,7 +19,6 @@ $lcd = [
   ],
 ];
 
-// PC reconditionnés, regroupés par état A/B/C
 $pc = [
   'A' => [
     ['ref'=>'PC-A-001','marque'=>'Lenovo','modele'=>'ThinkCentre M720','cpu'=>'i5-9500','ram'=>'16 Go','stockage'=>'512 Go SSD','os'=>'Windows 11 Pro','qty'=>5,'prix'=>349.00],
@@ -35,13 +32,11 @@ $pc = [
   ],
 ];
 
-// Photocopieurs
 $copiers = [
   ['ref'=>'COPSN-001','marque'=>'Kyocera','modele'=>'TASKalfa 2553ci','sn'=>'KYO2553-001','mac'=>'10:AA:22:BB:33:CC','compteur_bw'=>45213,'compteur_color'=>18322,'statut'=>'Stock','qty'=>2],
   ['ref'=>'COPSN-005','marque'=>'Ricoh','modele'=>'MP C307','sn'=>'RICOH307-005','mac'=>'00:25:96:FF:EE:11','compteur_bw'=>9812,'compteur_color'=>5230,'statut'=>'Réservé','qty'=>1],
 ];
 
-// Toners
 $toners = [
   ['ref'=>'TN-K-2553','marque'=>'Kyocera','modele'=>'TK-8345K','couleur'=>'Noir','compat'=>'TA 2553ci / 3253ci','qty'=>14],
   ['ref'=>'TN-C-2553','marque'=>'Kyocera','modele'=>'TK-8345C','couleur'=>'Cyan','compat'=>'TA 2553ci / 3253ci','qty'=>6],
@@ -49,14 +44,13 @@ $toners = [
   ['ref'=>'TN-Y-307','marque'=>'Ricoh','modele'=>'MPC307-Y','couleur'=>'Jaune','compat'=>'MP C307','qty'=>0],
 ];
 
-// Papier
 $papiers = [
   ['ref'=>'PAP-A4-80','type'=>'A4 80g','format'=>'210x297','couleur'=>'Blanc','qty'=>120],
   ['ref'=>'PAP-A3-90','type'=>'A3 90g','format'=>'297x420','couleur'=>'Blanc','qty'=>30],
   ['ref'=>'PAP-A4-RECYC','type'=>'A4 80g Recyclé','format'=>'210x297','couleur'=>'Blanc','qty'=>15],
 ];
 
-/** Totaux rapides **/
+/** Totaux **/
 function sumQty(array $rows): int { $t=0; foreach($rows as $r){ $t+=(int)($r['qty']??0);} return $t; }
 $lcdTotals = ['A'=>sumQty($lcd['A']), 'B'=>sumQty($lcd['B']), 'C'=>sumQty($lcd['C'])];
 $pcTotals  = ['A'=>sumQty($pc['A']),  'B'=>sumQty($pc['B']),  'C'=>sumQty($pc['C'])];
@@ -72,14 +66,14 @@ $papiersTotal = sumQty($papiers);
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Stock - CCComputer</title>
 
-  <!-- mêmes CSS de base que clients.php -->
+  <!-- mêmes bases que clients.php -->
   <link rel="stylesheet" href="/assets/css/main.css" />
   <link rel="stylesheet" href="/assets/css/stock.css" />
 </head>
 <body class="page-stock">
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
-<div class="page-container"><!-- même conteneur que clients.php -->
+<div class="page-container">
   <div class="page-header">
     <h2 class="page-title">Stock</h2>
     <p class="page-subtitle">
@@ -89,28 +83,20 @@ $papiersTotal = sumQty($papiers);
     </p>
   </div>
 
-  <!-- Barre de filtres + navigation (style calqué sur clients.php) -->
+  <!-- Filtre global (agit sur tous les tableaux) -->
   <div class="filters-row">
-    <input type="text" id="q" placeholder="Filtrer (réf., marque, modèle…)" aria-label="Filtrer" />
-    <div class="tabs">
-      <button class="tab-btn" data-tab="lcd" aria-selected="true">LCD</button>
-      <button class="tab-btn" data-tab="pc" aria-selected="false">PC</button>
-      <button class="tab-btn" data-tab="copiers" aria-selected="false">Photocopieurs</button>
-      <button class="tab-btn" data-tab="toners" aria-selected="false">Toners</button>
-      <button class="tab-btn" data-tab="paper" aria-selected="false">Papier</button>
-    </div>
+    <input type="text" id="q" placeholder="Filtrer partout (réf., marque, modèle, SN, MAC…)" aria-label="Filtrer" />
   </div>
 
-  <!-- ===== LCD (A/B/C) ===== -->
-  <section id="tab-lcd" class="tab-panel" role="region" aria-labelledby="LCD">
-    <div class="subtabs" role="tablist" aria-label="LCD par état">
-      <button class="subtab-btn" data-sub="A" aria-selected="true">A</button>
-      <button class="subtab-btn" data-sub="B" aria-selected="false">B</button>
-      <button class="subtab-btn" data-sub="C" aria-selected="false">C</button>
-    </div>
-
+  <!-- ===== LCD (A + B + C visibles) ===== -->
+  <h3 class="section-title">LCD</h3>
+  <div class="section-grid">
     <?php foreach (['A','B','C'] as $etat): ?>
-      <div class="subpanel" id="lcd-<?= $etat ?>" <?= $etat==='A'?'':'style="display:none;"' ?>>
+      <section class="card-section">
+        <div class="section-head">
+          <span class="pill">État <?= h($etat) ?></span>
+          <span class="muted"><?= (int)array_sum(array_map(fn($r)=>$r['qty']??0, $lcd[$etat] ?? [])) ?> en stock</span>
+        </div>
         <div class="table-wrapper">
           <table class="tbl-stock">
             <thead>
@@ -136,20 +122,19 @@ $papiersTotal = sumQty($papiers);
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     <?php endforeach; ?>
-  </section>
+  </div>
 
-  <!-- ===== PC (A/B/C) ===== -->
-  <section id="tab-pc" class="tab-panel" role="region" aria-labelledby="PC" style="display:none;">
-    <div class="subtabs" role="tablist" aria-label="PC par état">
-      <button class="subtab-btn" data-sub="A" aria-selected="true">A</button>
-      <button class="subtab-btn" data-sub="B" aria-selected="false">B</button>
-      <button class="subtab-btn" data-sub="C" aria-selected="false">C</button>
-    </div>
-
+  <!-- ===== PC (A + B + C visibles) ===== -->
+  <h3 class="section-title">PC reconditionnés</h3>
+  <div class="section-grid">
     <?php foreach (['A','B','C'] as $etat): ?>
-      <div class="subpanel" id="pc-<?= $etat ?>" <?= $etat==='A'?'':'style="display:none;"' ?>>
+      <section class="card-section">
+        <div class="section-head">
+          <span class="pill">État <?= h($etat) ?></span>
+          <span class="muted"><?= (int)array_sum(array_map(fn($r)=>$r['qty']??0, $pc[$etat] ?? [])) ?> en stock</span>
+        </div>
         <div class="table-wrapper">
           <table class="tbl-stock">
             <thead>
@@ -177,12 +162,13 @@ $papiersTotal = sumQty($papiers);
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     <?php endforeach; ?>
-  </section>
+  </div>
 
   <!-- ===== Photocopieurs ===== -->
-  <section id="tab-copiers" class="tab-panel" role="region" aria-labelledby="Photocopieurs" style="display:none;">
+  <h3 class="section-title">Photocopieurs</h3>
+  <section class="card-section">
     <div class="table-wrapper">
       <table class="tbl-stock">
         <thead>
@@ -213,7 +199,8 @@ $papiersTotal = sumQty($papiers);
   </section>
 
   <!-- ===== Toners ===== -->
-  <section id="tab-toners" class="tab-panel" role="region" aria-labelledby="Toners" style="display:none;">
+  <h3 class="section-title">Toners</h3>
+  <section class="card-section">
     <div class="table-wrapper">
       <table class="tbl-stock">
         <thead>
@@ -240,7 +227,8 @@ $papiersTotal = sumQty($papiers);
   </section>
 
   <!-- ===== Papier ===== -->
-  <section id="tab-paper" class="tab-panel" role="region" aria-labelledby="Papier" style="display:none;">
+  <h3 class="section-title">Papier</h3>
+  <section class="card-section">
     <div class="table-wrapper">
       <table class="tbl-stock">
         <thead>
@@ -264,47 +252,10 @@ $papiersTotal = sumQty($papiers);
       </table>
     </div>
   </section>
-</div><!-- /.page-container -->
+</div>
 
-<!-- JS minimal (même logique que clients.php : filtres & lignes responsives) -->
+<!-- Filtre global : agit sur toutes les lignes de tous les tableaux -->
 <script>
-// Navigation onglets principaux
-(function(){
-  const panels = {
-    lcd: document.getElementById('tab-lcd'),
-    pc: document.getElementById('tab-pc'),
-    copiers: document.getElementById('tab-copiers'),
-    toners: document.getElementById('tab-toners'),
-    paper: document.getElementById('tab-paper'),
-  };
-  const tabBtns = document.querySelectorAll('.tab-btn');
-  function showTab(name){
-    Object.keys(panels).forEach(k => panels[k].style.display = (k===name)?'block':'none');
-    tabBtns.forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab===name)));
-    document.getElementById('q')?.focus();
-  }
-  tabBtns.forEach(b => b.addEventListener('click', ()=>showTab(b.dataset.tab)));
-})();
-
-// Sous-onglets A/B/C pour LCD & PC
-(function(){
-  function bindSubtabs(prefix){
-    const wrap = document.querySelector(`#tab-${prefix} .subtabs`);
-    if (!wrap) return;
-    const buttons = wrap.querySelectorAll('.subtab-btn');
-    function showSub(val){
-      buttons.forEach(b => b.setAttribute('aria-selected', String(b.dataset.sub===val)));
-      document.querySelectorAll(`#tab-${prefix} .subpanel`).forEach(p => {
-        p.style.display = p.id === `${prefix}-${val}` ? 'block' : 'none';
-      });
-    }
-    buttons.forEach(btn => btn.addEventListener('click', ()=>showSub(btn.dataset.sub)));
-  }
-  bindSubtabs('lcd');
-  bindSubtabs('pc');
-})();
-
-// Filtre rapide (client-side)
 (function(){
   const q = document.getElementById('q');
   if (!q) return;
