@@ -392,8 +392,9 @@ try {
             document.body.style.overflow = '';
         }
 
+        // SEUL le bouton flottant ouvre la popup
         btn && btn.addEventListener('click', openPopup);
-        clientsCard && clientsCard.addEventListener('click', openPopup);
+
         overlay && overlay.addEventListener('click', closePopup);
         closeBtn && closeBtn.addEventListener('click', closePopup);
 
