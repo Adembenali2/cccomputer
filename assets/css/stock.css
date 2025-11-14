@@ -33,7 +33,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* Carte/section */
 .card-section {
-  display: inline-block;
+  display: inline-block;          /* requis avec column-count */
   width: 100%;
   margin: 0 0 .75rem;
   break-inside: avoid;
@@ -62,8 +62,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* ================== TABLES ================== */
 .table-wrapper { overflow-x: auto; }
 
-/* Aligner colonnes = même grille thead/tbody
-   -> table-layout: fixed + <colgroup> pour chaque table */
+/* Aligner les colonnes: table-layout fixed + colgroup */
 .tbl-stock {
   width: 100%;
   border-collapse: separate;
@@ -71,15 +70,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
   table-layout: fixed;
 }
 
-/* Largeurs par rôle de colonne (réutilisées via <col class="...">) */
+/* Largeurs de colonnes réutilisées par <col class="..."> */
 .col-qty     { width: 88px; }
 .col-poids   { width: 120px; }
 .col-couleur { width: 140px; }
 .col-statut  { width: 120px; }
 .col-etat    { width: 88px; }
 .col-sn      { width: 220px; }
-/* Les modèles prennent le reste */
-.col-modele  { width: auto; }
+.col-modele  { width: auto; } /* prend le reste */
 
 .tbl-stock thead th{
   background: var(--bg-tertiary);
@@ -97,13 +95,25 @@ html, body { max-width: 100%; overflow-x: hidden; }
   vertical-align: top;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis; /* important pour fixed layout */
+  text-overflow: ellipsis; /* utile avec table-layout: fixed */
 }
 .tbl-stock tbody tr:hover { background: var(--bg-secondary); }
 .td-metric { font-weight: 700; text-align: right; }
 .td-metric.is-zero { color: #b91c1c; font-weight: 800; }
 
-/* Compact */
+/* Alignements cohérents th/td par colonne */
+th.th-left,  td.td-left  { text-align: left; }
+th.th-right, td.td-right { text-align: right; }
+th.th-center,td.td-center{ text-align: center; }
+
+th.th-qty,   td.td-qty   { text-align: right; }   /* Qté */
+th.th-poids, td.td-poids { text-align: right; }   /* Poids (peut passer à left si souhaité) */
+th.th-modele,td.td-modele{ text-align: left; }    /* Modèle */
+th.th-sn,    td.td-sn    { text-align: left; }    /* N° Série */
+th.th-statut,td.td-statut{ text-align: center; }  /* Statut */
+th.th-etat,  td.td-etat  { text-align: center; }  /* État */
+
+/* Compact (densité) */
 .tbl-compact thead th, .tbl-compact tbody td { font-size: .95rem; }
 
 /* Badges état + chip */
@@ -117,7 +127,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .state-A { background: #dcfce7; color: #166534; border-color: #86efac; }
 .state-B { background: #fef9c3; color: #854d0e; border-color: #fde68a; }
 .state-C { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
-.state-na { background: var(--bg-secondary); color: var(--text-muted); }
+.state-na { background: var(--bg-secondary); color: #98a2b3; }
 
 .chip {
   display:inline-block; padding:2px 8px; border-radius:999px;
@@ -133,7 +143,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   background: var(--bg-tertiary);
 }
 
-/* ===== Mobile: tableau aux étiquettes (lisible <= 640px) ===== */
+/* ===== Mobile: tableau en cartes lisibles (<=640px) ===== */
 @media (max-width: 640px) {
   .tbl-stock thead { display: none; }
   .tbl-stock, .tbl-stock tbody, .tbl-stock tr, .tbl-stock td { display: block; width: 100%; }
@@ -143,17 +153,17 @@ html, body { max-width: 100%; overflow-x: hidden; }
     grid-template-columns: 44% 56%;
     gap: .25rem .5rem;
     white-space: normal;
+    overflow: visible;
+    text-overflow: initial;
   }
   .tbl-stock tbody td::before {
     content: attr(data-th);
     font-size: .78rem;
     font-weight: 600;
     color: var(--text-muted);
-    text-transform: none;
   }
   .td-metric { text-align: right; }
-  /* enlever les cols widths qui n'ont plus de sens en mobile */
-  .tbl-stock colgroup { display: none; }
+  .tbl-stock colgroup { display: none; } /* les largeurs de colonnes ne s'appliquent plus en mobile */
 }
 
 /* ===== Modal ===== */
@@ -213,7 +223,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   margin-top: .25rem; font-weight: 700; color: var(--text-primary);
 }
 
-/* Préférence OS : réduire les animations */
+/* Réduire les animations si demandé par l'OS */
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
