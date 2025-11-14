@@ -251,6 +251,33 @@ try {
             </div>
         </div>
 
+        <!-- Vue attribution photocopieuse -->
+        <div class="client-assign-view" id="clientAssignView" style="display:none;" aria-hidden="true">
+            <div class="cdv-wrap">
+                <div class="cdv-header">
+                    <div class="cdv-title">Attribuer une photocopieuse</div>
+                    <div class="cdv-sub">Client : <span id="assign-client-name">—</span></div>
+                </div>
+                <form method="post" action="/api/attribuer_photocopieur.php" class="assign-form">
+                    <input type="hidden" name="id_client" id="assign-id-client" value="">
+
+                    <div class="cdv-field">
+                        <div class="lbl">Adresse MAC de la photocopieuse</div>
+                        <div class="val">
+                            <input type="text" name="mac_address" id="assign-mac-address"
+                                   placeholder="Ex : AA:BB:CC:DD:EE:FF"
+                                   required />
+                        </div>
+                    </div>
+
+                    <div class="cdv-actions">
+                        <button type="submit" class="btn-primary">Attribuer</button>
+                        <button type="button" class="btn-secondary" id="assign-cancel-btn">Annuler</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <div class="client-detail-view" id="clientDetailView" role="region" aria-label="Détails du client" aria-hidden="true">
             <div class="cdv-wrap">
                 <div class="cdv-sidebar">
@@ -425,10 +452,11 @@ try {
         });
     })();
 
-    // --- Fiche client (affichage + chargement appareils) ---
+    // --- Fiche client + attribution photocopieuse ---
     (function(){
         const listView   = document.getElementById('clientListView');
         const detailView = document.getElementById('clientDetailView');
+        const assignView = document.getElementById('clientAssignView');
         const list       = document.getElementById('clientsList');
         if(!list || !detailView || !listView) return;
 
@@ -443,6 +471,10 @@ try {
 
         function showDetail(){
             listView.style.display   = 'none';
+            if (assignView) {
+                assignView.style.display = 'none';
+                assignView.setAttribute('aria-hidden','true');
+            }
             detailView.style.display = 'block';
             detailView.setAttribute('aria-hidden','false');
             document.getElementById('popupTitle').textContent = 'Fiche Client';
@@ -452,6 +484,10 @@ try {
         function showList(){
             detailView.style.display = 'none';
             detailView.setAttribute('aria-hidden','true');
+            if (assignView) {
+                assignView.style.display = 'none';
+                assignView.setAttribute('aria-hidden','true');
+            }
             listView.style.display   = 'block';
             document.getElementById('popupTitle').textContent = 'Liste des Clients';
         }
@@ -578,15 +614,66 @@ try {
             }
         }
 
+        // Gestion formulaire attribution : bouton Annuler
+        const assignCancelBtn = document.getElementById('assign-cancel-btn');
+        if (assignCancelBtn && assignView && listView) {
+            assignCancelBtn.addEventListener('click', function(e){
+                e.preventDefault();
+                assignView.style.display = 'none';
+                assignView.setAttribute('aria-hidden','true');
+                listView.style.display = 'block';
+                document.getElementById('popupTitle').textContent = 'Liste des Clients';
+            });
+        }
+
         if (list) {
+            async function handleClientClick(card) {
+                const id = card.dataset.clientId;
+                if (!id) return;
+
+                const clientName = card.querySelector('strong')?.textContent || 'Client';
+
+                try {
+                    const res = await fetch('/api/get_client_photocopieur.php?id=' + encodeURIComponent(id), {
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+
+                    if (data.ok && data.assigned && data.redirect_url) {
+                        // Le client a déjà une photocopieuse → redirection
+                        window.location.href = data.redirect_url;
+                        return;
+                    }
+
+                    // Pas de photocopieuse, on affiche le formulaire d’attribution
+                    if (assignView && listView) {
+                        listView.style.display = 'none';
+                        detailView.style.display = 'none';
+                        detailView.setAttribute('aria-hidden','true');
+                        assignView.style.display = 'block';
+                        assignView.setAttribute('aria-hidden','false');
+
+                        const assignNameSpan = document.getElementById('assign-client-name');
+                        const assignIdInput  = document.getElementById('assign-id-client');
+                        if (assignNameSpan) assignNameSpan.textContent = clientName;
+                        if (assignIdInput)  assignIdInput.value = id;
+
+                        document.getElementById('popupTitle').textContent = 'Attribuer une photocopieuse';
+                    }
+
+                } catch (err) {
+                    console.error('Erreur get_client_photocopieur', err);
+                    // En cas d’erreur, retour au comportement fiche client classique
+                    loadClientDetail(id);
+                }
+            }
+
             list.addEventListener('click', function(e){
                 const card = e.target.closest('.client-card');
                 if(!card) return;
                 e.preventDefault();
-                const id = card.dataset.clientId;
-                if (id) {
-                    loadClientDetail(id);
-                }
+                handleClientClick(card);
             });
 
             // Accessibilité clavier
@@ -595,10 +682,7 @@ try {
                 const card = e.target.closest('.client-card');
                 if(!card) return;
                 e.preventDefault();
-                const id = card.dataset.clientId;
-                if (id) {
-                    loadClientDetail(id);
-                }
+                handleClientClick(card);
             });
         }
     })();
