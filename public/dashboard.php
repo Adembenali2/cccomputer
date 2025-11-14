@@ -411,6 +411,16 @@ try {
             overlay.classList.add('active');
             popup.classList.add('active');
             document.body.style.overflow = 'hidden';
+
+            // Reset recherche pour afficher tous les clients
+            const input = document.getElementById('clientSearchInput');
+            const list  = document.getElementById('clientsList');
+            if (input && list) {
+                input.value = '';
+                list.querySelectorAll('.client-card').forEach(card => {
+                    card.style.display = '';
+                });
+            }
         }
         function closePopup(e){
             if(e) e.preventDefault();
@@ -564,23 +574,35 @@ try {
 
             devices.forEach(d => {
                 const tr = document.createElement('tr');
+
                 const td = (t) => {
                     const x = document.createElement('td');
                     x.textContent = (t ?? '—');
                     return x;
                 };
 
+                const tonerBlackText  = (d.TonerBlack  != null ? d.TonerBlack  + '%' : '000');
+                const tonerCyanText   = (d.TonerCyan   != null ? d.TonerCyan   + '%' : '000');
+                const tonerMagentaText= (d.TonerMagenta!= null ? d.TonerMagenta+ '%' : '000');
+                const tonerYellowText = (d.TonerYellow != null ? d.TonerYellow + '%' : '000');
+
+                const totalBWText     = (d.TotalBW     != null ? d.TotalBW     : '000');
+                const totalColorText  = (d.TotalColor  != null ? d.TotalColor  : '000');
+
+                const tsRaw = d.Timestamp || d.last_ts;
+                const tsText = tsRaw ? tsRaw : 'Pas attribué';
+
                 tr.appendChild(td(d.SerialNumber));
                 tr.appendChild(td(d.MacAddress));
                 tr.appendChild(td(d.Model));
                 tr.appendChild(td(d.Status));
-                tr.appendChild(td(d.TonerBlack != null ? d.TonerBlack + '%' : '—'));
-                tr.appendChild(td(d.TonerCyan  != null ? d.TonerCyan  + '%' : '—'));
-                tr.appendChild(td(d.TonerMagenta != null ? d.TonerMagenta + '%' : '—'));
-                tr.appendChild(td(d.TonerYellow  != null ? d.TonerYellow  + '%' : '—'));
-                tr.appendChild(td(d.TotalBW));
-                tr.appendChild(td(d.TotalColor));
-                tr.appendChild(td(d.Timestamp));
+                tr.appendChild(td(tonerBlackText));
+                tr.appendChild(td(tonerCyanText));
+                tr.appendChild(td(tonerMagentaText));
+                tr.appendChild(td(tonerYellowText));
+                tr.appendChild(td(totalBWText));
+                tr.appendChild(td(totalColorText));
+                tr.appendChild(td(tsText));
                 tbody.appendChild(tr);
             });
         }
