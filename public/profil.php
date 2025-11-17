@@ -88,7 +88,18 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
 // Rôles autorisés dans le champ Emploi
-$ROLES = ['Chargé relation clients', 'Livreur', 'Technicien', 'Secrétaire', 'Dirigeant', 'Administrateur'];
+$DEFAULT_ROLES = ['Administrateur', 'Dirigeant', 'Technicien', 'Secrétaire', 'Livreur', 'Chargé relation clients'];
+$roleRows = safeFetchAll($pdo, "SELECT DISTINCT Emploi FROM utilisateurs WHERE Emploi IS NOT NULL AND Emploi <> '' ORDER BY Emploi ASC", [], 'roles_distinct');
+$ROLES = [];
+foreach ($roleRows as $row) {
+    $val = trim((string)($row['Emploi'] ?? ''));
+    if ($val !== '') {
+        $ROLES[] = $val;
+    }
+}
+if (!$ROLES) {
+    $ROLES = $DEFAULT_ROLES;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // CSRF
