@@ -247,12 +247,31 @@ if (($_GET['saved'] ?? '') === '1') {
     </div>
 
     <div class="details-header">
-      <div class="h1">Fiche client</div>
-      <div class="meta">
-        <span class="badge">Raison sociale : <?= h($client['raison_sociale']) ?></span>
-        <span class="badge">Ville : <?= h($client['ville']) ?></span>
-        <span class="badge">Téléphone : <?= h($client['telephone1']) ?></span>
-        <span class="badge">Email : <?= h($client['email']) ?></span>
+      <div>
+        <div class="h1">Fiche client</div>
+        <p class="sub">Mettez à jour les informations administratives, contacts et justificatifs.</p>
+      </div>
+      <div class="meta-grid">
+        <div class="meta-block">
+          <span class="label">Raison sociale</span>
+          <strong><?= h($client['raison_sociale']) ?></strong>
+          <span class="sub">Ville : <?= h($client['ville']) ?></span>
+        </div>
+        <div class="meta-block">
+          <span class="label">Téléphone</span>
+          <strong><?= h($client['telephone1']) ?></strong>
+          <span class="sub"><?= h($client['telephone2'] ?: '—') ?></span>
+        </div>
+        <div class="meta-block">
+          <span class="label">Email</span>
+          <strong><?= h($client['email']) ?></strong>
+          <span class="sub">Parrain : <?= h($client['parrain'] ?: '—') ?></span>
+        </div>
+        <div class="meta-block">
+          <span class="label">Mode de dépôt</span>
+          <strong><?= h($client['depot_mode'] ?: '—') ?></strong>
+          <span class="sub">Offre : <?= h($client['offre'] ?: '—') ?></span>
+        </div>
       </div>
     </div>
 

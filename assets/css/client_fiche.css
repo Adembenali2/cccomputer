@@ -39,7 +39,36 @@
 /* Header */
 .details-header { display: grid; gap: .6rem; margin: 1rem 0; }
 .details-header .h1 { font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin: 0; }
-.meta { color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: .4rem .5rem; }
+.details-header .sub { margin: 0; color: var(--text-secondary); font-size: 0.95rem; }
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+.meta-block {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.meta-block .label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+}
+.meta-block strong {
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+.meta-block .sub {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
 
 /* Sections */
 .section-card {
