@@ -48,6 +48,24 @@ function assertValidCsrf(string $token): void {
         throw new RuntimeException("Session expirée. Veuillez recharger la page.");
     }
 }
+function rowHasAlert(array $row): bool {
+    $macNorm = $row['mac_norm'] ?? '';
+    $sn      = $row['SerialNumber'] ?? '';
+    $modele  = $row['Model'] ?? '';
+    $hasMachine = ($macNorm || $sn || $modele);
+    if (!$hasMachine) {
+        return false;
+    }
+    $lastTsRaw = $row['last_ts'] ?? null;
+    if (!$lastTsRaw) {
+        return true;
+    }
+    $ageHours = isset($row['last_age_hours']) ? (int)$row['last_age_hours'] : null;
+    if ($ageHours !== null && $ageHours >= 48) {
+        return true;
+    }
+    return false;
+}
 
 /** Génération numéro client C12345 **/
 function generateClientNumber(PDO $pdo): string {
@@ -306,6 +324,20 @@ try {
     error_log('clients.php SQL error: ' . $e->getMessage());
     $rows = [];
 }
+
+$machineTotal = count($rows);
+$alertCount = 0;
+$uniqueClients = [];
+foreach ($rows as $row) {
+    if ($view === 'assigned' && !empty($row['client_id'])) {
+        $uniqueClients[(int)$row['client_id']] = true;
+    }
+    if (rowHasAlert($row)) {
+        $alertCount++;
+    }
+}
+$uniqueClientsCount = count($uniqueClients);
+$lastRefreshLabel = date('d/m/Y à H:i');
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -329,38 +361,58 @@ try {
     <h2 class="page-title">
       <?= $view==='unassigned' ? 'Photocopieurs non attribués' : 'Photocopieurs attribués par client' ?>
     </h2>
+    <p class="page-sub">
+      Vue <?= $view==='unassigned' ? 'des équipements disponibles à attribuer' : 'des photocopieurs suivis par client' ?> — dernière mise à jour <?= h($lastRefreshLabel) ?>.
+    </p>
   </div>
 
-  <!-- Barre de filtres + actions -->
-  <div class="filters-row" style="margin-bottom:1rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
-    <input type="text" id="q" placeholder="Filtrer (client, modèle, SN, MAC)…"
-           style="flex:1; min-width:240px; padding:0.55rem 0.75rem; border:1px solid var(--border-color); border-radius: var(--radius-md); background:var(--bg-primary); color:var(--text-primary);">
-    <button id="clearQ" class="btn" style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--bg-primary); border-radius:var(--radius-md); cursor:pointer;">
-      Effacer
-    </button>
-
-    <!-- Bouton Ajouter un client -->
-    <button id="btnAddClient" class="btn btn-primary"
-            style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer;">
-      + Ajouter un client
-    </button>
-
-    <!-- Lien-bouton avec le même style que 'Ajouter un client' -->
+  <section class="clients-meta">
+    <div class="meta-card">
+      <span class="meta-label">Machines listées</span>
+      <strong class="meta-value"><?= h((string)$machineTotal) ?></strong>
+      <?php if ($machineTotal === 0): ?>
+        <span class="meta-chip">Aucune donnée</span>
+      <?php endif; ?>
+    </div>
+    <div class="meta-card">
+      <span class="meta-label">Alertes relevé</span>
+      <strong class="meta-value <?= $alertCount > 0 ? 'danger' : 'success' ?>"><?= h((string)$alertCount) ?></strong>
+      <span class="meta-sub"><?= $alertCount > 0 ? 'Machines à contrôler' : 'Tout est à jour' ?></span>
+    </div>
     <?php if ($view !== 'unassigned'): ?>
-      <a href="/public/clients.php?view=unassigned"
-         class="btn btn-primary"
-         role="button"
-         style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;">
-        Voir photocopieurs non attribués
-      </a>
-    <?php else: ?>
-      <a href="/public/clients.php"
-         class="btn btn-primary"
-         role="button"
-         style="padding:0.55rem 0.9rem; border:1px solid var(--border-color); background:var(--accent-primary); color:#fff; border-radius:var(--radius-md); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;">
-        ← Revenir aux attribués
-      </a>
+      <div class="meta-card">
+        <span class="meta-label">Clients couverts</span>
+        <strong class="meta-value"><?= h((string)$uniqueClientsCount) ?></strong>
+        <span class="meta-sub">Avec au moins un appareil</span>
+      </div>
     <?php endif; ?>
+    <div class="meta-card">
+      <span class="meta-label">Vue active</span>
+      <strong class="meta-value"><?= $view === 'unassigned' ? 'Non attribués' : 'Attribués' ?></strong>
+      <span class="meta-sub">Basculer en un clic</span>
+    </div>
+  </section>
+
+  <!-- Barre de filtres + actions -->
+  <div class="filters-row">
+    <div class="filters-left">
+      <input type="text" id="q" class="filter-input" placeholder="Filtrer (client, modèle, SN, MAC)…">
+      <button id="clearQ" class="btn btn-secondary" type="button">Effacer</button>
+    </div>
+    <div class="filters-actions">
+      <button id="btnAddClient" class="btn btn-primary" type="button">
+        + Ajouter un client
+      </button>
+      <?php if ($view !== 'unassigned'): ?>
+        <a href="/public/clients.php?view=unassigned" class="btn btn-outline" role="button">
+          Voir non attribués
+        </a>
+      <?php else: ?>
+        <a href="/public/clients.php" class="btn btn-outline" role="button">
+          ← Revenir aux attribués
+        </a>
+      <?php endif; ?>
+    </div>
   </div>
 
   <!-- Flash -->
@@ -416,12 +468,7 @@ try {
 
         $rowHref = $macNorm ? '/public/photocopieurs_details.php?mac='.urlencode($macNorm) : '';
 
-        $hasMachine = ($macNorm || $sn || $modele);
-        $isAlert = false;
-        if ($hasMachine) {
-          if (!$lastTsRaw) $isAlert = true;
-          elseif ($ageHours !== null && $ageHours >= 48) $isAlert = true;
-        }
+        $isAlert = rowHasAlert($r);
 
         $rowClasses = [];
         if ($rowHref)  $rowClasses[] = 'is-clickable';
