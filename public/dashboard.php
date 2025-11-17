@@ -117,79 +117,7 @@ $clients = $safeFetchAll(
     'clients_list'
 );
 
-$nbClients = count($clients);
-
-$clientsContactables = array_reduce(
-    $clients,
-    static function (int $carry, array $client): int {
-        return $carry + ((isset($client['email']) && filter_var($client['email'], FILTER_VALIDATE_EMAIL)) ? 1 : 0);
-    },
-    0
-);
-
-$recentClients = array_values(array_filter($clients, static function ($client) {
-    return !empty($client['date_dajout']);
-}));
-
-usort($recentClients, static function ($a, $b) {
-    return strcmp($b['date_dajout'] ?? '', $a['date_dajout'] ?? '');
-});
-
-$recentClients = array_slice($recentClients, 0, 5);
-
-$recentClients = $recentClients ?: array_slice($clients, 0, 5);
-
-$todayDate = (new DateTime('today'))->format('Y-m-d');
-$historiqueAujourdHui = 0;
-$historiqueTrend = 0;
-
-if (!empty($historique_par_jour)) {
-    foreach ($historique_par_jour as $index => $row) {
-        $date = $row['date'] ?? null;
-        if ($date === $todayDate) {
-            $historiqueAujourdHui = (int)($row['total_historique'] ?? 0);
-            break;
-        }
-    }
-
-    if (count($historique_par_jour) > 1) {
-        $courant = (int)($historique_par_jour[0]['total_historique'] ?? 0);
-        $precedent = (int)($historique_par_jour[1]['total_historique'] ?? 0);
-        if ($precedent === 0) {
-            $historiqueTrend = $courant > 0 ? 100 : 0;
-        } else {
-            $historiqueTrend = (($courant - $precedent) / max($precedent, 1)) * 100;
-        }
-    }
-}
-
-$historiqueTrendDirection = 'stable';
-if ($historiqueTrend > 3) {
-    $historiqueTrendDirection = 'up';
-} elseif ($historiqueTrend < -3) {
-    $historiqueTrendDirection = 'down';
-}
-
-$historiqueTrendValue = round($historiqueTrend, 1);
-$historiqueTrendLabel = ($historiqueTrendValue >= 0 ? '+' : '') . $historiqueTrendValue . '%';
-$historiqueResume = array_slice($historique_par_jour, 0, 7);
-$lastRefreshLabel = date('d/m/Y à H:i');
-$formatDate = static function (?string $date, string $format = 'd/m'): string {
-    if (!$date) {
-        return '—';
-    }
-    try {
-        $dt = new DateTime($date);
-        return $dt->format($format);
-    } catch (Exception $e) {
-        return $date;
-    }
-};
-$maxHistoriqueValue = 0;
-foreach ($historiqueResume as $row) {
-    $maxHistoriqueValue = max($maxHistoriqueValue, (int)($row['total_historique'] ?? 0));
-}
-$maxHistoriqueValue = max($maxHistoriqueValue, 1);
+$nbClients = is_array($clients) ? count($clients) : 0;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -206,44 +134,11 @@ $maxHistoriqueValue = max($maxHistoriqueValue, 1);
 
     <div class="dashboard-wrapper">
         <div class="dashboard-header">
-            <div class="dashboard-heading">
-                <h2 class="dashboard-title">Tableau de Bord</h2>
-                <p class="dashboard-subtitle">
-                    Dernière mise à jour&nbsp;: <?= htmlspecialchars($lastRefreshLabel, ENT_QUOTES, 'UTF-8') ?>
-                </p>
-            </div>
+            <h2 class="dashboard-title">Tableau de Bord</h2>
 
             <div class="import-badge" id="importBadge" aria-live="polite" title="État du dernier import SFTP">
                 <span class="ico run" id="impIco">⏳</span>
                 <span class="txt" id="impTxt">Import SFTP : vérification…</span>
-            </div>
-        </div>
-
-        <div class="dashboard-meta" aria-live="polite" aria-label="Indicateurs rapides">
-            <div class="kpi-group" role="list">
-                <div class="kpi-chip <?= $nb_paiements_en_attente > 0 ? 'is-alert' : 'is-ok' ?>" role="listitem">
-                    <span class="kpi-label">Paiements à traiter</span>
-                    <strong class="kpi-value"><?= htmlspecialchars($nb_paiements_en_attente, ENT_QUOTES, 'UTF-8') ?></strong>
-                </div>
-                <div class="kpi-chip <?= $nb_sav_a_traiter > 0 ? 'is-alert' : 'is-ok' ?>" role="listitem">
-                    <span class="kpi-label">Tickets SAV</span>
-                    <strong class="kpi-value"><?= htmlspecialchars($nb_sav_a_traiter, ENT_QUOTES, 'UTF-8') ?></strong>
-                </div>
-                <div class="kpi-chip <?= $nb_livraisons_a_faire > 0 ? 'is-alert' : 'is-ok' ?>" role="listitem">
-                    <span class="kpi-label">Livraisons en attente</span>
-                    <strong class="kpi-value"><?= htmlspecialchars($nb_livraisons_a_faire, ENT_QUOTES, 'UTF-8') ?></strong>
-                </div>
-                <div class="kpi-chip is-neutral" role="listitem">
-                    <span class="kpi-label">Clients contactables</span>
-                    <strong class="kpi-value"><?= htmlspecialchars($clientsContactables, ENT_QUOTES, 'UTF-8') ?></strong>
-                </div>
-            </div>
-            <div class="insight-card" aria-live="polite">
-                <span class="insight-label">Activité du jour</span>
-                <strong class="insight-value"><?= htmlspecialchars($historiqueAujourdHui, ENT_QUOTES, 'UTF-8') ?></strong>
-                <span class="insight-sub trend-<?= htmlspecialchars($historiqueTrendDirection, ENT_QUOTES, 'UTF-8') ?>">
-                    <?= htmlspecialchars($historiqueTrendLabel, ENT_QUOTES, 'UTF-8') ?>
-                </span>
             </div>
         </div>
 
