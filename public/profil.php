@@ -6,11 +6,59 @@ require_once __DIR__ . '/../includes/auth_role.php';        // démarre la sessi
 authorize_roles(['Administrateur', 'Dirigeant']);           // rôles cohérents avec le reste
 require_once __DIR__ . '/../includes/db.php';               // $pdo (PDO connecté)
 
+// ========================================================================
+// CONSTANTES & HELPERS
+// ========================================================================
+const USERS_LIMIT          = 300;
+const SEARCH_MAX_LENGTH    = 120;
+const TELEPHONE_PATTERN    = '/^[0-9+\-.\s]{6,}$/';
+const IMPORT_HISTORY_LIMIT = 20;
+
 // Contexte utilisateur courant (pour protections)
 $currentUser = [
     'id'    => (int)($_SESSION['user_id'] ?? 0),
     'Emploi'=> (string)($_SESSION['emploi'] ?? '')
 ];
+
+function sanitizeSearch(?string $value): string {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '';
+    }
+    $value = mb_substr(preg_replace('/\s+/', ' ', $value), 0, SEARCH_MAX_LENGTH);
+    return $value;
+}
+
+function safeFetchAll(PDO $pdo, string $sql, array $params = [], string $context = 'query'): array {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return is_array($rows) ? $rows : [];
+    } catch (PDOException $e) {
+        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+        return [];
+    }
+}
+
+function safeFetch(PDO $pdo, string $sql, array $params = [], string $context = 'query'): ?array {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row !== false ? $row : null;
+    } catch (PDOException $e) {
+        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+        return null;
+    }
+}
+
+function validateTelephone(?string $tel): bool {
+    if ($tel === null || $tel === '') {
+        return true;
+    }
+    return (bool)preg_match(TELEPHONE_PATTERN, $tel);
+}
 
 // ========================================================================
 // GESTION DES REQUÊTES POST (Formulaires) - Pattern PRG
@@ -47,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($nom === '' || $prenom === '') throw new RuntimeException("Nom et prénom sont requis.");
             if (!in_array($emploi, $ROLES, true)) throw new RuntimeException("Rôle (Emploi) invalide.");
             if ($debut === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $debut)) throw new RuntimeException("Date de début invalide.");
+            if (!validateTelephone($tel)) throw new RuntimeException("Téléphone invalide.");
 
             $hash = password_hash($pwd, PASSWORD_BCRYPT, ['cost' => 10]);
             $stmt = $pdo->prepare("
@@ -78,6 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($nom === '' || $prenom === '') throw new RuntimeException("Nom et prénom sont requis.");
             if (!in_array($emploi, $ROLES, true)) throw new RuntimeException("Rôle (Emploi) invalide.");
             if ($debut === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $debut)) throw new RuntimeException("Date de début invalide.");
+            if (!validateTelephone($tel)) throw new RuntimeException("Téléphone invalide.");
 
             $stmt = $pdo->prepare("
                 UPDATE utilisateurs
@@ -127,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 $CSRF = $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 
-$search = trim($_GET['q'] ?? '');
+$search = sanitizeSearch($_GET['q'] ?? '');
 $status = $_GET['statut'] ?? '';
 $role   = $_GET['role'] ?? '';
 
@@ -135,9 +185,18 @@ $params = [];
 $where  = [];
 
 if ($search !== '') {
-    $where[] = "(Email LIKE :q OR nom LIKE :q OR prenom LIKE :q OR telephone LIKE :q)";
-    $params[':q'] = "%{$search}%";
+    $tokens = preg_split('/\s+/', $search);
+    $tokenIndex = 0;
+    foreach ($tokens as $token) {
+        if ($token === '') {
+            continue;
+        }
+        $key = ':q' . $tokenIndex++;
+        $where[] = "(Email LIKE {$key} OR nom LIKE {$key} OR prenom LIKE {$key} OR telephone LIKE {$key})";
+        $params[$key] = "%{$token}%";
+    }
 }
+
 if ($status !== '' && in_array($status, ['actif', 'inactif'], true)) {
     $where[] = "statut = :statut";
     $params[':statut'] = $status;
@@ -150,28 +209,20 @@ if ($role !== '' && in_array($role, $ROLES, true)) {
 $sql = "SELECT id, Email, nom, prenom, telephone, Emploi, statut, date_debut, date_creation, date_modification
         FROM utilisateurs";
 if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
-$sql .= ' ORDER BY nom ASC, prenom ASC LIMIT 300';
+$sql .= ' ORDER BY nom ASC, prenom ASC LIMIT ' . USERS_LIMIT;
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$users = safeFetchAll($pdo, $sql, $params, 'utilisateurs_list');
 
 $editId  = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
-$editing = null;
-if ($editId > 0) {
-    $s = $pdo->prepare("SELECT * FROM utilisateurs WHERE id=?");
-    $s->execute([$editId]);
-    $editing = $s->fetch(PDO::FETCH_ASSOC) ?: null;
-}
+$editing = $editId > 0 ? safeFetch($pdo, "SELECT * FROM utilisateurs WHERE id=?", [$editId], 'utilisateur_edit') : null;
 
 // ——— NOUVEAU : on récupère les 20 derniers imports pour l’icône ———
-$imports = [];
-try {
-    $q = $pdo->query("SELECT id, ran_at, imported, skipped, ok, msg FROM import_run ORDER BY id DESC LIMIT 20");
-    $imports = $q->fetchAll(PDO::FETCH_ASSOC) ?: [];
-} catch (Throwable $e) {
-    $imports = [];
-}
+$imports = safeFetchAll(
+    $pdo,
+    "SELECT id, ran_at, imported, skipped, ok, msg FROM import_run ORDER BY id DESC LIMIT " . IMPORT_HISTORY_LIMIT,
+    [],
+    'imports_history'
+);
 
 // utilitaire pour décoder proprement msg JSON
 function decode_msg($row) {
@@ -364,7 +415,7 @@ function decode_msg($row) {
                     <label>Nom<input type="text" name="nom" required></label>
                     <label>Prénom<input type="text" name="prenom" required></label>
                 </div>
-                <label>Téléphone<input type="tel" name="telephone" pattern="[0-9+\-.\s]{6,}"></label>
+                <label>Téléphone<input type="tel" name="telephone" pattern="[0-9+\-.\s]{6,}" inputmode="tel"></label>
                 <div class="grid-2">
                     <label>Rôle (Emploi)
                         <select name="Emploi" required>
@@ -440,7 +491,7 @@ function decode_msg($row) {
                     <label>Nom<input type="text" name="nom" value="<?= h($editing['nom']) ?>" required></label>
                     <label>Prénom<input type="text" name="prenom" value="<?= h($editing['prenom']) ?>" required></label>
                 </div>
-                <label>Téléphone<input type="tel" name="telephone" value="<?= h($editing['telephone'] ?? '') ?>" pattern="[0-9+\-.\s]{6,}"></label>
+                <label>Téléphone<input type="tel" name="telephone" value="<?= h($editing['telephone'] ?? '') ?>" pattern="[0-9+\-.\s]{6,}" inputmode="tel"></label>
                 <div class="grid-2">
                     <label>Rôle (Emploi)
                         <select name="Emploi" required>
