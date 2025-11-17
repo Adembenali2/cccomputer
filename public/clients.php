@@ -9,7 +9,13 @@ if (method_exists($pdo, 'setAttribute')) {
     try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
 }
 
-/** Helpers **/
+// ==================================================================
+// Constantes & Helpers
+// ==================================================================
+const PHONE_PATTERN   = '/^[0-9+\-.\s]{6,}$/';
+const POSTAL_PATTERN  = '/^[0-9]{4,10}$/';
+const SIRET_PATTERN   = '/^[0-9]{14}$/';
+
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 function pctOrDash($v): string { if ($v === null || $v === '' || !is_numeric($v)) return '—'; $v = max(0, min(100, (int)$v)); return $v.'%'; }
 function old(string $key, string $default=''): string { return htmlspecialchars($_POST[$key] ?? $default, ENT_QUOTES, 'UTF-8'); }
@@ -17,6 +23,30 @@ function currentUserId(): ?int {
     if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
     if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
     return null;
+}
+function validateEmail(string $email): bool {
+    return (bool)filter_var($email, FILTER_VALIDATE_EMAIL);
+}
+function validatePhone(?string $phone): bool {
+    if ($phone === null || $phone === '') return true;
+    return (bool)preg_match(PHONE_PATTERN, $phone);
+}
+function validatePostalCode(string $postal): bool {
+    return (bool)preg_match(POSTAL_PATTERN, $postal);
+}
+function validateSiret(string $siret): bool {
+    return (bool)preg_match(SIRET_PATTERN, $siret);
+}
+function ensureCsrfToken(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+function assertValidCsrf(string $token): void {
+    if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+        throw new RuntimeException("Session expirée. Veuillez recharger la page.");
+    }
 }
 
 /** Génération numéro client C12345 **/
@@ -32,7 +62,16 @@ function isNoDefaultIdError(PDOException $e): bool { $code = (int)($e->errorInfo
 
 /** POST: ajout client **/
 $flash = ['type'=>null,'msg'=>null];
+$shouldOpenModal = false;
+$CSRF = ensureCsrfToken();
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'add_client') {
+    try {
+        assertValidCsrf($_POST['csrf_token'] ?? '');
+    } catch (RuntimeException $csrfEx) {
+        $flash = ['type'=>'error','msg'=>$csrfEx->getMessage()];
+        $shouldOpenModal = true;
+    }
+
     $raison_sociale      = trim($_POST['raison_sociale'] ?? '');
     $adresse             = trim($_POST['adresse'] ?? '');
     $code_postal         = trim($_POST['code_postal'] ?? '');
@@ -61,8 +100,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     if ($telephone1==='')       $errors[]="Le téléphone est obligatoire.";
     if ($email==='')            $errors[]="L'email est obligatoire.";
     if ($siret==='')            $errors[]="Le SIRET est obligatoire.";
+    if ($email && !validateEmail($email)) $errors[] = "L'email est invalide.";
+    if ($telephone1 && !validatePhone($telephone1)) $errors[] = "Le téléphone doit contenir au moins 6 caractères valides.";
+    if ($telephone2 && !validatePhone($telephone2)) $errors[] = "Le téléphone 2 doit contenir au moins 6 caractères valides.";
+    if ($code_postal && !validatePostalCode($code_postal)) $errors[] = "Code postal invalide.";
+    if ($siret && !validateSiret($siret)) $errors[] = "Le SIRET doit contenir 14 chiffres.";
 
-    if (empty($errors)) {
+    if (empty($errors) && !$shouldOpenModal) {
         $numero = generateClientNumber($pdo);
         $sqlInsert = "INSERT INTO clients
             (numero_client, raison_sociale, adresse, code_postal, ville,
@@ -85,17 +129,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             ':email'=>$email, ':parrain'=>($parrain!==''?$parrain:null), ':offre'=>$offre,
         ];
         try {
+            $pdo->beginTransaction();
             $pdo->prepare($sqlInsert)->execute($params);
             $insertedId = (int)$pdo->lastInsertId() ?: null;
 
             $userId  = currentUserId();
             $details = "Client créé: ID=" . ($insertedId ?? 'NULL') . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
             enregistrerAction($pdo, $userId, 'client_ajoute', $details);
+            $pdo->commit();
 
             header('Location: /public/clients.php?added=1'); exit;
         } catch (PDOException $e) {
+            $pdo->rollBack();
             if (isNoDefaultIdError($e)) {
                 try {
+                    $pdo->beginTransaction();
                     $id = nextClientId($pdo);
                     $pdo->prepare("
                         INSERT INTO clients
@@ -111,19 +159,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     ")->execute($params + [':id'=>$id]);
 
                     enregistrerAction($pdo, currentUserId(), 'client_ajoute', "Client créé: ID=$id, numero=$numero, raison_sociale=$raison_sociale");
+                    $pdo->commit();
                     header('Location: /public/clients.php?added=1'); exit;
                 } catch (PDOException $eId) {
+                    $pdo->rollBack();
                     error_log('clients.php INSERT with id error: '.$eId->getMessage());
                     $flash = ['type'=>'error','msg'=>"Erreur SQL: impossible de créer le client (id requis)."];
                 }
             } elseif ((int)($e->errorInfo[1] ?? 0) === 1062) {
                 try {
+                    $pdo->beginTransaction();
                     $numero = generateClientNumber($pdo);
                     $params[':numero_client'] = $numero;
                     $pdo->prepare($sqlInsert)->execute($params);
                     enregistrerAction($pdo, currentUserId(), 'client_ajoute', "Client créé (retry): numero=$numero, raison_sociale=$raison_sociale");
+                    $pdo->commit();
                     header('Location: /public/clients.php?added=1'); exit;
                 } catch (PDOException $e2) {
+                    $pdo->rollBack();
                     error_log('clients.php INSERT retry duplicate error: '.$e2->getMessage());
                     $flash = ['type'=>'error','msg'=>"Erreur SQL (unicité): impossible de créer le client."];
                 }
@@ -134,6 +187,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         }
     } else {
         $flash = ['type'=>'error','msg'=>implode('<br>', array_map('htmlspecialchars',$errors))];
+        $shouldOpenModal = true;
     }
 }
 if (($_GET['added'] ?? '') === '1') {
@@ -433,7 +487,7 @@ try {
     <button type="button" id="btnCloseModal" class="icon-btn icon-btn--close" aria-label="Fermer"><span aria-hidden="true">×</span></button>
   </div>
 
-  <?php if ($flash['type'] && $flash['type']!=='success' && ($_POST['action'] ?? '')==='add_client'): ?>
+  <?php if ($flash['type'] && $shouldOpenModal): ?>
     <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
       <?= $flash['msg'] ?>
     </div>
@@ -441,6 +495,7 @@ try {
 
   <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form" novalidate>
     <input type="hidden" name="action" value="add_client">
+    <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
 
     <div class="form-grid-2">
       <div class="card-like">
@@ -509,7 +564,7 @@ try {
 
 <script>
   // Ouverture auto si erreurs validation
-  window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode(($flash['type']==='error' && ($_POST['action'] ?? '')==='add_client') ? true : false) ?>;
+  window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode($shouldOpenModal) ?>;
 
   (function(){
     const overlay = document.getElementById('clientModalOverlay');
