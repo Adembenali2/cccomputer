@@ -64,19 +64,20 @@ function validateTelephone(?string $tel): bool {
 function formatDateDisplay(?string $date, string $format = 'd/m/Y'): string {
     if (!$date) {
         return '—';
-function logProfilAction(PDO $pdo, string $action, string $details): void {
-    try {
-        enregistrerAction($pdo, $_SESSION['user_id'] ?? null, $action, $details);
-    } catch (Throwable $e) {
-        error_log('profil.php log error: ' . $e->getMessage());
-    }
-}
     }
     try {
         $dt = new DateTime($date);
         return $dt->format($format);
     } catch (Exception $e) {
         return $date;
+    }
+}
+
+function logProfilAction(PDO $pdo, string $action, string $details): void {
+    try {
+        enregistrerAction($pdo, $_SESSION['user_id'] ?? null, $action, $details);
+    } catch (Throwable $e) {
+        error_log('profil.php log error: ' . $e->getMessage());
     }
 }
 
