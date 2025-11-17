@@ -5,6 +5,7 @@
 require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
 authorize_roles(['Administrateur', 'Dirigeant']);           // rôles cohérents avec le reste
 require_once __DIR__ . '/../includes/db.php';               // $pdo (PDO connecté)
+require_once __DIR__ . '/../includes/historique.php';
 
 // ========================================================================
 // CONSTANTES & HELPERS
@@ -63,6 +64,13 @@ function validateTelephone(?string $tel): bool {
 function formatDateDisplay(?string $date, string $format = 'd/m/Y'): string {
     if (!$date) {
         return '—';
+function logProfilAction(PDO $pdo, string $action, string $details): void {
+    try {
+        enregistrerAction($pdo, $_SESSION['user_id'] ?? null, $action, $details);
+    } catch (Throwable $e) {
+        error_log('profil.php log error: ' . $e->getMessage());
+    }
+}
     }
     try {
         $dt = new DateTime($date);
@@ -115,12 +123,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 VALUES (?,?,?,?,?,?,?,?)
             ");
             $stmt->execute([$email, $hash, $nom, $prenom, $tel, $emploi, $statut, $debut]);
+            $newId = (int)$pdo->lastInsertId();
+            logProfilAction($pdo, 'utilisateur_cree', "Utilisateur #{$newId} créé ({$email}, rôle {$emploi})");
 
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur créé avec succès."];
         }
         elseif ($action === 'update') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('Identifiant manquant.');
+            $before = safeFetch($pdo, "SELECT Email, nom, prenom, telephone, Emploi, statut, date_debut FROM utilisateurs WHERE id=?", [$id], 'profil_update_fetch');
+            if (!$before) throw new RuntimeException('Utilisateur introuvable.');
 
             // Empêche un admin/dirigeant de changer son propre rôle
             if ($id === $currentUser['id'] && isset($_POST['Emploi']) && $_POST['Emploi'] !== $currentUser['Emploi']) {
@@ -147,6 +159,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  WHERE id=?
             ");
             $stmt->execute([$email, $nom, $prenom, $tel, $emploi, $statut, $debut, $id]);
+            $changes = [];
+            $fieldMap = [
+                'Email' => $email,
+                'nom' => $nom,
+                'prenom' => $prenom,
+                'telephone' => $tel,
+                'Emploi' => $emploi,
+                'statut' => $statut,
+                'date_debut' => $debut,
+            ];
+            foreach ($fieldMap as $field => $newValue) {
+                $oldValue = $before[$field] ?? null;
+                if ($oldValue !== $newValue) {
+                    $changes[] = "{$field}: '{$oldValue}' → '{$newValue}'";
+                }
+            }
+            $detail = $changes ? implode(', ', $changes) : 'Aucun changement détecté';
+            logProfilAction($pdo, 'utilisateur_modifie', "Utilisateur #{$id} mis à jour. {$detail}");
 
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur mis à jour."];
         }
@@ -159,6 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $new = (($_POST['to'] ?? 'actif') === 'inactif') ? 'inactif' : 'actif';
             $stmt = $pdo->prepare("UPDATE utilisateurs SET statut=? WHERE id=?");
             $stmt->execute([$new, $id]);
+            logProfilAction($pdo, 'utilisateur_statut', "Statut utilisateur #{$id} changé en {$new}");
 
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut modifié en {$new}."];
         }
@@ -172,6 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hash = password_hash($newpwd, PASSWORD_BCRYPT, ['cost' => 10]);
             $stmt = $pdo->prepare("UPDATE utilisateurs SET password=? WHERE id=?");
             $stmt->execute([$hash, $id]);
+            logProfilAction($pdo, 'utilisateur_pwd_reset', "Mot de passe utilisateur #{$id} réinitialisé");
 
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Mot de passe réinitialisé."];
         }
