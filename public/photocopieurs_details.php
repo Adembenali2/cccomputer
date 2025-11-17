@@ -2,15 +2,38 @@
 // /public/photocopieurs_details.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/historique.php';
+
+const CLIENT_OPTIONS_LIMIT = 500;
 
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
-/** Normalise une MAC → ['norm'=>'AABBCCDDEEFF','colon'=>'AA:BB:CC:DD:EE:FF'] ou [null,null] */
 function normalizeMac(?string $mac): array {
   $raw = strtoupper(trim((string)$mac));
   $hex = preg_replace('~[^0-9A-F]~', '', $raw);
   if (strlen($hex) !== 12) return ['norm' => null, 'colon' => null];
   return ['norm' => $hex, 'colon' => implode(':', str_split($hex, 2))];
+}
+
+function ensureCsrfToken(): string {
+  if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+  }
+  return $_SESSION['csrf_token'];
+}
+
+function assertValidCsrf(string $token): void {
+  if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+    throw new RuntimeException("Session expirée, veuillez recharger la page.");
+  }
+}
+
+function logDeviceAction(PDO $pdo, string $action, string $details): void {
+  try {
+    enregistrerAction($pdo, $_SESSION['user_id'] ?? null, $action, $details);
+  } catch (Throwable $e) {
+    error_log('photocopieurs_details log error: ' . $e->getMessage());
+  }
 }
 
 /* ---------- Entrée ---------- */
@@ -28,7 +51,16 @@ else {
 
 /* ---------- Action: associer un client ---------- */
 $flash = ['type'=>null,'msg'=>null];
+$shouldOpenAttachModal = false;
+$csrfToken = ensureCsrfToken();
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'attach_client') {
+    try {
+        assertValidCsrf($_POST['csrf_token'] ?? '');
+    } catch (RuntimeException $csrfEx) {
+        $flash = ['type'=>'error','msg'=>$csrfEx->getMessage()];
+        $shouldOpenAttachModal = true;
+    }
+
     $clientId = (int)($_POST['id_client'] ?? 0);
     $snPost   = trim($_POST['sn'] ?? '');
     $macPost  = trim($_POST['mac'] ?? '');
@@ -40,6 +72,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     // ✅ On accepte SN seul OU MAC seule (au moins un des deux)
     if ($clientId <= 0 || ($snPost === '' && !$macNorm)) {
         $flash = ['type'=>'error','msg'=>"Veuillez choisir un client et fournir au moins le N° de série ou la MAC."];
+        $shouldOpenAttachModal = true;
     } else {
         try {
             // Construire l'INSERT dynamiquement (on n'écrit JAMAIS mac_norm car colonne générée)
@@ -57,6 +90,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 ':sn'        => ($snPost !== '' ? $snPost : null),// peut être NULL si SN inconnu
                 ':id_client' => $clientId
             ]);
+            logDeviceAction($pdo, 'photocopieur_attribue', "Photocopieur SN='{$snPost}' MAC='{$macNorm}' attribué au client #{$clientId}");
 
             header('Location: '.$_SERVER['REQUEST_URI']);
             exit;
@@ -64,6 +98,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         } catch (PDOException $e) {
             error_log('attach_client error: '.$e->getMessage());
             $flash = ['type'=>'error','msg'=>"Erreur: impossible d'associer le client."];
+            $shouldOpenAttachModal = true;
         }
     }
 }
@@ -132,7 +167,8 @@ try {
            telephone1
     FROM clients
     ORDER BY raison_sociale ASC
-  ")->fetchAll(PDO::FETCH_ASSOC);
+    LIMIT " . CLIENT_OPTIONS_LIMIT
+  )->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
   error_log('clients list error: '.$e->getMessage());
 }
@@ -253,6 +289,7 @@ function pctOrIntOrNull($v): ?int {
 
     <form method="post" class="standard-form" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>">
       <input type="hidden" name="action" value="attach_client">
+      <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
       <input type="hidden" name="sn"  value="<?= h($snDisplay) ?>">
 
       <?php
@@ -307,6 +344,8 @@ function pctOrIntOrNull($v): ?int {
       const ovl   = document.getElementById('attachOverlay');
       const cancel= document.getElementById('btnAttachCancel');
 
+      const shouldOpen = <?= json_encode($shouldOpenAttachModal) ?>;
+
       // Ouvrir le formulaire seulement si pas encore attribué (bouton, pas lien)
       if (btn && btn.tagName.toLowerCase() === 'button') {
         btn.addEventListener('click', openModal);
@@ -317,6 +356,10 @@ function pctOrIntOrNull($v): ?int {
 
       ovl && ovl.addEventListener('click', closeModal);
       cancel && cancel.addEventListener('click', closeModal);
+
+      if (shouldOpen) {
+        openModal();
+      }
 
       // Recherche instantanée
       const q = document.getElementById('clientSearch');
