@@ -60,6 +60,18 @@ function validateTelephone(?string $tel): bool {
     return (bool)preg_match(TELEPHONE_PATTERN, $tel);
 }
 
+function formatDateDisplay(?string $date, string $format = 'd/m/Y'): string {
+    if (!$date) {
+        return '—';
+    }
+    try {
+        $dt = new DateTime($date);
+        return $dt->format($format);
+    } catch (Exception $e) {
+        return $date;
+    }
+}
+
 // ========================================================================
 // GESTION DES REQUÊTES POST (Formulaires) - Pattern PRG
 // ========================================================================
@@ -224,6 +236,30 @@ $imports = safeFetchAll(
     'imports_history'
 );
 
+$totalUsers     = count($users);
+$activeUsers    = 0;
+$roleBreakdown  = [];
+$latestCreation = null;
+
+foreach ($users as $user) {
+    if (($user['statut'] ?? '') === 'actif') {
+        $activeUsers++;
+    }
+    $role = $user['Emploi'] ?? '—';
+    $roleBreakdown[$role] = ($roleBreakdown[$role] ?? 0) + 1;
+
+    $createdAt = $user['date_creation'] ?? null;
+    if ($createdAt) {
+        if ($latestCreation === null || strtotime($createdAt) > strtotime($latestCreation)) {
+            $latestCreation = $createdAt;
+        }
+    }
+}
+$inactiveUsers  = max($totalUsers - $activeUsers, 0);
+arsort($roleBreakdown);
+$topRoles = array_slice($roleBreakdown, 0, 3, true);
+$filtersActive = ($search !== '' || ($status !== '' && in_array($status, ['actif','inactif'], true)) || ($role !== '' && in_array($role, $ROLES, true)));
+
 // utilitaire pour décoder proprement msg JSON
 function decode_msg($row) {
     if (!isset($row['msg'])) return null;
@@ -372,6 +408,56 @@ function decode_msg($row) {
         </div>
         <!-- ——— fin icône import ——— -->
     </header>
+
+    <section class="profil-meta">
+        <div class="meta-card">
+            <span class="meta-label">Utilisateurs</span>
+            <strong class="meta-value"><?= h((string)$totalUsers) ?></strong>
+            <?php if ($totalUsers >= USERS_LIMIT): ?>
+                <span class="meta-chip" title="Limite d’affichage atteinte">+<?= USERS_LIMIT ?> affichés</span>
+            <?php endif; ?>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Actifs</span>
+            <strong class="meta-value success"><?= h((string)$activeUsers) ?></strong>
+            <span class="meta-sub">Inactifs : <?= h((string)$inactiveUsers) ?></span>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Dernière création</span>
+            <strong class="meta-value"><?= h(formatDateDisplay($latestCreation)) ?></strong>
+        </div>
+        <div class="meta-card meta-roles">
+            <span class="meta-label">Top rôles</span>
+            <div class="meta-pills">
+                <?php if ($topRoles): ?>
+                    <?php foreach ($topRoles as $roleName => $count): ?>
+                        <span class="pill role-pill">
+                            <?= h($roleName) ?>
+                            <span class="pill-count"><?= h((string)$count) ?></span>
+                        </span>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <span class="meta-sub">Aucun rôle disponible</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </section>
+
+    <?php if ($filtersActive): ?>
+        <div class="active-filters" role="status" aria-live="polite">
+            <span class="badge">Filtres actifs</span>
+            <?php if ($search !== ''): ?>
+                <span class="pill">Recherche : <?= h($search) ?></span>
+            <?php endif; ?>
+            <?php if ($role !== ''): ?>
+                <span class="pill">Rôle : <?= h($role) ?></span>
+            <?php endif; ?>
+            <?php if ($status !== ''): ?>
+                <span class="pill">Statut : <?= h($status) ?></span>
+            <?php endif; ?>
+            <a class="pill pill-clear" href="/public/profil.php" aria-label="Réinitialiser les filtres">Réinitialiser</a>
+        </div>
+    <?php endif; ?>
 
     <?php if ($flash && isset($flash['type'])): ?>
         <div class="flash <?= h($flash['type']) ?>"><?= h($flash['msg'] ?? '') ?></div>
