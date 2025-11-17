@@ -1,19 +1,33 @@
 <?php
-// /public/profil.php (VERSION FINALE COMPLÈTE ET CORRIGÉE)
+// /public/historique.php
 
-// ÉTAPE 1 : SÉCURITÉ D'ABORD
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_roles(['Admin', 'Dirigeant']);
-require_once __DIR__ . '/../includes/db.php'; // Doit fournir $pdo (PDO connecté)
+require_once __DIR__ . '/../includes/db.php'; // fournit $pdo (PDO connecté)
 
+const HISTORIQUE_PAGE_LIMIT = 200;
+const USER_SEARCH_MAX_CHARS = 80;
 
-// ====== Lecture des filtres GET ======
-$searchUser = trim($_GET['user_search'] ?? '');
-$searchDate = trim($_GET['date_search'] ?? '');
+// ====== Lecture et validation des filtres GET ======
+$rawUser = $_GET['user_search'] ?? '';
+$searchUser = trim(is_string($rawUser) ? $rawUser : '');
+if ($searchUser !== '') {
+    $searchUser = preg_replace('/\s+/', ' ', $searchUser);
+    $searchUser = mb_substr($searchUser, 0, USER_SEARCH_MAX_CHARS);
+}
 
-// Validation simple de la date (YYYY-MM-DD)
-if ($searchDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $searchDate)) {
-    $searchDate = '';
+$rawDate = $_GET['date_search'] ?? '';
+$searchDate = trim(is_string($rawDate) ? $rawDate : '');
+$dateStart = $dateEnd = null;
+if ($searchDate !== '') {
+    $dt = DateTime::createFromFormat('Y-m-d', $searchDate);
+    $errors = DateTime::getLastErrors();
+    if ($dt && empty($errors['warning_count']) && empty($errors['error_count'])) {
+        $dateStart = (clone $dt)->setTime(0, 0, 0);
+        $dateEnd   = (clone $dt)->modify('+1 day')->setTime(0, 0, 0);
+    } else {
+        $searchDate = '';
+    }
 }
 
 // ====== Construction de la requête ======
@@ -21,16 +35,22 @@ $params = [];
 $where  = [];
 
 if ($searchUser !== '') {
-    // LIKE sur "Nom Prénom" (prévoir collation pour la casse/accents côté BDD)
-    $where[] = "CONCAT(u.nom, ' ', u.prenom) LIKE :search_user";
-    $params[':search_user'] = '%' . $searchUser . '%';
+    $tokens = preg_split('/\s+/', $searchUser);
+    $tokenIndex = 0;
+    foreach ($tokens as $token) {
+        if ($token === '') {
+            continue;
+        }
+        $paramKey = ':search_user_' . $tokenIndex++;
+        $where[] = "(u.nom LIKE {$paramKey} OR u.prenom LIKE {$paramKey})";
+        $params[$paramKey] = '%' . $token . '%';
+    }
 }
 
-if ($searchDate !== '') {
-    // Utiliser une plage pour préserver les index de h.date_action
+if ($dateStart && $dateEnd) {
     $where[] = "h.date_action >= :dstart AND h.date_action < :dend";
-    $params[':dstart'] = $searchDate . ' 00:00:00';
-    $params[':dend']   = date('Y-m-d', strtotime($searchDate . ' +1 day')) . ' 00:00:00';
+    $params[':dstart'] = $dateStart->format('Y-m-d H:i:s');
+    $params[':dend']   = $dateEnd->format('Y-m-d H:i:s');
 }
 
 $sql = "
@@ -47,17 +67,28 @@ $sql = "
 ";
 
 if ($where) {
-    $sql .= " WHERE " . implode(" AND ", $where);
+    $sql .= ' WHERE ' . implode(' AND ', $where);
 }
 
-$sql .= " ORDER BY h.date_action DESC LIMIT 200"; // ajuste la limite si besoin
+$sql .= ' ORDER BY h.date_action DESC LIMIT ' . HISTORIQUE_PAGE_LIMIT;
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$historique = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$historique = [];
+$dbError = null;
+
+try {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $historique = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} catch (PDOException $e) {
+    $dbError = 'Impossible de charger l’historique pour le moment.';
+    error_log('Erreur SQL (historique): ' . $e->getMessage());
+}
 
 // ====== Helper d’échappement ======
-function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+function h(?string $s): string
+{
+    return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -118,7 +149,11 @@ function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES,
                 </tr>
             </thead>
             <tbody>
-                <?php if (empty($historique)): ?>
+                <?php if ($dbError !== null): ?>
+                    <tr>
+                        <td colspan="5" class="aucun"><?= h($dbError) ?></td>
+                    </tr>
+                <?php elseif (empty($historique)): ?>
                     <tr>
                         <td colspan="5" class="aucun">Aucun résultat trouvé pour les filtres.</td>
                     </tr>
@@ -143,7 +178,13 @@ function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES,
 
     <!-- Version “cartes” mobile -->
     <ul class="history-list">
-        <?php if (empty($historique)): ?>
+        <?php if ($dbError !== null): ?>
+            <li class="history-item">
+                <div class="item-body">
+                    <div class="aucun-resultat"><?= h($dbError) ?></div>
+                </div>
+            </li>
+        <?php elseif (empty($historique)): ?>
             <li class="history-item">
                 <div class="item-body">
                     <div class="aucun-resultat">Aucun résultat trouvé pour les filtres.</div>
