@@ -4,98 +4,192 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
+/**
+ * Raccourcis d'accès BDD avec journalisation.
+ *
+ * @param string $context Label pour les logs d'erreurs.
+ */
+$safeFetchColumn = static function (PDO $pdo, string $sql, array $params = [], $default = null, string $context = 'query') {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchColumn();
+    } catch (PDOException $e) {
+        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+        return $default;
+    }
+};
+
+$safeFetchAll = static function (PDO $pdo, string $sql, array $params = [], string $context = 'query') : array {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return is_array($rows) ? $rows : [];
+    } catch (PDOException $e) {
+        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+        return [];
+    }
+};
+
 // ==================================================================
 // Historique des actions (requêtes SQL réelles)
 // ==================================================================
-try {
-    $stmt = $pdo->query("SELECT COUNT(*) FROM historique");
-    $nHistorique = (string)$stmt->fetchColumn();
-} catch (PDOException $e) {
-    error_log("Erreur de requête SQL (nHistorique) : " . $e->getMessage());
-    $nHistorique = 'Erreur';
-}
+$nHistorique = (string)($safeFetchColumn(
+    $pdo,
+    "SELECT COUNT(*) FROM historique",
+    [],
+    'Erreur',
+    'historique_count'
+) ?? 'Erreur');
 
-try {
-    $sql = "SELECT DATE(date_action) AS date, COUNT(*) AS total_historique
-            FROM historique
-            GROUP BY DATE(date_action)
-            ORDER BY date DESC";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $historique_par_jour = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log("Erreur de requête SQL (historique_par_jour) : " . $e->getMessage());
-    $historique_par_jour = [];
-}
+$historique_par_jour = $safeFetchAll(
+    $pdo,
+    "SELECT DATE(date_action) AS date, COUNT(*) AS total_historique
+     FROM historique
+     GROUP BY DATE(date_action)
+     ORDER BY date DESC",
+    [],
+    'historique_par_jour'
+);
 
 // ==================================================================
 // Compteurs réels depuis la BDD
 // ==================================================================
-try {
-    $stmt = $pdo->query("SELECT COUNT(*) FROM paiements WHERE statut = 'en_attente'");
-    $nb_paiements_en_attente = (int)$stmt->fetchColumn();
-} catch (PDOException $e) {
-    error_log("Erreur SQL (paiements): " . $e->getMessage());
-    $nb_paiements_en_attente = 0;
-}
+$nb_paiements_en_attente = (int)($safeFetchColumn(
+    $pdo,
+    "SELECT COUNT(*) FROM paiements WHERE statut = :statut",
+    ['statut' => 'en_attente'],
+    0,
+    'paiements_en_attente'
+) ?? 0);
 
-try {
-    $stmt = $pdo->query("SELECT COUNT(*) FROM sav WHERE statut = 'a_traiter'");
-    $nb_sav_a_traiter = (int)$stmt->fetchColumn();
-} catch (PDOException $e) {
-    error_log("Erreur SQL (sav): " . $e->getMessage());
-    $nb_sav_a_traiter = 0;
-}
+$nb_sav_a_traiter = (int)($safeFetchColumn(
+    $pdo,
+    "SELECT COUNT(*) FROM sav WHERE statut = :statut",
+    ['statut' => 'a_traiter'],
+    0,
+    'sav_a_traiter'
+) ?? 0);
 
-try {
-    $stmt = $pdo->query("SELECT COUNT(*) FROM livraisons WHERE statut = 'en_attente'");
-    $nb_livraisons_a_faire = (int)$stmt->fetchColumn();
-} catch (PDOException $e) {
-    error_log("Erreur SQL (livraisons): " . $e->getMessage());
-    $nb_livraisons_a_faire = 0;
-}
+$nb_livraisons_a_faire = (int)($safeFetchColumn(
+    $pdo,
+    "SELECT COUNT(*) FROM livraisons WHERE statut = :statut",
+    ['statut' => 'en_attente'],
+    0,
+    'livraisons_en_attente'
+) ?? 0);
 
 $payClass = ($nb_paiements_en_attente > 0) ? 'count-bad' : 'count-ok';
 
 // ==================================================================
 // Récupération clients depuis la BDD
 // ==================================================================
-try {
-    $sql = "SELECT 
-                id,
-                numero_client,
-                raison_sociale,
-                nom_dirigeant,
-                prenom_dirigeant,
-                email,
-                adresse,
-                code_postal,
-                ville,
-                adresse_livraison,
-                livraison_identique,
-                siret,
-                numero_tva,
-                depot_mode,
-                telephone1,
-                telephone2,
-                parrain,
-                offre,
-                date_creation,
-                date_dajout,
-                pdf1, pdf2, pdf3, pdf4, pdf5,
-                pdfcontrat,
-                iban
-            FROM clients
-            ORDER BY raison_sociale ASC";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $nbClients = is_array($clients) ? count($clients) : 0;
-} catch (PDOException $e) {
-    error_log('Erreur SQL (clients): ' . $e->getMessage());
-    $clients = [];
-    $nbClients = 0;
+$clients = $safeFetchAll(
+    $pdo,
+    "SELECT 
+        id,
+        numero_client,
+        raison_sociale,
+        nom_dirigeant,
+        prenom_dirigeant,
+        email,
+        adresse,
+        code_postal,
+        ville,
+        adresse_livraison,
+        livraison_identique,
+        siret,
+        numero_tva,
+        depot_mode,
+        telephone1,
+        telephone2,
+        parrain,
+        offre,
+        date_creation,
+        date_dajout,
+        pdf1, pdf2, pdf3, pdf4, pdf5,
+        pdfcontrat,
+        iban
+    FROM clients
+    ORDER BY raison_sociale ASC",
+    [],
+    'clients_list'
+);
+
+$nbClients = count($clients);
+
+$clientsContactables = array_reduce(
+    $clients,
+    static function (int $carry, array $client): int {
+        return $carry + ((isset($client['email']) && filter_var($client['email'], FILTER_VALIDATE_EMAIL)) ? 1 : 0);
+    },
+    0
+);
+
+$recentClients = array_values(array_filter($clients, static function ($client) {
+    return !empty($client['date_dajout']);
+}));
+
+usort($recentClients, static function ($a, $b) {
+    return strcmp($b['date_dajout'] ?? '', $a['date_dajout'] ?? '');
+});
+
+$recentClients = array_slice($recentClients, 0, 5);
+
+$recentClients = $recentClients ?: array_slice($clients, 0, 5);
+
+$todayDate = (new DateTime('today'))->format('Y-m-d');
+$historiqueAujourdHui = 0;
+$historiqueTrend = 0;
+
+if (!empty($historique_par_jour)) {
+    foreach ($historique_par_jour as $index => $row) {
+        $date = $row['date'] ?? null;
+        if ($date === $todayDate) {
+            $historiqueAujourdHui = (int)($row['total_historique'] ?? 0);
+            break;
+        }
+    }
+
+    if (count($historique_par_jour) > 1) {
+        $courant = (int)($historique_par_jour[0]['total_historique'] ?? 0);
+        $precedent = (int)($historique_par_jour[1]['total_historique'] ?? 0);
+        if ($precedent === 0) {
+            $historiqueTrend = $courant > 0 ? 100 : 0;
+        } else {
+            $historiqueTrend = (($courant - $precedent) / max($precedent, 1)) * 100;
+        }
+    }
 }
+
+$historiqueTrendDirection = 'stable';
+if ($historiqueTrend > 3) {
+    $historiqueTrendDirection = 'up';
+} elseif ($historiqueTrend < -3) {
+    $historiqueTrendDirection = 'down';
+}
+
+$historiqueTrendValue = round($historiqueTrend, 1);
+$historiqueTrendLabel = ($historiqueTrendValue >= 0 ? '+' : '') . $historiqueTrendValue . '%';
+$historiqueResume = array_slice($historique_par_jour, 0, 7);
+$lastRefreshLabel = date('d/m/Y à H:i');
+$formatDate = static function (?string $date, string $format = 'd/m'): string {
+    if (!$date) {
+        return '—';
+    }
+    try {
+        $dt = new DateTime($date);
+        return $dt->format($format);
+    } catch (Exception $e) {
+        return $date;
+    }
+};
+$maxHistoriqueValue = 0;
+foreach ($historiqueResume as $row) {
+    $maxHistoriqueValue = max($maxHistoriqueValue, (int)($row['total_historique'] ?? 0));
+}
+$maxHistoriqueValue = max($maxHistoriqueValue, 1);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -112,11 +206,44 @@ try {
 
     <div class="dashboard-wrapper">
         <div class="dashboard-header">
-            <h2 class="dashboard-title">Tableau de Bord</h2>
+            <div class="dashboard-heading">
+                <h2 class="dashboard-title">Tableau de Bord</h2>
+                <p class="dashboard-subtitle">
+                    Dernière mise à jour&nbsp;: <?= htmlspecialchars($lastRefreshLabel, ENT_QUOTES, 'UTF-8') ?>
+                </p>
+            </div>
 
             <div class="import-badge" id="importBadge" aria-live="polite" title="État du dernier import SFTP">
                 <span class="ico run" id="impIco">⏳</span>
                 <span class="txt" id="impTxt">Import SFTP : vérification…</span>
+            </div>
+        </div>
+
+        <div class="dashboard-meta" aria-live="polite" aria-label="Indicateurs rapides">
+            <div class="kpi-group" role="list">
+                <div class="kpi-chip <?= $nb_paiements_en_attente > 0 ? 'is-alert' : 'is-ok' ?>" role="listitem">
+                    <span class="kpi-label">Paiements à traiter</span>
+                    <strong class="kpi-value"><?= htmlspecialchars($nb_paiements_en_attente, ENT_QUOTES, 'UTF-8') ?></strong>
+                </div>
+                <div class="kpi-chip <?= $nb_sav_a_traiter > 0 ? 'is-alert' : 'is-ok' ?>" role="listitem">
+                    <span class="kpi-label">Tickets SAV</span>
+                    <strong class="kpi-value"><?= htmlspecialchars($nb_sav_a_traiter, ENT_QUOTES, 'UTF-8') ?></strong>
+                </div>
+                <div class="kpi-chip <?= $nb_livraisons_a_faire > 0 ? 'is-alert' : 'is-ok' ?>" role="listitem">
+                    <span class="kpi-label">Livraisons en attente</span>
+                    <strong class="kpi-value"><?= htmlspecialchars($nb_livraisons_a_faire, ENT_QUOTES, 'UTF-8') ?></strong>
+                </div>
+                <div class="kpi-chip is-neutral" role="listitem">
+                    <span class="kpi-label">Clients contactables</span>
+                    <strong class="kpi-value"><?= htmlspecialchars($clientsContactables, ENT_QUOTES, 'UTF-8') ?></strong>
+                </div>
+            </div>
+            <div class="insight-card" aria-live="polite">
+                <span class="insight-label">Activité du jour</span>
+                <strong class="insight-value"><?= htmlspecialchars($historiqueAujourdHui, ENT_QUOTES, 'UTF-8') ?></strong>
+                <span class="insight-sub trend-<?= htmlspecialchars($historiqueTrendDirection, ENT_QUOTES, 'UTF-8') ?>">
+                    <?= htmlspecialchars($historiqueTrendLabel, ENT_QUOTES, 'UTF-8') ?>
+                </span>
             </div>
         </div>
 
