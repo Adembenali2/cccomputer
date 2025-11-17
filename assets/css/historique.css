@@ -16,6 +16,104 @@
   margin: 0;
 }
 
+.page-subtitle {
+  margin: 0.5rem 0 0;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+/* ===============================
+   Méta & badges
+   =============================== */
+.history-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.history-meta.has-filter {
+  margin-bottom: 0.75rem;
+}
+
+.meta-card {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.meta-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: .05em;
+}
+
+.meta-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  width: fit-content;
+}
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.active-filters .badge {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--accent-primary);
+  background: rgba(59,130,246,0.1);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.pill-clear {
+  color: #ef4444;
+  border-color: rgba(239,68,68,0.35);
+  background: rgba(239,68,68,0.08);
+}
+
+.pill-clear:hover {
+  background: rgba(239,68,68,0.15);
+}
+
 /* ===============================
    Formulaire de filtres (auto)
    =============================== */
@@ -162,6 +260,14 @@
     gap: .6rem;
   }
 
+  .history-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .meta-value {
+    font-size: 1.25rem;
+  }
+
   /* Sur mobile : montrer les cartes, cacher le tableau */
   .history-table { display: none; }
   .history-list  { display: block; }
@@ -179,3 +285,4 @@
     transition-duration: 0.01ms !important;
   }
 }
+

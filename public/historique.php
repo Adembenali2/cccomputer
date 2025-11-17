@@ -89,6 +89,35 @@ function h(?string $s): string
 {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 }
+
+function formatDateTime(?string $dateTime): string
+{
+    if (!$dateTime) {
+        return '—';
+    }
+    try {
+        $dt = new DateTime($dateTime);
+        return $dt->format('d/m/Y H:i');
+    } catch (Exception $e) {
+        return $dateTime;
+    }
+}
+
+$historiqueCount = count($historique);
+$isLimited = ($historiqueCount === HISTORIQUE_PAGE_LIMIT);
+
+$uniqueUsers = [];
+foreach ($historique as $row) {
+    $fullname = trim(($row['nom'] ?? '') . ' ' . ($row['prenom'] ?? ''));
+    if ($fullname !== '') {
+        $uniqueUsers[$fullname] = true;
+    }
+}
+$uniqueUsersCount = count($uniqueUsers);
+$lastActivity = $historique[0]['date_action'] ?? null;
+$firstActivity = $historiqueCount > 0 ? ($historique[$historiqueCount - 1]['date_action'] ?? null) : null;
+
+$filtersActive = ($searchUser !== '' || $searchDate !== '');
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -108,7 +137,45 @@ function h(?string $s): string
 <main class="page-container page-historique">
     <header class="page-header">
         <h1 class="page-title">Historique des actions</h1>
+        <p class="page-subtitle">
+            Surveillez les opérations clés en temps réel. Les 200 dernières entrées sont affichées.
+        </p>
     </header>
+
+    <section class="history-meta <?= $filtersActive ? 'has-filter' : '' ?>">
+        <div class="meta-card">
+            <span class="meta-label">Entrées listées</span>
+            <strong class="meta-value"><?= h((string)$historiqueCount) ?></strong>
+            <?php if ($isLimited): ?>
+                <span class="meta-chip" title="Seulement les dernières entrées sont affichées">Limite atteinte</span>
+            <?php endif; ?>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Utilisateurs impliqués</span>
+            <strong class="meta-value"><?= h((string)$uniqueUsersCount) ?></strong>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Dernière activité</span>
+            <strong class="meta-value"><?= h(formatDateTime($lastActivity)) ?></strong>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Première activité</span>
+            <strong class="meta-value"><?= h(formatDateTime($firstActivity)) ?></strong>
+        </div>
+    </section>
+
+    <?php if ($filtersActive): ?>
+        <div class="active-filters" role="status" aria-live="polite">
+            <span class="badge">Filtres actifs</span>
+            <?php if ($searchUser !== ''): ?>
+                <span class="pill">Utilisateur : <?= h($searchUser) ?></span>
+            <?php endif; ?>
+            <?php if ($searchDate !== ''): ?>
+                <span class="pill">Date : <?= h($searchDate) ?></span>
+            <?php endif; ?>
+            <a class="pill pill-clear" href="historique.php" aria-label="Réinitialiser les filtres">Réinitialiser</a>
+        </div>
+    <?php endif; ?>
 
     <!-- Formulaire de filtres (auto-submit, sans boutons) -->
     <form class="filtre-form" id="filterForm" method="get" action="historique.php" novalidate>
