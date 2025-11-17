@@ -9,15 +9,39 @@
 }
 
 /* En-tête + badges */
-.details-header { display: grid; gap: .35rem; margin: 1rem 0; }
+.details-header { display: grid; gap: .75rem; margin: 1rem 0; }
 .details-header .h1 { font-size: 1.35rem; font-weight: 800; color: var(--text-primary); }
-.meta { color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: .4rem .5rem; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
+.meta-block {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: .65rem .75rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.meta-block .label {
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+}
+.meta-block strong {
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+.meta-block .sub {
+  font-size: .85rem;
+  color: var(--text-secondary);
+}
 .badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; border: 1px solid var(--border-color); font-size: .85rem; background: var(--bg-primary); }
 
 /* Barre d’outils (Retour + Espace client) */
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .25rem 0 1rem; }
 .back-link { text-decoration: none; color: var(--text-primary); padding: .45rem .65rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary); }
-.toolbar .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .5rem .8rem; font-weight: 700; border-radius: var(--radius-md); border: 1px solid var(--border-color); cursor: pointer; text-decoration: none; box-shadow: var(--shadow-sm); color: var(--text-primary); background: var(--bg-primary); }
+.toolbar .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .5rem .8rem; font-weight: 700; border-radius: var(--radius-md); border: 1px solid var(--border-color); cursor: pointer; text-decoration: none; box-shadow: var(--shadow-sm); color: var(--text-primary); background: var(--bg-primary); min-width: 130px; justify-content: center; }
 .toolbar .btn:hover { filter: brightness(0.98); }
 .toolbar .btn-primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
 .toolbar .btn-primary:hover { background: var(--accent-secondary); }

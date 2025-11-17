@@ -201,7 +201,7 @@ function pctOrIntOrNull($v): ?int {
         <a href="/public/client_fiche.php?id=<?= (int)$client['id'] ?>" class="btn btn-primary" id="btn-espace-client">Espace client</a>
       <?php else: ?>
         <!-- Pas encore attribué → ouvre le formulaire d’attribution -->
-        <button type="button" class="btn btn-primary" id="btn-espace-client">Espace client</button>
+        <button type="button" class="btn btn-primary" id="btn-espace-client">Attribuer</button>
       <?php endif; ?>
     </div>
 
@@ -214,18 +214,28 @@ function pctOrIntOrNull($v): ?int {
     <div class="details-header">
       <div class="h1">Historique du photocopieur</div>
 
-      <div class="meta">
-        <span class="badge">Modèle: <?= h($model) ?></span>
-        <span class="badge">Nom: <?= h($name) ?></span>
-        <span class="badge">SN: <?= h($snDisplay) ?></span>
-        <span class="badge">MAC: <?= h($macDisplay) ?></span>
-        <span class="badge">IP: <?= h($ipDisplay) ?></span>
-        <span class="badge">Statut: <?= h($status) ?></span>
-
+      <div class="meta-grid">
+        <div class="meta-block">
+          <span class="label">Modèle</span>
+          <strong><?= h($model) ?></strong>
+          <span class="sub">Nom: <?= h($name) ?></span>
+        </div>
+        <div class="meta-block">
+          <span class="label">Série</span>
+          <strong><?= h($snDisplay) ?></strong>
+          <span class="sub">MAC: <?= h($macDisplay) ?></span>
+        </div>
+        <div class="meta-block">
+          <span class="label">Réseau</span>
+          <strong><?= h($ipDisplay) ?></strong>
+          <span class="sub">Statut: <?= h($status) ?></span>
+        </div>
         <?php if ($client): ?>
-          <span class="badge">Client: <?= h($client['raison_sociale'] ?? '—') ?></span>
-          <span class="badge">Tél: <?= h($client['telephone1'] ?? '—') ?></span>
-          <span class="badge">Dirigeant: <?= h(trim(($client['nom_dirigeant'] ?? '').' '.($client['prenom_dirigeant'] ?? '')) ?: '—') ?></span>
+        <div class="meta-block">
+          <span class="label">Client</span>
+          <strong><?= h($client['raison_sociale'] ?? '—') ?></strong>
+          <span class="sub"><?= h(trim(($client['nom_dirigeant'] ?? '').' '.($client['prenom_dirigeant'] ?? '')) ?: '—') ?> · <?= h($client['telephone1'] ?? '—') ?></span>
+        </div>
         <?php endif; ?>
       </div>
 
