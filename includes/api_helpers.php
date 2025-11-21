@@ -132,3 +132,33 @@ function setCache(string $key, array $data): bool {
     return file_put_contents($cacheFile, json_encode($data)) !== false;
 }
 
+/**
+ * Vérifie si une colonne existe dans une table (avec cache pour éviter les requêtes répétées)
+ */
+function columnExists(PDO $pdo, string $table, string $column): bool {
+    static $cache = [];
+    $cacheKey = "{$table}.{$column}";
+    
+    if (isset($cache[$cacheKey])) {
+        return $cache[$cacheKey];
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = :table 
+            AND COLUMN_NAME = :column
+        ");
+        $stmt->execute([':table' => $table, ':column' => $column]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $exists = ($result['cnt'] ?? 0) > 0;
+        $cache[$cacheKey] = $exists;
+        return $exists;
+    } catch (PDOException $e) {
+        error_log("columnExists error for {$table}.{$column}: " . $e->getMessage());
+        return false;
+    }
+}
+

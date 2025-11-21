@@ -116,7 +116,12 @@ function store_upload(array $file, int $id): ?string {
 
 // --------- Charger client ----------
 try {
-  $stmt = $pdo->prepare("SELECT * FROM clients WHERE id = :id LIMIT 1");
+  // Sélection explicite des colonnes nécessaires au lieu de SELECT * pour améliorer les performances
+  $stmt = $pdo->prepare("SELECT id, numero_client, raison_sociale, adresse, code_postal, ville, 
+                         nom_dirigeant, prenom_dirigeant, telephone1, telephone2, email, siret, 
+                         numero_tva, depot_mode, parrain, offre, date_creation, date_dajout,
+                         adresse_livraison, livraison_identique, pdf1, pdf2, pdf3, pdf4, pdf5, pdfcontrat, iban
+                         FROM clients WHERE id = :id LIMIT 1");
   $stmt->execute([':id'=>$id]);
   $client = $stmt->fetch(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {

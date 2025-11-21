@@ -278,14 +278,14 @@ try {
             $allMessages = array_merge($messages, $replies);
         }
         
-        // Supprimer les doublons (basé sur l'ID)
+        // Supprimer les doublons (basé sur l'ID) - Optimisé avec array_flip pour O(n) au lieu de O(n²)
         $uniqueMessages = [];
         $seenIds = [];
         foreach ($allMessages as $msg) {
             $msgId = (int)$msg['id'];
-            if (!in_array($msgId, $seenIds)) {
+            if (!isset($seenIds[$msgId])) {
                 $uniqueMessages[] = $msg;
-                $seenIds[] = $msgId;
+                $seenIds[$msgId] = true;
             }
         }
         

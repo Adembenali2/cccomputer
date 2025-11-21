@@ -105,11 +105,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
 
 /* ---------- Lecture relevés ---------- */
 try {
+  // Sélection explicite des colonnes nécessaires au lieu de SELECT * pour améliorer les performances
+  $columns = "id, `Timestamp`, Model, Nom, Status, IpAddress, MacAddress, SerialNumber, 
+              TonerBlack, TonerCyan, TonerMagenta, TonerYellow, TotalBW, TotalColor, TotalPages";
   if ($useMac) {
-    $stmt = $pdo->prepare("SELECT * FROM compteur_relevee WHERE mac_norm = :mac ORDER BY `Timestamp` DESC, id DESC");
+    $stmt = $pdo->prepare("SELECT {$columns} FROM compteur_relevee WHERE mac_norm = :mac ORDER BY `Timestamp` DESC, id DESC");
     $stmt->execute([':mac' => $macParam]);
   } else {
-    $stmt = $pdo->prepare("SELECT * FROM compteur_relevee WHERE SerialNumber = :sn ORDER BY `Timestamp` DESC, id DESC");
+    $stmt = $pdo->prepare("SELECT {$columns} FROM compteur_relevee WHERE SerialNumber = :sn ORDER BY `Timestamp` DESC, id DESC");
     $stmt->execute([':sn' => $snParam]);
   }
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

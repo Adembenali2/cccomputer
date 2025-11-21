@@ -325,7 +325,7 @@ $sql .= ' ORDER BY nom ASC, prenom ASC LIMIT ' . USERS_LIMIT;
 $users = safeFetchAll($pdo, $sql, $params, 'utilisateurs_list');
 
 $editId  = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
-$editing = $editId > 0 ? safeFetch($pdo, "SELECT * FROM utilisateurs WHERE id=?", [$editId], 'utilisateur_edit') : null;
+$editing = $editId > 0 ? safeFetch($pdo, "SELECT id, Email, nom, prenom, telephone, Emploi, statut, date_debut, date_creation, date_modification FROM utilisateurs WHERE id=?", [$editId], 'utilisateur_edit') : null;
 
 // ——— NOUVEAU : on récupère les 20 derniers imports pour l’icône ———
 $imports = safeFetchAll(
