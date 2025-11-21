@@ -246,8 +246,21 @@ try {
 $totalLivraisons = count($rows);
 $retardCount     = 0;
 $todayCount      = 0;
+$archiveCount    = 0;
 
 foreach ($rows as $idx => $l) {
+    $statut = $l['statut'] ?? '';
+    $isLivree = ($statut === 'livree');
+    
+    // Compter les livraisons archivées
+    if ($isLivree) {
+        $archiveCount++;
+        // Ne pas calculer les flags pour les livraisons archivées
+        $rows[$idx]['is_today'] = false;
+        $rows[$idx]['is_late']  = false;
+        continue;
+    }
+    
     $prevue = $l['date_prevue'] ?? null;
     $reelle = $l['date_reelle'] ?? null;
 
@@ -276,21 +289,33 @@ foreach ($rows as $idx => $l) {
 }
 
 // ============================================================================
-// Vue (toutes / retard / aujourd’hui)
+// Vue (toutes / retard / aujourd’hui / archive)
 // ============================================================================
 $view = $_GET['view'] ?? 'toutes';
-if (!in_array($view, ['toutes', 'retard', 'aujourdhui'], true)) {
+if (!in_array($view, ['toutes', 'retard', 'aujourdhui', 'archive'], true)) {
     $view = 'toutes';
 }
 
 $filteredLivraisons = array_values(array_filter($rows, function($l) use ($view) {
+    // Vue "archive" : afficher uniquement les livraisons livrées
+    if ($view === 'archive') {
+        return ($l['statut'] ?? '') === 'livree';
+    }
+    
+    // Pour toutes les autres vues, exclure les livraisons livrées
+    $statut = $l['statut'] ?? '';
+    if ($statut === 'livree') {
+        return false;
+    }
+    
+    // Appliquer les autres filtres
     if ($view === 'retard') {
         return !empty($l['is_late']);
     }
     if ($view === 'aujourdhui') {
         return !empty($l['is_today']);
     }
-    return true; // toutes
+    return true; // toutes (sauf livrées)
 }));
 
 $listedCount      = count($filteredLivraisons);
@@ -333,6 +358,9 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       <?php if ($listedCount === 0): ?>
         <span class="meta-chip">Aucune donnée</span>
       <?php endif; ?>
+      <?php if ($view !== 'archive'): ?>
+        <span class="meta-sub">Archive : <?= h((string)$archiveCount) ?> livraison(s)</span>
+      <?php endif; ?>
     </div>
 
     <div class="meta-card">
@@ -355,9 +383,15 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       <span class="meta-label">Vue active</span>
       <strong class="meta-value">
         <?php
-          echo $view === 'retard'
-            ? 'En retard'
-            : ($view === 'aujourdhui' ? 'Aujourd’hui' : 'Toutes');
+          if ($view === 'archive') {
+              echo 'Archive';
+          } elseif ($view === 'retard') {
+              echo 'En retard';
+          } elseif ($view === 'aujourdhui') {
+              echo 'Aujourd’hui';
+          } else {
+              echo 'Toutes';
+          }
         ?>
       </strong>
       <span class="meta-sub">Filtrer en un clic</span>
@@ -377,6 +411,8 @@ $lastRefreshLabel = date('d/m/Y à H:i');
          class="btn <?= $view === 'aujourdhui' ? 'btn-primary' : 'btn-outline' ?>">Aujourd’hui</a>
       <a href="/public/livraisons.php?view=retard"
          class="btn <?= $view === 'retard' ? 'btn-primary' : 'btn-outline' ?>">En retard</a>
+      <a href="/public/livraisons.php?view=archive"
+         class="btn <?= $view === 'archive' ? 'btn-primary' : 'btn-outline' ?>">📦 Archive</a>
     </div>
   </div>
 
