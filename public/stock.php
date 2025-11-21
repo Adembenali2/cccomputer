@@ -15,6 +15,7 @@ function stateBadge(?string $etat): string {
 
 /* =========================================================
    PHOTOCOPIEURS — UNIQUEMENT NON ATTRIBUÉS (depuis BDD)
+   (Chargés mais plus affichés dans la page)
    ========================================================= */
 $copiers = [];
 try {
@@ -160,6 +161,11 @@ $sectionImages = [
           <img src="<?= h($sectionImages['toners']) ?>" class="section-icon" alt="Toners" loading="lazy" onerror="this.style.display='none'">
           <h3 class="section-title">Toners</h3>
         </div>
+        <div class="head-right">
+          <a href="/stock_add.php?type=toner" class="btn btn-primary btn-sm">
+            + Ajouter toner
+          </a>
+        </div>
       </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact">
@@ -189,6 +195,11 @@ $sectionImages = [
           <img src="<?= h($sectionImages['papier']) ?>" class="section-icon" alt="Papier" loading="lazy" onerror="this.style.display='none'">
           <h3 class="section-title">Papier</h3>
         </div>
+        <div class="head-right">
+          <a href="/stock_add.php?type=papier" class="btn btn-primary btn-sm">
+            + Ajouter papier
+          </a>
+        </div>
       </div>
       <div class="table-wrapper">
         <table class="tbl-stock tbl-compact">
@@ -211,36 +222,7 @@ $sectionImages = [
       </div>
     </section>
 
-    <!-- Photocopieurs (non attribués, BDD) -->
-    <section class="card-section" data-section="photocopieurs">
-      <div class="section-head">
-        <div class="head-left">
-          <img src="<?= h($sectionImages['photocopieurs']) ?>" class="section-icon" alt="Photocopieurs" loading="lazy" onerror="this.style.display='none'">
-          <h3 class="section-title">Photocopieurs</h3>
-        </div>
-      </div>
-      <div class="table-wrapper">
-        <table class="tbl-stock tbl-compact click-rows">
-          <colgroup>
-            <col class="col-modele"><col class="col-sn"><col class="col-statut">
-          </colgroup>
-          <thead><tr><th>Modèle</th><th>N° Série</th><th>Statut</th></tr></thead>
-          <tbody>
-          <?php foreach ($copiers as $r): ?>
-            <tr
-              data-type="copiers" data-id="<?= h($r['id']) ?>"
-              data-search="<?= h(strtolower(($r['modele']??'').' '.($r['sn']??'').' '.($r['marque']??'').' '.($r['mac']??'').' '.($r['statut']??'').' '.($r['emplacement']??''))) ?>">
-              <td data-th="Modèle"  title="<?= h($r['modele']) ?>"><strong><?= h($r['modele']) ?></strong></td>
-              <td data-th="N° Série" title="<?= h($r['sn']) ?>"><?= h($r['sn']) ?></td>
-              <td data-th="Statut"><span class="chip"><?= h($r['statut']) ?></span></td>
-            </tr>
-          <?php endforeach; if (empty($copiers)): ?>
-            <tr><td colspan="3">— Aucun photocopieur non attribué —</td></tr>
-          <?php endif; ?>
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <!-- Photocopieurs : section supprimée (plus d'affichage) -->
 
     <!-- LCD -->
     <section class="card-section" data-section="lcd">
@@ -248,6 +230,11 @@ $sectionImages = [
         <div class="head-left">
           <img src="<?= h($sectionImages['lcd']) ?>" class="section-icon" alt="Écrans LCD" loading="lazy" onerror="this.style.display='none'">
           <h3 class="section-title">LCD</h3>
+        </div>
+        <div class="head-right">
+          <a href="/stock_add.php?type=lcd" class="btn btn-primary btn-sm">
+            + Ajouter LCD
+          </a>
         </div>
       </div>
       <div class="table-wrapper">
@@ -279,6 +266,11 @@ $sectionImages = [
         <div class="head-left">
           <img src="<?= h($sectionImages['pc']) ?>" class="section-icon" alt="PC reconditionnés" loading="lazy" onerror="this.style.display='none'">
           <h3 class="section-title">PC reconditionnés</h3>
+        </div>
+        <div class="head-right">
+          <a href="/stock_add.php?type=pc" class="btn btn-primary btn-sm">
+            + Ajouter PC
+          </a>
         </div>
       </div>
       <div class="table-wrapper">
@@ -332,6 +324,7 @@ $sectionImages = [
   function reorderSections(){
     const sections = Array.from(mason.querySelectorAll('.card-section'));
     const scored = sections.map((s, i)=>({el:s, score: visibleRowCount(s), idx:i}));
+// tri décroissant par nb de lignes visibles
     scored.sort((a,b)=> b.score - a.score || a.idx - b.idx);
     scored.forEach(x => mason.appendChild(x.el));
   }
