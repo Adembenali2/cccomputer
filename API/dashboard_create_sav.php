@@ -160,17 +160,44 @@ try {
     // Enregistrer dans l'historique
     try {
         $technicienNom = $technicien ? ($technicien['prenom'] . ' ' . $technicien['nom']) : 'Non assigné';
-        $typePanneLabel = $typePanne ? ('type: ' . $typePanne) : '';
+        $technicienId = $technicien ? (int)$technicien['id'] : 0;
+        
+        // Labels pour les priorités et types de panne
+        $prioriteLabels = [
+            'basse' => 'Basse',
+            'normale' => 'Normale',
+            'haute' => 'Haute',
+            'urgente' => 'Urgente'
+        ];
+        $typePanneLabels = [
+            'logiciel' => 'Logiciel',
+            'materiel' => 'Matériel',
+            'piece_rechangeable' => 'Pièce rechangeable'
+        ];
+        
+        $prioriteLabel = $prioriteLabels[$priorite] ?? $priorite;
+        $typePanneLabel = $typePanne ? ($typePanneLabels[$typePanne] ?? $typePanne) : null;
+        
         $details = sprintf(
-            'SAV créé: %s pour client %s (ID %d), technicien %s, date ouverture: %s, priorité: %s%s', 
+            'SAV créé: %s pour client %s (ID %d), technicien %s%s, date ouverture: %s, priorité: %s%s', 
             $reference,
             $client['raison_sociale'],
-            $idClient, 
+            $idClient,
             $technicienNom,
+            $technicienId > 0 ? ' (ID ' . $technicienId . ')' : '',
             $dateOuverture,
-            $priorite,
-            $typePanneLabel ? (', ' . $typePanneLabel) : ''
+            $prioriteLabel,
+            $typePanneLabel ? (', type de panne: ' . $typePanneLabel) : ''
         );
+        
+        if (!empty($description)) {
+            $descShort = mb_substr($description, 0, 100);
+            if (mb_strlen($description) > 100) {
+                $descShort .= '...';
+            }
+            $details .= ' - Description: ' . $descShort;
+        }
+        
         enregistrerAction($pdo, $_SESSION['user_id'], 'sav_cree', $details);
     } catch (Throwable $e) {
         error_log('dashboard_create_sav.php log error: ' . $e->getMessage());

@@ -95,12 +95,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             $flash = ['type'=>'error','msg'=>"Type de panne invalide."];
         } else {
             try {
-                // Récupération du SAV pour vérifier permissions
+                // Récupération du SAV pour vérifier permissions (avec infos client et technicien pour l'historique)
                 $stmt = $pdo->prepare("
                     SELECT s.id, s.id_client, s.id_technicien, s.reference, s.description, 
                            s.date_ouverture, s.date_fermeture, s.statut, s.priorite, s.type_panne, s.commentaire,
-                           s.created_at, s.updated_at
+                           s.created_at, s.updated_at,
+                           c.raison_sociale AS client_nom,
+                           u.nom AS technicien_nom,
+                           u.prenom AS technicien_prenom
                     FROM sav s
+                    LEFT JOIN clients c ON c.id = s.id_client
+                    LEFT JOIN utilisateurs u ON u.id = s.id_technicien
                     WHERE s.id = :id
                     LIMIT 1
                 ");
@@ -160,20 +165,57 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 'haute' => 'Haute',
                                 'urgente' => 'Urgente'
                             ];
+                            $typePanneLabels = [
+                                'logiciel' => 'Logiciel',
+                                'materiel' => 'Matériel',
+                                'piece_rechangeable' => 'Pièce rechangeable'
+                            ];
+                            
                             $oldStatutLabel = $statutLabels[$oldStatut] ?? $oldStatut;
                             $newStatutLabel = $statutLabels[$newStatut] ?? $newStatut;
+                            $prioriteLabel = $prioriteLabels[$newPriorite] ?? $newPriorite;
                             
+                            // Construire les détails comme pour les livraisons
                             $details = sprintf(
-                                'SAV #%d (%s) : statut changé de "%s" à "%s", priorité: %s',
+                                'SAV #%d (%s) : statut changé de "%s" à "%s"',
                                 $savId,
                                 $sav['reference'] ?? 'N/A',
                                 $oldStatutLabel,
-                                $newStatutLabel,
-                                $prioriteLabels[$newPriorite] ?? $newPriorite
+                                $newStatutLabel
                             );
                             
+                            // Ajouter la priorité si elle a changé
+                            $oldPriorite = $sav['priorite'] ?? 'normale';
+                            if ($oldPriorite !== $newPriorite) {
+                                $oldPrioriteLabel = $prioriteLabels[$oldPriorite] ?? $oldPriorite;
+                                $details .= sprintf(', priorité changée de "%s" à "%s"', $oldPrioriteLabel, $prioriteLabel);
+                            } else {
+                                $details .= sprintf(', priorité: %s', $prioriteLabel);
+                            }
+                            
+                            // Ajouter le type de panne si modifié
+                            if (!empty($newTypePanne)) {
+                                $typePanneLabel = $typePanneLabels[$newTypePanne] ?? $newTypePanne;
+                                $details .= sprintf(', type de panne: %s', $typePanneLabel);
+                            }
+                            
+                            // Ajouter la date de fermeture si résolu
                             if (!empty($dateFermeture) && $newStatut === 'resolu') {
                                 $details .= sprintf(' - Date de fermeture: %s', $dateFermeture);
+                            }
+                            
+                            // Ajouter les informations client et technicien pour plus de contexte
+                            $clientNom = $sav['client_nom'] ?? null;
+                            if ($clientNom) {
+                                $details .= sprintf(' - Client: %s', $clientNom);
+                            }
+                            
+                            $technicienNom = null;
+                            if (!empty($sav['technicien_prenom']) || !empty($sav['technicien_nom'])) {
+                                $technicienNom = trim(($sav['technicien_prenom'] ?? '') . ' ' . ($sav['technicien_nom'] ?? ''));
+                            }
+                            if ($technicienNom) {
+                                $details .= sprintf(' - Technicien: %s', $technicienNom);
                             }
                             
                             enregistrerAction($pdo, currentUserId(), 'sav_modifie', $details);
