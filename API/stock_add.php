@@ -20,12 +20,23 @@ function jsonResponse(array $data, int $statusCode = 200) {
 // Démarrer le buffer de sortie
 ob_start();
 
+// Gestion de la session pour les API (sans redirection HTML)
 try {
-    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/db.php';
 } catch (Throwable $e) {
     error_log('stock_add.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+}
+
+// Vérifier l'authentification sans redirection HTML
+if (empty($_SESSION['user_id'])) {
+    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
+}
+
+// Générer un token CSRF si manquant
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 // Vérifier que la connexion existe
