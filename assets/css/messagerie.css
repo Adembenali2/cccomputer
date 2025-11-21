@@ -185,6 +185,37 @@
     word-wrap: break-word;
 }
 
+/* Amélioration des résultats de recherche de clients */
+.client-result-item {
+    padding: 0.6rem 0.75rem !important;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.15s ease;
+}
+
+.client-result-item:last-child {
+    border-bottom: none;
+}
+
+.client-result-item strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.client-result-item span {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.client-result-item:hover {
+    background: var(--bg-secondary) !important;
+}
+
 /* Responsive */
 @media (max-width: 960px) {
     .messages-container {

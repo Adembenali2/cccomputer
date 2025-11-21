@@ -454,22 +454,24 @@ lienSearch.addEventListener('input', () => {
     lienResults.innerHTML = '';
     lienResults.style.display = 'none';
     
-    if (!query || query.length < 2 || !type) {
+    // Minimum 1 caractère pour la recherche (au lieu de 2)
+    if (!query || query.length < 1 || !type) {
         return;
     }
     
     lienResults.innerHTML = '<div class="client-result-item loading">Recherche en cours…</div>';
     lienResults.style.display = 'block';
     
+    // Debounce réduit à 200ms pour une recherche plus réactive
     searchTimeout = setTimeout(async () => {
         try {
             let url = '';
             if (type === 'client') {
-                url = `/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=10`;
+                url = `/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=15`;
             } else if (type === 'livraison') {
-                url = `/API/messagerie_search_livraisons.php?q=${encodeURIComponent(query)}&limit=10`;
+                url = `/API/messagerie_search_livraisons.php?q=${encodeURIComponent(query)}&limit=15`;
             } else if (type === 'sav') {
-                url = `/API/messagerie_search_sav.php?q=${encodeURIComponent(query)}&limit=10`;
+                url = `/API/messagerie_search_sav.php?q=${encodeURIComponent(query)}&limit=15`;
             }
             
             const response = await fetch(url);
@@ -481,7 +483,10 @@ lienSearch.addEventListener('input', () => {
             if (type === 'client' && data.ok && data.clients) {
                 results = data.clients.map(c => ({
                     id: c.id,
-                    label: c.name + ' - ' + c.address
+                    name: c.name,
+                    dirigeant: c.dirigeant_complet || (c.prenom_dirigeant && c.nom_dirigeant ? `${c.prenom_dirigeant} ${c.nom_dirigeant}` : null),
+                    address: c.address,
+                    code: c.code
                 }));
             } else if ((type === 'livraison' || type === 'sav') && data.ok && data.results) {
                 results = data.results;
@@ -498,10 +503,33 @@ lienSearch.addEventListener('input', () => {
             results.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'client-result-item';
-                div.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong>`;
+                
+                if (type === 'client') {
+                    // Affichage amélioré pour les clients : raison sociale + dirigeant + adresse
+                    let html = `<strong>${escapeHtml(item.name || 'N/A')}</strong>`;
+                    if (item.dirigeant) {
+                        html += `<br><span style="color: var(--text-secondary); font-size: 0.85rem;">👤 ${escapeHtml(item.dirigeant)}</span>`;
+                    }
+                    if (item.address) {
+                        html += `<br><span style="color: var(--text-muted); font-size: 0.8rem;">📍 ${escapeHtml(item.address)}</span>`;
+                    }
+                    div.innerHTML = html;
+                } else {
+                    // Pour livraisons et SAV, affichage simple
+                    div.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong>`;
+                }
+                
                 div.addEventListener('click', () => {
-                    idLienInput.value = item.id;
-                    lienSelected.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem;">✕</button>`;
+                    if (type === 'client') {
+                        const displayText = item.dirigeant 
+                            ? `${item.name} (${item.dirigeant})`
+                            : item.name;
+                        idLienInput.value = item.id;
+                        lienSelected.innerHTML = `<strong>${escapeHtml(displayText)}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
+                    } else {
+                        idLienInput.value = item.id;
+                        lienSelected.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
+                    }
                     lienSelected.style.display = 'block';
                     lienSearch.value = '';
                     lienResults.style.display = 'none';
@@ -512,7 +540,7 @@ lienSearch.addEventListener('input', () => {
             console.error('Erreur recherche:', err);
             lienResults.innerHTML = '<div class="client-result-item empty">Erreur de recherche.</div>';
         }
-    }, 300);
+    }, 200);
 });
 
 function clearLien() {

@@ -48,7 +48,7 @@ if (empty($query) || strlen($query) < 2) {
 }
 
 try {
-    // Recherche dans raison_sociale, numero_client, adresse, ville, code_postal
+    // Recherche dans raison_sociale, nom_dirigeant, prenom_dirigeant, numero_client, adresse, ville, code_postal
     $searchTerm = '%' . $query . '%';
     $sql = "
         SELECT 
@@ -67,6 +67,10 @@ try {
         FROM clients
         WHERE 
             raison_sociale LIKE :q
+            OR nom_dirigeant LIKE :q
+            OR prenom_dirigeant LIKE :q
+            OR CONCAT(nom_dirigeant, ' ', prenom_dirigeant) LIKE :q
+            OR CONCAT(prenom_dirigeant, ' ', nom_dirigeant) LIKE :q
             OR numero_client LIKE :q
             OR adresse LIKE :q
             OR ville LIKE :q
@@ -104,10 +108,16 @@ try {
             $addressForGeocode = trim($c['adresse_livraison'] . ' ' . $codePostal . ' ' . $ville);
         }
         
+        $nomDirigeant = trim(($c['prenom_dirigeant'] ?? '') . ' ' . ($c['nom_dirigeant'] ?? ''));
+        $nomDirigeant = $nomDirigeant ?: null;
+        
         $formatted[] = [
             'id' => (int)$c['id'],
             'code' => $c['numero_client'],
             'name' => $c['raison_sociale'],
+            'nom_dirigeant' => $c['nom_dirigeant'] ?? null,
+            'prenom_dirigeant' => $c['prenom_dirigeant'] ?? null,
+            'dirigeant_complet' => $nomDirigeant,
             'address' => $address, // Adresse principale (exactement comme dans la BDD)
             'address_geocode' => $addressForGeocode, // Adresse à utiliser pour le géocodage
             'adresse' => $c['adresse'], // Rue exacte de la BDD
