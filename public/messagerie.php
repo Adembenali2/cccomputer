@@ -399,11 +399,38 @@ $totalMessages = count($messages);
                             <?php endif; ?>
                             
                             <div class="message-subject">
+                                <?php if (!empty($msg['id_message_parent'])): ?>
+                                    <span class="message-reply-indicator">↩️ Réponse à:</span>
+                                <?php endif; ?>
                                 <strong><?= h($msg['sujet']) ?></strong>
                             </div>
                             
                             <div class="message-body">
                                 <?= nl2br(h($msg['message'])) ?>
+                            </div>
+                            
+                            <!-- Actions sur le message -->
+                            <div class="message-actions">
+                                <?php if ($isToMe || $isFromMe): ?>
+                                    <!-- Bouton Répondre -->
+                                    <button type="button" 
+                                            class="btn-reply" 
+                                            data-message-id="<?= (int)$msg['id'] ?>"
+                                            data-expediteur-id="<?= (int)$msg['id_expediteur'] ?>"
+                                            data-expediteur-nom="<?= h($expediteurNom) ?>"
+                                            data-sujet="<?= h($msg['sujet']) ?>"
+                                            title="Répondre">
+                                        💬 Répondre
+                                    </button>
+                                    
+                                    <!-- Bouton Supprimer -->
+                                    <button type="button" 
+                                            class="btn-delete-message" 
+                                            data-message-id="<?= (int)$msg['id'] ?>"
+                                            title="Supprimer">
+                                        🗑️ Supprimer
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -789,6 +816,217 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ==================
+// Gestion des réponses
+// ==================
+
+// Emojis populaires pour les réponses rapides
+const popularEmojis = ['👍', '👎', '✅', '❌', '❤️', '😊', '😢', '😮', '🎉', '👏', '🙏', '💪', '🔥', '⭐', '💯'];
+
+// Créer le modal de réponse
+function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
+    // Supprimer le modal existant s'il y en a un
+    const existingModal = document.getElementById('replyModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'replyModal';
+    modal.className = 'reply-modal-overlay';
+    modal.innerHTML = `
+        <div class="reply-modal">
+            <div class="reply-modal-header">
+                <h3>Répondre à ${escapeHtml(expediteurNom)}</h3>
+                <button type="button" class="reply-modal-close" aria-label="Fermer">×</button>
+            </div>
+            <div class="reply-modal-body">
+                <div class="reply-type-selector">
+                    <button type="button" class="reply-type-btn active" data-type="text">📝 Texte</button>
+                    <button type="button" class="reply-type-btn" data-type="emoji">😀 Emoji</button>
+                </div>
+                
+                <div id="replyTextContainer" class="reply-container">
+                    <textarea id="replyTextInput" 
+                              class="messagerie-textarea" 
+                              rows="4" 
+                              placeholder="Votre réponse..."></textarea>
+                </div>
+                
+                <div id="replyEmojiContainer" class="reply-container" style="display:none;">
+                    <div class="emoji-picker">
+                        <div class="emoji-quick">
+                            <div class="section-title">Emojis rapides</div>
+                            <div class="emoji-grid">
+                                ${popularEmojis.map(emoji => `
+                                    <button type="button" class="emoji-btn" data-emoji="${emoji}">${emoji}</button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="emoji-custom">
+                            <div class="section-title">Ou tapez un emoji</div>
+                            <input type="text" 
+                                   id="replyEmojiInput" 
+                                   class="messagerie-input" 
+                                   placeholder="Ex: 👍, 😊, ✅..."
+                                   maxlength="10">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="reply-modal-actions">
+                    <button type="button" class="btn-secondary" id="replyCancelBtn">Annuler</button>
+                    <button type="button" class="btn-primary" id="replySendBtn">Envoyer</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Gestion du type de réponse
+    let currentType = 'text';
+    const textContainer = document.getElementById('replyTextContainer');
+    const emojiContainer = document.getElementById('replyEmojiContainer');
+    const typeButtons = modal.querySelectorAll('.reply-type-btn');
+    
+    typeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            typeButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentType = btn.getAttribute('data-type');
+            
+            if (currentType === 'text') {
+                textContainer.style.display = 'block';
+                emojiContainer.style.display = 'none';
+            } else {
+                textContainer.style.display = 'none';
+                emojiContainer.style.display = 'block';
+            }
+        });
+    });
+    
+    // Sélection d'emoji rapide
+    modal.querySelectorAll('.emoji-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const emoji = btn.getAttribute('data-emoji');
+            document.getElementById('replyEmojiInput').value = emoji;
+        });
+    });
+    
+    // Fermer le modal
+    const closeModal = () => {
+        modal.remove();
+    };
+    
+    modal.querySelector('.reply-modal-close').addEventListener('click', closeModal);
+    modal.querySelector('#replyCancelBtn').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    
+    // Envoyer la réponse
+    document.getElementById('replySendBtn').addEventListener('click', async () => {
+        let contenu = '';
+        if (currentType === 'text') {
+            contenu = document.getElementById('replyTextInput').value.trim();
+        } else {
+            contenu = document.getElementById('replyEmojiInput').value.trim();
+        }
+        
+        if (!contenu) {
+            alert('Veuillez saisir une réponse');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/API/messagerie_reply.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    csrf_token: csrfToken,
+                    message_id: messageId,
+                    reponse_type: currentType,
+                    reponse_contenu: contenu
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.ok) {
+                closeModal();
+                // Recharger la page pour afficher la réponse
+                window.location.reload();
+            } else {
+                alert('Erreur: ' + (result.error || 'Erreur inconnue'));
+            }
+        } catch (err) {
+            console.error('Erreur envoi réponse:', err);
+            alert('Erreur lors de l\'envoi de la réponse');
+        }
+    });
+    
+    // Focus sur le champ approprié
+    setTimeout(() => {
+        if (currentType === 'text') {
+            document.getElementById('replyTextInput').focus();
+        } else {
+            document.getElementById('replyEmojiInput').focus();
+        }
+    }, 100);
+}
+
+// Gestion des boutons Répondre
+document.addEventListener('click', (e) => {
+    if (e.target.closest('.btn-reply')) {
+        const btn = e.target.closest('.btn-reply');
+        const messageId = btn.getAttribute('data-message-id');
+        const expediteurId = btn.getAttribute('data-expediteur-id');
+        const expediteurNom = btn.getAttribute('data-expediteur-nom');
+        const sujet = btn.getAttribute('data-sujet');
+        createReplyModal(messageId, expediteurId, expediteurNom, sujet);
+    }
+});
+
+// Gestion des boutons Supprimer
+document.addEventListener('click', (e) => {
+    if (e.target.closest('.btn-delete-message')) {
+        const btn = e.target.closest('.btn-delete-message');
+        const messageId = btn.getAttribute('data-message-id');
+        
+        if (!confirm('Êtes-vous sûr de vouloir supprimer ce message ?')) {
+            return;
+        }
+        
+        (async () => {
+            try {
+                const response = await fetch('/API/messagerie_delete.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        csrf_token: csrfToken,
+                        message_id: messageId
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    // Masquer le message ou recharger la page
+                    btn.closest('.message-item').style.display = 'none';
+                    // Ou recharger pour mettre à jour la liste
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    alert('Erreur: ' + (result.error || 'Erreur inconnue'));
+                }
+            } catch (err) {
+                console.error('Erreur suppression:', err);
+                alert('Erreur lors de la suppression du message');
+            }
+        })();
+    }
+});
 </script>
 </body>
 </html>
