@@ -451,6 +451,13 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                     </select>
                                 </div>
                                 
+                                <div id="deliveryQuantityContainer" class="form-row" style="display: none;">
+                                    <label>Quantité*</label>
+                                    <input type="number" id="deliveryQuantity" name="product_qty" min="1" value="1" required 
+                                           placeholder="Quantité à livrer" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                    <small style="color: #666; font-size: 0.85rem;">Cette quantité sera déduite du stock et enregistrée pour le client.</small>
+                                </div>
+                                
                                 <div class="form-row">
                                     <label>Objet / Description*</label>
                                     <input type="text" id="deliveryObjet" name="objet" required 
@@ -1025,7 +1032,43 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
         // Sélection du type de produit
         deliveryProductType && deliveryProductType.addEventListener('change', function() {
-            loadStockProducts(this.value);
+            const type = this.value;
+            loadStockProducts(type);
+            
+            // Afficher/masquer le champ quantité selon le type de produit
+            const quantityContainer = document.getElementById('deliveryQuantityContainer');
+            if (quantityContainer) {
+                if (type && type !== 'autre') {
+                    quantityContainer.style.display = 'block';
+                } else {
+                    quantityContainer.style.display = 'none';
+                }
+            }
+        });
+        
+        // Afficher le champ quantité quand un produit est sélectionné
+        const deliveryProduct = document.getElementById('deliveryProduct');
+        deliveryProduct && deliveryProduct.addEventListener('change', function() {
+            const quantityContainer = document.getElementById('deliveryQuantityContainer');
+            const productContainer = document.getElementById('deliveryProductContainer');
+            if (quantityContainer && productContainer && this.value) {
+                quantityContainer.style.display = 'block';
+                // Mettre à jour la quantité max selon le stock disponible
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption) {
+                    const stockMatch = selectedOption.textContent.match(/Stock: (\d+)/);
+                    if (stockMatch) {
+                        const maxStock = parseInt(stockMatch[1], 10);
+                        const qtyInput = document.getElementById('deliveryQuantity');
+                        if (qtyInput) {
+                            qtyInput.max = maxStock;
+                            if (parseInt(qtyInput.value, 10) > maxStock) {
+                                qtyInput.value = maxStock;
+                            }
+                        }
+                    }
+                }
+            }
         });
         
         // Soumission du formulaire de livraison
@@ -1051,10 +1094,30 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             // Ajouter le produit sélectionné si disponible
             const productType = formData.get('product_type');
             const productId = formData.get('product_id');
+            const productQty = formData.get('product_qty');
             if (productType && productId && productType !== 'autre') {
                 data.product_type = productType;
                 data.product_id = parseInt(productId, 10);
-                data.product_qty = 1; // Quantité par défaut
+                // Utiliser la quantité saisie, ou 1 par défaut si non spécifiée
+                data.product_qty = productQty ? parseInt(productQty, 10) : 1;
+                
+                // Validation : la quantité doit être > 0
+                if (data.product_qty <= 0) {
+                    errorDiv.textContent = 'La quantité doit être supérieure à 0';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Vérifier que la quantité ne dépasse pas le stock disponible
+                const qtyInput = document.getElementById('deliveryQuantity');
+                if (qtyInput && qtyInput.hasAttribute('data-max')) {
+                    const maxStock = parseInt(qtyInput.getAttribute('data-max'), 10);
+                    if (data.product_qty > maxStock) {
+                        errorDiv.textContent = `La quantité (${data.product_qty}) dépasse le stock disponible (${maxStock})`;
+                        errorDiv.style.display = 'block';
+                        return;
+                    }
+                }
             }
             
             try {
@@ -1081,6 +1144,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 deliveryForm.style.display = 'none';
                 deliveryForm.reset();
                 document.getElementById('deliveryProductContainer').style.display = 'none';
+                document.getElementById('deliveryQuantityContainer').style.display = 'none';
                 toggleDeliveryForm.textContent = '➕ Ajouter';
                 errorDiv.style.display = 'none';
                 

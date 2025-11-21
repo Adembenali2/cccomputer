@@ -72,10 +72,10 @@ $idLivreur = isset($data['id_livreur']) ? (int)$data['id_livreur'] : 0;
 $datePrevue = trim($data['date_prevue'] ?? '');
 $commentaire = trim($data['commentaire'] ?? '');
 
-// Données produit (optionnelles - pour déduire le stock)
+// Données produit (optionnelles - pour déduire le stock et enregistrer pour le client)
 $productType = trim($data['product_type'] ?? '');
 $productId = isset($data['product_id']) ? (int)$data['product_id'] : 0;
-$productQty = isset($data['product_qty']) ? (int)$data['product_qty'] : 1; // Quantité à déduire
+$productQty = isset($data['product_qty']) ? max(1, (int)$data['product_qty']) : 1; // Quantité à déduire et à livrer au client
 
 $errors = [];
 if ($idClient <= 0) $errors[] = "ID client invalide";
@@ -138,10 +138,12 @@ try {
     }
     
     // Si un produit est sélectionné, vérifier le stock et déduire
+    $stockLabel = ''; // Initialiser pour utilisation dans l'objet de la livraison
+    $stock = null; // Initialiser pour vérification
+    
     if ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) {
         // Vérifier le stock disponible
         $stockCheck = null;
-        $stockLabel = '';
         
         switch ($productType) {
             case 'papier':
@@ -239,6 +241,19 @@ try {
         }
     }
     
+    // Construire l'objet de la livraison avec le produit et la quantité si un produit est sélectionné
+    $objetFinal = $objet;
+    if ($productType && $productId > 0 && isset($stockLabel) && $stockLabel !== '') {
+        // Ajouter les détails du produit et la quantité dans l'objet pour le client
+        // Format : [Description] - [Produit] (Quantité: X)
+        $objetFinal = trim($objet);
+        if ($objetFinal !== '') {
+            $objetFinal .= ' - ' . $stockLabel . ' (Quantité: ' . $productQty . ')';
+        } else {
+            $objetFinal = $stockLabel . ' (Quantité: ' . $productQty . ')';
+        }
+    }
+    
     // Insérer la livraison
     $sql = "
         INSERT INTO livraisons (
@@ -268,7 +283,7 @@ try {
         ':id_livreur' => $idLivreur,
         ':reference' => $reference,
         ':adresse_livraison' => $adresseLivraison,
-        ':objet' => $objet,
+        ':objet' => $objetFinal,
         ':date_prevue' => $datePrevue,
         ':commentaire' => empty($commentaire) ? null : $commentaire
     ]);
