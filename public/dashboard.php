@@ -337,6 +337,12 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         </svg>
                         Livraisons
                     </button>
+                    <button class="cdv-nav-btn" data-tab="sav" aria-selected="false">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                        </svg>
+                        SAV
+                    </button>
                 </div>
                 <div class="cdv-main">
                     <div class="cdv-tab" data-tab="home">
@@ -496,6 +502,82 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 <div class="form-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem;">
                                     <button type="submit" class="btn-primary">✅ Créer la livraison</button>
                                     <button type="button" id="cancelDeliveryForm" class="btn-secondary">Annuler</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="cdv-tab" data-tab="sav" style="display:none;">
+                        <div class="cdv-header">
+                            <div class="cdv-title">Gestion des SAV</div>
+                            <div class="cdv-sub">Client : <span id="sav-client-name">—</span></div>
+                        </div>
+                        
+                        <!-- Liste des SAV existants -->
+                        <div id="savListContainer" style="margin-bottom: 1.5rem;">
+                            <h4 style="margin-bottom: 0.5rem;">SAV existants</h4>
+                            <div id="savList" style="max-height: 300px; overflow-y: auto;">
+                                <p class="hint">Chargement...</p>
+                            </div>
+                        </div>
+
+                        <!-- Formulaire de nouveau SAV -->
+                        <div id="savFormContainer">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4 style="margin: 0;">Nouveau SAV</h4>
+                                <button type="button" id="toggleSavForm" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">➕ Ajouter</button>
+                            </div>
+                            
+                            <form id="savForm" style="display: none;" class="standard-form">
+                                <input type="hidden" id="savClientId" name="client_id">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(ensureCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+                                
+                                <div class="form-row">
+                                    <label>Référence*</label>
+                                    <input type="text" id="savReference" name="reference" required 
+                                           placeholder="Ex: SAV-2024-001" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Description du problème*</label>
+                                    <textarea id="savDescription" name="description" required rows="4"
+                                              placeholder="Décrivez le problème rencontré..." style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Priorité*</label>
+                                    <select id="savPriorite" name="priorite" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                        <option value="normale">Normale</option>
+                                        <option value="basse">Basse</option>
+                                        <option value="haute">Haute</option>
+                                        <option value="urgente">Urgente</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Technicien</label>
+                                    <select id="savTechnicien" name="id_technicien" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                        <option value="">-- Non assigné --</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Date d'ouverture*</label>
+                                    <input type="date" id="savDateOuverture" name="date_ouverture" required 
+                                           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Commentaire</label>
+                                    <textarea id="savCommentaire" name="commentaire" rows="3"
+                                              placeholder="Notes supplémentaires..." style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                                </div>
+                                
+                                <div id="savError" class="error-message" style="display: none; padding: 0.5rem; background: #fee2e2; color: #dc2626; border-radius: 4px; margin-bottom: 1rem;"></div>
+                                
+                                <div class="form-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                                    <button type="submit" class="btn-primary">✅ Créer le SAV</button>
+                                    <button type="button" id="cancelSavForm" class="btn-secondary">Annuler</button>
                                 </div>
                             </form>
                         </div>
@@ -993,6 +1075,26 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         });
         
+        // Gestion de l'onglet SAV
+        const savTab = document.querySelector('.cdv-nav-btn[data-tab="sav"]');
+        const savFormContainer = document.getElementById('savFormContainer');
+        const toggleSavForm = document.getElementById('toggleSavForm');
+        const cancelSavForm = document.getElementById('cancelSavForm');
+        const savForm = document.getElementById('savForm');
+        
+        // Quand on active l'onglet SAV, mettre à jour le nom du client
+        savTab && savTab.addEventListener('click', function() {
+            const clientId = document.getElementById('savClientId')?.value;
+            const client = (CLIENTS_DATA || []).find(c => String(c.id) === String(clientId)) || {};
+            const clientNameEl = document.getElementById('sav-client-name');
+            if (clientNameEl && client.raison_sociale) {
+                clientNameEl.textContent = client.raison_sociale;
+            }
+            if (clientId) {
+                loadSavs(clientId);
+            }
+        });
+        
         // Toggle formulaire de livraison
         toggleDeliveryForm && toggleDeliveryForm.addEventListener('click', function() {
             if (deliveryForm.style.display === 'none') {
@@ -1169,6 +1271,217 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             } catch (err) {
                 console.error('Erreur création livraison:', err);
                 errorDiv.textContent = 'Erreur de connexion lors de la création de la livraison';
+                errorDiv.style.display = 'block';
+            }
+        });
+        
+        // Charger les SAV du client
+        async function loadSavs(clientId) {
+            const savList = document.getElementById('savList');
+            if (!savList) return;
+            
+            savList.innerHTML = '<p class="hint">Chargement...</p>';
+            
+            try {
+                const response = await fetch(`/API/dashboard_get_sav.php?client_id=${clientId}`);
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    savList.innerHTML = `<p class="hint" style="color: #dc2626;">Erreur: ${data.error || 'Erreur de chargement'}</p>`;
+                    return;
+                }
+                
+                const savs = data.savs || [];
+                
+                if (savs.length === 0) {
+                    savList.innerHTML = '<p class="hint">Aucun SAV pour ce client.</p>';
+                    return;
+                }
+                
+                savList.innerHTML = '';
+                savs.forEach(sav => {
+                    const statutLabels = {
+                        'ouvert': 'Ouvert',
+                        'en_cours': 'En cours',
+                        'resolu': 'Résolu',
+                        'annule': 'Annulé'
+                    };
+                    const prioriteLabels = {
+                        'basse': 'Basse',
+                        'normale': 'Normale',
+                        'haute': 'Haute',
+                        'urgente': 'Urgente'
+                    };
+                    const prioriteColors = {
+                        'basse': '#6b7280',
+                        'normale': '#3b82f6',
+                        'haute': '#f59e0b',
+                        'urgente': '#dc2626'
+                    };
+                    
+                    const item = document.createElement('div');
+                    item.style.cssText = 'padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 0.5rem; background: #f9fafb;';
+                    item.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                            <div>
+                                <strong>${escapeHtml(sav.reference)}</strong>
+                                <span style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: ${prioriteColors[sav.priorite] || '#666'}; color: white; font-size: 0.75rem;">
+                                    ${prioriteLabels[sav.priorite] || sav.priorite}
+                                </span>
+                                <span style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: #6b7280; color: white; font-size: 0.75rem;">
+                                    ${statutLabels[sav.statut] || sav.statut}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.9rem; margin-bottom: 0.25rem;">
+                            <strong>Description:</strong> ${escapeHtml(sav.description)}
+                        </div>
+                        <div style="font-size: 0.85rem; color: #666;">
+                            <strong>Date ouverture:</strong> ${escapeHtml(sav.date_ouverture)}
+                            ${sav.date_fermeture ? `<br><strong>Date fermeture:</strong> ${escapeHtml(sav.date_fermeture)}` : ''}
+                            ${sav.technicien_nom ? `<br><strong>Technicien:</strong> ${escapeHtml(sav.technicien_prenom + ' ' + sav.technicien_nom)}` : '<br><strong>Technicien:</strong> Non assigné'}
+                        </div>
+                    `;
+                    savList.appendChild(item);
+                });
+                
+            } catch (err) {
+                console.error('Erreur chargement SAV:', err);
+                savList.innerHTML = '<p class="hint" style="color: #dc2626;">Erreur de chargement des SAV.</p>';
+            }
+        }
+        
+        // Charger les techniciens
+        async function loadTechniciens() {
+            const select = document.getElementById('savTechnicien');
+            if (!select) return;
+            
+            try {
+                const response = await fetch('/API/dashboard_get_techniciens.php');
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    select.innerHTML = '<option value="">Erreur de chargement</option>';
+                    return;
+                }
+                
+                const techniciens = data.techniciens || [];
+                select.innerHTML = '<option value="">-- Non assigné --</option>';
+                
+                techniciens.forEach(tech => {
+                    const option = document.createElement('option');
+                    option.value = tech.id;
+                    option.textContent = tech.full_name + (tech.telephone ? ' (' + tech.telephone + ')' : '');
+                    select.appendChild(option);
+                });
+                
+            } catch (err) {
+                console.error('Erreur chargement techniciens:', err);
+                select.innerHTML = '<option value="">Erreur de chargement</option>';
+            }
+        }
+        
+        // Toggle formulaire de SAV
+        toggleSavForm && toggleSavForm.addEventListener('click', function() {
+            if (savForm.style.display === 'none') {
+                const clientId = document.getElementById('savClientId')?.value;
+                const client = (CLIENTS_DATA || []).find(c => String(c.id) === String(clientId)) || {};
+                
+                // Préremplir les champs
+                if (client.id) {
+                    document.getElementById('savClientId').value = client.id;
+                }
+                
+                // Générer une référence automatique
+                const now = new Date();
+                const ref = 'SAV-' + now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+                document.getElementById('savReference').value = ref;
+                
+                // Définir la date d'ouverture par défaut (aujourd'hui)
+                const today = now.toISOString().split('T')[0];
+                document.getElementById('savDateOuverture').value = today;
+                
+                // Charger automatiquement la liste des techniciens
+                loadTechniciens();
+                
+                savForm.style.display = 'block';
+                toggleSavForm.textContent = '❌ Annuler';
+            } else {
+                savForm.style.display = 'none';
+                savForm.reset();
+                toggleSavForm.textContent = '➕ Ajouter';
+                document.getElementById('savError').style.display = 'none';
+            }
+        });
+        
+        cancelSavForm && cancelSavForm.addEventListener('click', function() {
+            savForm.style.display = 'none';
+            savForm.reset();
+            toggleSavForm.textContent = '➕ Ajouter';
+            document.getElementById('savError').style.display = 'none';
+        });
+        
+        // Soumission du formulaire de SAV
+        savForm && savForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const errorDiv = document.getElementById('savError');
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            
+            const formData = new FormData(savForm);
+            const data = {
+                client_id: parseInt(formData.get('client_id'), 10),
+                reference: formData.get('reference').trim(),
+                description: formData.get('description').trim(),
+                priorite: formData.get('priorite'),
+                date_ouverture: formData.get('date_ouverture'),
+                commentaire: formData.get('commentaire').trim(),
+                csrf_token: formData.get('csrf_token')
+            };
+            
+            // Ajouter le technicien si sélectionné
+            const technicienId = formData.get('id_technicien');
+            if (technicienId) {
+                data.id_technicien = parseInt(technicienId, 10);
+            }
+            
+            try {
+                const response = await fetch('/API/dashboard_create_sav.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (!result.ok) {
+                    errorDiv.textContent = result.error || 'Erreur lors de la création du SAV';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Succès : recharger les SAV et cacher le formulaire
+                const clientId = data.client_id;
+                await loadSavs(clientId);
+                
+                savForm.style.display = 'none';
+                savForm.reset();
+                toggleSavForm.textContent = '➕ Ajouter';
+                errorDiv.style.display = 'none';
+                
+                // Afficher un message de succès temporaire
+                const successMsg = document.createElement('div');
+                successMsg.style.cssText = 'padding: 0.5rem; background: #d1fae5; color: #065f46; border-radius: 4px; margin-bottom: 1rem;';
+                successMsg.textContent = '✅ ' + (result.message || 'SAV créé avec succès');
+                savFormContainer.insertBefore(successMsg, savFormContainer.firstChild);
+                setTimeout(() => successMsg.remove(), 3000);
+                
+            } catch (err) {
+                console.error('Erreur création SAV:', err);
+                errorDiv.textContent = 'Erreur de connexion lors de la création du SAV';
                 errorDiv.style.display = 'block';
             }
         });
