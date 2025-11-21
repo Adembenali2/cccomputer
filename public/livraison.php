@@ -22,7 +22,9 @@ function currentUserId(): ?int {
 }
 
 function currentUserRole(): ?string {
-    // On essaye plusieurs clés possibles
+    // Récupérer le rôle depuis la session (comme défini dans auth.php)
+    if (isset($_SESSION['emploi'])) return $_SESSION['emploi'];
+    // Fallback pour compatibilité
     if (isset($_SESSION['user']['Emploi'])) return $_SESSION['user']['Emploi'];
     if (isset($_SESSION['user']['emploi'])) return $_SESSION['user']['emploi'];
     return null;
@@ -45,15 +47,21 @@ function assertValidCsrf(string $token): void {
 function canEditDelivery(array $liv): bool {
     $uid  = currentUserId();
     $role = currentUserRole();
-    if (!$uid) return false;
+    if (!$uid || !$role) return false;
 
-    // Les livreurs ne peuvent modifier QUE leurs livraisons
-    if ($role === 'Livreur') {
-        return isset($liv['id_livreur']) && (int)$liv['id_livreur'] === (int)$uid;
+    // Les Admin et Dirigeant peuvent modifier toutes les livraisons
+    if (in_array($role, ['Admin', 'Dirigeant'], true)) {
+        return true;
     }
 
-    // Les autres rôles (Admin, Dirigeant, etc.) peuvent modifier toutes les livraisons
-    return true;
+    // Les livreurs ne peuvent modifier QUE leurs propres livraisons assignées
+    if ($role === 'Livreur') {
+        $livreurId = isset($liv['id_livreur']) ? (int)$liv['id_livreur'] : 0;
+        return $livreurId > 0 && $livreurId === (int)$uid;
+    }
+
+    // Tous les autres rôles (Technicien, Secrétaire, Chargé relation clients) ne peuvent pas modifier
+    return false;
 }
 
 /** Flash simple **/
@@ -556,7 +564,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 
     <div class="modal-actions">
       <div class="modal-hint">
-        Seul le livreur assigné ou un rôle autorisé (Admin / Dirigeant…) peut modifier le statut.
+        <strong>Permissions :</strong> Seul le livreur assigné à cette livraison peut modifier son statut. Les administrateurs et dirigeants peuvent modifier toutes les livraisons.
       </div>
       <button type="submit" id="modal_submit_btn" class="fiche-action-btn">Enregistrer</button>
     </div>
@@ -643,7 +651,8 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           permMsg.textContent = '';
           permMsg.style.color = '';
         } else {
-          permMsg.textContent = "Vous ne pouvez pas modifier le statut de cette livraison (elle appartient à un autre livreur).";
+          const currentLivreur = tr.getAttribute('data-livreur') || '—';
+          permMsg.textContent = "Vous ne pouvez pas modifier cette livraison. Seul le livreur assigné (" + currentLivreur + ") ou un administrateur/dirigeant peut modifier le statut.";
           permMsg.style.color = '#dc2626';
         }
       }
