@@ -1011,6 +1011,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const today = now.toISOString().split('T')[0];
                 document.getElementById('deliveryDatePrevue').value = today;
                 
+                // Charger automatiquement la liste des livreurs depuis la table utilisateurs
+                loadLivreurs();
+                
                 deliveryForm.style.display = 'block';
                 toggleDeliveryForm.textContent = '❌ Annuler';
             } else {
