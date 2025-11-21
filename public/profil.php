@@ -573,6 +573,7 @@ function decode_msg($row) {
     </form>
 
     <section class="grid-2cols">
+        <?php if ($isAdminOrDirigeant): ?>
         <div class="panel">
             <h2 class="panel-title">Créer un utilisateur</h2>
             <form class="standard-form" method="post" action="/public/profil.php" autocomplete="off">
