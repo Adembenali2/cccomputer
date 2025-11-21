@@ -10,16 +10,126 @@ if (method_exists($pdo, 'setAttribute')) {
     } catch (\Throwable $e) {}
 }
 
-/** Helper d’échappement **/
+/** Helpers **/
 function h(?string $s): string {
     return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8');
 }
 
+function currentUserId(): ?int {
+    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
+    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
+    return null;
+}
+
+function currentUserRole(): ?string {
+    // On essaye plusieurs clés possibles
+    if (isset($_SESSION['user']['Emploi'])) return $_SESSION['user']['Emploi'];
+    if (isset($_SESSION['user']['emploi'])) return $_SESSION['user']['emploi'];
+    return null;
+}
+
+/** CSRF minimal (même logique que dans clients.php) **/
+function ensureCsrfToken(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+function assertValidCsrf(string $token): void {
+    if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+        throw new RuntimeException("Session expirée. Veuillez recharger la page.");
+    }
+}
+
+/** Permissions : qui peut éditer une livraison ? **/
+function canEditDelivery(array $liv): bool {
+    $uid  = currentUserId();
+    $role = currentUserRole();
+    if (!$uid) return false;
+
+    // Les livreurs ne peuvent modifier QUE leurs livraisons
+    if ($role === 'Livreur') {
+        return isset($liv['id_livreur']) && (int)$liv['id_livreur'] === (int)$uid;
+    }
+
+    // Les autres rôles (Admin, Dirigeant, etc.) peuvent modifier toutes les livraisons
+    return true;
+}
+
+/** Flash simple **/
+$flash = ['type' => null, 'msg' => null];
+
+$CSRF  = ensureCsrfToken();
 $today = date('Y-m-d');
 
-// -----------------------------------------------------------------------------
-// Récupération des livraisons depuis la base
-// -----------------------------------------------------------------------------
+// ============================================================================
+// POST : mise à jour de livraison (statut, éventuellement date_reelle)
+// ============================================================================
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'update_delivery') {
+    try {
+        assertValidCsrf($_POST['csrf_token'] ?? '');
+    } catch (RuntimeException $csrfEx) {
+        $flash = ['type' => 'error', 'msg' => $csrfEx->getMessage()];
+    }
+
+    if (!$flash['type']) {
+        $livraisonId = (int)($_POST['livraison_id'] ?? 0);
+        $newStatut   = $_POST['statut'] ?? '';
+
+        $allowedStatuts = ['planifiee','en_cours','livree','annulee'];
+        if (!$livraisonId || !in_array($newStatut, $allowedStatuts, true)) {
+            $flash = ['type'=>'error','msg'=>"Données invalides pour la mise à jour de la livraison."];
+        } else {
+            try {
+                // Récupération de la livraison pour vérifier permissions + date_reelle actuelle
+                $stmt = $pdo->prepare("
+                    SELECT l.*
+                    FROM livraisons l
+                    WHERE l.id = :id
+                    LIMIT 1
+                ");
+                $stmt->execute([':id' => $livraisonId]);
+                $liv = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$liv) {
+                    $flash = ['type'=>'error','msg'=>"Livraison introuvable."];
+                } elseif (!canEditDelivery($liv)) {
+                    $flash = ['type'=>'error','msg'=>"Vous n'êtes pas autorisé à modifier cette livraison."];
+                } else {
+                    // Gestion automatique de la date_reelle :
+                    // - si on passe en "livree" et qu'il n'y a pas encore de date_reelle -> on met aujourd'hui
+                    // - sinon on laisse la date_reelle telle quelle
+                    $dateReelle = $liv['date_reelle'] ?? null;
+                    if ($newStatut === 'livree' && empty($dateReelle)) {
+                        $dateReelle = $today;
+                    }
+
+                    $upd = $pdo->prepare("
+                        UPDATE livraisons
+                        SET statut = :statut,
+                            date_reelle = :date_reelle,
+                            updated_at = NOW()
+                        WHERE id = :id
+                    ");
+                    $upd->execute([
+                        ':statut'      => $newStatut,
+                        ':date_reelle' => $dateReelle,
+                        ':id'          => $livraisonId,
+                    ]);
+
+                    $flash = ['type'=>'success','msg'=>"Livraison mise à jour avec succès."];
+                }
+            } catch (PDOException $e) {
+                error_log('livraisons.php UPDATE error: ' . $e->getMessage());
+                $flash = ['type'=>'error','msg'=>"Erreur SQL : impossible de mettre à jour la livraison."];
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Récupération des livraisons depuis la base (pour l’affichage)
+// ============================================================================
 try {
     $sql = "
         SELECT
@@ -39,9 +149,9 @@ try {
     $rows = [];
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Calcul des flags (retard / aujourd’hui) et stats globales
-// -----------------------------------------------------------------------------
+// ============================================================================
 $totalLivraisons = count($rows);
 $retardCount     = 0;
 $todayCount      = 0;
@@ -61,10 +171,8 @@ foreach ($rows as $idx => $l) {
     $isLate = false;
     if ($prevue) {
         if ($reelle) {
-            // Livrée après la date prévue
             if ($reelle > $prevue) $isLate = true;
         } else {
-            // Non livrée alors que la date prévue est passée
             if ($prevue < $today) $isLate = true;
         }
     }
@@ -76,9 +184,9 @@ foreach ($rows as $idx => $l) {
     if ($isToday) $todayCount++;
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Vue (toutes / retard / aujourd’hui)
-// -----------------------------------------------------------------------------
+// ============================================================================
 $view = $_GET['view'] ?? 'toutes';
 if (!in_array($view, ['toutes', 'retard', 'aujourdhui'], true)) {
     $view = 'toutes';
@@ -119,6 +227,13 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     </p>
   </div>
 
+  <!-- Flash -->
+  <?php if ($flash['type']): ?>
+    <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
+      <?= $flash['msg'] ?>
+    </div>
+  <?php endif; ?>
+
   <!-- Meta cards -->
   <section class="clients-meta">
     <div class="meta-card">
@@ -158,16 +273,13 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     </div>
   </section>
 
-  <!-- Barre de filtres + actions -->
+  <!-- Barre de filtres (sans bouton d’ajout) -->
   <div class="filters-row">
     <div class="filters-left">
       <input type="text" id="q" class="filter-input" placeholder="Filtrer (client, référence, adresse, objet, livreur)…">
       <button id="clearQ" class="btn btn-secondary" type="button">Effacer</button>
     </div>
     <div class="filters-actions">
-      <button id="btnAddDelivery" class="btn btn-primary" type="button">
-        + Planifier une livraison
-      </button>
       <a href="/public/livraisons.php?view=toutes"
          class="btn <?= $view === 'toutes' ? 'btn-primary' : 'btn-outline' ?>">Toutes</a>
       <a href="/public/livraisons.php?view=aujourdhui"
@@ -239,12 +351,27 @@ $lastRefreshLabel = date('d/m/Y à H:i');
               $clientNom . ' ' . $ref . ' ' . $adresse . ' ' . $objet . ' ' . $livreurNomComplet
           );
 
+          $canEditThis = canEditDelivery($liv);
           $rowClasses = [];
           if ($isLate)  $rowClasses[] = 'row-alert';
           if ($isToday) $rowClasses[] = 'row-today';
           $rowClassAttr = $rowClasses ? ' class="'.h(implode(' ', $rowClasses)).'"' : '';
         ?>
-        <tr data-search="<?= h($searchText) ?>"<?= $rowClassAttr ?>>
+        <tr
+          data-id="<?= (int)$liv['id'] ?>"
+          data-search="<?= h($searchText) ?>"
+          data-client="<?= h($clientNom) ?>"
+          data-ref="<?= h($ref) ?>"
+          data-adresse="<?= h($adresse) ?>"
+          data-objet="<?= h($objet) ?>"
+          data-prevue="<?= h($prevueLabel) ?>"
+          data-reelle="<?= h($reelleLabel) ?>"
+          data-statut="<?= h($liv['statut']) ?>"
+          data-livreur="<?= h($livreurNomComplet) ?>"
+          data-commentaire="<?= h($commentaire) ?>"
+          data-can-edit="<?= $canEditThis ? '1' : '0' ?>"
+          <?= $rowClassAttr ?>
+        >
           <td data-th="Client">
             <div class="client-cell">
               <div class="client-raison"><?= h($clientNom) ?></div>
@@ -284,49 +411,71 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   </div>
 </div>
 
-<!-- Popup "Planifier une livraison" (pour l’instant sans INSERT) -->
+<!-- Popup édition livraison -->
 <div id="deliveryModalOverlay" class="popup-overlay" aria-hidden="true"></div>
-<div id="deliveryModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="deliveryModalTitle" style="display:none;">
+<div id="editDeliveryModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="editDeliveryModalTitle" style="display:none;">
   <div class="modal-header">
-    <h3 id="deliveryModalTitle">Planifier une livraison</h3>
+    <h3 id="editDeliveryModalTitle">Modifier la livraison</h3>
     <button type="button" id="btnCloseDeliveryModal" class="icon-btn icon-btn--close" aria-label="Fermer"><span aria-hidden="true">×</span></button>
   </div>
 
-  <div style="padding:0.75rem 0; color:var(--text-secondary); font-size:0.95rem;">
-    Pour l’instant cette fenêtre est uniquement visuelle.
-    Tu pourras ensuite connecter ce formulaire à la base de données (INSERT dans <code>livraisons</code>).
-  </div>
+  <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form" novalidate>
+    <input type="hidden" name="action" value="update_delivery">
+    <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+    <input type="hidden" name="livraison_id" id="livraison_id">
 
-  <form method="post" action="#" class="standard-form modal-form" novalidate>
     <div class="form-grid-2">
       <div class="card-like">
-        <div class="subsection-title">Infos client & livraison</div>
-        <label>Client (texte libre pour le moment)</label>
-        <input type="text" name="client" placeholder="Nom du client">
-        <label>Référence commande</label>
-        <input type="text" name="ref" placeholder="CMD-2025-XXX">
+        <div class="subsection-title">Informations</div>
+        <label>Client</label>
+        <input type="text" id="modal_client" readonly>
+
+        <label>Référence</label>
+        <input type="text" id="modal_ref" readonly>
+
         <label>Adresse de livraison</label>
-        <input type="text" name="adresse" placeholder="Adresse complète">
+        <textarea id="modal_adresse" rows="2" readonly></textarea>
+
         <label>Objet</label>
-        <input type="text" name="objet" placeholder="Ex : Livraison photocopieur">
+        <input type="text" id="modal_objet" readonly>
       </div>
 
       <div class="card-like">
-        <div class="subsection-title">Dates & planning</div>
-        <label>Date prévue</label>
-        <input type="date" name="date_prevue">
-        <label>Date réelle</label>
-        <input type="date" name="date_reelle">
-        <label>Livré par (nom du livreur)</label>
-        <input type="text" name="livreur" placeholder="Nom du livreur">
-        <label>Commentaire</label>
-        <textarea name="commentaire" rows="3" placeholder="Notes internes, contraintes d’accès…"></textarea>
+        <div class="subsection-title">Statut & dates</div>
+        <div class="grid-two">
+          <div>
+            <label>Date prévue</label>
+            <input type="text" id="modal_prevue" readonly>
+          </div>
+          <div>
+            <label>Date réelle</label>
+            <input type="text" id="modal_reelle" readonly>
+          </div>
+        </div>
+
+        <label>Livré par</label>
+        <input type="text" id="modal_livreur" readonly>
+
+        <label>Statut</label>
+        <select name="statut" id="modal_statut">
+          <option value="planifiee">Planifiée</option>
+          <option value="en_cours">En cours</option>
+          <option value="livree">Livrée</option>
+          <option value="annulee">Annulée</option>
+        </select>
+
+        <label>Commentaire (lecture seule)</label>
+        <textarea id="modal_commentaire" rows="3" readonly></textarea>
+
+        <div id="modal_permission_msg" style="margin-top:0.5rem; font-size:0.85rem;"></div>
       </div>
     </div>
 
     <div class="modal-actions">
-      <div class="modal-hint">Ce formulaire est une maquette : il n’enregistre rien pour le moment.</div>
-      <button type="button" class="fiche-action-btn">Enregistrer (bientôt)</button>
+      <div class="modal-hint">
+        Seul le livreur assigné ou un rôle autorisé (Admin / Dirigeant…) peut modifier le statut.
+      </div>
+      <button type="submit" id="modal_submit_btn" class="fiche-action-btn">Enregistrer</button>
     </div>
   </form>
 </div>
@@ -335,9 +484,21 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 // Gestion modale
 (function(){
   const overlay   = document.getElementById('deliveryModalOverlay');
-  const modal     = document.getElementById('deliveryModal');
-  const openBtn   = document.getElementById('btnAddDelivery');
+  const modal     = document.getElementById('editDeliveryModal');
   const closeBtn  = document.getElementById('btnCloseDeliveryModal');
+
+  const inputId        = document.getElementById('livraison_id');
+  const inputClient    = document.getElementById('modal_client');
+  const inputRef       = document.getElementById('modal_ref');
+  const inputAdresse   = document.getElementById('modal_adresse');
+  const inputObjet     = document.getElementById('modal_objet');
+  const inputPrevue    = document.getElementById('modal_prevue');
+  const inputReelle    = document.getElementById('modal_reelle');
+  const inputLivreur   = document.getElementById('modal_livreur');
+  const selectStatut   = document.getElementById('modal_statut');
+  const textareaCom    = document.getElementById('modal_commentaire');
+  const permMsg        = document.getElementById('modal_permission_msg');
+  const submitBtn      = document.getElementById('modal_submit_btn');
 
   function openModal(){
     document.body.classList.add('modal-open');
@@ -352,33 +513,82 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     modal.style.display='none';
   }
 
-  if (openBtn)  openBtn.addEventListener('click', openModal);
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
   if (overlay)  overlay.addEventListener('click', closeModal);
-})();
 
-// Filtre rapide
-(function(){
+  // Lignes cliquables -> ouverture modale d'édition
+  const rows = document.querySelectorAll('table#tbl tbody tr[data-id]');
+  rows.forEach(tr => {
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', (e) => {
+      // ne pas ouvrir si l'utilisateur est en train de sélectionner du texte
+      if (window.getSelection && String(window.getSelection())) return;
+
+      const id        = tr.getAttribute('data-id');
+      const client    = tr.getAttribute('data-client') || '';
+      const ref       = tr.getAttribute('data-ref') || '';
+      const adresse   = tr.getAttribute('data-adresse') || '';
+      const objet     = tr.getAttribute('data-objet') || '';
+      const prevue    = tr.getAttribute('data-prevue') || '';
+      const reelle    = tr.getAttribute('data-reelle') || '';
+      const livreur   = tr.getAttribute('data-livreur') || '';
+      const statut    = tr.getAttribute('data-statut') || 'planifiee';
+      const com       = tr.getAttribute('data-commentaire') || '';
+      const canEdit   = tr.getAttribute('data-can-edit') === '1';
+
+      if (inputId)      inputId.value = id;
+      if (inputClient)  inputClient.value = client;
+      if (inputRef)     inputRef.value = ref;
+      if (inputAdresse) inputAdresse.value = adresse;
+      if (inputObjet)   inputObjet.value = objet;
+      if (inputPrevue)  inputPrevue.value = prevue;
+      if (inputReelle)  inputReelle.value = reelle;
+      if (inputLivreur) inputLivreur.value = livreur;
+      if (textareaCom)  textareaCom.value = com;
+
+      if (selectStatut) {
+        selectStatut.value = statut;
+        selectStatut.disabled = !canEdit;
+      }
+
+      if (submitBtn) {
+        submitBtn.disabled = !canEdit;
+      }
+
+      if (permMsg) {
+        if (canEdit) {
+          permMsg.textContent = '';
+          permMsg.style.color = '';
+        } else {
+          permMsg.textContent = "Vous ne pouvez pas modifier le statut de cette livraison (elle appartient à un autre livreur).";
+          permMsg.style.color = '#dc2626';
+        }
+      }
+
+      openModal();
+    });
+  });
+
+  // Filtre rapide
   const q = document.getElementById('q');
   const clear = document.getElementById('clearQ');
-  if (!q) return;
-  const lines = Array.from(document.querySelectorAll('table#tbl tbody tr'));
-
-  function apply(){
-    const v = (q.value || '').trim().toLowerCase();
-    lines.forEach(tr => {
-      const t = (tr.getAttribute('data-search') || '').toLowerCase();
-      tr.style.display = !v || t.includes(v) ? '' : 'none';
-    });
-  }
-
-  q.addEventListener('input', apply);
-  if (clear) {
-    clear.addEventListener('click', () => {
-      q.value = '';
-      apply();
-      q.focus();
-    });
+  if (q) {
+    const lines = Array.from(document.querySelectorAll('table#tbl tbody tr'));
+    function apply(){
+      const v = (q.value || '').trim().toLowerCase();
+      lines.forEach(tr => {
+        const t = (tr.getAttribute('data-search') || '').toLowerCase();
+        tr.style.display = !v || t.includes(v) ? '' : 'none';
+      });
+    }
+    q.addEventListener('input', apply);
+    if (clear) {
+      clear.addEventListener('click', () => {
+        q.value = '';
+        apply();
+        q.focus();
+      });
+    }
   }
 })();
 </script>

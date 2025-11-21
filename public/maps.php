@@ -1,10 +1,10 @@
 <?php
 // /public/maps.php
-// Page de planification de trajets clients (version sans base de données)
+// Page de planification de trajets clients (version sans base de données, Google Maps)
 
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_roles(['Admin', 'Dirigeant']); // adapte si tu veux ouvrir à d'autres rôles
-require_once __DIR__ . '/../includes/db.php'; // pas encore utilisé ici, mais prêt pour plus tard
+require_once __DIR__ . '/../includes/db.php'; // prêt pour plus tard si tu branches la BDD
 
 function h(?string $s): string {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
@@ -22,14 +22,11 @@ function h(?string $s): string {
     <!-- CSS spécifique à la page carte -->
     <link rel="stylesheet" href="/assets/css/maps.css">
 
-    <!-- Leaflet (carte) -->
-    <link rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-            crossorigin=""></script>
+    <!-- Google Maps JS API (mettre ta vraie clé) -->
+    <script
+        src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&language=fr&region=FR"
+        defer
+    ></script>
 </head>
 <body class="page-maps">
 
@@ -100,7 +97,7 @@ function h(?string $s): string {
                 </div>
 
                 <p id="routeMessage" class="maps-message hint">
-                    L’itinéraire utilise le service de routage public OSRM (OpenStreetMap).
+                    L’itinéraire utilise le service de routage Google (Directions API).
                     L’ordre est optimisé selon la <strong>proximité</strong> et le niveau <strong>d’urgence</strong>.
                 </p>
 
@@ -214,53 +211,93 @@ const demoClients = [
     }
 ];
 
-// ============
-// Carte Leaflet
-// ============
+// ==================
+// Variables globales
+// ==================
 
-let map = L.map('map');
-
-// Fond de carte
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
-}).addTo(map);
-
-// Fit initial sur les clients
-let clientsLatLng = demoClients.map(c => [c.lat, c.lng]);
-if (clientsLatLng.length) {
-    let bounds = L.latLngBounds(clientsLatLng);
-    map.fitBounds(bounds, { padding: [40, 40] });
-} else {
-    map.setView([46.5, 2.0], 6); // centre France
-}
-
-// Marqueurs clients
+let map;
+let directionsService;
+let directionsRenderer;
 const clientMarkers = {};
-demoClients.forEach(client => {
-    const m = L.marker([client.lat, client.lng]).addTo(map);
-    m.bindPopup(
-        `<strong>${client.name}</strong><br>` +
-        `${client.address}<br>` +
-        `<small>Code : ${client.code}</small>`
-    );
-    clientMarkers[client.id] = m;
-});
-
-// Mise à jour badge clients
-document.getElementById('badgeClients').textContent = "Clients : " + demoClients.length;
-
-// =========================
-// Recherche & sélection de clients
-// =========================
 
 const clientSearchInput = document.getElementById('clientSearch');
 const clientResultsEl = document.getElementById('clientResults');
 const selectedClientsContainer = document.getElementById('selectedClients');
 
-// selectedClients = [{id, priority}]
-let selectedClients = [];
+let selectedClients = [];     // [{id, priority}]
+let startPoint = null;        // {lat, lng}
+let startMarker = null;
+let pickStartFromMap = false;
+let lastOrderedStops = [];    // clients dans l'ordre optimisé
+let lastRouteLegs = [];       // legs renvoyés par Google Directions
 
-// Rendu des clients sélectionnés
+const startInfoEl = document.getElementById('startInfo');
+const badgeStartEl = document.getElementById('badgeStart');
+const routeMessageEl = document.getElementById('routeMessage');
+const btnShowTurns = document.getElementById('btnShowTurns');
+const routeStepsEl = document.getElementById('routeSteps');
+const routeTurnsEl = document.getElementById('routeTurns');
+
+// ==================
+// Initialisation Google Maps
+// ==================
+
+function initMap() {
+    // Centre initial approx. France
+    map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: 46.5, lng: 2.0 },
+        zoom: 6,
+        mapTypeId: 'roadmap',
+        tilt: 45 // léger effet "3D" quand tu zoomes
+    });
+
+    directionsService = new google.maps.DirectionsService();
+    directionsRenderer = new google.maps.DirectionsRenderer({
+        map: map,
+        suppressMarkers: false,
+        polylineOptions: {
+            strokeColor: '#3b82f6',
+            strokeOpacity: 0.9,
+            strokeWeight: 6
+        }
+    });
+
+    // Placer les marqueurs clients
+    const bounds = new google.maps.LatLngBounds();
+
+    demoClients.forEach(client => {
+        const pos = { lat: client.lat, lng: client.lng };
+        const m = new google.maps.Marker({
+            position: pos,
+            map: map,
+            title: client.name
+        });
+        const info = new google.maps.InfoWindow({
+            content: `<strong>${client.name}</strong><br>${client.address}<br><small>Code : ${client.code}</small>`
+        });
+        m.addListener('click', () => info.open(map, m));
+
+        clientMarkers[client.id] = m;
+        bounds.extend(pos);
+    });
+
+    if (!bounds.isEmpty()) {
+        map.fitBounds(bounds);
+    }
+
+    document.getElementById('badgeClients').textContent = "Clients : " + demoClients.length;
+
+    // Events UI après que la map soit prête
+    initUIEvents();
+}
+
+window.initMap = initMap;
+window.addEventListener('load', initMap);
+
+// =========================
+// UI : recherche & sélection
+// =========================
+
 function renderSelectedClients() {
     selectedClientsContainer.innerHTML = '';
 
@@ -325,9 +362,10 @@ function renderSelectedClients() {
         chip.addEventListener('click', (e) => {
             if (e.target === select || e.target === btnRemove) return;
             // centrer la carte sur le client
-            map.setView([client.lat, client.lng], 13);
+            map.setZoom(13);
+            map.panTo({ lat: client.lat, lng: client.lng });
             if (clientMarkers[client.id]) {
-                clientMarkers[client.id].openPopup();
+                google.maps.event.trigger(clientMarkers[client.id], 'click');
             }
         });
 
@@ -335,7 +373,6 @@ function renderSelectedClients() {
     });
 }
 
-// Ajout d'un client à la tournée
 function addClientToRoute(client) {
     if (!client) return;
 
@@ -356,14 +393,13 @@ function addClientToRoute(client) {
     clientResultsEl.style.display = 'none';
     renderSelectedClients();
 
-    // focus visuel sur le client
-    map.setView([client.lat, client.lng], 13);
+    map.setZoom(13);
+    map.panTo({ lat: client.lat, lng: client.lng });
     if (clientMarkers[client.id]) {
-        clientMarkers[client.id].openPopup();
+        google.maps.event.trigger(clientMarkers[client.id], 'click');
     }
 }
 
-// Recherche dans la liste de clients
 function searchClients(query) {
     query = query.trim().toLowerCase();
     if (!query) return [];
@@ -371,147 +407,52 @@ function searchClients(query) {
     return demoClients.filter(c => {
         const haystack = (c.name + ' ' + c.code + ' ' + c.address).toLowerCase();
         return haystack.includes(query);
-    }).slice(0, 10); // limite à 10 résultats pour rester lisible
+    }).slice(0, 10);
 }
 
-clientSearchInput.addEventListener('input', () => {
-    const q = clientSearchInput.value;
-    clientResultsEl.innerHTML = '';
-
-    if (!q.trim()) {
-        clientResultsEl.style.display = 'none';
-        return;
-    }
-
-    const results = searchClients(q);
-    clientResultsEl.style.display = 'block';
-
-    if (!results.length) {
-        const item = document.createElement('div');
-        item.className = 'client-result-item empty';
-        item.textContent = 'Aucun client trouvé.';
-        clientResultsEl.appendChild(item);
-        return;
-    }
-
-    results.forEach(client => {
-        const item = document.createElement('div');
-        item.className = 'client-result-item';
-        item.innerHTML =
-            `<strong>${client.name}</strong>` +
-            `<span>${client.address} — ${client.code}</span>`;
-        item.addEventListener('click', () => addClientToRoute(client));
-        clientResultsEl.appendChild(item);
-    });
-});
-
-// Fermer la liste de résultats si clic ailleurs
-document.addEventListener('click', (e) => {
-    if (!clientResultsEl.contains(e.target) && e.target !== clientSearchInput) {
-        clientResultsEl.style.display = 'none';
-    }
-});
-
-// ================================
+// ==========================
 // Gestion du point de départ
-// ================================
-
-let startPoint = null;
-let startMarker = null;
-let pickStartFromMap = false;
-const startInfoEl = document.getElementById('startInfo');
-const badgeStartEl = document.getElementById('badgeStart');
-const routeMessageEl = document.getElementById('routeMessage');
-let routeLayer = null;
-let lastOrderedStops = [];  // clients dans l'ordre optimisé
-let lastRouteLegs = [];     // legs renvoyés par OSRM
-
-const btnShowTurns = document.getElementById('btnShowTurns');
-const routeStepsEl = document.getElementById('routeSteps');
-const routeTurnsEl = document.getElementById('routeTurns');
+// ==========================
 
 function setStartPoint(latlng, label) {
-    startPoint = latlng;
+    startPoint = { lat: latlng.lat, lng: latlng.lng };
 
     if (startMarker) {
-        map.removeLayer(startMarker);
+        startMarker.setMap(null);
     }
 
-    startMarker = L.marker(latlng, { draggable: true }).addTo(map);
-    startMarker.bindPopup(`<strong>Départ</strong><br>${label || ''}`).openPopup();
+    startMarker = new google.maps.Marker({
+        position: startPoint,
+        map: map,
+        draggable: true,
+        icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: '#16a34a',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2
+        },
+        title: 'Point de départ'
+    });
 
-    startMarker.on('dragend', (e) => {
-        const pos = e.target.getLatLng();
-        startPoint = [pos.lat, pos.lng];
-        startInfoEl.textContent = `Départ : ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)} (marqueur déplacé)`;
+    startMarker.addListener('dragend', (e) => {
+        const pos = e.latLng;
+        startPoint = { lat: pos.lat(), lng: pos.lng() };
+        startInfoEl.textContent = `Départ : ${startPoint.lat.toFixed(5)}, ${startPoint.lng.toFixed(5)} (marqueur déplacé)`;
         badgeStartEl.textContent = 'Départ : défini';
     });
 
-    startInfoEl.textContent = `Départ : ${latlng[0].toFixed(5)}, ${latlng[1].toFixed(5)}${label ? ' – ' + label : ''}`;
+    startInfoEl.textContent = `Départ : ${startPoint.lat.toFixed(5)}, ${startPoint.lng.toFixed(5)}${label ? ' – ' + label : ''}`;
     badgeStartEl.textContent = 'Départ : défini';
+
+    map.setZoom(13);
+    map.panTo(startPoint);
 }
 
-// Bouton : utiliser la géolocalisation
-document.getElementById('btnGeo').addEventListener('click', () => {
-    routeMessageEl.textContent = "Demande de géolocalisation en cours…";
-    routeMessageEl.className = 'maps-message hint';
-
-    if (!navigator.geolocation) {
-        routeMessageEl.textContent = "Géolocalisation non supportée par ce navigateur.";
-        routeMessageEl.className = 'maps-message alert';
-        return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-        (pos) => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            setStartPoint([lat, lng], "Ma position");
-            map.setView([lat, lng], 13);
-            routeMessageEl.textContent = "Point de départ défini sur votre position actuelle.";
-            routeMessageEl.className = 'maps-message success';
-        },
-        (err) => {
-            routeMessageEl.textContent = "Impossible de récupérer votre position (" + err.message + ").";
-            routeMessageEl.className = 'maps-message alert';
-        },
-        { enableHighAccuracy: true }
-    );
-});
-
-// Bouton : choisir le départ sur la carte
-document.getElementById('btnClickStart').addEventListener('click', () => {
-    pickStartFromMap = !pickStartFromMap;
-    routeMessageEl.textContent = pickStartFromMap
-        ? "Cliquez sur la carte pour définir le point de départ."
-        : "Mode sélection de départ désactivé.";
-    routeMessageEl.className = 'maps-message hint';
-});
-
-// Bouton : effacer le départ
-document.getElementById('btnClearStart').addEventListener('click', () => {
-    if (startMarker) {
-        map.removeLayer(startMarker);
-        startMarker = null;
-    }
-    startPoint = null;
-    startInfoEl.textContent = 'Aucun point de départ défini.';
-    badgeStartEl.textContent = 'Départ : non défini';
-});
-
-// Clic sur la carte pour définir le départ (si mode actif)
-map.on('click', (e) => {
-    if (!pickStartFromMap) return;
-    const latlng = [e.latlng.lat, e.latlng.lng];
-    setStartPoint(latlng, "Point choisi sur la carte");
-    routeMessageEl.textContent = "Point de départ défini depuis la carte.";
-    routeMessageEl.className = 'maps-message success';
-    pickStartFromMap = false;
-});
-
-// =====================================
-// Calcul d'itinéraire avec OSRM (demo)
-// =====================================
+// ==================
+// Utilitaires route
+// ==================
 
 function formatDistance(meters) {
     if (!meters && meters !== 0) return '—';
@@ -528,7 +469,7 @@ function formatDuration(seconds) {
     return h + ' h ' + (m > 0 ? m + ' min' : '');
 }
 
-// Distance haversine (en km)
+// Distance haversine (km) pour l'heuristique proximité + urgence
 function haversine(lat1, lon1, lat2, lon2) {
     const R = 6371; // km
     const toRad = x => x * Math.PI / 180;
@@ -542,7 +483,6 @@ function haversine(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-// Récupère les clients sélectionnés avec leur priorité
 function getSelectedClientsForRouting() {
     return selectedClients
         .map(sel => {
@@ -556,11 +496,11 @@ function getSelectedClientsForRouting() {
         .filter(Boolean);
 }
 
-// Calcule l'ordre de visite en fonction de la distance + priorité (heuristique simple)
+// Proximité + urgence
 function computeOrderedStops(startLatLng, clients) {
     const remaining = clients.slice();
     const ordered = [];
-    let current = { lat: startLatLng[0], lng: startLatLng[1] };
+    let current = { lat: startLatLng.lat, lng: startLatLng.lng };
 
     while (remaining.length) {
         let bestIndex = 0;
@@ -571,14 +511,12 @@ function computeOrderedStops(startLatLng, clients) {
             const distKm = haversine(current.lat, current.lng, c.lat, c.lng);
             const pr = c.priority || 1;
 
-            // Plus l'urgence est forte, plus on réduit "le coût" de la distance
             let weight;
             if (pr >= 3) weight = 0.4;
             else if (pr === 2) weight = 0.7;
             else weight = 1.0;
 
             const score = distKm * weight;
-
             if (score < bestScore) {
                 bestScore = score;
                 bestIndex = i;
@@ -593,13 +531,11 @@ function computeOrderedStops(startLatLng, clients) {
     return ordered;
 }
 
-// Résumé des grandes étapes (Départ -> Client 1, etc.)
+// Résumé des grandes étapes
 function renderRouteSummary(legs) {
     routeStepsEl.innerHTML = '';
 
-    if (!legs || !legs.length) {
-        return;
-    }
+    if (!legs || !legs.length) return;
 
     const ul = document.createElement('ul');
 
@@ -612,75 +548,14 @@ function renderRouteSummary(legs) {
 
         const toLabel = lastOrderedStops[index]?.name || 'Arrivée';
 
-        li.textContent = `Étape ${index + 1} : ${fromLabel} → ${toLabel} (${formatDistance(leg.distance)}, ${formatDuration(leg.duration)})`;
+        li.textContent = `Étape ${index + 1} : ${fromLabel} → ${toLabel} (${leg.distance.text}, ${leg.duration.text})`;
         ul.appendChild(li);
     });
 
     routeStepsEl.appendChild(ul);
 }
 
-// Traduction simple des manœuvres OSRM en phrases FR
-function buildInstruction(step, indexGlobal) {
-    const man = step.maneuver || {};
-    const type = man.type || '';
-    const mod = man.modifier || '';
-    const name = step.name || '';
-    const dist = formatDistance(step.distance || 0);
-
-    const dirMap = {
-        'left': 'à gauche',
-        'right': 'à droite',
-        'slight left': 'légèrement à gauche',
-        'slight_right': 'légèrement à droite',
-        'sharp_left': 'franchement à gauche',
-        'sharp_right': 'franchement à droite',
-        'uturn': 'en faisant demi-tour',
-        'straight': 'tout droit'
-    };
-    const dir = dirMap[mod] || '';
-
-    let txt;
-
-    if (type === 'depart') {
-        if (name) {
-            txt = `Démarrer sur ${name}.`;
-        } else {
-            txt = 'Démarrer depuis votre position.';
-        }
-    } else if (type === 'arrive') {
-        txt = 'Vous êtes arrivé à destination.';
-    } else if (type === 'roundabout') {
-        const exit = man.exit ? `, prendre la sortie ${man.exit}` : '';
-        if (name) {
-            txt = `Au rond-point${exit}, suivre ${name}.`;
-        } else {
-            txt = `Au rond-point${exit}, continuer sur la voie principale.`;
-        }
-    } else if (type === 'turn' || type === 'continue') {
-        if (dir && name) {
-            txt = `Tourner ${dir} sur ${name} (${dist}).`;
-        } else if (dir) {
-            txt = `Tourner ${dir} (${dist}).`;
-        } else if (name) {
-            txt = `Suivre ${name} (${dist}).`;
-        } else {
-            txt = `Continuer tout droit (${dist}).`;
-        }
-    } else if (type === 'merge') {
-        txt = name ? `S’insérer sur ${name} (${dist}).` : `S’insérer sur la voie (${dist}).`;
-    } else if (type === 'on ramp') {
-        txt = name ? `Prendre la bretelle vers ${name} (${dist}).` : `Prendre la bretelle (${dist}).`;
-    } else if (type === 'off ramp') {
-        txt = name ? `Prendre la sortie vers ${name} (${dist}).` : `Prendre la sortie (${dist}).`;
-    } else {
-        // fallback générique
-        txt = name ? `Continuer sur ${name} (${dist}).` : `Continuer (${dist}).`;
-    }
-
-    return txt;
-}
-
-// Affichage détaillé tour par tour
+// Détails tour par tour (comme Google Maps, en français)
 function renderTurnByTurn(legs) {
     routeTurnsEl.innerHTML = '';
 
@@ -717,15 +592,13 @@ function renderTurnByTurn(legs) {
             const li = document.createElement('li');
             li.className = 'route-turns-step';
 
-            const instruction = buildInstruction(step, stepIndex);
-
             const labelIndex = document.createElement('span');
             labelIndex.className = 'route-turns-step-index';
             labelIndex.textContent = stepIndex;
 
             const text = document.createElement('div');
             text.className = 'route-turns-step-text';
-            text.textContent = instruction;
+            text.innerHTML = step.instructions + ` (${step.distance.text})`;
 
             li.appendChild(labelIndex);
             li.appendChild(text);
@@ -739,22 +612,122 @@ function renderTurnByTurn(legs) {
     });
 }
 
-// Bouton pour afficher / masquer les instructions détaillées
-btnShowTurns.addEventListener('click', () => {
-    if (!lastRouteLegs.length) return;
+// =====================
+// Événements UI & route
+// =====================
 
-    const isHidden = routeTurnsEl.style.display === 'none' || routeTurnsEl.style.display === '';
-    routeTurnsEl.style.display = isHidden ? 'block' : 'none';
-    btnShowTurns.textContent = isHidden
-        ? '👁️ Masquer l’itinéraire détaillé'
-        : '👁️ Voir l’itinéraire détaillé';
-});
+function initUIEvents() {
+    // Recherche clients
+    clientSearchInput.addEventListener('input', () => {
+        const q = clientSearchInput.value;
+        clientResultsEl.innerHTML = '';
 
-// -------------------------------------
-// Lancement du calcul d'itinéraire
-// -------------------------------------
+        if (!q.trim()) {
+            clientResultsEl.style.display = 'none';
+            return;
+        }
 
-document.getElementById('btnRoute').addEventListener('click', () => {
+        const results = searchClients(q);
+        clientResultsEl.style.display = 'block';
+
+        if (!results.length) {
+            const item = document.createElement('div');
+            item.className = 'client-result-item empty';
+            item.textContent = 'Aucun client trouvé.';
+            clientResultsEl.appendChild(item);
+            return;
+        }
+
+        results.forEach(client => {
+            const item = document.createElement('div');
+            item.className = 'client-result-item';
+            item.innerHTML =
+                `<strong>${client.name}</strong>` +
+                `<span>${client.address} — ${client.code}</span>`;
+            item.addEventListener('click', () => addClientToRoute(client));
+            clientResultsEl.appendChild(item);
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!clientResultsEl.contains(e.target) && e.target !== clientSearchInput) {
+            clientResultsEl.style.display = 'none';
+        }
+    });
+
+    // Bouton géolocalisation
+    document.getElementById('btnGeo').addEventListener('click', () => {
+        routeMessageEl.textContent = "Demande de géolocalisation en cours…";
+        routeMessageEl.className = 'maps-message hint';
+
+        if (!navigator.geolocation) {
+            routeMessageEl.textContent = "Géolocalisation non supportée par ce navigateur.";
+            routeMessageEl.className = 'maps-message alert';
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                setStartPoint({ lat, lng }, "Ma position");
+                routeMessageEl.textContent = "Point de départ défini sur votre position actuelle.";
+                routeMessageEl.className = 'maps-message success';
+            },
+            (err) => {
+                routeMessageEl.textContent = "Impossible de récupérer votre position (" + err.message + ").";
+                routeMessageEl.className = 'maps-message alert';
+            },
+            { enableHighAccuracy: true }
+        );
+    });
+
+    // Bouton choisir départ sur la carte
+    document.getElementById('btnClickStart').addEventListener('click', () => {
+        pickStartFromMap = !pickStartFromMap;
+        routeMessageEl.textContent = pickStartFromMap
+            ? "Cliquez sur la carte pour définir le point de départ."
+            : "Mode sélection de départ désactivé.";
+        routeMessageEl.className = 'maps-message hint';
+    });
+
+    // Effacer départ
+    document.getElementById('btnClearStart').addEventListener('click', () => {
+        if (startMarker) {
+            startMarker.setMap(null);
+            startMarker = null;
+        }
+        startPoint = null;
+        startInfoEl.textContent = 'Aucun point de départ défini.';
+        badgeStartEl.textContent = 'Départ : non défini';
+    });
+
+    // Clic carte pour définir départ
+    map.addListener('click', (e) => {
+        if (!pickStartFromMap) return;
+        const latlng = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+        setStartPoint(latlng, "Point choisi sur la carte");
+        routeMessageEl.textContent = "Point de départ défini depuis la carte.";
+        routeMessageEl.className = 'maps-message success';
+        pickStartFromMap = false;
+    });
+
+    // Bouton voir / cacher détails
+    btnShowTurns.addEventListener('click', () => {
+        if (!lastRouteLegs.length) return;
+        const isHidden = routeTurnsEl.style.display === 'none' || routeTurnsEl.style.display === '';
+        routeTurnsEl.style.display = isHidden ? 'block' : 'none';
+        btnShowTurns.textContent = isHidden
+            ? '👁️ Masquer l’itinéraire détaillé'
+            : '👁️ Voir l’itinéraire détaillé';
+    });
+
+    // Bouton calculer itinéraire
+    document.getElementById('btnRoute').addEventListener('click', calculateRoute);
+}
+
+// Calcul de l’itinéraire avec Google Directions
+function calculateRoute() {
     routeStepsEl.innerHTML = '';
     routeTurnsEl.innerHTML = '';
     routeTurnsEl.style.display = 'none';
@@ -781,81 +754,67 @@ document.getElementById('btnRoute').addEventListener('click', () => {
         return;
     }
 
-    // Calcul de l'ordre optimisé (proximité + urgence)
     const orderedStops = computeOrderedStops(startPoint, clientsForRouting);
     lastOrderedStops = orderedStops.slice();
     lastRouteLegs = [];
 
-    // Construction de la chaîne de coordonnées OSRM : lon,lat;lon,lat;...
-    const waypoints = [
-        { lat: startPoint[0], lng: startPoint[1], label: 'Départ' },
-        ...orderedStops.map(c => ({ lat: c.lat, lng: c.lng, label: c.name, id: c.id }))
-    ];
+    const origin = new google.maps.LatLng(startPoint.lat, startPoint.lng);
+    const destinationStop = orderedStops[orderedStops.length - 1];
+    const destination = new google.maps.LatLng(destinationStop.lat, destinationStop.lng);
 
-    const coords = waypoints
-        .map(p => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`)
-        .join(';');
+    const waypoints = orderedStops.slice(0, -1).map(c => ({
+        location: new google.maps.LatLng(c.lat, c.lng),
+        stopover: true
+    }));
 
-    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+    const request = {
+        origin: origin,
+        destination: destination,
+        waypoints: waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+        optimizeWaypoints: false // on respecte notre ordre (proximité + urgence)
+    };
 
     routeMessageEl.textContent = "Calcul de l’itinéraire en cours…";
     routeMessageEl.className = 'maps-message hint';
 
-    fetch(url)
-        .then(res => res.json())
-        .then(data => {
-            if (!data.routes || !data.routes.length) {
-                throw new Error('Aucun itinéraire trouvé.');
-            }
-
-            const route = data.routes[0];
-
-            // Nettoyer l’ancien tracé
-            if (routeLayer) {
-                map.removeLayer(routeLayer);
-            }
-
-            routeLayer = L.geoJSON(route.geometry, {
-                style: {
-                    color: '#3b82f6',
-                    weight: 5,
-                    opacity: 0.85
-                }
-            }).addTo(map);
-
-            // Ajuster le zoom sur l’itinéraire
-            const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-            const bounds = L.latLngBounds(coords);
-            map.fitBounds(bounds, { padding: [40, 40] });
-
-            // Statistiques globales
-            const distance = route.distance; // en mètres
-            const duration = route.duration; // en secondes
-
-            document.getElementById('statDistance').textContent = formatDistance(distance);
-            document.getElementById('statDuration').textContent = formatDuration(duration);
-            document.getElementById('statStops').textContent = orderedStops.length + ' client(s)';
-            document.getElementById('statInfo').textContent = 'Conduite continue approximative';
-
-            // Stocker les legs pour les détails
-            lastRouteLegs = route.legs || [];
-
-            // Résumé des étapes + détails
-            renderRouteSummary(lastRouteLegs);
-            renderTurnByTurn(lastRouteLegs);
-
-            // On laisse l'utilisateur choisir quand afficher les détails
-            btnShowTurns.disabled = false;
-
-            routeMessageEl.textContent = "Itinéraire calculé avec succès (optimisé et détaillé).";
-            routeMessageEl.className = 'maps-message success';
-        })
-        .catch(err => {
-            console.error(err);
-            routeMessageEl.textContent = "Erreur lors du calcul de l’itinéraire : " + err.message;
+    directionsService.route(request, (result, status) => {
+        if (status !== google.maps.DirectionsStatus.OK || !result.routes.length) {
+            console.error(result);
+            routeMessageEl.textContent = "Erreur lors du calcul de l’itinéraire : " + status;
             routeMessageEl.className = 'maps-message alert';
+            return;
+        }
+
+        directionsRenderer.setDirections(result);
+        const route = result.routes[0];
+
+        // stats globales
+        let totalDistance = 0;
+        let totalDuration = 0;
+
+        (route.legs || []).forEach(leg => {
+            totalDistance += leg.distance.value; // mètres
+            totalDuration += leg.duration.value; // secondes
         });
-});
+
+        document.getElementById('statDistance').textContent = formatDistance(totalDistance);
+        document.getElementById('statDuration').textContent = formatDuration(totalDuration);
+        document.getElementById('statStops').textContent = orderedStops.length + ' client(s)';
+        document.getElementById('statInfo').textContent = 'Temps de trajet estimé (Google).';
+
+        lastRouteLegs = route.legs || [];
+
+        // Résumé + tour par tour
+        renderRouteSummary(lastRouteLegs);
+        renderTurnByTurn(lastRouteLegs);
+
+        btnShowTurns.disabled = false;
+
+        routeMessageEl.textContent = "Itinéraire calculé avec succès (Google Maps, détails disponibles).";
+        routeMessageEl.className = 'maps-message success';
+    });
+}
 </script>
 </body>
 </html>
