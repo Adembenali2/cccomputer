@@ -14,7 +14,7 @@ $paperId  = (int)($_POST['paper_id'] ?? 0);
 $qtyDelta = (int)($_POST['qty_delta'] ?? 0);  // négatif = sortie
 $reason   = $_POST['reason'] ?? 'ajustement';
 $reference= trim($_POST['reference'] ?? '');
-$userId   = $_SESSION['user']['id'] ?? null;
+$userId   = $_SESSION['user_id'] ?? null;
 
 if ($paperId<=0 || $qtyDelta===0 || !in_array($reason,['ajustement','achat','retour','correction'],true)) {
   echo json_encode(['ok'=>0,'err'=>'Paramètres invalides']); exit;

@@ -56,7 +56,7 @@ try {
     $pdo->commit();
 
     // Redirection vers la page détail
-    $redirectUrl = '/dephotocopieurs_details.php?mac=' . urlencode($macNorm);
+    $redirectUrl = '/public/photocopieurs_details.php?mac=' . urlencode($macNorm);
     header('Location: ' . $redirectUrl);
     exit;
 

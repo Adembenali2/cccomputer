@@ -31,8 +31,8 @@ try {
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($row) {
-        // Ici j’assume que ta page accepte un paramètre ?mac= (mac_norm)
-        $redirectUrl = '/dephotocopieurs_details.php?mac=' . urlencode($row['mac_norm']);
+        // Redirection vers la page de détails du photocopieur
+        $redirectUrl = '/public/photocopieurs_details.php?mac=' . urlencode($row['mac_norm']);
 
         echo json_encode([
             'ok'       => true,

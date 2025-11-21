@@ -6,8 +6,7 @@ error_reporting(E_ALL);
 ini_set('display_errors','1');
 
 // --- sécurité basique : POST + CSRF en session ---
-require_once __DIR__ . '/../includes/auth.php'; // garde ta protection d'accès
-session_start();
+require_once __DIR__ . '/../includes/auth.php'; // garde ta protection d'accès (session déjà démarrée)
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
   http_response_code(405);
   header('Allow: POST');
