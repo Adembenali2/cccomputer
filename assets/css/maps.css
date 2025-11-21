@@ -87,6 +87,148 @@
   gap: 0.4rem;
 }
 
+/* Recherche de clients */
+.client-search {
+  position: relative;
+  margin-bottom: 0.5rem;
+}
+
+.client-search-input {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.client-search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+}
+
+.client-results {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  max-height: 220px;
+  overflow: auto;
+  display: none;
+}
+
+.client-result-item {
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.client-result-item strong {
+  color: var(--text-primary);
+}
+
+.client-result-item span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.client-result-item:hover {
+  background: var(--bg-secondary);
+}
+
+.client-result-item.empty {
+  cursor: default;
+}
+
+/* Clients sélectionnés */
+.selected-clients {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  padding: 0.4rem 0.5rem;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.selected-client-chip {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.3rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  margin-bottom: 0.35rem;
+  cursor: pointer;
+}
+
+.selected-client-chip:last-child {
+  margin-bottom: 0;
+}
+
+.selected-client-chip:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.selected-client-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.85rem;
+}
+
+.selected-client-main strong {
+  color: var(--text-primary);
+}
+
+.selected-client-main span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.selected-client-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.selected-client-controls label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.selected-client-controls select {
+  margin-left: 0.25rem;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.chip-remove {
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 0.1rem 0.4rem;
+  cursor: pointer;
+}
+
 /* Stats itinéraire */
 .maps-stats {
   display: grid;
@@ -116,43 +258,22 @@
   font-weight: 700;
 }
 
-/* Liste des clients */
-.client-list {
-  max-height: 260px;
-  overflow: auto;
-  padding: 0.4rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.client-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  padding: 0.25rem 0.15rem;
-}
-
-.client-item + .client-item {
+/* Résumé des étapes */
+.route-steps {
+  margin-top: 0.6rem;
+  padding-top: 0.4rem;
   border-top: 1px dashed var(--border-color);
-  padding-top: 0.35rem;
-  margin-top: 0.35rem;
-}
-
-.client-item strong {
-  display: block;
-  color: var(--text-primary);
-}
-
-.client-item span {
-  display: block;
+  font-size: 0.8rem;
   color: var(--text-secondary);
-  font-size: 0.78rem;
 }
 
-.client-item input[type="checkbox"] {
-  margin-top: 0.15rem;
+.route-steps ul {
+  padding-left: 1.2rem;
+  margin: 0.25rem 0 0;
+}
+
+.route-steps li {
+  margin-bottom: 0.25rem;
 }
 
 /* Bloc carte à droite */

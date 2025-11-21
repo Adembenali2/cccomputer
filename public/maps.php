@@ -50,6 +50,7 @@ function h(?string $s): string {
             <h2>Planifier un trajet</h2>
             <small>1. Définissez un point de départ, 2. Sélectionnez les clients, 3. Calculez l’itinéraire.</small>
 
+            <!-- 1. Point de départ -->
             <div>
                 <div class="section-title">1. Point de départ</div>
                 <div class="btn-group">
@@ -62,28 +63,39 @@ function h(?string $s): string {
                 </div>
             </div>
 
+            <!-- 2. Clients à visiter -->
             <div>
                 <div class="section-title">2. Clients à visiter</div>
                 <p class="hint">
-                    Cochez les clients à visiter (dans l’ordre de la liste). Vous pouvez en prendre 4, 5 ou 6 par exemple.
+                    Recherchez un client (nom, code, adresse) puis ajoutez-le à la tournée.
+                    Vous pouvez gérer des dizaines ou centaines de clients sans liste infinie.
                 </p>
-                <div class="client-list" id="clientList">
-                    <!-- Liste remplie en JS, mais ci-dessous un fallback si JS désactivé -->
-                    <div class="client-item">
-                        <input type="checkbox" disabled>
-                        <div>
-                            <strong>Client A</strong>
-                            <span>Exemple (JL)</span>
-                        </div>
+
+                <div class="client-search">
+                    <input type="search"
+                           id="clientSearch"
+                           class="client-search-input"
+                           placeholder="Rechercher un client (nom, code, adresse)…"
+                           autocomplete="off">
+                    <div id="clientResults"
+                         class="client-results"
+                         aria-label="Résultats de recherche de clients">
+                        <!-- Rempli dynamiquement -->
                     </div>
+                </div>
+
+                <div class="selected-clients" id="selectedClients">
+                    <p class="hint">Aucun client sélectionné pour le moment.</p>
                 </div>
             </div>
 
+            <!-- 3. Calcul itinéraire -->
             <div>
                 <div class="section-title">3. Calculer l’itinéraire</div>
                 <button type="button" id="btnRoute" class="primary">🚐 Calculer l’itinéraire</button>
                 <p id="routeMessage" class="maps-message hint">
                     L’itinéraire utilise le service de routage public OSRM (OpenStreetMap).
+                    L’ordre est optimisé selon la <strong>proximité</strong> et le niveau <strong>d’urgence</strong>.
                 </p>
 
                 <div class="maps-stats" aria-live="polite">
@@ -103,6 +115,10 @@ function h(?string $s): string {
                         <span class="maps-stat-label">Temps de trajet</span>
                         <span class="maps-stat-value" id="statInfo">—</span>
                     </div>
+                </div>
+
+                <div id="routeSteps" class="route-steps">
+                    <!-- Résumé des étapes rempli en JS -->
                 </div>
             </div>
         </aside>
@@ -129,6 +145,7 @@ function h(?string $s): string {
 // ==================
 
 // Clients codés en dur pour la démonstration (à remplacer plus tard par la base de données)
+// On ajoute un champ "basePriority" (1 normal, 2 urgent, 3 très urgent)
 const demoClients = [
     {
         id: 1,
@@ -136,7 +153,8 @@ const demoClients = [
         code: "CL-001",
         address: "10 Rue de Paris, Lyon",
         lat: 45.764043,
-        lng: 4.835659
+        lng: 4.835659,
+        basePriority: 1
     },
     {
         id: 2,
@@ -144,7 +162,8 @@ const demoClients = [
         code: "CL-002",
         address: "25 Avenue de la République, Villeurbanne",
         lat: 45.7700,
-        lng: 4.8800
+        lng: 4.8800,
+        basePriority: 2
     },
     {
         id: 3,
@@ -152,7 +171,8 @@ const demoClients = [
         code: "CL-003",
         address: "5 Rue Victor Hugo, Vénissieux",
         lat: 45.6970,
-        lng: 4.8850
+        lng: 4.8850,
+        basePriority: 1
     },
     {
         id: 4,
@@ -160,7 +180,8 @@ const demoClients = [
         code: "CL-004",
         address: "50 Rue Garibaldi, Lyon",
         lat: 45.7510,
-        lng: 4.8500
+        lng: 4.8500,
+        basePriority: 3
     },
     {
         id: 5,
@@ -168,7 +189,8 @@ const demoClients = [
         code: "CL-005",
         address: "12 Rue du Lac, Décines",
         lat: 45.7680,
-        lng: 4.9600
+        lng: 4.9600,
+        basePriority: 1
     },
     {
         id: 6,
@@ -176,7 +198,8 @@ const demoClients = [
         code: "CL-006",
         address: "2 Rue Nationale, Oullins",
         lat: 45.7160,
-        lng: 4.8060
+        lng: 4.8060,
+        basePriority: 2
     }
 ];
 
@@ -216,46 +239,166 @@ demoClients.forEach(client => {
 document.getElementById('badgeClients').textContent = "Clients : " + demoClients.length;
 
 // =========================
-// UI : liste des clients
+// Recherche & sélection de clients
 // =========================
 
-const clientListEl = document.getElementById('clientList');
-clientListEl.innerHTML = '';
+const clientSearchInput = document.getElementById('clientSearch');
+const clientResultsEl = document.getElementById('clientResults');
+const selectedClientsContainer = document.getElementById('selectedClients');
 
-demoClients.forEach(client => {
-    const row = document.createElement('label');
-    row.className = 'client-item';
+// selectedClients = [{id, priority}]
+let selectedClients = [];
 
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.value = client.id;
+// Rendu des clients sélectionnés
+function renderSelectedClients() {
+    selectedClientsContainer.innerHTML = '';
 
-    const content = document.createElement('div');
-    const title = document.createElement('strong');
-    title.textContent = client.name;
-    const info = document.createElement('span');
-    info.textContent = `${client.address} — ${client.code}`;
+    if (!selectedClients.length) {
+        const p = document.createElement('p');
+        p.className = 'hint';
+        p.textContent = 'Aucun client sélectionné pour le moment.';
+        selectedClientsContainer.appendChild(p);
+        return;
+    }
 
-    content.appendChild(title);
-    content.appendChild(info);
+    selectedClients.forEach((sel, idx) => {
+        const client = demoClients.find(c => c.id === sel.id);
+        if (!client) return;
 
-    row.appendChild(checkbox);
-    row.appendChild(content);
+        const chip = document.createElement('div');
+        chip.className = 'selected-client-chip';
 
-    checkbox.addEventListener('change', () => {
-        if (checkbox.checked && clientMarkers[client.id]) {
-            clientMarkers[client.id].openPopup();
-        }
+        const text = document.createElement('div');
+        text.className = 'selected-client-main';
+        text.innerHTML =
+            `<strong>${idx + 1}. ${client.name}</strong>` +
+            `<span>${client.address} — ${client.code}</span>`;
+
+        const controls = document.createElement('div');
+        controls.className = 'selected-client-controls';
+
+        // Sélecteur d'urgence
+        const labelUrg = document.createElement('label');
+        labelUrg.textContent = 'Urgence : ';
+
+        const select = document.createElement('select');
+        select.innerHTML = `
+            <option value="1">Normale</option>
+            <option value="2">Urgente</option>
+            <option value="3">Très urgente</option>
+        `;
+        select.value = String(sel.priority || client.basePriority || 1);
+
+        select.addEventListener('change', () => {
+            sel.priority = parseInt(select.value, 10) || 1;
+        });
+
+        labelUrg.appendChild(select);
+
+        // Bouton supprimer
+        const btnRemove = document.createElement('button');
+        btnRemove.type = 'button';
+        btnRemove.className = 'chip-remove';
+        btnRemove.textContent = '✕';
+        btnRemove.addEventListener('click', () => {
+            selectedClients = selectedClients.filter(s => s.id !== sel.id);
+            renderSelectedClients();
+        });
+
+        controls.appendChild(labelUrg);
+        controls.appendChild(btnRemove);
+
+        chip.appendChild(text);
+        chip.appendChild(controls);
+
+        chip.addEventListener('click', (e) => {
+            if (e.target === select || e.target === btnRemove) return;
+            // centrer la carte sur le client
+            map.setView([client.lat, client.lng], 13);
+            if (clientMarkers[client.id]) {
+                clientMarkers[client.id].openPopup();
+            }
+        });
+
+        selectedClientsContainer.appendChild(chip);
+    });
+}
+
+// Ajout d'un client à la tournée
+function addClientToRoute(client) {
+    if (!client) return;
+
+    if (selectedClients.find(s => s.id === client.id)) {
+        // déjà présent
+        clientSearchInput.value = '';
+        clientResultsEl.innerHTML = '';
+        return;
+    }
+
+    selectedClients.push({
+        id: client.id,
+        priority: client.basePriority || 1
     });
 
-    // clic sur la ligne => centrer la carte
-    row.addEventListener('click', (e) => {
-        if (e.target.tagName.toLowerCase() === 'input') return;
-        map.setView([client.lat, client.lng], 13);
+    clientSearchInput.value = '';
+    clientResultsEl.innerHTML = '';
+    renderSelectedClients();
+
+    // focus visuel sur le client
+    map.setView([client.lat, client.lng], 13);
+    if (clientMarkers[client.id]) {
         clientMarkers[client.id].openPopup();
-    });
+    }
+}
 
-    clientListEl.appendChild(row);
+// Recherche dans la liste de clients
+function searchClients(query) {
+    query = query.trim().toLowerCase();
+    if (!query) return [];
+
+    return demoClients.filter(c => {
+        const haystack = (c.name + ' ' + c.code + ' ' + c.address).toLowerCase();
+        return haystack.includes(query);
+    }).slice(0, 10); // limite à 10 résultats pour rester lisible
+}
+
+clientSearchInput.addEventListener('input', () => {
+    const q = clientSearchInput.value;
+    clientResultsEl.innerHTML = '';
+
+    if (!q.trim()) {
+        clientResultsEl.style.display = 'none';
+        return;
+    }
+
+    const results = searchClients(q);
+    if (!results.length) {
+        clientResultsEl.style.display = 'block';
+        const item = document.createElement('div');
+        item.className = 'client-result-item empty';
+        item.textContent = 'Aucun client trouvé.';
+        clientResultsEl.appendChild(item);
+        return;
+    }
+
+    clientResultsEl.style.display = 'block';
+
+    results.forEach(client => {
+        const item = document.createElement('div');
+        item.className = 'client-result-item';
+        item.innerHTML =
+            `<strong>${client.name}</strong>` +
+            `<span>${client.address} — ${client.code}</span>`;
+        item.addEventListener('click', () => addClientToRoute(client));
+        clientResultsEl.appendChild(item);
+    });
+});
+
+// Fermer la liste de résultats si clic ailleurs
+document.addEventListener('click', (e) => {
+    if (!clientResultsEl.contains(e.target) && e.target !== clientSearchInput) {
+        clientResultsEl.style.display = 'none';
+    }
 });
 
 // ================================
@@ -269,6 +412,7 @@ const startInfoEl = document.getElementById('startInfo');
 const badgeStartEl = document.getElementById('badgeStart');
 const routeMessageEl = document.getElementById('routeMessage');
 let routeLayer = null;
+let lastOrderedStops = []; // pour résumer les étapes
 
 function setStartPoint(latlng, label) {
     startPoint = latlng;
@@ -368,42 +512,104 @@ function formatDuration(seconds) {
     return h + ' h ' + (m > 0 ? m + ' min' : '');
 }
 
-function getSelectedClientsInOrder() {
-    const selectedIds = [];
-    const inputs = clientListEl.querySelectorAll('input[type="checkbox"]');
-    inputs.forEach((cb) => {
-        if (cb.checked) selectedIds.push(parseInt(cb.value, 10));
-    });
-    // On respecte l'ordre de la liste
-    return demoClients.filter(c => selectedIds.includes(c.id));
+// Distance haversine (en km)
+function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371; // km
+    const toRad = x => x * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// Récupère les clients sélectionnés avec leur priorité
+function getSelectedClientsForRouting() {
+    return selectedClients
+        .map(sel => {
+            const client = demoClients.find(c => c.id === sel.id);
+            if (!client) return null;
+            return {
+                ...client,
+                priority: sel.priority || client.basePriority || 1
+            };
+        })
+        .filter(Boolean);
+}
+
+// Calcule l'ordre de visite en fonction de la distance + priorité (heuristique simple)
+function computeOrderedStops(startLatLng, clients) {
+    const remaining = clients.slice();
+    const ordered = [];
+    let current = { lat: startLatLng[0], lng: startLatLng[1] };
+
+    while (remaining.length) {
+        let bestIndex = 0;
+        let bestScore = Infinity;
+
+        for (let i = 0; i < remaining.length; i++) {
+            const c = remaining[i];
+            const distKm = haversine(current.lat, current.lng, c.lat, c.lng);
+            const pr = c.priority || 1;
+
+            // Plus l'urgence est forte, plus on réduit "le coût" de la distance
+            // (3 = très urgent -> weight plus faible)
+            let weight;
+            if (pr >= 3) weight = 0.4;
+            else if (pr === 2) weight = 0.7;
+            else weight = 1.0;
+
+            const score = distKm * weight;
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+
+        const next = remaining.splice(bestIndex, 1)[0];
+        ordered.push(next);
+        current = { lat: next.lat, lng: next.lng };
+    }
+
+    return ordered;
 }
 
 document.getElementById('btnRoute').addEventListener('click', () => {
+    const routeStepsEl = document.getElementById('routeSteps');
+    routeStepsEl.innerHTML = '';
+
     if (!startPoint) {
         routeMessageEl.textContent = "Définissez d'abord un point de départ (ma position ou clic sur la carte).";
         routeMessageEl.className = 'maps-message alert';
         return;
     }
 
-    const selectedClients = getSelectedClientsInOrder();
+    const clientsForRouting = getSelectedClientsForRouting();
 
-    if (selectedClients.length === 0) {
+    if (!clientsForRouting.length) {
         routeMessageEl.textContent = "Sélectionnez au moins un client à visiter.";
         routeMessageEl.className = 'maps-message alert';
         return;
     }
 
-    // Limite "raisonnable" 1–8 clients pour la démo
-    if (selectedClients.length > 8) {
-        routeMessageEl.textContent = "Pour la démo, limitez-vous à 8 clients maximum.";
+    if (clientsForRouting.length > 20) {
+        routeMessageEl.textContent = "Pour la démo, limitez-vous à 20 clients maximum par tournée.";
         routeMessageEl.className = 'maps-message alert';
         return;
     }
 
+    // Calcul de l'ordre optimisé (proximité + urgence)
+    const orderedStops = computeOrderedStops(startPoint, clientsForRouting);
+    lastOrderedStops = orderedStops.slice();
+
     // Construction de la chaîne de coordonnées OSRM : lon,lat;lon,lat;...
     const waypoints = [
-        { lat: startPoint[0], lng: startPoint[1], type: 'start' },
-        ...selectedClients.map(c => ({ lat: c.lat, lng: c.lng, type: 'client', id: c.id }))
+        { lat: startPoint[0], lng: startPoint[1], label: 'Départ' },
+        ...orderedStops.map(c => ({ lat: c.lat, lng: c.lng, label: c.name, id: c.id }))
     ];
 
     const coords = waypoints
@@ -442,16 +648,36 @@ document.getElementById('btnRoute').addEventListener('click', () => {
             const bounds = L.latLngBounds(coords);
             map.fitBounds(bounds, { padding: [40, 40] });
 
-            // Statistiques
+            // Statistiques globales
             const distance = route.distance; // en mètres
             const duration = route.duration; // en secondes
 
             document.getElementById('statDistance').textContent = formatDistance(distance);
             document.getElementById('statDuration').textContent = formatDuration(duration);
-            document.getElementById('statStops').textContent = selectedClients.length + ' client(s)';
+            document.getElementById('statStops').textContent = orderedStops.length + ' client(s)';
             document.getElementById('statInfo').textContent = 'Conduite continue approximative';
 
-            routeMessageEl.textContent = "Itinéraire calculé avec succès.";
+            // Résumé des étapes (comme un mini Google Maps)
+            if (route.legs && route.legs.length) {
+                const ul = document.createElement('ul');
+
+                route.legs.forEach((leg, index) => {
+                    const li = document.createElement('li');
+
+                    const fromLabel = (index === 0)
+                        ? 'Départ'
+                        : (lastOrderedStops[index - 1]?.name || 'Étape ' + index);
+
+                    const toLabel = lastOrderedStops[index]?.name || 'Arrivée';
+
+                    li.textContent = `Étape ${index + 1} : ${fromLabel} → ${toLabel} (${formatDistance(leg.distance)}, ${formatDuration(leg.duration)})`;
+                    ul.appendChild(li);
+                });
+
+                routeStepsEl.appendChild(ul);
+            }
+
+            routeMessageEl.textContent = "Itinéraire calculé avec succès (optimisé selon distance + urgence).";
             routeMessageEl.className = 'maps-message success';
         })
         .catch(err => {
