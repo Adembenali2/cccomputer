@@ -228,13 +228,13 @@ $totalMessages = count($messages);
                     <option value="sav">🔧 SAV</option>
                 </select>
 
-                <div id="lienContainer" style="display:none; margin-top: 0.5rem;">
+                <div id="lienContainer" style="display:none; margin-top: 0.5rem; position: relative;">
                     <input type="text" 
                            id="lienSearch" 
                            class="client-search-input" 
                            placeholder="Tapez pour rechercher..." 
                            autocomplete="off">
-                    <div id="lienResults" class="client-results" style="display:none;"></div>
+                    <div id="lienResults" class="client-results" style="display:none; position: absolute; z-index: 1000;"></div>
                     <input type="hidden" name="id_lien" id="idLien" value="">
                     <div id="lienSelected" class="lien-selected" style="display:none; margin-top: 0.5rem;"></div>
                 </div>
@@ -472,19 +472,28 @@ if (selectTypeLien && lienContainer && lienSearch) {
 
 // Fonction pour afficher les résultats de recherche
 function displaySearchResults(results, type) {
-    if (!lienResults) return;
+    console.log('displaySearchResults called with', results?.length || 0, 'results, type:', type);
+    
+    if (!lienResults) {
+        console.error('lienResults element not found in displaySearchResults');
+        return;
+    }
     
     lienResults.innerHTML = '';
     
     if (!results || results.length === 0) {
+        console.log('No results to display');
         const item = document.createElement('div');
         item.className = 'client-result-item empty';
         item.textContent = 'Aucun résultat trouvé.';
         lienResults.appendChild(item);
+        lienResults.style.display = 'block';
         return;
     }
     
-    results.forEach(item => {
+    console.log('Displaying', results.length, 'results');
+    results.forEach((item, index) => {
+        console.log(`Processing result ${index}:`, item);
         const div = document.createElement('div');
         div.className = 'client-result-item';
         
@@ -525,6 +534,9 @@ function displaySearchResults(results, type) {
         });
         lienResults.appendChild(div);
     });
+    
+    lienResults.style.display = 'block';
+    console.log('Results displayed, lienResults.style.display set to block');
 }
 
 // Fonction pour charger les premiers clients (par défaut)
@@ -606,17 +618,27 @@ if (lienSearch) {
                     url = `/API/messagerie_search_sav.php?q=${encodeURIComponent(query)}&limit=15`;
                 }
                 
+                console.log('Fetching URL:', url);
                 const response = await fetch(url);
+                console.log('Response status:', response.status);
+                
                 if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Response error:', errorText);
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
+                console.log('API Response:', data);
                 
-                if (!lienResults) return;
+                if (!lienResults) {
+                    console.error('lienResults element not found');
+                    return;
+                }
                 
                 let results = [];
                 if (type === 'client' && data.ok && data.clients) {
+                    console.log('Clients found:', data.clients.length);
                     results = data.clients.map(c => ({
                         id: c.id,
                         name: c.name,
@@ -624,10 +646,14 @@ if (lienSearch) {
                         address: c.address,
                         code: c.code
                     }));
+                    console.log('Formatted results:', results);
                 } else if ((type === 'livraison' || type === 'sav') && data.ok && data.results) {
                     results = data.results;
+                } else {
+                    console.warn('Unexpected data format:', data);
                 }
                 
+                console.log('Calling displaySearchResults with', results.length, 'results');
                 displaySearchResults(results, type);
             } catch (err) {
                 console.error('Erreur recherche:', err);
