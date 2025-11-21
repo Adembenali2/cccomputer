@@ -14,8 +14,7 @@ function stateBadge(?string $etat): string {
 }
 
 /* =========================================================
-   PHOTOCOPIEURS — UNIQUEMENT NON ATTRIBUÉS (depuis BDD)
-   (Chargés mais plus affichés dans la page)
+   PHOTOCOPIEURS — non attribués (chargés mais plus affichés)
    ========================================================= */
 $copiers = [];
 try {
@@ -85,7 +84,7 @@ try {
 }
 
 /* =========================================================
-   PAPIER — depuis la BDD (vue v_paper_stock)
+   PAPIER — depuis v_paper_stock
    ========================================================= */
 $papers = [];
 try {
@@ -97,26 +96,81 @@ try {
 }
 
 /* =========================================================
-   AUTRES CATEGORIES (mock)
+   TONERS — depuis v_toner_stock
    ========================================================= */
-$lcd = [
-  ['id'=>'lcd-24a-001','marque'=>'Dell','reference'=>'LCD-24A-001','etat'=>'A','modele'=>'U2415','taille'=>24,'resolution'=>'1920x1200','connectique'=>'HDMI/DP','prix'=>129.90,'qty'=>12],
-  ['id'=>'lcd-27b-004','marque'=>'LG','reference'=>'LCD-27B-004','etat'=>'B','modele'=>'27UL500','taille'=>27,'resolution'=>'3840x2160','connectique'=>'HDMI','prix'=>219.90,'qty'=>4],
-  ['id'=>'lcd-22c-020','marque'=>'HP','reference'=>'LCD-22C-020','etat'=>'C','modele'=>'Z22n G2','taille'=>22,'resolution'=>'1920x1080','connectique'=>'DP','prix'=>79.90,'qty'=>6],
-];
+$toners = [];
+try {
+  $stmt = $pdo->query("SELECT toner_id, marque, modele, couleur, qty_stock FROM v_toner_stock ORDER BY marque, modele, couleur");
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($rows as $r) {
+    $toners[] = [
+      'id'      => (int)$r['toner_id'],
+      'marque'  => $r['marque'],
+      'modele'  => $r['modele'],
+      'couleur' => $r['couleur'],
+      'qty'     => (int)$r['qty_stock'],
+    ];
+  }
+} catch (PDOException $e) {
+  error_log('stock toner SQL: '.$e->getMessage());
+  $toners = [];
+}
 
-$pc = [
-  ['id'=>'pc-a-001','etat'=>'A','reference'=>'PC-A-001','marque'=>'Lenovo','modele'=>'ThinkCentre M720','cpu'=>'i5-9500','ram'=>'16 Go','stockage'=>'512 Go SSD','os'=>'Windows 11 Pro','gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6','prix'=>349.00,'qty'=>5],
-  ['id'=>'pc-b-010','etat'=>'B','reference'=>'PC-B-010','marque'=>'Dell','modele'=>'OptiPlex 7060','cpu'=>'i5-8500','ram'=>'8 Go','stockage'=>'256 Go SSD','os'=>'Windows 10 Pro','gpu'=>'Intel UHD 630','reseau'=>'Gigabit','ports'=>'USB 3.0 x6','prix'=>279.00,'qty'=>10],
-  ['id'=>'pc-c-015','etat'=>'C','reference'=>'PC-C-015','marque'=>'Lenovo','modele'=>'ThinkPad T460','cpu'=>'i5-6300U','ram'=>'8 Go','stockage'=>'240 Go SSD','os'=>'Windows 10 Pro','gpu'=>'Intel HD 520','reseau'=>'Wi-Fi/BT','ports'=>'USB 3.0 x3','prix'=>189.00,'qty'=>7],
-];
+/* =========================================================
+   LCD — depuis v_lcd_stock
+   ========================================================= */
+$lcd = [];
+try {
+  $stmt = $pdo->query("SELECT lcd_id, marque, reference, etat, modele, taille, resolution, connectique, prix, qty_stock FROM v_lcd_stock ORDER BY marque, modele, taille");
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($rows as $r) {
+    $lcd[] = [
+      'id'         => (int)$r['lcd_id'],
+      'marque'     => $r['marque'],
+      'reference'  => $r['reference'],
+      'etat'       => $r['etat'],
+      'modele'     => $r['modele'],
+      'taille'     => (int)$r['taille'],
+      'resolution' => $r['resolution'],
+      'connectique'=> $r['connectique'],
+      'prix'       => $r['prix'] !== null ? (float)$r['prix'] : null,
+      'qty'        => (int)$r['qty_stock'],
+    ];
+  }
+} catch (PDOException $e) {
+  error_log('stock lcd SQL: '.$e->getMessage());
+  $lcd = [];
+}
 
-$toners = [
-  ['id'=>'tn-k-2553','marque'=>'Kyocera','modele'=>'TK-8345K','couleur'=>'Noir','qty'=>14],
-  ['id'=>'tn-c-2553','marque'=>'Kyocera','modele'=>'TK-8345C','couleur'=>'Cyan','qty'=>6],
-  ['id'=>'tn-m-307','marque'=>'Ricoh','modele'=>'MPC307-M','couleur'=>'Magenta','qty'=>3],
-  ['id'=>'tn-y-307','marque'=>'Ricoh','modele'=>'MPC307-Y','couleur'=>'Jaune','qty'=>0],
-];
+/* =========================================================
+   PC — depuis v_pc_stock
+   ========================================================= */
+$pc = [];
+try {
+  $stmt = $pdo->query("SELECT pc_id, etat, reference, marque, modele, cpu, ram, stockage, os, gpu, reseau, ports, prix, qty_stock FROM v_pc_stock ORDER BY marque, modele, reference");
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($rows as $r) {
+    $pc[] = [
+      'id'        => (int)$r['pc_id'],
+      'etat'      => $r['etat'],
+      'reference' => $r['reference'],
+      'marque'    => $r['marque'],
+      'modele'    => $r['modele'],
+      'cpu'       => $r['cpu'],
+      'ram'       => $r['ram'],
+      'stockage'  => $r['stockage'],
+      'os'        => $r['os'],
+      'gpu'       => $r['gpu'],
+      'reseau'    => $r['reseau'],
+      'ports'     => $r['ports'],
+      'prix'      => $r['prix'] !== null ? (float)$r['prix'] : null,
+      'qty'       => (int)$r['qty_stock'],
+    ];
+  }
+} catch (PDOException $e) {
+  error_log('stock pc SQL: '.$e->getMessage());
+  $pc = [];
+}
 
 $datasets = ['copiers'=>$copiers, 'lcd'=>$lcd, 'pc'=>$pc];
 
@@ -162,9 +216,9 @@ $sectionImages = [
           <h3 class="section-title">Toners</h3>
         </div>
         <div class="head-right">
-          <a href="/stock_add.php?type=toner" class="btn btn-primary btn-sm">
+          <button type="button" class="btn btn-primary btn-sm btn-add" data-add-type="toner">
             + Ajouter toner
-          </a>
+          </button>
         </div>
       </div>
       <div class="table-wrapper">
@@ -196,9 +250,9 @@ $sectionImages = [
           <h3 class="section-title">Papier</h3>
         </div>
         <div class="head-right">
-          <a href="/stock_add.php?type=papier" class="btn btn-primary btn-sm">
+          <button type="button" class="btn btn-primary btn-sm btn-add" data-add-type="papier">
             + Ajouter papier
-          </a>
+          </button>
         </div>
       </div>
       <div class="table-wrapper">
@@ -232,9 +286,9 @@ $sectionImages = [
           <h3 class="section-title">LCD</h3>
         </div>
         <div class="head-right">
-          <a href="/stock_add.php?type=lcd" class="btn btn-primary btn-sm">
+          <button type="button" class="btn btn-primary btn-sm btn-add" data-add-type="lcd">
             + Ajouter LCD
-          </a>
+          </button>
         </div>
       </div>
       <div class="table-wrapper">
@@ -268,9 +322,9 @@ $sectionImages = [
           <h3 class="section-title">PC reconditionnés</h3>
         </div>
         <div class="head-right">
-          <a href="/stock_add.php?type=pc" class="btn btn-primary btn-sm">
+          <button type="button" class="btn btn-primary btn-sm btn-add" data-add-type="pc">
             + Ajouter PC
-          </a>
+          </button>
         </div>
       </div>
       <div class="table-wrapper">
@@ -310,6 +364,25 @@ $sectionImages = [
   </div>
 </div>
 
+<!-- ===== Modale ajout produit ===== -->
+<div id="addOverlay" class="modal-overlay" aria-hidden="true"></div>
+<div id="addModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="addModalTitle" style="display:none;">
+  <div class="modal-header">
+    <h3 id="addModalTitle">Ajouter</h3>
+    <button type="button" id="addModalClose" class="icon-btn icon-btn--close" aria-label="Fermer">×</button>
+  </div>
+  <div class="modal-body">
+    <form id="addForm">
+      <div id="addFields" class="detail-grid"></div>
+      <div class="modal-actions" style="margin-top:1rem; display:flex; gap:.5rem; justify-content:flex-end;">
+        <button type="button" id="addCancel" class="btn btn-secondary">Annuler</button>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+      </div>
+      <div id="addError" class="form-error" style="color:#c00; margin-top:.5rem; display:none;"></div>
+    </form>
+  </div>
+</div>
+
 <script>
 /* ===== Filtre + réordonnancement ===== */
 (function(){
@@ -324,7 +397,6 @@ $sectionImages = [
   function reorderSections(){
     const sections = Array.from(mason.querySelectorAll('.card-section'));
     const scored = sections.map((s, i)=>({el:s, score: visibleRowCount(s), idx:i}));
-// tri décroissant par nb de lignes visibles
     scored.sort((a,b)=> b.score - a.score || a.idx - b.idx);
     scored.forEach(x => mason.appendChild(x.el));
   }
@@ -459,6 +531,158 @@ function badgeEtat(e){
     tr.addEventListener('keydown', (e)=>{
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.click(); }
     });
+  });
+})();
+
+/* ===== Modale ajout produit (papier / toner / lcd / pc) ===== */
+(function(){
+  const overlay = document.getElementById('addOverlay');
+  const modal   = document.getElementById('addModal');
+  const titleEl = document.getElementById('addModalTitle');
+  const btnClose= document.getElementById('addModalClose');
+  const btnCancel = document.getElementById('addCancel');
+  const form    = document.getElementById('addForm');
+  const fieldsContainer = document.getElementById('addFields');
+  const errorBox = document.getElementById('addError');
+
+  let currentType = null;
+
+  const FORM_SCHEMAS = {
+    toner: [
+      {name:'marque',    label:'Marque',      type:'text',   required:true},
+      {name:'modele',    label:'Modèle',      type:'text',   required:true},
+      {name:'couleur',   label:'Couleur',     type:'text',   required:true},
+      {name:'qty_delta', label:'Quantité',    type:'number', required:true, min:1},
+      {name:'reference', label:'Référence (BL, facture…)', type:'text'}
+    ],
+    papier: [
+      {name:'marque',    label:'Marque',      type:'text',   required:true},
+      {name:'modele',    label:'Modèle',      type:'text',   required:true},
+      {name:'poids',     label:'Poids',       type:'text',   required:true},
+      {name:'qty_delta', label:'Quantité',    type:'number', required:true, min:1},
+      {name:'reference', label:'Référence (BL, facture…)', type:'text'}
+    ],
+    lcd: [
+      {name:'marque',     label:'Marque',        type:'text',   required:true},
+      {name:'reference',  label:'Référence',     type:'text',   required:true},
+      {name:'etat',       label:'État (A/B/C)',  type:'text',   required:true, maxLength:1},
+      {name:'modele',     label:'Modèle',        type:'text',   required:true},
+      {name:'taille',     label:'Taille (pouces)', type:'number', required:true, min:10},
+      {name:'resolution', label:'Résolution',    type:'text',   required:true},
+      {name:'connectique',label:'Connectique',   type:'text',   required:true},
+      {name:'prix',       label:'Prix (EUR)',    type:'number', step:'0.01'},
+      {name:'qty_delta',  label:'Quantité',      type:'number', required:true, min:1},
+      {name:'reference_move', label:'Référence mouvement (BL, facture…)', type:'text'}
+    ],
+    pc: [
+      {name:'etat',        label:'État (A/B/C)', type:'text',   required:true, maxLength:1},
+      {name:'reference',   label:'Référence',    type:'text',   required:true},
+      {name:'marque',      label:'Marque',       type:'text',   required:true},
+      {name:'modele',      label:'Modèle',       type:'text',   required:true},
+      {name:'cpu',         label:'CPU',          type:'text',   required:true},
+      {name:'ram',         label:'RAM',          type:'text',   required:true},
+      {name:'stockage',    label:'Stockage',     type:'text',   required:true},
+      {name:'os',          label:'OS',           type:'text',   required:true},
+      {name:'gpu',         label:'GPU',          type:'text'},
+      {name:'reseau',      label:'Réseau',       type:'text'},
+      {name:'ports',       label:'Ports',        type:'text'},
+      {name:'prix',        label:'Prix (EUR)',   type:'number', step:'0.01'},
+      {name:'qty_delta',   label:'Quantité',     type:'number', required:true, min:1},
+      {name:'reference_move', label:'Référence mouvement (BL, facture…)', type:'text'}
+    ]
+  };
+
+  function clearForm(){
+    fieldsContainer.innerHTML = '';
+    errorBox.style.display = 'none';
+    errorBox.textContent = '';
+  }
+
+  function buildForm(type){
+    clearForm();
+    const schema = FORM_SCHEMAS[type];
+    if (!schema) return;
+    schema.forEach(f => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'field-card';
+
+      const lbl = document.createElement('label');
+      lbl.className = 'lbl';
+      lbl.textContent = f.label;
+      lbl.htmlFor = 'add_'+f.name;
+
+      const input = document.createElement('input');
+      input.className = 'val';
+      input.id = 'add_'+f.name;
+      input.name = f.name;
+      input.type = f.type || 'text';
+      if (f.required) input.required = true;
+      if (f.min != null) input.min = f.min;
+      if (f.step != null) input.step = f.step;
+      if (f.maxLength != null) input.maxLength = f.maxLength;
+
+      wrapper.appendChild(lbl);
+      wrapper.appendChild(input);
+      fieldsContainer.appendChild(wrapper);
+    });
+  }
+
+  function openModal(type){
+    currentType = type;
+    titleEl.textContent = 'Ajouter ' + type;
+    buildForm(type);
+    document.body.classList.add('modal-open');
+    overlay.style.display = 'block';
+    overlay.setAttribute('aria-hidden','false');
+    modal.style.display = 'block';
+  }
+
+  function closeModal(){
+    document.body.classList.remove('modal-open');
+    overlay.style.display = 'none';
+    overlay.setAttribute('aria-hidden','true');
+    modal.style.display = 'none';
+    currentType = null;
+    clearForm();
+  }
+
+  btnClose && btnClose.addEventListener('click', closeModal);
+  btnCancel && btnCancel.addEventListener('click', function(e){ e.preventDefault(); closeModal(); });
+  overlay && overlay.addEventListener('click', closeModal);
+
+  document.querySelectorAll('.btn-add[data-add-type]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-add-type');
+      openModal(t);
+    });
+  });
+
+  form && form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    if (!currentType) return;
+
+    const formData = new FormData(form);
+    const payload = {};
+    formData.forEach((v,k) => { payload[k] = v; });
+
+    try {
+      const res = await fetch('/api/stock_add.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ type: currentType, data: payload })
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        errorBox.textContent = json.error || 'Erreur lors de l’enregistrement.';
+        errorBox.style.display = 'block';
+        return;
+      }
+      closeModal();
+      window.location.reload();
+    } catch (err) {
+      errorBox.textContent = 'Erreur réseau ou serveur.';
+      errorBox.style.display = 'block';
+    }
   });
 })();
 </script>
