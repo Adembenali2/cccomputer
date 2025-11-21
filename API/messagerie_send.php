@@ -112,6 +112,12 @@ if ($idDestinataire) {
 }
 
 try {
+    // Vérifier si la table messagerie existe
+    $checkTable = $pdo->query("SHOW TABLES LIKE 'messagerie'");
+    if ($checkTable->rowCount() === 0) {
+        jsonResponse(['ok' => false, 'error' => 'La table de messagerie n\'existe pas. Veuillez exécuter la migration SQL.'], 500);
+    }
+    
     $pdo->beginTransaction();
     
     $sql = "

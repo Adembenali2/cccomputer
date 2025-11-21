@@ -37,43 +37,65 @@ if (empty($_SESSION['user_id'])) {
 $userId = (int)$_SESSION['user_id'];
 
 try {
-    // Compter les messages directs non lus
-    $stmt1 = $pdo->prepare("
-        SELECT COUNT(*) 
-        FROM messagerie 
-        WHERE id_destinataire = :user_id
-          AND lu = 0 
-          AND supprime_destinataire = 0
-    ");
-    $stmt1->execute([':user_id' => $userId]);
-    $countDirect = (int)$stmt1->fetchColumn();
+    // Vérifier si la table messagerie existe
+    $checkTable = $pdo->query("SHOW TABLES LIKE 'messagerie'");
+    if ($checkTable->rowCount() === 0) {
+        // Table n'existe pas encore, retourner 0
+        jsonResponse(['ok' => true, 'count' => 0]);
+    }
     
-    // Compter les messages "à tous" non lus (non présents dans la table de lectures)
-    $countBroadcast = 0;
+    // Compter les messages directs non lus
+    $countDirect = 0;
     try {
-        $stmt2 = $pdo->prepare("
-            SELECT COUNT(*) 
-            FROM messagerie m
-            LEFT JOIN messagerie_lectures ml ON ml.id_message = m.id AND ml.id_utilisateur = :user_id
-            WHERE m.id_destinataire IS NULL
-              AND m.id_expediteur != :user_id2
-              AND m.supprime_destinataire = 0
-              AND ml.id IS NULL
-        ");
-        $stmt2->execute([':user_id' => $userId, ':user_id2' => $userId]);
-        $countBroadcast = (int)$stmt2->fetchColumn();
-    } catch (PDOException $e) {
-        // Si la table de lectures n'existe pas encore, on compte tous les messages à tous
-        error_log('messagerie_get_unread_count.php - Table lectures peut ne pas exister: ' . $e->getMessage());
-        $stmt2b = $pdo->prepare("
+        $stmt1 = $pdo->prepare("
             SELECT COUNT(*) 
             FROM messagerie 
-            WHERE id_destinataire IS NULL
-              AND id_expediteur != :user_id
+            WHERE id_destinataire = :user_id
+              AND lu = 0 
               AND supprime_destinataire = 0
         ");
-        $stmt2b->execute([':user_id' => $userId]);
-        $countBroadcast = (int)$stmt2b->fetchColumn();
+        $stmt1->execute([':user_id' => $userId]);
+        $countDirect = (int)$stmt1->fetchColumn();
+    } catch (PDOException $e) {
+        error_log('messagerie_get_unread_count.php - Erreur comptage direct: ' . $e->getMessage());
+        $countDirect = 0;
+    }
+    
+    // Compter les messages "à tous" non lus
+    $countBroadcast = 0;
+    try {
+        // Vérifier si la table messagerie_lectures existe
+        $checkLectures = $pdo->query("SHOW TABLES LIKE 'messagerie_lectures'");
+        $hasLecturesTable = $checkLectures->rowCount() > 0;
+        
+        if ($hasLecturesTable) {
+            // Utiliser la table de lectures
+            $stmt2 = $pdo->prepare("
+                SELECT COUNT(*) 
+                FROM messagerie m
+                LEFT JOIN messagerie_lectures ml ON ml.id_message = m.id AND ml.id_utilisateur = :user_id
+                WHERE m.id_destinataire IS NULL
+                  AND m.id_expediteur != :user_id2
+                  AND m.supprime_destinataire = 0
+                  AND ml.id IS NULL
+            ");
+            $stmt2->execute([':user_id' => $userId, ':user_id2' => $userId]);
+            $countBroadcast = (int)$stmt2->fetchColumn();
+        } else {
+            // Table de lectures n'existe pas, compter tous les messages à tous
+            $stmt2b = $pdo->prepare("
+                SELECT COUNT(*) 
+                FROM messagerie 
+                WHERE id_destinataire IS NULL
+                  AND id_expediteur != :user_id
+                  AND supprime_destinataire = 0
+            ");
+            $stmt2b->execute([':user_id' => $userId]);
+            $countBroadcast = (int)$stmt2b->fetchColumn();
+        }
+    } catch (PDOException $e) {
+        error_log('messagerie_get_unread_count.php - Erreur comptage broadcast: ' . $e->getMessage());
+        $countBroadcast = 0;
     }
     
     $count = $countDirect + $countBroadcast;
@@ -82,9 +104,13 @@ try {
     
 } catch (PDOException $e) {
     error_log('messagerie_get_unread_count.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('messagerie_get_unread_count.php SQL trace: ' . $e->getTraceAsString());
+    // Retourner 0 au lieu d'une erreur pour éviter de bloquer le header
+    jsonResponse(['ok' => true, 'count' => 0]);
 } catch (Throwable $e) {
     error_log('messagerie_get_unread_count.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
+    error_log('messagerie_get_unread_count.php trace: ' . $e->getTraceAsString());
+    // Retourner 0 au lieu d'une erreur pour éviter de bloquer le header
+    jsonResponse(['ok' => true, 'count' => 0]);
 }
 

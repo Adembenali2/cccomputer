@@ -60,6 +60,12 @@ if ($messageId <= 0) {
 }
 
 try {
+    // Vérifier si la table messagerie existe
+    $checkTable = $pdo->query("SHOW TABLES LIKE 'messagerie'");
+    if ($checkTable->rowCount() === 0) {
+        jsonResponse(['ok' => false, 'error' => 'La table de messagerie n\'existe pas.'], 500);
+    }
+    
     // Vérifier que le message appartient bien au destinataire (ou message à tous)
     $check = $pdo->prepare("
         SELECT id, lu, id_destinataire
@@ -80,14 +86,34 @@ try {
     if ($message['id_destinataire'] === null) {
         // Message "à tous" : utiliser la table de lectures
         try {
-            $insert = $pdo->prepare("
-                INSERT IGNORE INTO messagerie_lectures (id_message, id_utilisateur, date_lecture)
-                VALUES (:id_message, :user_id, NOW())
-            ");
-            $insert->execute([':id_message' => $messageId, ':user_id' => $userId]);
+            // Vérifier si la table existe
+            $checkLectures = $pdo->query("SHOW TABLES LIKE 'messagerie_lectures'");
+            if ($checkLectures->rowCount() > 0) {
+                $insert = $pdo->prepare("
+                    INSERT IGNORE INTO messagerie_lectures (id_message, id_utilisateur, date_lecture)
+                    VALUES (:id_message, :user_id, NOW())
+                ");
+                $insert->execute([':id_message' => $messageId, ':user_id' => $userId]);
+            } else {
+                // Si la table n'existe pas, on met quand même à jour le champ lu (solution de secours)
+                $update = $pdo->prepare("
+                    UPDATE messagerie 
+                    SET lu = 1, 
+                        date_lecture = NOW()
+                    WHERE id = :id
+                ");
+                $update->execute([':id' => $messageId]);
+            }
         } catch (PDOException $e) {
-            // Si la table n'existe pas encore, on ignore
-            error_log('messagerie_mark_read.php - Table lectures peut ne pas exister: ' . $e->getMessage());
+            error_log('messagerie_mark_read.php - Erreur table lectures: ' . $e->getMessage());
+            // Solution de secours : mettre à jour le champ lu
+            $update = $pdo->prepare("
+                UPDATE messagerie 
+                SET lu = 1, 
+                    date_lecture = NOW()
+                WHERE id = :id
+            ");
+            $update->execute([':id' => $messageId]);
         }
     } else {
         // Message direct : mettre à jour le champ lu

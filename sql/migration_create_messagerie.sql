@@ -3,32 +3,29 @@
 
 CREATE TABLE IF NOT EXISTS `messagerie` (
   `id` INT NOT NULL AUTO_INCREMENT,
-  `id_expediteur` INT NOT NULL COMMENT 'ID de l''utilisateur qui envoie le message',
-  `id_destinataire` INT DEFAULT NULL COMMENT 'NULL = message à tous, sinon ID utilisateur spécifique',
+  `id_expediteur` INT NOT NULL,
+  `id_destinataire` INT DEFAULT NULL,
   `sujet` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `message` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  `type_lien` ENUM('client', 'livraison', 'sav', NULL) DEFAULT NULL COMMENT 'Type d''élément lié',
-  `id_lien` INT DEFAULT NULL COMMENT 'ID de l''élément lié (client, livraison ou SAV)',
-  `lu` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0 = non lu, 1 = lu',
+  `type_lien` ENUM('client', 'livraison', 'sav') DEFAULT NULL,
+  `id_lien` INT DEFAULT NULL,
+  `lu` TINYINT(1) NOT NULL DEFAULT 0,
   `date_envoi` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `date_lecture` DATETIME DEFAULT NULL COMMENT 'Date de première lecture',
-  `supprime_expediteur` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Message supprimé par l''expéditeur',
-  `supprime_destinataire` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Message supprimé par le destinataire',
+  `date_lecture` DATETIME DEFAULT NULL,
+  `supprime_expediteur` TINYINT(1) NOT NULL DEFAULT 0,
+  `supprime_destinataire` TINYINT(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_expediteur` (`id_expediteur`),
   KEY `idx_destinataire` (`id_destinataire`),
   KEY `idx_lu` (`lu`),
   KEY `idx_date_envoi` (`date_envoi`),
   KEY `idx_type_lien` (`type_lien`, `id_lien`),
+  KEY `idx_destinataire_lu` (`id_destinataire`, `lu`, `date_envoi`),
+  KEY `idx_expediteur_supprime` (`id_expediteur`, `supprime_expediteur`, `date_envoi`),
   CONSTRAINT `fk_messagerie_expediteur` FOREIGN KEY (`id_expediteur`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_messagerie_destinataire` FOREIGN KEY (`id_destinataire`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Index pour améliorer les performances des requêtes fréquentes
-ALTER TABLE `messagerie` ADD INDEX `idx_destinataire_lu` (`id_destinataire`, `lu`, `date_envoi`);
-ALTER TABLE `messagerie` ADD INDEX `idx_expediteur_supprime` (`id_expediteur`, `supprime_expediteur`, `date_envoi`);
-
--- Table pour gérer les lectures des messages "à tous" (un message peut être lu par plusieurs utilisateurs)
 CREATE TABLE IF NOT EXISTS `messagerie_lectures` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `id_message` INT NOT NULL,
