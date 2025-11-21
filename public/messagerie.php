@@ -598,7 +598,8 @@ if (lienSearch) {
             try {
                 let url = '';
                 if (type === 'client') {
-                    url = `/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=15`;
+                    // Essayer d'abord la version de test, puis la version normale
+                    url = `/API/maps_search_clients_test.php?q=${encodeURIComponent(query)}&limit=15`;
                 } else if (type === 'livraison') {
                     url = `/API/messagerie_search_livraisons.php?q=${encodeURIComponent(query)}&limit=15`;
                 } else if (type === 'sav') {

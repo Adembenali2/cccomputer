@@ -67,7 +67,7 @@ try {
     $limit = max(1, min((int)$limit, 50));
     $limitInt = (int)$limit;
     
-    // Simplifier la requête - utiliser une approche plus basique
+    // Requête SQL très simple - récupérer plus de résultats puis filtrer en PHP
     $sql = "
         SELECT 
             id,
@@ -85,21 +85,16 @@ try {
         FROM clients
         WHERE 
             raison_sociale LIKE :q
-            OR nom_dirigeant LIKE :q
-            OR prenom_dirigeant LIKE :q
             OR numero_client LIKE :q
-            OR adresse LIKE :q
-            OR ville LIKE :q
-            OR code_postal LIKE :q
         ORDER BY raison_sociale ASC
-        LIMIT {$limitInt}
+        LIMIT 100
     ";
     
     $stmt = $pdo->prepare($sql);
     if (!$stmt) {
         $errorInfo = $pdo->errorInfo();
         error_log('maps_search_clients.php prepare error: ' . json_encode($errorInfo));
-        throw new PDOException('Erreur de préparation SQL');
+        jsonResponse(['ok' => false, 'error' => 'Erreur de préparation SQL'], 500);
     }
     
     $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
@@ -108,38 +103,68 @@ try {
     if (!$execResult) {
         $errorInfo = $stmt->errorInfo();
         error_log('maps_search_clients.php execute error: ' . json_encode($errorInfo));
-        throw new PDOException('Erreur d\'exécution SQL');
+        jsonResponse(['ok' => false, 'error' => 'Erreur d\'exécution SQL'], 500);
     }
     
-    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $allClients = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Filtrer les résultats pour les combinaisons nom+prenom (fait en PHP pour éviter les problèmes SQL)
-    if (!empty($clients)) {
-        $filteredClients = [];
-        foreach ($clients as $c) {
-            $nomComplet = trim(($c['nom_dirigeant'] ?? '') . ' ' . ($c['prenom_dirigeant'] ?? ''));
-            $prenomNom = trim(($c['prenom_dirigeant'] ?? '') . ' ' . ($c['nom_dirigeant'] ?? ''));
-            $adresseComplete = trim(($c['adresse'] ?? '') . ' ' . ($c['code_postal'] ?? '') . ' ' . ($c['ville'] ?? ''));
-            
-            $searchLower = strtolower($query);
-            $match = false;
-            
-            if (stripos($c['raison_sociale'] ?? '', $query) !== false) $match = true;
-            if (stripos($c['nom_dirigeant'] ?? '', $query) !== false) $match = true;
-            if (stripos($c['prenom_dirigeant'] ?? '', $query) !== false) $match = true;
-            if (stripos($nomComplet, $query) !== false) $match = true;
-            if (stripos($prenomNom, $query) !== false) $match = true;
-            if (stripos($c['numero_client'] ?? '', $query) !== false) $match = true;
-            if (stripos($c['adresse'] ?? '', $query) !== false) $match = true;
-            if (stripos($c['ville'] ?? '', $query) !== false) $match = true;
-            if (stripos($c['code_postal'] ?? '', $query) !== false) $match = true;
-            if (stripos($adresseComplete, $query) !== false) $match = true;
-            
-            if ($match) {
-                $filteredClients[] = $c;
+    // Filtrer les résultats en PHP pour inclure nom, prénom, adresse, etc.
+    $clients = [];
+    $queryLower = mb_strtolower($query, 'UTF-8');
+    
+    foreach ($allClients as $c) {
+        $match = false;
+        
+        // Raison sociale
+        if (stripos($c['raison_sociale'] ?? '', $query) !== false) {
+            $match = true;
+        }
+        // Numéro client
+        elseif (stripos($c['numero_client'] ?? '', $query) !== false) {
+            $match = true;
+        }
+        // Nom dirigeant
+        elseif (!empty($c['nom_dirigeant']) && stripos($c['nom_dirigeant'], $query) !== false) {
+            $match = true;
+        }
+        // Prénom dirigeant
+        elseif (!empty($c['prenom_dirigeant']) && stripos($c['prenom_dirigeant'], $query) !== false) {
+            $match = true;
+        }
+        // Nom + Prénom
+        elseif (!empty($c['nom_dirigeant']) && !empty($c['prenom_dirigeant'])) {
+            $nomComplet = trim($c['nom_dirigeant'] . ' ' . $c['prenom_dirigeant']);
+            $prenomNom = trim($c['prenom_dirigeant'] . ' ' . $c['nom_dirigeant']);
+            if (stripos($nomComplet, $query) !== false || stripos($prenomNom, $query) !== false) {
+                $match = true;
             }
         }
-        $clients = array_slice($filteredClients, 0, $limitInt);
+        // Adresse
+        elseif (!empty($c['adresse']) && stripos($c['adresse'], $query) !== false) {
+            $match = true;
+        }
+        // Ville
+        elseif (!empty($c['ville']) && stripos($c['ville'], $query) !== false) {
+            $match = true;
+        }
+        // Code postal
+        elseif (!empty($c['code_postal']) && stripos($c['code_postal'], $query) !== false) {
+            $match = true;
+        }
+        // Adresse complète
+        elseif (!empty($c['adresse']) && !empty($c['code_postal']) && !empty($c['ville'])) {
+            $adresseComplete = trim($c['adresse'] . ' ' . $c['code_postal'] . ' ' . $c['ville']);
+            if (stripos($adresseComplete, $query) !== false) {
+                $match = true;
+            }
+        }
+        
+        if ($match) {
+            $clients[] = $c;
+            if (count($clients) >= $limitInt) {
+                break;
+            }
+        }
     }
     
     // Formater les résultats - Utiliser exactement les données de la base de données
