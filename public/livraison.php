@@ -296,26 +296,56 @@ if (!in_array($view, ['toutes', 'retard', 'aujourdhui', 'archive'], true)) {
     $view = 'toutes';
 }
 
-$filteredLivraisons = array_values(array_filter($rows, function($l) use ($view) {
+$filteredLivraisons = array_values(array_filter($rows, function($l) use ($view, $today) {
+    $statut = $l['statut'] ?? '';
+    
     // Vue "archive" : afficher uniquement les livraisons livrées
     if ($view === 'archive') {
-        return ($l['statut'] ?? '') === 'livree';
+        return $statut === 'livree';
     }
     
     // Pour toutes les autres vues, exclure les livraisons livrées
-    $statut = $l['statut'] ?? '';
     if ($statut === 'livree') {
         return false;
     }
     
-    // Appliquer les autres filtres
+    // Vue "retard" : afficher uniquement les livraisons en retard
     if ($view === 'retard') {
-        return !empty($l['is_late']);
+        $isLate = !empty($l['is_late']);
+        // Vérification supplémentaire si is_late n'est pas défini
+        if (!$isLate) {
+            $prevue = $l['date_prevue'] ?? null;
+            $reelle = $l['date_reelle'] ?? null;
+            if ($prevue) {
+                if ($reelle) {
+                    $isLate = ($reelle > $prevue);
+                } else {
+                    $isLate = ($prevue < $today);
+                }
+            }
+        }
+        return $isLate;
     }
+    
+    // Vue "aujourdhui" : afficher les livraisons prévues ou livrées aujourd'hui
     if ($view === 'aujourdhui') {
-        return !empty($l['is_today']);
+        $isToday = !empty($l['is_today']);
+        // Vérification supplémentaire si is_today n'est pas défini
+        if (!$isToday) {
+            $prevue = $l['date_prevue'] ?? null;
+            $reelle = $l['date_reelle'] ?? null;
+            if ($prevue && $prevue === $today) {
+                $isToday = true;
+            }
+            if ($reelle && $reelle === $today) {
+                $isToday = true;
+            }
+        }
+        return $isToday;
     }
-    return true; // toutes (sauf livrées)
+    
+    // Vue "toutes" : afficher toutes les livraisons sauf les livrées
+    return true;
 }));
 
 $listedCount      = count($filteredLivraisons);
@@ -405,13 +435,13 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       <button id="clearQ" class="btn btn-secondary" type="button">Effacer</button>
     </div>
     <div class="filters-actions">
-      <a href="/public/livraisons.php?view=toutes"
+      <a href="/public/livraison.php?view=toutes"
          class="btn <?= $view === 'toutes' ? 'btn-primary' : 'btn-outline' ?>">Toutes</a>
-      <a href="/public/livraisons.php?view=aujourdhui"
-         class="btn <?= $view === 'aujourdhui' ? 'btn-primary' : 'btn-outline' ?>">Aujourd’hui</a>
-      <a href="/public/livraisons.php?view=retard"
+      <a href="/public/livraison.php?view=aujourdhui"
+         class="btn <?= $view === 'aujourdhui' ? 'btn-primary' : 'btn-outline' ?>">Aujourd'hui</a>
+      <a href="/public/livraison.php?view=retard"
          class="btn <?= $view === 'retard' ? 'btn-primary' : 'btn-outline' ?>">En retard</a>
-      <a href="/public/livraisons.php?view=archive"
+      <a href="/public/livraison.php?view=archive"
          class="btn <?= $view === 'archive' ? 'btn-primary' : 'btn-outline' ?>">📦 Archive</a>
     </div>
   </div>
