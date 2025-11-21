@@ -13,6 +13,29 @@ function stateBadge(?string $etat): string {
   return '<span class="state state-'.$e.'">'.$e.'</span>';
 }
 
+// Helper pour requêtes sécurisées
+function safeFetchAll(PDO $pdo, string $sql, array $params = [], string $context = 'query'): array {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return is_array($rows) ? $rows : [];
+    } catch (PDOException $e) {
+        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+        return [];
+    }
+}
+
+// Gestion des messages flash
+$flash = $_SESSION['flash'] ?? null;
+unset($_SESSION['flash']);
+
+// Message de succès depuis paramètre GET
+if (isset($_GET['added']) && in_array($_GET['added'], ['papier', 'toner', 'lcd', 'pc'], true)) {
+    $typeName = ['papier' => 'papier', 'toner' => 'toner', 'lcd' => 'LCD', 'pc' => 'PC'][$_GET['added']];
+    $flash = ['type' => 'success', 'msg' => ucfirst($typeName) . ' ajouté avec succès dans le stock.'];
+}
+
 /* =========================================================
    PHOTOCOPIEURS — non attribués (chargés mais plus affichés)
    ========================================================= */
@@ -86,91 +109,100 @@ try {
 /* =========================================================
    PAPIER — depuis v_paper_stock
    ========================================================= */
-$papers = [];
-try {
-  $stmt = $pdo->query("SELECT paper_id, marque, modele, poids, qty_stock FROM v_paper_stock ORDER BY marque, modele, poids");
-  $papers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-  error_log('stock papier SQL: '.$e->getMessage());
-  $papers = [];
-}
+$papers = safeFetchAll(
+    $pdo,
+    "SELECT paper_id, marque, modele, poids, qty_stock FROM v_paper_stock ORDER BY marque, modele, poids",
+    [],
+    'stock_papier'
+);
 
 /* =========================================================
    TONERS — depuis v_toner_stock
    ========================================================= */
+$tonersRaw = safeFetchAll(
+    $pdo,
+    "SELECT toner_id, marque, modele, couleur, qty_stock FROM v_toner_stock ORDER BY marque, modele, couleur",
+    [],
+    'stock_toner'
+);
 $toners = [];
-try {
-  $stmt = $pdo->query("SELECT toner_id, marque, modele, couleur, qty_stock FROM v_toner_stock ORDER BY marque, modele, couleur");
-  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-  foreach ($rows as $r) {
+foreach ($tonersRaw as $r) {
     $toners[] = [
-      'id'      => (int)$r['toner_id'],
-      'marque'  => $r['marque'],
-      'modele'  => $r['modele'],
-      'couleur' => $r['couleur'],
-      'qty'     => (int)$r['qty_stock'],
+        'id'      => (int)$r['toner_id'],
+        'marque'  => $r['marque'],
+        'modele'  => $r['modele'],
+        'couleur' => $r['couleur'],
+        'qty'     => (int)$r['qty_stock'],
     ];
-  }
-} catch (PDOException $e) {
-  error_log('stock toner SQL: '.$e->getMessage());
-  $toners = [];
 }
 
 /* =========================================================
    LCD — depuis v_lcd_stock
    ========================================================= */
+$lcdRaw = safeFetchAll(
+    $pdo,
+    "SELECT lcd_id, marque, reference, etat, modele, taille, resolution, connectique, prix, qty_stock FROM v_lcd_stock ORDER BY marque, modele, taille",
+    [],
+    'stock_lcd'
+);
 $lcd = [];
-try {
-  $stmt = $pdo->query("SELECT lcd_id, marque, reference, etat, modele, taille, resolution, connectique, prix, qty_stock FROM v_lcd_stock ORDER BY marque, modele, taille");
-  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-  foreach ($rows as $r) {
+foreach ($lcdRaw as $r) {
     $lcd[] = [
-      'id'         => (int)$r['lcd_id'],
-      'marque'     => $r['marque'],
-      'reference'  => $r['reference'],
-      'etat'       => $r['etat'],
-      'modele'     => $r['modele'],
-      'taille'     => (int)$r['taille'],
-      'resolution' => $r['resolution'],
-      'connectique'=> $r['connectique'],
-      'prix'       => $r['prix'] !== null ? (float)$r['prix'] : null,
-      'qty'        => (int)$r['qty_stock'],
+        'id'         => (int)$r['lcd_id'],
+        'marque'     => $r['marque'],
+        'reference'  => $r['reference'],
+        'etat'       => $r['etat'],
+        'modele'     => $r['modele'],
+        'taille'     => (int)$r['taille'],
+        'resolution' => $r['resolution'],
+        'connectique'=> $r['connectique'],
+        'prix'       => $r['prix'] !== null ? (float)$r['prix'] : null,
+        'qty'        => (int)$r['qty_stock'],
     ];
-  }
-} catch (PDOException $e) {
-  error_log('stock lcd SQL: '.$e->getMessage());
-  $lcd = [];
 }
 
 /* =========================================================
    PC — depuis v_pc_stock
    ========================================================= */
+$pcRaw = safeFetchAll(
+    $pdo,
+    "SELECT pc_id, etat, reference, marque, modele, cpu, ram, stockage, os, gpu, reseau, ports, prix, qty_stock FROM v_pc_stock ORDER BY marque, modele, reference",
+    [],
+    'stock_pc'
+);
 $pc = [];
-try {
-  $stmt = $pdo->query("SELECT pc_id, etat, reference, marque, modele, cpu, ram, stockage, os, gpu, reseau, ports, prix, qty_stock FROM v_pc_stock ORDER BY marque, modele, reference");
-  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-  foreach ($rows as $r) {
+foreach ($pcRaw as $r) {
     $pc[] = [
-      'id'        => (int)$r['pc_id'],
-      'etat'      => $r['etat'],
-      'reference' => $r['reference'],
-      'marque'    => $r['marque'],
-      'modele'    => $r['modele'],
-      'cpu'       => $r['cpu'],
-      'ram'       => $r['ram'],
-      'stockage'  => $r['stockage'],
-      'os'        => $r['os'],
-      'gpu'       => $r['gpu'],
-      'reseau'    => $r['reseau'],
-      'ports'     => $r['ports'],
-      'prix'      => $r['prix'] !== null ? (float)$r['prix'] : null,
-      'qty'       => (int)$r['qty_stock'],
+        'id'        => (int)$r['pc_id'],
+        'etat'      => $r['etat'],
+        'reference' => $r['reference'],
+        'marque'    => $r['marque'],
+        'modele'    => $r['modele'],
+        'cpu'       => $r['cpu'],
+        'ram'       => $r['ram'],
+        'stockage'  => $r['stockage'],
+        'os'        => $r['os'],
+        'gpu'       => $r['gpu'],
+        'reseau'    => $r['reseau'],
+        'ports'     => $r['ports'],
+        'prix'      => $r['prix'] !== null ? (float)$r['prix'] : null,
+        'qty'       => (int)$r['qty_stock'],
     ];
-  }
-} catch (PDOException $e) {
-  error_log('stock pc SQL: '.$e->getMessage());
-  $pc = [];
 }
+
+// Calcul des statistiques
+$totalPapier = array_sum(array_map(fn($p) => (int)($p['qty_stock'] ?? 0), $papers));
+$totalToners = array_sum(array_map(fn($t) => (int)($t['qty'] ?? 0), $toners));
+$totalLCD = array_sum(array_map(fn($l) => (int)($l['qty'] ?? 0), $lcd));
+$totalPC = array_sum(array_map(fn($p) => (int)($p['qty'] ?? 0), $pc));
+
+$stockFaible = [
+    'papier' => array_filter($papers, fn($p) => (int)($p['qty_stock'] ?? 0) <= 5),
+    'toners' => array_filter($toners, fn($t) => (int)($t['qty'] ?? 0) <= 3),
+    'lcd'    => array_filter($lcd, fn($l) => (int)($l['qty'] ?? 0) <= 2),
+    'pc'     => array_filter($pc, fn($p) => (int)($p['qty'] ?? 0) <= 2),
+];
+$nbStockFaible = count($stockFaible['papier']) + count($stockFaible['toners']) + count($stockFaible['lcd']) + count($stockFaible['pc']);
 
 $datasets = ['copiers'=>$copiers, 'lcd'=>$lcd, 'pc'=>$pc];
 
@@ -200,8 +232,39 @@ $sectionImages = [
 <div class="page-container">
   <div class="page-header">
     <h2 class="page-title">Stock</h2>
-    <p class="page-subtitle">Disposition <strong>dynamique</strong> — la section la plus remplie s’affiche en premier.</p>
+    <p class="page-subtitle">Disposition <strong>dynamique</strong> — la section la plus remplie s'affiche en premier.</p>
   </div>
+
+  <?php if ($flash && isset($flash['type'])): ?>
+    <div class="flash <?= h($flash['type']) ?>" role="alert" style="margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 8px; background: <?= $flash['type']==='success'?'#dcfce7':'#fee2e2' ?>; color: <?= $flash['type']==='success'?'#16a34a':'#dc2626' ?>; border: 1px solid <?= $flash['type']==='success'?'#86efac':'#fecaca' ?>;">
+      <?= h($flash['msg'] ?? '') ?>
+    </div>
+  <?php endif; ?>
+
+  <section class="stock-meta" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; margin-bottom: 1rem;">
+    <div class="meta-card" style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem; text-align: center;">
+      <span style="display: block; font-size: .875rem; color: #6b7280; margin-bottom: .25rem;">Total Papier</span>
+      <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #111827;"><?= h((string)$totalPapier) ?></strong>
+    </div>
+    <div class="meta-card" style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem; text-align: center;">
+      <span style="display: block; font-size: .875rem; color: #6b7280; margin-bottom: .25rem;">Total Toners</span>
+      <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #111827;"><?= h((string)$totalToners) ?></strong>
+    </div>
+    <div class="meta-card" style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem; text-align: center;">
+      <span style="display: block; font-size: .875rem; color: #6b7280; margin-bottom: .25rem;">Total LCD</span>
+      <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #111827;"><?= h((string)$totalLCD) ?></strong>
+    </div>
+    <div class="meta-card" style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem; text-align: center;">
+      <span style="display: block; font-size: .875rem; color: #6b7280; margin-bottom: .25rem;">Total PC</span>
+      <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #111827;"><?= h((string)$totalPC) ?></strong>
+    </div>
+    <?php if ($nbStockFaible > 0): ?>
+      <div class="meta-card" style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: .75rem; text-align: center;">
+        <span style="display: block; font-size: .875rem; color: #92400e; margin-bottom: .25rem;">⚠ Stock faible</span>
+        <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #78350f;"><?= h((string)$nbStockFaible) ?></strong>
+      </div>
+    <?php endif; ?>
+  </section>
 
   <div class="filters-row">
     <input type="text" id="q" placeholder="Filtrer partout (réf., modèle, SN, MAC, CPU…)" aria-label="Filtrer" />
@@ -404,6 +467,7 @@ $sectionImages = [
   function norm(s){
     return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   }
+  let filterTimeout = null;
   function applyFilter(){
     const v = norm(q.value||'');
     document.querySelectorAll('.tbl-stock tbody tr').forEach(tr=>{
@@ -412,7 +476,11 @@ $sectionImages = [
     });
     reorderSections();
   }
-  q && q.addEventListener('input', applyFilter);
+  // Debounce pour améliorer les performances
+  q && q.addEventListener('input', function(){
+    clearTimeout(filterTimeout);
+    filterTimeout = setTimeout(applyFilter, 200);
+  });
   reorderSections();
   if ('ResizeObserver' in window){
     const ro = new ResizeObserver(()=> reorderSections());
@@ -692,13 +760,17 @@ function badgeEtat(e){
 
       if (!res.ok || !json.ok) {
         console.error('Erreur API :', json);
-        errorBox.textContent = json.error || 'Erreur lors de l’enregistrement.';
+        errorBox.textContent = json.error || 'Erreur lors de l'enregistrement.';
         errorBox.style.display = 'block';
         return;
       }
 
+      // Succès : afficher message et recharger
       closeModal();
-      window.location.reload();
+      // Ajouter paramètre flash pour afficher message de succès
+      const url = new URL(window.location.href);
+      url.searchParams.set('added', currentType);
+      window.location.href = url.toString();
     } catch (err) {
       console.error('Erreur fetch :', err);
       errorBox.textContent = 'Erreur réseau ou serveur.';
