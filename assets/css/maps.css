@@ -381,7 +381,7 @@
   color: var(--text-secondary);
 }
 
-/* Element carte Google */
+/* Element carte Leaflet */
 #map {
   width: 100%;
   height: min(70vh, 700px);
