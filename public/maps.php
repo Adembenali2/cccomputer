@@ -255,7 +255,7 @@ async function geocodeAddress(address) {
     }
     
     try {
-        const response = await fetch(`../API/maps_geocode.php?address=${encodeURIComponent(address)}`);
+        const response = await fetch(`/API/maps_geocode.php?address=${encodeURIComponent(address)}`);
         const data = await response.json();
         
         if (data.ok && data.lat && data.lng) {
@@ -514,7 +514,7 @@ async function searchClients(query) {
     if (!query || query.length < 2) return [];
     
     try {
-        const response = await fetch(`../API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=20`);
+        const response = await fetch(`/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=20`);
         const data = await response.json();
         
         if (data.ok && Array.isArray(data.clients)) {

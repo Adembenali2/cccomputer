@@ -27,11 +27,17 @@ try {
     require_once __DIR__ . '/../includes/db.php';
 } catch (Throwable $e) {
     error_log('maps_search_clients.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation: ' . $e->getMessage()], 500);
 }
 
 if (empty($_SESSION['user_id'])) {
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
+}
+
+// Vérifier que $pdo est bien défini
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    error_log('maps_search_clients.php: $pdo not defined or invalid');
+    jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
 }
 
 $query = trim($_GET['q'] ?? '');
@@ -91,7 +97,9 @@ try {
         
         // Pour le géocodage, utiliser l'adresse de livraison si elle est différente et existe
         $addressForGeocode = $address;
-        if (!empty($c['adresse_livraison']) && empty($c['livraison_identique'])) {
+        // Vérifier explicitement si livraison_identique est 0 ou false (adresse de livraison différente)
+        $livraisonIdentique = isset($c['livraison_identique']) ? (bool)$c['livraison_identique'] : false;
+        if (!empty($c['adresse_livraison']) && !$livraisonIdentique) {
             // Si adresse de livraison existe et est différente, l'utiliser
             $addressForGeocode = trim($c['adresse_livraison'] . ' ' . $codePostal . ' ' . $ville);
         }
@@ -117,9 +125,11 @@ try {
     
 } catch (PDOException $e) {
     error_log('maps_search_clients.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('maps_search_clients.php SQL trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
 } catch (Throwable $e) {
     error_log('maps_search_clients.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
+    error_log('maps_search_clients.php trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
 }
 
