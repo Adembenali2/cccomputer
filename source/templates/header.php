@@ -59,14 +59,12 @@ if (!function_exists('h')) {
       <span class="nav-label">Accueil</span>
     </a>
 
-    <a href="/public/contact.php" aria-label="Contact">
+    <a href="/public/messagerie.php" aria-label="Messagerie" class="messagerie-link" id="messagerie-link">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
-      <span class="nav-label">Contact</span>
+      <span class="nav-label">Messagerie</span>
+      <span class="messagerie-badge" id="messagerie-badge" style="display:none;">0</span>
     </a>
 
     <a href="/public/agenda.php" aria-label="Agenda">
@@ -199,6 +197,31 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
       }
     });
+  }
+
+  // --- BADGE MESSAGERIE (nombre de messages non lus) ---
+  const messagerieBadge = document.getElementById('messagerie-badge');
+  if (messagerieBadge) {
+    async function updateMessagerieBadge() {
+      try {
+        const response = await fetch('/API/messagerie_get_unread_count.php');
+        const data = await response.json();
+        if (data.ok && data.count > 0) {
+          messagerieBadge.textContent = data.count > 99 ? '99+' : data.count;
+          messagerieBadge.style.display = 'inline-block';
+        } else {
+          messagerieBadge.style.display = 'none';
+        }
+      } catch (err) {
+        console.error('Erreur mise à jour badge messagerie:', err);
+      }
+    }
+    
+    // Charger au démarrage
+    updateMessagerieBadge();
+    
+    // Mettre à jour toutes les 30 secondes
+    setInterval(updateMessagerieBadge, 30000);
   }
 });
 </script>
