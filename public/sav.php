@@ -121,14 +121,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 } else {
                     // Gestion automatique de la date_fermeture :
                     // - si on passe en "resolu" et qu'il n'y a pas encore de date_fermeture -> on met aujourd'hui
-                    // - si on passe en autre statut et qu'il y a une date_fermeture -> on la met à NULL
+                    // - si on passe en autre statut (même depuis "resolu") et qu'il y a une date_fermeture -> on la met à NULL
                     $dateFermeture = $sav['date_fermeture'] ?? null;
                     $oldStatut = $sav['statut'] ?? '';
                     $isBecomingResolu = ($newStatut === 'resolu' && $oldStatut !== 'resolu');
+                    $isLeavingResolu = ($oldStatut === 'resolu' && $newStatut !== 'resolu');
                     
                     if ($newStatut === 'resolu' && empty($dateFermeture)) {
+                        // Passer à "résolu" : mettre la date de fermeture à aujourd'hui si elle n'existe pas
                         $dateFermeture = $today;
-                    } elseif ($newStatut !== 'resolu' && !empty($dateFermeture)) {
+                    } elseif ($newStatut !== 'resolu') {
+                        // Passer à un autre statut (ouvert, en_cours, annule) : supprimer la date de fermeture
+                        // Cela permet au SAV de réapparaître dans la liste principale et de sortir des archives
                         $dateFermeture = null;
                     }
 
