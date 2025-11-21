@@ -50,6 +50,8 @@ if (empty($query) || strlen($query) < 2) {
 try {
     // Recherche dans raison_sociale, nom_dirigeant, prenom_dirigeant, numero_client, adresse, ville, code_postal
     $searchTerm = '%' . $query . '%';
+    
+    // Utiliser une approche plus simple et robuste
     $sql = "
         SELECT 
             id,
@@ -67,23 +69,31 @@ try {
         FROM clients
         WHERE 
             raison_sociale LIKE :q
-            OR nom_dirigeant LIKE :q
-            OR prenom_dirigeant LIKE :q
-            OR CONCAT(nom_dirigeant, ' ', prenom_dirigeant) LIKE :q
-            OR CONCAT(prenom_dirigeant, ' ', nom_dirigeant) LIKE :q
+            OR (nom_dirigeant IS NOT NULL AND nom_dirigeant LIKE :q)
+            OR (prenom_dirigeant IS NOT NULL AND prenom_dirigeant LIKE :q)
+            OR (nom_dirigeant IS NOT NULL AND prenom_dirigeant IS NOT NULL AND CONCAT(nom_dirigeant, ' ', prenom_dirigeant) LIKE :q)
+            OR (nom_dirigeant IS NOT NULL AND prenom_dirigeant IS NOT NULL AND CONCAT(prenom_dirigeant, ' ', nom_dirigeant) LIKE :q)
             OR numero_client LIKE :q
-            OR adresse LIKE :q
-            OR ville LIKE :q
-            OR code_postal LIKE :q
-            OR CONCAT(adresse, ' ', code_postal, ' ', ville) LIKE :q
+            OR (adresse IS NOT NULL AND adresse LIKE :q)
+            OR (ville IS NOT NULL AND ville LIKE :q)
+            OR (code_postal IS NOT NULL AND code_postal LIKE :q)
+            OR (adresse IS NOT NULL AND code_postal IS NOT NULL AND ville IS NOT NULL AND CONCAT(adresse, ' ', code_postal, ' ', ville) LIKE :q)
         ORDER BY raison_sociale ASC
         LIMIT :limit
     ";
     
     $stmt = $pdo->prepare($sql);
+    if (!$stmt) {
+        throw new PDOException('Erreur de préparation de la requête SQL');
+    }
+    
     $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->execute();
+    
+    if (!$stmt->execute()) {
+        $errorInfo = $stmt->errorInfo();
+        throw new PDOException('Erreur d\'exécution SQL: ' . ($errorInfo[2] ?? 'Erreur inconnue'));
+    }
     
     $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -135,11 +145,15 @@ try {
     
 } catch (PDOException $e) {
     error_log('maps_search_clients.php SQL error: ' . $e->getMessage());
+    error_log('maps_search_clients.php SQL error code: ' . ($e->getCode() ?? 'N/A'));
+    error_log('maps_search_clients.php SQL error info: ' . json_encode($e->errorInfo ?? []));
     error_log('maps_search_clients.php SQL trace: ' . $e->getTraceAsString());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
+    // Ne pas exposer le message d'erreur SQL complet pour des raisons de sécurité
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
 } catch (Throwable $e) {
     error_log('maps_search_clients.php error: ' . $e->getMessage());
+    error_log('maps_search_clients.php error file: ' . $e->getFile() . ':' . $e->getLine());
     error_log('maps_search_clients.php trace: ' . $e->getTraceAsString());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
 }
 
