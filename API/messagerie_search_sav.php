@@ -42,8 +42,16 @@ if (empty($query) || strlen($query) < 1) {
 }
 
 try {
+    // Vérifier que la table sav existe
+    $checkTable = $pdo->query("SHOW TABLES LIKE 'sav'");
+    if ($checkTable->rowCount() === 0) {
+        jsonResponse(['ok' => true, 'results' => []]); // Retourne vide si la table n'existe pas
+    }
+    
     $searchTerm = '%' . $query . '%';
     $limitInt = (int)$limit;
+    
+    // Requête simplifiée avec binding correct
     $sql = "
         SELECT 
             s.id,
@@ -52,15 +60,17 @@ try {
             c.raison_sociale AS client_nom
         FROM sav s
         LEFT JOIN clients c ON c.id = s.id_client
-        WHERE s.reference LIKE :q
-           OR s.description LIKE :q
-           OR c.raison_sociale LIKE :q
+        WHERE s.reference LIKE :q1
+           OR s.description LIKE :q2
+           OR c.raison_sociale LIKE :q3
         ORDER BY s.date_ouverture DESC, s.id DESC
         LIMIT {$limitInt}
     ";
     
     $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':q1', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':q2', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':q3', $searchTerm, PDO::PARAM_STR);
     $stmt->execute();
     
     $savs = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -69,18 +79,19 @@ try {
     foreach ($savs as $s) {
         $results[] = [
             'id' => (int)$s['id'],
-            'reference' => $s['reference'],
-            'label' => $s['reference'] . ' - ' . ($s['client_nom'] ?? 'N/A') . ' (' . mb_substr($s['description'] ?? '', 0, 50) . '...)'
+            'reference' => $s['reference'] ?? '',
+            'label' => ($s['reference'] ?? '') . ' - ' . ($s['client_nom'] ?? 'N/A') . ' (' . mb_substr($s['description'] ?? '', 0, 50) . '...)'
         ];
     }
     
     jsonResponse(['ok' => true, 'results' => $results]);
     
 } catch (PDOException $e) {
-    error_log('messagerie_search_sav.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('messagerie_search_sav.php SQL error: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
+    error_log('messagerie_search_sav.php SQL: ' . ($sql ?? 'N/A'));
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
 } catch (Throwable $e) {
     error_log('messagerie_search_sav.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
 }
 

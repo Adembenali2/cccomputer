@@ -42,8 +42,16 @@ if (empty($query) || strlen($query) < 1) {
 }
 
 try {
+    // Vérifier que la table livraisons existe
+    $checkTable = $pdo->query("SHOW TABLES LIKE 'livraisons'");
+    if ($checkTable->rowCount() === 0) {
+        jsonResponse(['ok' => true, 'results' => []]); // Retourne vide si la table n'existe pas
+    }
+    
     $searchTerm = '%' . $query . '%';
     $limitInt = (int)$limit;
+    
+    // Requête simplifiée avec binding correct
     $sql = "
         SELECT 
             l.id,
@@ -52,15 +60,17 @@ try {
             c.raison_sociale AS client_nom
         FROM livraisons l
         LEFT JOIN clients c ON c.id = l.id_client
-        WHERE l.reference LIKE :q
-           OR l.objet LIKE :q
-           OR c.raison_sociale LIKE :q
+        WHERE l.reference LIKE :q1
+           OR l.objet LIKE :q2
+           OR c.raison_sociale LIKE :q3
         ORDER BY l.date_prevue DESC, l.id DESC
         LIMIT {$limitInt}
     ";
     
     $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':q1', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':q2', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':q3', $searchTerm, PDO::PARAM_STR);
     $stmt->execute();
     
     $livraisons = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -69,18 +79,19 @@ try {
     foreach ($livraisons as $l) {
         $results[] = [
             'id' => (int)$l['id'],
-            'reference' => $l['reference'],
-            'label' => $l['reference'] . ' - ' . ($l['client_nom'] ?? 'N/A') . ' (' . ($l['objet'] ?? '') . ')'
+            'reference' => $l['reference'] ?? '',
+            'label' => ($l['reference'] ?? '') . ' - ' . ($l['client_nom'] ?? 'N/A') . ' (' . ($l['objet'] ?? '') . ')'
         ];
     }
     
     jsonResponse(['ok' => true, 'results' => $results]);
     
 } catch (PDOException $e) {
-    error_log('messagerie_search_livraisons.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('messagerie_search_livraisons.php SQL error: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
+    error_log('messagerie_search_livraisons.php SQL: ' . ($sql ?? 'N/A'));
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
 } catch (Throwable $e) {
     error_log('messagerie_search_livraisons.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
 }
 
