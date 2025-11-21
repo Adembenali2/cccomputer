@@ -84,6 +84,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         $newStatut   = $_POST['statut'] ?? '';
         $newPriorite = $_POST['priorite'] ?? '';
         $newTypePanne = trim($_POST['type_panne'] ?? '');
+        $newCommentaireTechnicien = trim($_POST['commentaire_technicien'] ?? '');
 
         $allowedStatuts = ['ouvert','en_cours','resolu','annule'];
         $allowedPriorites = ['basse','normale','haute','urgente'];
@@ -99,6 +100,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 $stmt = $pdo->prepare("
                     SELECT s.id, s.id_client, s.id_technicien, s.reference, s.description, 
                            s.date_ouverture, s.date_fermeture, s.statut, s.priorite, s.type_panne, s.commentaire,
+                           s.notes_techniques AS commentaire_technicien,
                            s.created_at, s.updated_at,
                            c.raison_sociale AS client_nom,
                            u.nom AS technicien_nom,
@@ -132,22 +134,48 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
 
                     $pdo->beginTransaction();
                     try {
-                        $upd = $pdo->prepare("
-                            UPDATE sav
-                            SET statut = :statut,
-                                priorite = :priorite,
-                                type_panne = :type_panne,
-                                date_fermeture = :date_fermeture,
-                                updated_at = NOW()
-                            WHERE id = :id
-                        ");
-                        $upd->execute([
-                            ':statut'      => $newStatut,
-                            ':priorite'    => $newPriorite,
-                            ':type_panne'  => !empty($newTypePanne) ? $newTypePanne : null,
-                            ':date_fermeture' => $dateFermeture,
-                            ':id'          => $savId,
-                        ]);
+                        // Vérifier si la colonne notes_techniques existe, sinon utiliser commentaire
+                        $checkColumn = $pdo->query("SHOW COLUMNS FROM sav LIKE 'notes_techniques'");
+                        $hasNotesTechniques = $checkColumn->rowCount() > 0;
+                        
+                        if ($hasNotesTechniques) {
+                            $upd = $pdo->prepare("
+                                UPDATE sav
+                                SET statut = :statut,
+                                    priorite = :priorite,
+                                    type_panne = :type_panne,
+                                    date_fermeture = :date_fermeture,
+                                    notes_techniques = :commentaire_technicien,
+                                    updated_at = NOW()
+                                WHERE id = :id
+                            ");
+                            $upd->execute([
+                                ':statut'      => $newStatut,
+                                ':priorite'    => $newPriorite,
+                                ':type_panne'  => !empty($newTypePanne) ? $newTypePanne : null,
+                                ':date_fermeture' => $dateFermeture,
+                                ':commentaire_technicien' => !empty($newCommentaireTechnicien) ? $newCommentaireTechnicien : null,
+                                ':id'          => $savId,
+                            ]);
+                        } else {
+                            // Fallback : utiliser commentaire si notes_techniques n'existe pas
+                            $upd = $pdo->prepare("
+                                UPDATE sav
+                                SET statut = :statut,
+                                    priorite = :priorite,
+                                    type_panne = :type_panne,
+                                    date_fermeture = :date_fermeture,
+                                    updated_at = NOW()
+                                WHERE id = :id
+                            ");
+                            $upd->execute([
+                                ':statut'      => $newStatut,
+                                ':priorite'    => $newPriorite,
+                                ':type_panne'  => !empty($newTypePanne) ? $newTypePanne : null,
+                                ':date_fermeture' => $dateFermeture,
+                                ':id'          => $savId,
+                            ]);
+                        }
 
                         $pdo->commit();
                         
@@ -199,6 +227,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 $details .= sprintf(', type de panne: %s', $typePanneLabel);
                             }
                             
+                            // Ajouter le commentaire technicien si modifié
+                            if (!empty($newCommentaireTechnicien)) {
+                                $commentaireShort = mb_substr($newCommentaireTechnicien, 0, 100);
+                                if (mb_strlen($newCommentaireTechnicien) > 100) {
+                                    $commentaireShort .= '...';
+                                }
+                                $details .= sprintf(' - Commentaire technicien: %s', $commentaireShort);
+                            }
+                            
                             // Ajouter la date de fermeture si résolu
                             if (!empty($dateFermeture) && $newStatut === 'resolu') {
                                 $details .= sprintf(' - Date de fermeture: %s', $dateFermeture);
@@ -245,6 +282,7 @@ try {
     $sql = "
         SELECT
             s.*,
+            s.notes_techniques AS commentaire_technicien,
             c.raison_sociale AS client_nom,
             u.nom    AS technicien_nom,
             u.prenom AS technicien_prenom
@@ -553,6 +591,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           $typePanneColor = $typePanne ? ($typePanneColors[$typePanne] ?? '#6b7280') : '#6b7280';
 
           $commentaire = $s['commentaire'] ?? '';
+          $commentaireTechnicien = $s['commentaire_technicien'] ?? '';
 
           $searchText = strtolower(
               $clientNom . ' ' . $ref . ' ' . $description . ' ' . $technicienNomComplet
@@ -577,6 +616,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           data-type-panne="<?= h($typePanne ?? '') ?>"
           data-technicien="<?= h($technicienNomComplet) ?>"
           data-commentaire="<?= h($commentaire) ?>"
+          data-commentaire-technicien="<?= h($commentaireTechnicien) ?>"
           data-can-edit="<?= $canEditThis ? '1' : '0' ?>"
           <?= $rowClassAttr ?>
         >
@@ -701,6 +741,10 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         <label>Commentaire (lecture seule)</label>
         <textarea id="modal_commentaire" rows="3" readonly></textarea>
 
+        <label>Commentaire technicien</label>
+        <textarea name="commentaire_technicien" id="modal_commentaire_technicien" rows="4" placeholder="Ajoutez vos notes techniques ici..."></textarea>
+        <small style="color: #6b7280; font-size: 0.85rem;">Ce commentaire est visible uniquement par les techniciens et administrateurs.</small>
+
         <div id="modal_permission_msg" style="margin-top:0.5rem; font-size:0.85rem;"></div>
       </div>
     </div>
@@ -730,7 +774,9 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   const inputTechnicien   = document.getElementById('modal_technicien');
   const selectPriorite   = document.getElementById('modal_priorite');
   const selectStatut   = document.getElementById('modal_statut');
+  const selectTypePanne = document.getElementById('modal_type_panne');
   const textareaCom    = document.getElementById('modal_commentaire');
+  const textareaComTech = document.getElementById('modal_commentaire_technicien');
   const permMsg        = document.getElementById('modal_permission_msg');
   const submitBtn      = document.getElementById('modal_submit_btn');
 
@@ -768,6 +814,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       const statut    = tr.getAttribute('data-statut') || 'ouvert';
       const typePanne = tr.getAttribute('data-type-panne') || '';
       const com       = tr.getAttribute('data-commentaire') || '';
+      const comTech   = tr.getAttribute('data-commentaire-technicien') || '';
       const canEdit   = tr.getAttribute('data-can-edit') === '1';
 
       if (inputId)      inputId.value = id;
@@ -778,6 +825,10 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       if (inputFermeture)  inputFermeture.value = fermeture;
       if (inputTechnicien) inputTechnicien.value = technicien;
       if (textareaCom)  textareaCom.value = com;
+      if (textareaComTech) {
+        textareaComTech.value = comTech;
+        textareaComTech.disabled = !canEdit;
+      }
 
       if (selectPriorite) {
         selectPriorite.value = priorite;
