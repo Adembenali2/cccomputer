@@ -297,13 +297,23 @@ async function loadClientWithGeocode(client) {
 }
 
 // Fonction pour ajouter un client sur la carte
-function addClientToMap(client) {
-    if (!client.lat || !client.lng) return;
-    
-    if (clientMarkers[client.id]) {
-        return; // Déjà sur la carte
+// autoFit: si true, ajuste la vue pour inclure tous les clients, sinon ne fait rien
+function addClientToMap(client, autoFit = true) {
+    if (!client.lat || !client.lng) {
+        console.warn('Client sans coordonnées:', client);
+        return false; // Retourner false si pas de coordonnées
     }
     
+    // Si le marqueur existe déjà, juste le mettre à jour
+    if (clientMarkers[client.id]) {
+        // Mettre à jour la position et l'icône si nécessaire
+        const marker = clientMarkers[client.id];
+        marker.setLatLng([client.lat, client.lng]);
+        marker.setIcon(createPriorityIcon(client.basePriority || 1));
+        return true;
+    }
+    
+    // Créer un nouveau marqueur
     const marker = L.marker([client.lat, client.lng], {
         icon: createPriorityIcon(client.basePriority || 1)
     }).addTo(map);
@@ -323,16 +333,19 @@ function addClientToMap(client) {
     marker.bindPopup(popupContent);
     clientMarkers[client.id] = marker;
     
-    // Ajuster la vue pour inclure tous les clients
-    const allCoords = Array.from(clientsCache.values())
-        .filter(c => c.lat && c.lng)
-        .map(c => [c.lat, c.lng]);
-    if (allCoords.length > 0) {
-        const bounds = L.latLngBounds(allCoords);
-        map.fitBounds(bounds, { padding: [40, 40] });
+    // Ajuster la vue pour inclure tous les clients seulement si autoFit est true
+    if (autoFit) {
+        const allCoords = Array.from(clientsCache.values())
+            .filter(c => c.lat && c.lng)
+            .map(c => [c.lat, c.lng]);
+        if (allCoords.length > 1) {
+            const bounds = L.latLngBounds(allCoords);
+            map.fitBounds(bounds, { padding: [40, 40] });
+        }
     }
     
     updateClientsBadge();
+    return true;
 }
 
 function escapeHtml(text) {
@@ -498,13 +511,29 @@ async function addClientToRoute(client) {
     clientSearchInput.value = '';
     clientResultsEl.innerHTML = '';
     clientResultsEl.style.display = 'none';
+    
+    // Ajouter le client sur la carte AVANT de rendre la liste (pour qu'il soit visible immédiatement)
+    const added = addClientToMap(client, false); // false = ne pas ajuster la vue automatiquement
+    
+    // Centrer la carte sur le client sélectionné et ouvrir le popup
+    if (client.lat && client.lng) {
+        map.setView([client.lat, client.lng], 15); // Zoom plus proche pour voir le client
+        // Attendre un peu pour que le marqueur soit créé
+        setTimeout(() => {
+            if (clientMarkers[client.id]) {
+                clientMarkers[client.id].openPopup();
+            }
+        }, 100);
+    }
+    
+    // Mettre à jour la liste des clients sélectionnés
     renderSelectedClients();
-
-    // Ajouter le client sur la carte s'il n'y est pas déjà
-    addClientToMap(client);
-
-    map.setView([client.lat, client.lng], 13);
-    if (clientMarkers[client.id]) clientMarkers[client.id].openPopup();
+    
+    // Message de confirmation
+    if (added) {
+        routeMessageEl.textContent = `Client "${client.name}" ajouté à la tournée et affiché sur la carte.`;
+        routeMessageEl.className = 'maps-message success';
+    }
 }
 
 // Recherche de clients via API
@@ -568,8 +597,9 @@ clientSearchInput.addEventListener('input', () => {
             item.innerHTML =
                 `<strong>${escapeHtml(client.name)}</strong>` +
                 `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>`;
-            item.addEventListener('click', () => {
-                addClientToRoute(client);
+            item.addEventListener('click', async () => {
+                // Ajouter le client à la route (qui va le géocoder et l'afficher sur la carte)
+                await addClientToRoute(client);
             });
             clientResultsEl.appendChild(item);
         });
