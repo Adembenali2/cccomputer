@@ -32,9 +32,20 @@ function jsonResponse(array $data, int $statusCode = 200) {
 try {
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/historique.php';
 } catch (Throwable $e) {
     error_log('stock_add.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+}
+
+// Fonction helper pour enregistrer dans l'historique (comme dans profil.php)
+function logStockAction(PDO $pdo, string $action, string $details): void {
+    try {
+        $userId = $_SESSION['user_id'] ?? null;
+        enregistrerAction($pdo, $userId, $action, $details);
+    } catch (Throwable $e) {
+        error_log('stock_add.php log error: ' . $e->getMessage());
+    }
 }
 
 // Vérifier l'authentification sans redirection HTML
@@ -138,6 +149,13 @@ try {
             ]);
 
             $pdo->commit();
+            
+            // Enregistrer dans l'historique
+            $details = sprintf('Ajout papier: %s %s - Poids: %s - Quantité: %d', $marque, $modele, $poids, $qty);
+            if ($ref !== '') {
+                $details .= ' - Référence: ' . $ref;
+            }
+            logStockAction($pdo, 'ajout_stock_papier', $details);
             break;
 
         /* ===================== TONER ===================== */
@@ -197,6 +215,13 @@ try {
             ]);
 
             $pdo->commit();
+            
+            // Enregistrer dans l'historique
+            $details = sprintf('Ajout toner: %s %s - Couleur: %s - Quantité: %d', $marque, $modele, $couleur, $qty);
+            if ($ref !== '') {
+                $details .= ' - Référence: ' . $ref;
+            }
+            logStockAction($pdo, 'ajout_stock_toner', $details);
             break;
 
         /* ===================== LCD ===================== */
@@ -287,6 +312,13 @@ try {
             ]);
 
             $pdo->commit();
+            
+            // Enregistrer dans l'historique
+            $details = sprintf('Ajout LCD: %s %s - Référence: %s - Taille: %d" - Quantité: %d', $marque, $modele, $reference, $taille, $qty);
+            if ($ref !== $reference && $ref !== '') {
+                $details .= ' - Référence mouvement: ' . $ref;
+            }
+            logStockAction($pdo, 'ajout_stock_lcd', $details);
             break;
 
         /* ===================== PC ===================== */
@@ -391,6 +423,13 @@ try {
             ]);
 
             $pdo->commit();
+            
+            // Enregistrer dans l'historique
+            $details = sprintf('Ajout PC: %s %s - Référence: %s - CPU: %s - RAM: %s - Quantité: %d', $marque, $modele, $reference, $cpu, $ram, $qty);
+            if ($ref !== $reference && $ref !== '') {
+                $details .= ' - Référence mouvement: ' . $ref;
+            }
+            logStockAction($pdo, 'ajout_stock_pc', $details);
             break;
 
         default:
