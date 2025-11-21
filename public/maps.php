@@ -3,12 +3,28 @@
 // Page de planification de trajets clients (version 100% gratuite : OpenStreetMap + OSRM)
 
 require_once __DIR__ . '/../includes/auth_role.php';
-authorize_roles(['Admin', 'Dirigeant']); // adapte si besoin
-require_once __DIR__ . '/../includes/db.php'; // prêt pour plus tard si tu branches la BDD
+authorize_roles(['Admin', 'Dirigeant']);
+require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 }
+
+// Helper pour requêtes sécurisées
+function safeFetchAll(PDO $pdo, string $sql, array $params = [], string $context = 'query'): array {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return is_array($rows) ? $rows : [];
+    } catch (PDOException $e) {
+        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+        return [];
+    }
+}
+
+// Récupérer le nombre total de clients pour l'affichage
+$totalClients = (int)($pdo->query("SELECT COUNT(*) FROM clients")->fetchColumn() ?? 0);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -68,7 +84,7 @@ function h(?string $s): string {
                 <div class="section-title">2. Clients à visiter</div>
                 <p class="hint">
                     Recherchez un client (nom, code, adresse) puis ajoutez-le à la tournée.
-                    La recherche évite d’afficher une liste énorme, même avec 2000 clients.
+                    La recherche se fait en temps réel dans la base de données (minimum 2 caractères).
                 </p>
 
                 <div class="client-search">
@@ -113,8 +129,9 @@ function h(?string $s): string {
                 </div>
 
                 <p id="routeMessage" class="maps-message hint">
-                    L’itinéraire utilise le service de routage public <strong>OSRM</strong> (OpenStreetMap).
-                    L’ordre peut être <strong>optimisé</strong> automatiquement ou ajusté manuellement (↑ / ↓).
+                    L'itinéraire utilise le service de routage public <strong>OSRM</strong> (OpenStreetMap).
+                    L'ordre peut être <strong>optimisé</strong> automatiquement ou ajusté manuellement (↑ / ↓).
+                    Les adresses sont géocodées automatiquement via <strong>Nominatim</strong>.
                 </p>
 
                 <div class="maps-stats" aria-live="polite">
@@ -152,10 +169,10 @@ function h(?string $s): string {
         <section class="map-wrapper">
             <div class="map-toolbar">
                 <div class="map-toolbar-left">
-                    <strong>Carte clients</strong> – Démo sans base de données
+                    <strong>Carte clients</strong> – <?= h((string)$totalClients) ?> client(s) enregistré(s)
                 </div>
                 <div class="map-toolbar-right">
-                    <span class="badge" id="badgeClients">Clients : 0</span>
+                    <span class="badge" id="badgeClients">Clients chargés : 0</span>
                     <span class="badge" id="badgeStart">Départ : non défini</span>
                 </div>
             </div>
@@ -166,66 +183,11 @@ function h(?string $s): string {
 
 <script>
 // ==================
-// Configuration démo
+// Configuration
 // ==================
 
-// Clients codés en dur pour la démonstration (à remplacer plus tard par la base de données)
-const demoClients = [
-    {
-        id: 1,
-        name: "Client Alpha",
-        code: "CL-001",
-        address: "10 Rue de Paris, Lyon",
-        lat: 45.764043,
-        lng: 4.835659,
-        basePriority: 1
-    },
-    {
-        id: 2,
-        name: "Client Bravo",
-        code: "CL-002",
-        address: "25 Avenue de la République, Villeurbanne",
-        lat: 45.7700,
-        lng: 4.8800,
-        basePriority: 2
-    },
-    {
-        id: 3,
-        name: "Client Charlie",
-        code: "CL-003",
-        address: "5 Rue Victor Hugo, Vénissieux",
-        lat: 45.6970,
-        lng: 4.8850,
-        basePriority: 1
-    },
-    {
-        id: 4,
-        name: "Client Delta",
-        code: "CL-004",
-        address: "50 Rue Garibaldi, Lyon",
-        lat: 45.7510,
-        lng: 4.8500,
-        basePriority: 3
-    },
-    {
-        id: 5,
-        name: "Client Echo",
-        code: "CL-005",
-        address: "12 Rue du Lac, Décines",
-        lat: 45.7680,
-        lng: 4.9600,
-        basePriority: 1
-    },
-    {
-        id: 6,
-        name: "Client Foxtrot",
-        code: "CL-006",
-        address: "2 Rue Nationale, Oullins",
-        lat: 45.7160,
-        lng: 4.8060,
-        basePriority: 2
-    }
-];
+// Cache des clients chargés (avec coordonnées géocodées)
+const clientsCache = new Map(); // id -> {id, name, code, address, lat, lng, basePriority}
 
 // ==================
 // Variables globales
@@ -283,29 +245,97 @@ function createPriorityIcon(priority) {
     });
 }
 
-// Placer les clients sur la carte
-const clientsLatLng = demoClients.map(c => [c.lat, c.lng]);
-if (clientsLatLng.length) {
-    const bounds = L.latLngBounds(clientsLatLng);
-    map.fitBounds(bounds, { padding: [40, 40] });
-} else {
-    map.setView([46.5, 2.0], 6);
+// Initialiser la carte sur la France
+map.setView([46.5, 2.0], 6);
+
+// Fonction pour géocoder une adresse
+async function geocodeAddress(address) {
+    if (!address || address.trim() === '') {
+        return null;
+    }
+    
+    try {
+        const response = await fetch(`../API/maps_geocode.php?address=${encodeURIComponent(address)}`);
+        const data = await response.json();
+        
+        if (data.ok && data.lat && data.lng) {
+            return { lat: data.lat, lng: data.lng, display_name: data.display_name || address };
+        }
+        return null;
+    } catch (err) {
+        console.error('Erreur géocodage:', err);
+        return null;
+    }
 }
 
-demoClients.forEach(client => {
+// Fonction pour charger un client avec géocodage
+async function loadClientWithGeocode(client) {
+    if (clientsCache.has(client.id)) {
+        return clientsCache.get(client.id);
+    }
+    
+    const coords = await geocodeAddress(client.address);
+    if (!coords) {
+        console.warn('Impossible de géocoder:', client.address);
+        return null;
+    }
+    
+    const clientWithCoords = {
+        ...client,
+        lat: coords.lat,
+        lng: coords.lng
+    };
+    
+    clientsCache.set(client.id, clientWithCoords);
+    return clientWithCoords;
+}
+
+// Fonction pour ajouter un client sur la carte
+function addClientToMap(client) {
+    if (!client.lat || !client.lng) return;
+    
+    if (clientMarkers[client.id]) {
+        return; // Déjà sur la carte
+    }
+    
     const marker = L.marker([client.lat, client.lng], {
         icon: createPriorityIcon(client.basePriority || 1)
     }).addTo(map);
-
-    marker.bindPopup(
-        `<strong>${client.name}</strong><br>` +
-        `${client.address}<br>` +
-        `<small>Code : ${client.code}</small>`
-    );
+    
+    const popupContent = `
+        <strong>${escapeHtml(client.name)}</strong><br>
+        ${escapeHtml(client.address)}<br>
+        <small>Code : ${escapeHtml(client.code)}</small>
+        ${client.telephone ? `<br><small>Tel: ${escapeHtml(client.telephone)}</small>` : ''}
+    `;
+    
+    marker.bindPopup(popupContent);
     clientMarkers[client.id] = marker;
-});
+    
+    // Ajuster la vue pour inclure tous les clients
+    const allCoords = Array.from(clientsCache.values())
+        .filter(c => c.lat && c.lng)
+        .map(c => [c.lat, c.lng]);
+    if (allCoords.length > 0) {
+        const bounds = L.latLngBounds(allCoords);
+        map.fitBounds(bounds, { padding: [40, 40] });
+    }
+    
+    updateClientsBadge();
+}
 
-document.getElementById('badgeClients').textContent = "Clients : " + demoClients.length;
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function updateClientsBadge() {
+    const count = Object.keys(clientMarkers).length;
+    document.getElementById('badgeClients').textContent = `Clients chargés : ${count}`;
+}
+
+updateClientsBadge();
 
 // =========================
 // UI : recherche & sélection
@@ -323,7 +353,7 @@ function renderSelectedClients() {
     }
 
     selectedClients.forEach((sel, idx) => {
-        const client = demoClients.find(c => c.id === sel.id);
+        const client = clientsCache.get(sel.id);
         if (!client) return;
 
         const chip = document.createElement('div');
@@ -421,7 +451,7 @@ function renderSelectedClients() {
     });
 }
 
-function addClientToRoute(client) {
+async function addClientToRoute(client) {
     if (!client) return;
 
     if (selectedClients.find(s => s.id === client.id)) {
@@ -429,6 +459,20 @@ function addClientToRoute(client) {
         clientResultsEl.innerHTML = '';
         clientResultsEl.style.display = 'none';
         return;
+    }
+
+    // S'assurer que le client a des coordonnées
+    if (!client.lat || !client.lng) {
+        routeMessageEl.textContent = "Géocodage de l'adresse en cours…";
+        routeMessageEl.className = 'maps-message hint';
+        
+        const clientWithCoords = await loadClientWithGeocode(client);
+        if (!clientWithCoords || !clientWithCoords.lat || !clientWithCoords.lng) {
+            routeMessageEl.textContent = "Impossible de géocoder l'adresse de ce client. Veuillez vérifier l'adresse.";
+            routeMessageEl.className = 'maps-message alert';
+            return;
+        }
+        client = clientWithCoords;
     }
 
     selectedClients.push({
@@ -441,48 +485,76 @@ function addClientToRoute(client) {
     clientResultsEl.style.display = 'none';
     renderSelectedClients();
 
+    // Ajouter le client sur la carte s'il n'y est pas déjà
+    addClientToMap(client);
+
     map.setView([client.lat, client.lng], 13);
     if (clientMarkers[client.id]) clientMarkers[client.id].openPopup();
 }
 
-function searchClients(query) {
-    query = query.trim().toLowerCase();
-    if (!query) return [];
-    return demoClients.filter(c => {
-        const haystack = (c.name + ' ' + c.code + ' ' + c.address).toLowerCase();
-        return haystack.includes(query);
-    }).slice(0, 10);
+// Recherche de clients via API
+let searchTimeout = null;
+async function searchClients(query) {
+    query = query.trim();
+    if (!query || query.length < 2) return [];
+    
+    try {
+        const response = await fetch(`../API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=20`);
+        const data = await response.json();
+        
+        if (data.ok && Array.isArray(data.clients)) {
+            return data.clients;
+        }
+        return [];
+    } catch (err) {
+        console.error('Erreur recherche clients:', err);
+        return [];
+    }
 }
 
 clientSearchInput.addEventListener('input', () => {
     const q = clientSearchInput.value;
     clientResultsEl.innerHTML = '';
-
-    if (!q.trim()) {
+    
+    clearTimeout(searchTimeout);
+    
+    if (!q.trim() || q.length < 2) {
         clientResultsEl.style.display = 'none';
         return;
     }
-
-    const results = searchClients(q);
+    
+    // Afficher un indicateur de chargement
+    const loadingItem = document.createElement('div');
+    loadingItem.className = 'client-result-item loading';
+    loadingItem.textContent = 'Recherche en cours…';
+    clientResultsEl.appendChild(loadingItem);
     clientResultsEl.style.display = 'block';
-
-    if (!results.length) {
-        const item = document.createElement('div');
-        item.className = 'client-result-item empty';
-        item.textContent = 'Aucun client trouvé.';
-        clientResultsEl.appendChild(item);
-        return;
-    }
-
-    results.forEach(client => {
-        const item = document.createElement('div');
-        item.className = 'client-result-item';
-        item.innerHTML =
-            `<strong>${client.name}</strong>` +
-            `<span>${client.address} — ${client.code}</span>`;
-        item.addEventListener('click', () => addClientToRoute(client));
-        clientResultsEl.appendChild(item);
-    });
+    
+    // Debounce de 300ms
+    searchTimeout = setTimeout(async () => {
+        const results = await searchClients(q);
+        clientResultsEl.innerHTML = '';
+        
+        if (!results.length) {
+            const item = document.createElement('div');
+            item.className = 'client-result-item empty';
+            item.textContent = 'Aucun client trouvé.';
+            clientResultsEl.appendChild(item);
+            return;
+        }
+        
+        results.forEach(client => {
+            const item = document.createElement('div');
+            item.className = 'client-result-item';
+            item.innerHTML =
+                `<strong>${escapeHtml(client.name)}</strong>` +
+                `<span>${escapeHtml(client.address)} — ${escapeHtml(client.code)}</span>`;
+            item.addEventListener('click', () => {
+                addClientToRoute(client);
+            });
+            clientResultsEl.appendChild(item);
+        });
+    }, 300);
 });
 
 document.addEventListener('click', (e) => {
@@ -611,8 +683,8 @@ function haversine(lat1, lon1, lat2, lon2) {
 function getSelectedClientsForRouting() {
     return selectedClients
         .map(sel => {
-            const client = demoClients.find(c => c.id === sel.id);
-            if (!client) return null;
+            const client = clientsCache.get(sel.id);
+            if (!client || !client.lat || !client.lng) return null;
             return {
                 ...client,
                 priority: sel.priority || client.basePriority || 1

@@ -184,6 +184,12 @@
   cursor: default;
 }
 
+.client-result-item.loading {
+  cursor: default;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 /* Clients sélectionnés */
 .selected-clients {
   border-radius: var(--radius-md);
