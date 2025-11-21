@@ -10,6 +10,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
   echo json_encode(['ok'=>0,'err'=>'Method not allowed']); exit;
 }
 
+// Vérification CSRF
+$csrfToken = $_POST['csrf_token'] ?? '';
+$csrfSession = $_SESSION['csrf_token'] ?? '';
+if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrfToken)) {
+  echo json_encode(['ok'=>0,'err'=>'Token CSRF invalide']); exit;
+}
+
 $paperId  = (int)($_POST['paper_id'] ?? 0);
 $qtyDelta = (int)($_POST['qty_delta'] ?? 0);  // négatif = sortie
 $reason   = $_POST['reason'] ?? 'ajustement';

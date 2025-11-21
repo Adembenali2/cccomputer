@@ -10,6 +10,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Vérification CSRF
+$csrfToken = $_POST['csrf_token'] ?? '';
+$csrfSession = $_SESSION['csrf_token'] ?? '';
+if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrfToken)) {
+    http_response_code(403);
+    echo "Token CSRF invalide";
+    exit;
+}
+
 $idClient = filter_input(INPUT_POST, 'id_client', FILTER_VALIDATE_INT);
 $macInput = isset($_POST['mac_address']) ? trim($_POST['mac_address']) : '';
 

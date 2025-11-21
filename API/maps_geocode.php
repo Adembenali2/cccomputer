@@ -40,6 +40,21 @@ if (empty($address)) {
     jsonResponse(['ok' => false, 'error' => 'Adresse manquante'], 400);
 }
 
+// Vérifier le cache (24h de validité)
+$cacheDir = __DIR__ . '/../cache';
+if (!is_dir($cacheDir)) {
+    @mkdir($cacheDir, 0755, true);
+}
+$cacheKey = 'geocode_' . md5($address);
+$cacheFile = $cacheDir . '/' . $cacheKey . '.json';
+
+if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 86400) {
+    $cached = json_decode(file_get_contents($cacheFile), true);
+    if (is_array($cached) && isset($cached['ok'])) {
+        jsonResponse($cached);
+    }
+}
+
 // Utiliser Nominatim (OpenStreetMap) pour géocoder
 // IMPORTANT: Respecter la politique d'utilisation (max 1 requête/seconde, User-Agent requis)
 $encodedAddress = urlencode($address);
@@ -77,10 +92,15 @@ if (!is_array($data) || empty($data)) {
 }
 
 $result = $data[0];
-jsonResponse([
+$responseData = [
     'ok' => true,
     'lat' => (float)$result['lat'],
     'lng' => (float)$result['lon'],
     'display_name' => $result['display_name'] ?? $address
-]);
+];
+
+// Sauvegarder dans le cache
+@file_put_contents($cacheFile, json_encode($responseData));
+
+jsonResponse($responseData);
 
