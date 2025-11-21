@@ -21,6 +21,10 @@ $currentUser = [
     'Emploi'=> (string)($_SESSION['emploi'] ?? '')
 ];
 
+// Vérifier si l'utilisateur est un livreur ou admin/dirigeant (pour restrictions d'affichage)
+$isLivreur = ($currentUser['Emploi'] ?? '') === 'Livreur';
+$isAdminOrDirigeant = in_array($currentUser['Emploi'] ?? '', ['Admin', 'Dirigeant'], true);
+
 function sanitizeSearch(?string $value): string {
     $value = trim((string)$value);
     if ($value === '') {
@@ -110,10 +114,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = $_POST['action'] ?? '';
-    
-    // Vérifier si l'utilisateur est un livreur (restrictions pour les livreurs)
-    $isLivreur = ($currentUser['Emploi'] ?? '') === 'Livreur';
-    $isAdminOrDirigeant = in_array($currentUser['Emploi'] ?? '', ['Admin', 'Dirigeant'], true);
 
     try {
         // Les livreurs ne peuvent pas créer de nouveaux utilisateurs
