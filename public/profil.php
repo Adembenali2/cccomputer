@@ -94,16 +94,30 @@ function logProfilAction(PDO $pdo, string $action, string $details): void {
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
-// Rôles autorisés dans le champ Emploi (correspondent exactement aux valeurs ENUM de la base de données)
+// ------------------------------------------------------------------------
+// Rôles autorisés dans le champ Emploi (ENUM de la base de données)
+// On les récupère directement depuis la définition de la colonne ENUM
+// pour être sûr d'avoir TOUS les rôles, même s'ils ne sont pas encore utilisés
+// ------------------------------------------------------------------------
 $DEFAULT_ROLES = ['Chargé relation clients', 'Livreur', 'Technicien', 'Secrétaire', 'Dirigeant', 'Admin'];
-$roleRows = safeFetchAll($pdo, "SELECT DISTINCT Emploi FROM utilisateurs WHERE Emploi IS NOT NULL AND Emploi <> '' ORDER BY Emploi ASC", [], 'roles_distinct');
+
 $ROLES = [];
-foreach ($roleRows as $row) {
-    $val = trim((string)($row['Emploi'] ?? ''));
-    if ($val !== '') {
-        $ROLES[] = $val;
+
+// On récupère la définition de la colonne ENUM `Emploi`
+$col = safeFetch($pdo, "SHOW COLUMNS FROM utilisateurs LIKE 'Emploi'", [], 'enum_emploi');
+
+if ($col && isset($col['Type']) && preg_match("/^enum\((.*)\)$/i", $col['Type'], $m)) {
+    // $m[1] contient la liste :  'Chargé relation clients','Livreur','Technicien','Secrétaire','Dirigeant','Admin'
+    $enumValues = str_getcsv($m[1], ',', "'");
+    foreach ($enumValues as $val) {
+        $val = trim($val);
+        if ($val !== '') {
+            $ROLES[] = $val;
+        }
     }
 }
+
+// fallback de sécurité si jamais on ne récupère rien
 if (!$ROLES) {
     $ROLES = $DEFAULT_ROLES;
 }
@@ -225,7 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Vous n\'êtes pas autorisé à modifier le statut des utilisateurs.');
             }
             
-            $id = (int)($_POST['id'] ?? 0);
+            $id = (int)$_POST['id'];
             if ($id <= 0) throw new RuntimeException('Identifiant manquant.');
             // Empêche de se désactiver soi-même
             if ($id === $currentUser['id']) throw new RuntimeException('Vous ne pouvez pas désactiver votre propre compte.');
@@ -331,8 +345,8 @@ foreach ($users as $user) {
     if (($user['statut'] ?? '') === 'actif') {
         $activeUsers++;
     }
-    $role = $user['Emploi'] ?? '—';
-    $roleBreakdown[$role] = ($roleBreakdown[$role] ?? 0) + 1;
+    $roleName = $user['Emploi'] ?? '—';
+    $roleBreakdown[$roleName] = ($roleBreakdown[$roleName] ?? 0) + 1;
 
     $createdAt = $user['date_creation'] ?? null;
     if ($createdAt) {
