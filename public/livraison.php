@@ -796,6 +796,33 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       });
     }
   }
+
+  // Ouvrir automatiquement la livraison si un paramètre ref est présent dans l'URL
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const refParam = urlParams.get('ref');
+    if (refParam) {
+      // Chercher la ligne correspondante
+      const rows = document.querySelectorAll('table#tbl tbody tr[data-ref]');
+      for (const tr of rows) {
+        const rowRef = tr.getAttribute('data-ref');
+        if (rowRef && rowRef.trim() === refParam.trim()) {
+          // Simuler un clic sur la ligne pour ouvrir le modal
+          setTimeout(() => {
+            tr.click();
+            // Faire défiler jusqu'à la ligne
+            tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Mettre en surbrillance la ligne
+            tr.style.backgroundColor = '#fef3c7';
+            setTimeout(() => {
+              tr.style.backgroundColor = '';
+            }, 2000);
+          }, 100);
+          break;
+        }
+      }
+    }
+  })();
 })();
 </script>
 </body>
