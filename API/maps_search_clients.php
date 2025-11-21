@@ -51,7 +51,10 @@ try {
     // Recherche dans raison_sociale, nom_dirigeant, prenom_dirigeant, numero_client, adresse, ville, code_postal
     $searchTerm = '%' . $query . '%';
     
-    // Utiliser une approche plus simple et robuste
+    // S'assurer que $limit est un entier valide
+    $limit = max(1, min((int)$limit, 50));
+    
+    // Utiliser une approche plus simple - LIMIT doit être un entier direct, pas un paramètre lié
     $sql = "
         SELECT 
             id,
@@ -69,26 +72,26 @@ try {
         FROM clients
         WHERE 
             raison_sociale LIKE :q
-            OR (nom_dirigeant IS NOT NULL AND nom_dirigeant LIKE :q)
-            OR (prenom_dirigeant IS NOT NULL AND prenom_dirigeant LIKE :q)
-            OR (nom_dirigeant IS NOT NULL AND prenom_dirigeant IS NOT NULL AND CONCAT(nom_dirigeant, ' ', prenom_dirigeant) LIKE :q)
-            OR (nom_dirigeant IS NOT NULL AND prenom_dirigeant IS NOT NULL AND CONCAT(prenom_dirigeant, ' ', nom_dirigeant) LIKE :q)
+            OR COALESCE(nom_dirigeant, '') LIKE :q
+            OR COALESCE(prenom_dirigeant, '') LIKE :q
+            OR CONCAT(COALESCE(nom_dirigeant, ''), ' ', COALESCE(prenom_dirigeant, '')) LIKE :q
+            OR CONCAT(COALESCE(prenom_dirigeant, ''), ' ', COALESCE(nom_dirigeant, '')) LIKE :q
             OR numero_client LIKE :q
-            OR (adresse IS NOT NULL AND adresse LIKE :q)
-            OR (ville IS NOT NULL AND ville LIKE :q)
-            OR (code_postal IS NOT NULL AND code_postal LIKE :q)
-            OR (adresse IS NOT NULL AND code_postal IS NOT NULL AND ville IS NOT NULL AND CONCAT(adresse, ' ', code_postal, ' ', ville) LIKE :q)
+            OR COALESCE(adresse, '') LIKE :q
+            OR COALESCE(ville, '') LIKE :q
+            OR COALESCE(code_postal, '') LIKE :q
+            OR CONCAT(COALESCE(adresse, ''), ' ', COALESCE(code_postal, ''), ' ', COALESCE(ville, '')) LIKE :q
         ORDER BY raison_sociale ASC
-        LIMIT :limit
+        LIMIT " . (int)$limit . "
     ";
     
     $stmt = $pdo->prepare($sql);
     if (!$stmt) {
-        throw new PDOException('Erreur de préparation de la requête SQL');
+        $errorInfo = $pdo->errorInfo();
+        throw new PDOException('Erreur de préparation SQL: ' . ($errorInfo[2] ?? 'Erreur inconnue'));
     }
     
     $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     
     if (!$stmt->execute()) {
         $errorInfo = $stmt->errorInfo();
