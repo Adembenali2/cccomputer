@@ -43,17 +43,27 @@ if ($clientId <= 0) {
 
 try {
     // Récupérer les photocopieurs du client avec leurs derniers relevés
+    // Utilisation de ROW_NUMBER() pour identifier le dernier relevé par mac_norm
+    // En cas d'égalité sur Timestamp, on prend le plus grand ID (plus récent)
     $sql = "
         WITH v_compteur_last AS (
             SELECT r.*,
-                   ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+                   ROW_NUMBER() OVER (
+                       PARTITION BY r.mac_norm 
+                       ORDER BY r.`Timestamp` DESC, r.id DESC
+                   ) AS rn
             FROM compteur_relevee r
+            WHERE r.mac_norm IS NOT NULL AND r.mac_norm != ''
         ),
         v_last AS (
-            SELECT *, TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
-            FROM v_compteur_last WHERE rn = 1
+            SELECT 
+                *,
+                TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
+            FROM v_compteur_last 
+            WHERE rn = 1
         )
         SELECT
+            pc.id,
             pc.mac_norm,
             COALESCE(pc.SerialNumber, v.SerialNumber) AS SerialNumber,
             COALESCE(pc.MacAddress, v.MacAddress) AS MacAddress,
@@ -80,11 +90,23 @@ try {
     $stmt->execute([':client_id' => $clientId]);
     $devices = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Normaliser les données pour éviter les valeurs NULL problématiques
+    // Normaliser les données pour éviter les valeurs NULL problématiques et formater les dates
     $devices = array_map(function($device) {
-        return array_map(function($value) {
-            return $value === null ? null : $value;
-        }, $device);
+        // Formatage de la date pour faciliter l'affichage côté client
+        if (!empty($device['last_ts'])) {
+            // Garder la date telle quelle, le JS s'en occupera
+        }
+        
+        // S'assurer que les valeurs numériques sont correctement typées
+        $numericFields = ['TonerBlack', 'TonerCyan', 'TonerMagenta', 'TonerYellow', 
+                          'TotalBW', 'TotalColor', 'TotalPages', 'last_age_hours'];
+        foreach ($numericFields as $field) {
+            if (isset($device[$field])) {
+                $device[$field] = $device[$field] === null ? null : (int)$device[$field];
+            }
+        }
+        
+        return $device;
     }, $devices);
     
     echo json_encode($devices ?: [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK);
