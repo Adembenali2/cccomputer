@@ -39,7 +39,9 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 }
 
 try {
-    // Récupérer les utilisateurs avec Emploi = 'Livreur' et statut = 'actif'
+    // Récupérer uniquement les utilisateurs avec Emploi = 'Livreur' et statut = 'actif'
+    // Le champ Emploi est un ENUM : 'Chargé relation clients','Livreur','Technicien','Secrétaire','Dirigeant','Admin'
+    // On filtre strictement sur Emploi = 'Livreur' pour obtenir uniquement les livreurs
     $sql = "
         SELECT 
             id,
@@ -50,8 +52,9 @@ try {
             Emploi,
             statut
         FROM utilisateurs
-        WHERE Emploi = 'Livreur' AND statut = 'actif'
-        ORDER BY nom, prenom ASC
+        WHERE Emploi = 'Livreur' 
+          AND statut = 'actif'
+        ORDER BY nom ASC, prenom ASC
     ";
     
     $stmt = $pdo->prepare($sql);

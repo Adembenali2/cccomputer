@@ -114,13 +114,27 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
     }
     
-    // Vérifier que le livreur existe et est bien un livreur actif
-    $checkLivreur = $pdo->prepare("SELECT id, nom, prenom FROM utilisateurs WHERE id = :id AND Emploi = 'Livreur' AND statut = 'actif' LIMIT 1");
+    // Vérifier que le livreur existe et est bien un utilisateur avec Emploi = 'Livreur' et statut = 'actif'
+    // Le champ Emploi est un ENUM, on vérifie strictement que c'est bien un livreur
+    $checkLivreur = $pdo->prepare("
+        SELECT id, nom, prenom, Emploi, statut 
+        FROM utilisateurs 
+        WHERE id = :id 
+          AND Emploi = 'Livreur' 
+          AND statut = 'actif' 
+        LIMIT 1
+    ");
     $checkLivreur->execute([':id' => $idLivreur]);
     $livreur = $checkLivreur->fetch(PDO::FETCH_ASSOC);
     if (!$livreur) {
         $pdo->rollBack();
-        jsonResponse(['ok' => false, 'error' => 'Livreur introuvable ou inactif'], 404);
+        jsonResponse(['ok' => false, 'error' => 'Livreur introuvable ou inactif. Vérifiez que l\'utilisateur a le rôle "Livreur" et est actif.'], 404);
+    }
+    
+    // Double vérification que c'est bien un livreur (sécurité supplémentaire)
+    if (($livreur['Emploi'] ?? '') !== 'Livreur' || ($livreur['statut'] ?? '') !== 'actif') {
+        $pdo->rollBack();
+        jsonResponse(['ok' => false, 'error' => 'L\'utilisateur sélectionné n\'est pas un livreur actif.'], 400);
     }
     
     // Si un produit est sélectionné, vérifier le stock et déduire
