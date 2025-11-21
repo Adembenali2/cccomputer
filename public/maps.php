@@ -4,27 +4,15 @@
 
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_roles(['Admin', 'Dirigeant']);
-require_once __DIR__ . '/../includes/db.php';
+// Temporairement désactivé pour les tests
+// require_once __DIR__ . '/../includes/db.php';
 
 function h(?string $s): string {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 }
 
-// Helper pour requêtes sécurisées
-function safeFetchAll(PDO $pdo, string $sql, array $params = [], string $context = 'query'): array {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return is_array($rows) ? $rows : [];
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return [];
-    }
-}
-
-// Récupérer le nombre total de clients pour l'affichage
-$totalClients = (int)($pdo->query("SELECT COUNT(*) FROM clients")->fetchColumn() ?? 0);
+// Nombre de clients de test
+$totalClients = 6;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -186,8 +174,101 @@ $totalClients = (int)($pdo->query("SELECT COUNT(*) FROM clients")->fetchColumn()
 // Configuration
 // ==================
 
+// Clients de test par défaut (pour les tests sans base de données)
+const demoClients = [
+    {
+        id: 1,
+        name: "Client Alpha",
+        code: "CL-001",
+        address: "10 Rue de Paris, 69001 Lyon",
+        adresse: "10 Rue de Paris",
+        code_postal: "69001",
+        ville: "Lyon",
+        lat: 45.764043,
+        lng: 4.835659,
+        telephone: "04 12 34 56 78",
+        email: "alpha@example.com",
+        basePriority: 1
+    },
+    {
+        id: 2,
+        name: "Client Bravo",
+        code: "CL-002",
+        address: "25 Avenue de la République, 69100 Villeurbanne",
+        adresse: "25 Avenue de la République",
+        code_postal: "69100",
+        ville: "Villeurbanne",
+        lat: 45.7700,
+        lng: 4.8800,
+        telephone: "04 23 45 67 89",
+        email: "bravo@example.com",
+        basePriority: 2
+    },
+    {
+        id: 3,
+        name: "Client Charlie",
+        code: "CL-003",
+        address: "5 Rue Victor Hugo, 69200 Vénissieux",
+        adresse: "5 Rue Victor Hugo",
+        code_postal: "69200",
+        ville: "Vénissieux",
+        lat: 45.6970,
+        lng: 4.8850,
+        telephone: "04 34 56 78 90",
+        email: "charlie@example.com",
+        basePriority: 1
+    },
+    {
+        id: 4,
+        name: "Client Delta",
+        code: "CL-004",
+        address: "50 Rue Garibaldi, 69003 Lyon",
+        adresse: "50 Rue Garibaldi",
+        code_postal: "69003",
+        ville: "Lyon",
+        lat: 45.7510,
+        lng: 4.8500,
+        telephone: "04 45 67 89 01",
+        email: "delta@example.com",
+        basePriority: 3
+    },
+    {
+        id: 5,
+        name: "Client Echo",
+        code: "CL-005",
+        address: "12 Rue du Lac, 69150 Décines",
+        adresse: "12 Rue du Lac",
+        code_postal: "69150",
+        ville: "Décines",
+        lat: 45.7680,
+        lng: 4.9600,
+        telephone: "04 56 78 90 12",
+        email: "echo@example.com",
+        basePriority: 1
+    },
+    {
+        id: 6,
+        name: "Client Foxtrot",
+        code: "CL-006",
+        address: "2 Rue Nationale, 69600 Oullins",
+        adresse: "2 Rue Nationale",
+        code_postal: "69600",
+        ville: "Oullins",
+        lat: 45.7160,
+        lng: 4.8060,
+        telephone: "04 67 89 01 23",
+        email: "foxtrot@example.com",
+        basePriority: 2
+    }
+];
+
 // Cache des clients chargés (avec coordonnées géocodées)
 const clientsCache = new Map(); // id -> {id, name, code, address, lat, lng, basePriority}
+
+// Initialiser le cache avec les clients de test
+demoClients.forEach(client => {
+    clientsCache.set(client.id, client);
+});
 
 // ==================
 // Variables globales
@@ -245,8 +326,14 @@ function createPriorityIcon(priority) {
     });
 }
 
-// Initialiser la carte sur la France
-map.setView([46.5, 2.0], 6);
+// Initialiser la carte sur les clients de test
+const clientsLatLng = demoClients.map(c => [c.lat, c.lng]);
+if (clientsLatLng.length) {
+    const bounds = L.latLngBounds(clientsLatLng);
+    map.fitBounds(bounds, { padding: [40, 40] });
+} else {
+    map.setView([46.5, 2.0], 6);
+}
 
 // Fonction pour géocoder une adresse
 async function geocodeAddress(address) {
@@ -489,7 +576,8 @@ async function addClientToRoute(client) {
         return;
     }
 
-    // S'assurer que le client a des coordonnées
+    // En mode test, les clients ont déjà des coordonnées
+    // Si pas de coordonnées, essayer de géocoder (pour compatibilité future)
     if (!client.lat || !client.lng) {
         routeMessageEl.textContent = "Géocodage de l'adresse en cours…";
         routeMessageEl.className = 'maps-message hint';
@@ -536,24 +624,17 @@ async function addClientToRoute(client) {
     }
 }
 
-// Recherche de clients via API
+// Recherche de clients (mode test - sans base de données)
 let searchTimeout = null;
-async function searchClients(query) {
-    query = query.trim();
+function searchClients(query) {
+    query = query.trim().toLowerCase();
     if (!query || query.length < 2) return [];
     
-    try {
-        const response = await fetch(`/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=20`);
-        const data = await response.json();
-        
-        if (data.ok && Array.isArray(data.clients)) {
-            return data.clients;
-        }
-        return [];
-    } catch (err) {
-        console.error('Erreur recherche clients:', err);
-        return [];
-    }
+    // Recherche dans les clients de test
+    return demoClients.filter(c => {
+        const haystack = (c.name + ' ' + c.code + ' ' + c.address + ' ' + c.adresse + ' ' + c.ville).toLowerCase();
+        return haystack.includes(query);
+    }).slice(0, 20);
 }
 
 clientSearchInput.addEventListener('input', () => {
@@ -575,8 +656,8 @@ clientSearchInput.addEventListener('input', () => {
     clientResultsEl.style.display = 'block';
     
     // Debounce de 300ms
-    searchTimeout = setTimeout(async () => {
-        const results = await searchClients(q);
+    searchTimeout = setTimeout(() => {
+        const results = searchClients(q);
         clientResultsEl.innerHTML = '';
         
         if (!results.length) {
@@ -588,7 +669,7 @@ clientSearchInput.addEventListener('input', () => {
         }
         
         results.forEach(client => {
-            // Afficher l'adresse exacte de la base de données
+            // Afficher l'adresse exacte
             const displayAddress = client.address || 
                 `${client.adresse || ''} ${client.code_postal || ''} ${client.ville || ''}`.trim();
             
@@ -597,9 +678,9 @@ clientSearchInput.addEventListener('input', () => {
             item.innerHTML =
                 `<strong>${escapeHtml(client.name)}</strong>` +
                 `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>`;
-            item.addEventListener('click', async () => {
-                // Ajouter le client à la route (qui va le géocoder et l'afficher sur la carte)
-                await addClientToRoute(client);
+            item.addEventListener('click', () => {
+                // Ajouter le client à la route (déjà avec coordonnées, pas besoin de géocoder)
+                addClientToRoute(client);
             });
             clientResultsEl.appendChild(item);
         });
