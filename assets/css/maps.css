@@ -99,6 +99,28 @@
   gap: 0.4rem;
 }
 
+/* Options d’itinéraire */
+.route-options {
+  margin-top: 0.4rem;
+}
+
+.route-option {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.route-option input[type="checkbox"] {
+  accent-color: var(--accent-primary);
+}
+
+/* Bouton Google Maps */
+.route-extra {
+  margin-top: 0.4rem;
+}
+
 /* Recherche de clients */
 .client-search {
   position: relative;
@@ -238,6 +260,16 @@
   color: var(--text-secondary);
   font-size: 0.75rem;
   padding: 0.1rem 0.4rem;
+  cursor: pointer;
+}
+
+.chip-move {
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.3rem;
   cursor: pointer;
 }
 
@@ -386,6 +418,19 @@
   width: 100%;
   height: min(70vh, 700px);
   min-height: 420px;
+}
+
+/* Icônes de priorité */
+.priority-marker {
+  border-radius: 50%;
+}
+
+.priority-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
 }
 
 /* Messages */

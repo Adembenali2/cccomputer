@@ -99,9 +99,22 @@ function h(?string $s): string {
                     </button>
                 </div>
 
+                <div class="route-options">
+                    <label class="route-option">
+                        <input type="checkbox" id="optimizeOrder" checked>
+                        Optimiser l’ordre (proximité + urgence)
+                    </label>
+                </div>
+
+                <div class="route-extra">
+                    <button type="button" id="btnGoogle" class="secondary" disabled>
+                        📱 Ouvrir l’itinéraire dans Google Maps
+                    </button>
+                </div>
+
                 <p id="routeMessage" class="maps-message hint">
                     L’itinéraire utilise le service de routage public <strong>OSRM</strong> (OpenStreetMap).
-                    L’ordre est optimisé selon la <strong>proximité</strong> et le niveau <strong>d’urgence</strong>.
+                    L’ordre peut être <strong>optimisé</strong> automatiquement ou ajusté manuellement (↑ / ↓).
                 </p>
 
                 <div class="maps-stats" aria-live="polite">
@@ -230,8 +243,8 @@ let startPoint = null;        // [lat, lng]
 let startMarker = null;
 let pickStartFromMap = false;
 let routeLayer = null;
-let lastOrderedStops = [];    // clients dans l'ordre optimisé
-let lastRouteLegs = [];       // legs renvoyés par OSRM
+let lastOrderedStops = [];    // clients dans l'ordre utilisé pour l'itinéraire
+let lastRouteLegs = [];       // legs OSRM
 
 const startInfoEl = document.getElementById('startInfo');
 const badgeStartEl = document.getElementById('badgeStart');
@@ -239,6 +252,8 @@ const routeMessageEl = document.getElementById('routeMessage');
 const btnShowTurns = document.getElementById('btnShowTurns');
 const routeStepsEl = document.getElementById('routeSteps');
 const routeTurnsEl = document.getElementById('routeTurns');
+const btnGoogle = document.getElementById('btnGoogle');
+const optimizeOrderCheckbox = document.getElementById('optimizeOrder');
 
 // ==================
 // Initialisation Leaflet
@@ -251,6 +266,23 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
 }).addTo(map);
 
+// === Icônes de priorité ===
+function getPriorityColor(priority) {
+    if (priority >= 3) return '#ef4444'; // rouge
+    if (priority === 2) return '#f97316'; // orange
+    return '#16a34a'; // vert
+}
+
+function createPriorityIcon(priority) {
+    const color = getPriorityColor(priority);
+    return L.divIcon({
+        className: 'priority-marker',
+        html: `<div class="priority-dot" style="background:${color};"></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+    });
+}
+
 // Placer les clients sur la carte
 const clientsLatLng = demoClients.map(c => [c.lat, c.lng]);
 if (clientsLatLng.length) {
@@ -261,13 +293,16 @@ if (clientsLatLng.length) {
 }
 
 demoClients.forEach(client => {
-    const m = L.marker([client.lat, client.lng]).addTo(map);
-    m.bindPopup(
+    const marker = L.marker([client.lat, client.lng], {
+        icon: createPriorityIcon(client.basePriority || 1)
+    }).addTo(map);
+
+    marker.bindPopup(
         `<strong>${client.name}</strong><br>` +
         `${client.address}<br>` +
         `<small>Code : ${client.code}</small>`
     );
-    clientMarkers[client.id] = m;
+    clientMarkers[client.id] = marker;
 });
 
 document.getElementById('badgeClients').textContent = "Clients : " + demoClients.length;
@@ -317,28 +352,67 @@ function renderSelectedClients() {
 
         select.addEventListener('change', () => {
             sel.priority = parseInt(select.value, 10) || 1;
+            const marker = clientMarkers[client.id];
+            if (marker) {
+                marker.setIcon(createPriorityIcon(sel.priority));
+            }
         });
 
         labelUrg.appendChild(select);
+
+        // Bouton déplacer vers le haut
+        const btnUp = document.createElement('button');
+        btnUp.type = 'button';
+        btnUp.textContent = '↑';
+        btnUp.className = 'chip-move';
+        btnUp.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const index = selectedClients.findIndex(s => s.id === sel.id);
+            if (index > 0) {
+                const tmp = selectedClients[index - 1];
+                selectedClients[index - 1] = selectedClients[index];
+                selectedClients[index] = tmp;
+                renderSelectedClients();
+            }
+        });
+
+        // Bouton déplacer vers le bas
+        const btnDown = document.createElement('button');
+        btnDown.type = 'button';
+        btnDown.textContent = '↓';
+        btnDown.className = 'chip-move';
+        btnDown.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const index = selectedClients.findIndex(s => s.id === sel.id);
+            if (index < selectedClients.length - 1) {
+                const tmp = selectedClients[index + 1];
+                selectedClients[index + 1] = selectedClients[index];
+                selectedClients[index] = tmp;
+                renderSelectedClients();
+            }
+        });
 
         // Bouton supprimer
         const btnRemove = document.createElement('button');
         btnRemove.type = 'button';
         btnRemove.className = 'chip-remove';
         btnRemove.textContent = '✕';
-        btnRemove.addEventListener('click', () => {
+        btnRemove.addEventListener('click', (e) => {
+            e.stopPropagation();
             selectedClients = selectedClients.filter(s => s.id !== sel.id);
             renderSelectedClients();
         });
 
         controls.appendChild(labelUrg);
+        controls.appendChild(btnUp);
+        controls.appendChild(btnDown);
         controls.appendChild(btnRemove);
 
         chip.appendChild(text);
         chip.appendChild(controls);
 
         chip.addEventListener('click', (e) => {
-            if (e.target === select || e.target === btnRemove) return;
+            if (e.target === select || e.target === btnRemove || e.target === btnUp || e.target === btnDown) return;
             map.setView([client.lat, client.lng], 13);
             if (clientMarkers[client.id]) clientMarkers[client.id].openPopup();
         });
@@ -733,6 +807,22 @@ btnShowTurns.addEventListener('click', () => {
         : '👁️ Voir l’itinéraire détaillé';
 });
 
+// Ouvrir l’itinéraire dans Google Maps (site web, pas d’API)
+function openInGoogleMaps() {
+    if (!startPoint || !lastOrderedStops.length) return;
+
+    const parts = [];
+    parts.push(`${startPoint[0]},${startPoint[1]}`);
+    lastOrderedStops.forEach(c => {
+        parts.push(`${c.lat},${c.lng}`);
+    });
+
+    const url = 'https://www.google.com/maps/dir/' + parts.join('/');
+    window.open(url, '_blank');
+}
+
+btnGoogle.addEventListener('click', openInGoogleMaps);
+
 // =====================
 // Calcul de l’itinéraire (OSRM)
 // =====================
@@ -743,6 +833,7 @@ document.getElementById('btnRoute').addEventListener('click', () => {
     routeTurnsEl.style.display = 'none';
     btnShowTurns.disabled = true;
     btnShowTurns.textContent = '👁️ Voir l’itinéraire détaillé';
+    btnGoogle.disabled = true;
 
     if (!startPoint) {
         routeMessageEl.textContent = "Définissez d'abord un point de départ (ma position ou clic sur la carte).";
@@ -764,7 +855,20 @@ document.getElementById('btnRoute').addEventListener('click', () => {
         return;
     }
 
-    const orderedStops = computeOrderedStops(startPoint, clientsForRouting);
+    let orderedStops;
+
+    if (optimizeOrderCheckbox.checked) {
+        orderedStops = computeOrderedStops(startPoint, clientsForRouting);
+        // on met à jour l’ordre dans la liste visuelle
+        selectedClients = orderedStops.map(c => ({
+            id: c.id,
+            priority: c.priority
+        }));
+        renderSelectedClients();
+    } else {
+        orderedStops = clientsForRouting.slice(); // respecter l'ordre manuel
+    }
+
     lastOrderedStops = orderedStops.slice();
     lastRouteLegs = [];
 
@@ -822,6 +926,7 @@ document.getElementById('btnRoute').addEventListener('click', () => {
             renderTurnByTurn(lastRouteLegs);
 
             btnShowTurns.disabled = false;
+            btnGoogle.disabled = false;
 
             routeMessageEl.textContent = "Itinéraire calculé avec succès (optimisé + détails).";
             routeMessageEl.className = 'maps-message success';
