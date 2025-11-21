@@ -1,0 +1,598 @@
+<?php
+// /public/agenda.php
+// Agenda affichant les SAV et livraisons prévus par jour pour chaque utilisateur
+
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/db.php';
+
+function h(?string $s): string {
+    return htmlspecialchars((string)$s ?? '', ENT_QUOTES, 'UTF-8');
+}
+
+function currentUserId(): ?int {
+    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
+    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
+    return null;
+}
+
+function currentUserRole(): ?string {
+    if (isset($_SESSION['emploi'])) return $_SESSION['emploi'];
+    if (isset($_SESSION['user']['Emploi'])) return $_SESSION['user']['Emploi'];
+    if (isset($_SESSION['user']['emploi'])) return $_SESSION['user']['emploi'];
+    return null;
+}
+
+$currentUserId = currentUserId();
+$currentUserRole = currentUserRole();
+$isAdmin = ($currentUserRole === 'Admin' || $currentUserRole === 'Dirigeant');
+
+// Paramètres de filtrage
+$filterUser = isset($_GET['user_id']) ? (int)$_GET['user_id'] : null;
+$filterDate = $_GET['date'] ?? date('Y-m-d');
+$viewMode = $_GET['view'] ?? 'week'; // 'day', 'week', 'month'
+
+// Validation de la date
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filterDate)) {
+    $filterDate = date('Y-m-d');
+}
+
+// Calculer les dates selon le mode d'affichage
+$startDate = $filterDate;
+$endDate = $filterDate;
+
+if ($viewMode === 'week') {
+    $dateObj = new DateTime($filterDate);
+    $dateObj->modify('monday this week');
+    $startDate = $dateObj->format('Y-m-d');
+    $dateObj->modify('sunday this week');
+    $endDate = $dateObj->format('Y-m-d');
+} elseif ($viewMode === 'month') {
+    $dateObj = new DateTime($filterDate);
+    $dateObj->modify('first day of this month');
+    $startDate = $dateObj->format('Y-m-d');
+    $dateObj->modify('last day of this month');
+    $endDate = $dateObj->format('Y-m-d');
+}
+
+// Récupérer la liste des utilisateurs pour le filtre
+$users = [];
+try {
+    $stmt = $pdo->query("
+        SELECT id, nom, prenom, Emploi 
+        FROM utilisateurs 
+        WHERE statut = 'actif' 
+        ORDER BY nom, prenom
+    ");
+    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('agenda.php - Erreur récupération utilisateurs: ' . $e->getMessage());
+}
+
+// Vérifier si la colonne date_intervention_prevue existe
+$hasDateIntervention = false;
+try {
+    $checkCol = $pdo->query("
+        SELECT COUNT(*) as cnt 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'sav' 
+        AND COLUMN_NAME = 'date_intervention_prevue'
+    ");
+    $hasDateIntervention = ($checkCol->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+} catch (PDOException $e) {
+    error_log('agenda.php - Erreur vérification colonne date_intervention_prevue: ' . $e->getMessage());
+}
+
+// Récupérer les SAV
+$savs = [];
+try {
+    if ($hasDateIntervention) {
+        $whereSav = ["(date_ouverture BETWEEN :start_date AND :end_date OR (date_intervention_prevue IS NOT NULL AND date_intervention_prevue BETWEEN :start_date2 AND :end_date2))"];
+        $paramsSav = [
+            ':start_date' => $startDate,
+            ':end_date' => $endDate,
+            ':start_date2' => $startDate,
+            ':end_date2' => $endDate
+        ];
+        $dateOrderBy = "COALESCE(s.date_intervention_prevue, s.date_ouverture)";
+        $selectDateIntervention = "s.date_intervention_prevue,";
+    } else {
+        $whereSav = ["date_ouverture BETWEEN :start_date AND :end_date"];
+        $paramsSav = [
+            ':start_date' => $startDate,
+            ':end_date' => $endDate
+        ];
+        $dateOrderBy = "s.date_ouverture";
+        $selectDateIntervention = "";
+    }
+    
+    // Filtrer par technicien si spécifié
+    if ($filterUser) {
+        $whereSav[] = "id_technicien = :tech_id";
+        $paramsSav[':tech_id'] = $filterUser;
+    } elseif (!$isAdmin) {
+        // Si pas admin, afficher uniquement les SAV assignés à l'utilisateur
+        $whereSav[] = "id_technicien = :current_user_id";
+        $paramsSav[':current_user_id'] = $currentUserId;
+    }
+    
+    // Exclure les SAV résolus et annulés
+    $whereSav[] = "statut NOT IN ('resolu', 'annule')";
+    
+    // Vérifier si type_panne existe
+    $hasTypePanne = false;
+    try {
+        $checkTypePanne = $pdo->query("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'sav' 
+            AND COLUMN_NAME = 'type_panne'
+        ");
+        $hasTypePanne = ($checkTypePanne->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+    } catch (PDOException $e) {
+        error_log('agenda.php - Erreur vérification colonne type_panne: ' . $e->getMessage());
+    }
+    
+    $selectTypePanne = $hasTypePanne ? "s.type_panne," : "";
+    
+    $sqlSav = "
+        SELECT 
+            s.id,
+            s.reference,
+            s.description,
+            s.date_ouverture,
+            {$selectDateIntervention}
+            s.statut,
+            s.priorite,
+            {$selectTypePanne}
+            c.raison_sociale AS client_nom,
+            c.adresse AS client_adresse,
+            c.ville AS client_ville,
+            c.code_postal AS client_code_postal,
+            u.nom AS technicien_nom,
+            u.prenom AS technicien_prenom,
+            u.Emploi AS technicien_role
+        FROM sav s
+        LEFT JOIN clients c ON c.id = s.id_client
+        LEFT JOIN utilisateurs u ON u.id = s.id_technicien
+        WHERE " . implode(' AND ', $whereSav) . "
+        ORDER BY {$dateOrderBy} ASC, s.priorite DESC
+    ";
+    
+    $stmtSav = $pdo->prepare($sqlSav);
+    $stmtSav->execute($paramsSav);
+    $savs = $stmtSav->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('agenda.php - Erreur récupération SAV: ' . $e->getMessage());
+}
+
+// Récupérer les livraisons
+$livraisons = [];
+try {
+    $whereLiv = ["date_prevue BETWEEN :start_date AND :end_date"];
+    $paramsLiv = [
+        ':start_date' => $startDate,
+        ':end_date' => $endDate
+    ];
+    
+    // Filtrer par livreur si spécifié
+    if ($filterUser) {
+        $whereLiv[] = "id_livreur = :livreur_id";
+        $paramsLiv[':livreur_id'] = $filterUser;
+    } elseif (!$isAdmin) {
+        // Si pas admin, afficher uniquement les livraisons assignées à l'utilisateur
+        $whereLiv[] = "id_livreur = :current_user_id";
+        $paramsLiv[':current_user_id'] = $currentUserId;
+    }
+    
+    // Exclure les livraisons livrées et annulées
+    $whereLiv[] = "statut NOT IN ('livree', 'annulee')";
+    
+    $sqlLiv = "
+        SELECT 
+            l.id,
+            l.reference,
+            l.objet,
+            l.date_prevue,
+            l.date_reelle,
+            l.statut,
+            l.adresse_livraison,
+            c.raison_sociale AS client_nom,
+            c.ville AS client_ville,
+            c.code_postal AS client_code_postal,
+            u.nom AS livreur_nom,
+            u.prenom AS livreur_prenom,
+            u.Emploi AS livreur_role
+        FROM livraisons l
+        LEFT JOIN clients c ON c.id = l.id_client
+        LEFT JOIN utilisateurs u ON u.id = l.id_livreur
+        WHERE " . implode(' AND ', $whereLiv) . "
+        ORDER BY l.date_prevue ASC, l.id ASC
+    ";
+    
+    $stmtLiv = $pdo->prepare($sqlLiv);
+    $stmtLiv->execute($paramsLiv);
+    $livraisons = $stmtLiv->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('agenda.php - Erreur récupération livraisons: ' . $e->getMessage());
+}
+
+// Grouper par date
+$agendaByDate = [];
+
+foreach ($savs as $sav) {
+    $date = ($hasDateIntervention && !empty($sav['date_intervention_prevue'])) 
+        ? $sav['date_intervention_prevue'] 
+        : $sav['date_ouverture'];
+    if (!isset($agendaByDate[$date])) {
+        $agendaByDate[$date] = ['savs' => [], 'livraisons' => []];
+    }
+    $agendaByDate[$date]['savs'][] = $sav;
+}
+
+foreach ($livraisons as $liv) {
+    $date = $liv['date_prevue'];
+    if (!isset($agendaByDate[$date])) {
+        $agendaByDate[$date] = ['savs' => [], 'livraisons' => []];
+    }
+    $agendaByDate[$date]['livraisons'][] = $liv;
+}
+
+// Trier les dates
+ksort($agendaByDate);
+
+// Statistiques
+$totalSavs = count($savs);
+$totalLivraisons = count($livraisons);
+?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Agenda - CCComputer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="/assets/css/main.css">
+    <link rel="stylesheet" href="/assets/css/maps.css">
+    <link rel="stylesheet" href="/assets/css/agenda.css">
+</head>
+<body class="page-maps page-agenda">
+
+<?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+
+<main class="page-container">
+    <header class="page-header">
+        <h1 class="page-title">Agenda</h1>
+        <p class="page-sub">
+            Visualisez tous les SAV et livraisons prévus par jour pour chaque utilisateur.<br>
+            <strong><?= h((string)$totalSavs) ?> SAV</strong> et <strong><?= h((string)$totalLivraisons) ?> livraison(s)</strong> sur la période sélectionnée.
+        </p>
+    </header>
+
+    <section class="maps-layout">
+        <!-- PANNEAU GAUCHE : FILTRES -->
+        <aside class="maps-panel" aria-label="Filtres de l'agenda">
+            <h2>Filtres</h2>
+            
+            <!-- Mode d'affichage -->
+            <div>
+                <div class="section-title">Vue</div>
+                <div class="btn-group" style="flex-direction: column; gap: 0.3rem;">
+                    <a href="/public/agenda.php?view=day&date=<?= h($filterDate) ?><?= $filterUser ? '&user_id=' . $filterUser : '' ?>"
+                       class="btn <?= $viewMode === 'day' ? 'primary' : 'secondary' ?>"
+                       style="width: 100%; text-align: center; text-decoration: none;">
+                        📅 Jour
+                    </a>
+                    <a href="/public/agenda.php?view=week&date=<?= h($filterDate) ?><?= $filterUser ? '&user_id=' . $filterUser : '' ?>"
+                       class="btn <?= $viewMode === 'week' ? 'primary' : 'secondary' ?>"
+                       style="width: 100%; text-align: center; text-decoration: none;">
+                        📆 Semaine
+                    </a>
+                    <a href="/public/agenda.php?view=month&date=<?= h($filterDate) ?><?= $filterUser ? '&user_id=' . $filterUser : '' ?>"
+                       class="btn <?= $viewMode === 'month' ? 'primary' : 'secondary' ?>"
+                       style="width: 100%; text-align: center; text-decoration: none;">
+                        📋 Mois
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filtre par utilisateur -->
+            <?php if ($isAdmin): ?>
+            <div style="margin-top: 1rem;">
+                <div class="section-title">Utilisateur</div>
+                <select id="filterUser" class="messagerie-select" onchange="filterByUser(this.value)">
+                    <option value="">Tous les utilisateurs</option>
+                    <?php foreach ($users as $user): ?>
+                        <option value="<?= (int)$user['id'] ?>" <?= $filterUser === (int)$user['id'] ? 'selected' : '' ?>>
+                            <?= h(trim(($user['prenom'] ?? '') . ' ' . ($user['nom'] ?? ''))) ?> (<?= h($user['Emploi'] ?? '') ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php else: ?>
+                <div style="margin-top: 1rem;">
+                    <div class="section-title">Utilisateur</div>
+                    <p class="hint">
+                        <?php
+                        $currentUser = array_filter($users, function($u) use ($currentUserId) {
+                            return (int)$u['id'] === $currentUserId;
+                        });
+                        $currentUser = reset($currentUser);
+                        if ($currentUser):
+                        ?>
+                            <?= h(trim(($currentUser['prenom'] ?? '') . ' ' . ($currentUser['nom'] ?? ''))) ?> (<?= h($currentUser['Emploi'] ?? '') ?>)
+                        <?php else: ?>
+                            Vous
+                        <?php endif; ?>
+                    </p>
+                </div>
+            <?php endif; ?>
+
+            <!-- Navigation de dates -->
+            <div style="margin-top: 1rem;">
+                <div class="section-title">Date</div>
+                <div class="btn-group" style="flex-direction: column; gap: 0.3rem;">
+                    <input type="date" 
+                           id="datePicker" 
+                           class="messagerie-input" 
+                           value="<?= h($filterDate) ?>"
+                           onchange="navigateToDate(this.value)">
+                    <div style="display: flex; gap: 0.3rem;">
+                        <button type="button" 
+                                class="btn secondary" 
+                                onclick="navigateDate(-1)"
+                                style="flex: 1;">
+                            ← Précédent
+                        </button>
+                        <button type="button" 
+                                class="btn secondary" 
+                                onclick="navigateDate(1)"
+                                style="flex: 1;">
+                            Suivant →
+                        </button>
+                    </div>
+                    <button type="button" 
+                            class="btn secondary" 
+                            onclick="navigateToDate('<?= date('Y-m-d') ?>')"
+                            style="width: 100%;">
+                        📅 Aujourd'hui
+                    </button>
+                </div>
+            </div>
+
+            <!-- Statistiques -->
+            <div style="margin-top: 1rem;">
+                <div class="section-title">Statistiques</div>
+                <div class="agenda-stats">
+                    <div class="agenda-stat-item">
+                        <span class="agenda-stat-label">SAV</span>
+                        <span class="agenda-stat-value"><?= h((string)$totalSavs) ?></span>
+                    </div>
+                    <div class="agenda-stat-item">
+                        <span class="agenda-stat-label">Livraisons</span>
+                        <span class="agenda-stat-value"><?= h((string)$totalLivraisons) ?></span>
+                    </div>
+                    <div class="agenda-stat-item">
+                        <span class="agenda-stat-label">Total</span>
+                        <span class="agenda-stat-value"><?= h((string)($totalSavs + $totalLivraisons)) ?></span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- PANNEAU DROIT : AGENDA -->
+        <section class="map-wrapper">
+            <div class="map-toolbar">
+                <div class="map-toolbar-left">
+                    <strong>Agenda</strong> – 
+                    <?php if ($viewMode === 'day'): ?>
+                        <?= h(date('d/m/Y', strtotime($filterDate))) ?>
+                    <?php elseif ($viewMode === 'week'): ?>
+                        Semaine du <?= h(date('d/m/Y', strtotime($startDate))) ?> au <?= h(date('d/m/Y', strtotime($endDate))) ?>
+                    <?php else: ?>
+                        <?= h(date('F Y', strtotime($filterDate))) ?>
+                    <?php endif; ?>
+                </div>
+                <div class="map-toolbar-right">
+                    <span class="badge">Vue : <?= $viewMode === 'day' ? 'Jour' : ($viewMode === 'week' ? 'Semaine' : 'Mois') ?></span>
+                    <?php if ($filterUser): ?>
+                        <?php
+                        $selectedUser = array_filter($users, function($u) use ($filterUser) {
+                            return (int)$u['id'] === $filterUser;
+                        });
+                        $selectedUser = reset($selectedUser);
+                        ?>
+                        <span class="badge">Utilisateur : <?= $selectedUser ? h(trim(($selectedUser['prenom'] ?? '') . ' ' . ($selectedUser['nom'] ?? ''))) : 'N/A' ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="agenda-container">
+                <?php if (empty($agendaByDate)): ?>
+                    <div class="agenda-empty">
+                        <p>Aucun SAV ou livraison prévu pour cette période.</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($agendaByDate as $date => $items): ?>
+                        <div class="agenda-day">
+                            <div class="agenda-day-header">
+                                <h3 class="agenda-day-title">
+                                    <?= h(date('l d/m/Y', strtotime($date))) ?>
+                                    <?php if ($date === date('Y-m-d')): ?>
+                                        <span class="badge" style="margin-left: 0.5rem; background: #3b82f6;">Aujourd'hui</span>
+                                    <?php endif; ?>
+                                </h3>
+                                <div class="agenda-day-count">
+                                    <?= count($items['savs']) ?> SAV, <?= count($items['livraisons']) ?> livraison(s)
+                                </div>
+                            </div>
+
+                            <div class="agenda-day-content">
+                                <!-- SAV -->
+                                <?php if (!empty($items['savs'])): ?>
+                                    <div class="agenda-section">
+                                        <h4 class="agenda-section-title">🔧 SAV (<?= count($items['savs']) ?>)</h4>
+                                        <div class="agenda-items">
+                                            <?php foreach ($items['savs'] as $sav): ?>
+                                                <?php
+                                                $prioriteColors = [
+                                                    'urgente' => '#ef4444',
+                                                    'haute' => '#f97316',
+                                                    'normale' => '#16a34a',
+                                                    'basse' => '#6b7280'
+                                                ];
+                                                $prioriteLabels = [
+                                                    'urgente' => 'Urgente',
+                                                    'haute' => 'Haute',
+                                                    'normale' => 'Normale',
+                                                    'basse' => 'Basse'
+                                                ];
+                                                $statutLabels = [
+                                                    'ouvert' => 'Ouvert',
+                                                    'en_cours' => 'En cours',
+                                                    'resolu' => 'Résolu',
+                                                    'annule' => 'Annulé'
+                                                ];
+                                                $typePanneLabels = [
+                                                    'logiciel' => 'Logiciel',
+                                                    'materiel' => 'Matériel',
+                                                    'piece_rechangeable' => 'Pièce rechangeable'
+                                                ];
+                                                $priorite = $sav['priorite'] ?? 'normale';
+                                                $technicienNom = trim(($sav['technicien_prenom'] ?? '') . ' ' . ($sav['technicien_nom'] ?? ''));
+                                                $clientAdresse = trim(($sav['client_adresse'] ?? '') . ' ' . ($sav['client_code_postal'] ?? '') . ' ' . ($sav['client_ville'] ?? ''));
+                                                ?>
+                                                <div class="agenda-item agenda-item-sav" 
+                                                     data-sav-id="<?= (int)$sav['id'] ?>"
+                                                     onclick="window.location.href='/public/sav.php?ref=<?= urlencode($sav['reference']) ?>'">
+                                                    <div class="agenda-item-header">
+                                                        <div class="agenda-item-title">
+                                                            <strong><?= h($sav['reference']) ?></strong>
+                                                            <?php if ($sav['type_panne']): ?>
+                                                                <span class="agenda-item-badge" style="background: #6366f1;">
+                                                                    <?= h($typePanneLabels[$sav['type_panne']] ?? $sav['type_panne']) ?>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <span class="agenda-item-priority" style="background: <?= h($prioriteColors[$priorite] ?? '#6b7280') ?>;">
+                                                            <?= h($prioriteLabels[$priorite] ?? $priorite) ?>
+                                                        </span>
+                                                    </div>
+                                                    <div class="agenda-item-body">
+                                                        <div class="agenda-item-description">
+                                                            <?= h(mb_substr($sav['description'], 0, 100)) ?><?= mb_strlen($sav['description']) > 100 ? '...' : '' ?>
+                                                        </div>
+                                                        <div class="agenda-item-meta">
+                                                            <span>👤 <?= h($sav['client_nom'] ?? 'N/A') ?></span>
+                                                            <?php if ($clientAdresse): ?>
+                                                                <span>📍 <?= h($clientAdresse) ?></span>
+                                                            <?php endif; ?>
+                                                            <?php if ($technicienNom): ?>
+                                                                <span>🔧 <?= h($technicienNom) ?></span>
+                                                            <?php endif; ?>
+                                                            <span>📊 <?= h($statutLabels[$sav['statut']] ?? $sav['statut']) ?></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+
+                                <!-- Livraisons -->
+                                <?php if (!empty($items['livraisons'])): ?>
+                                    <div class="agenda-section">
+                                        <h4 class="agenda-section-title">📦 Livraisons (<?= count($items['livraisons']) ?>)</h4>
+                                        <div class="agenda-items">
+                                            <?php foreach ($items['livraisons'] as $liv): ?>
+                                                <?php
+                                                $statutColors = [
+                                                    'planifiee' => '#6b7280',
+                                                    'en_cours' => '#3b82f6',
+                                                    'livree' => '#16a34a',
+                                                    'annulee' => '#ef4444'
+                                                ];
+                                                $statutLabels = [
+                                                    'planifiee' => 'Planifiée',
+                                                    'en_cours' => 'En cours',
+                                                    'livree' => 'Livrée',
+                                                    'annulee' => 'Annulée'
+                                                ];
+                                                $livreurNom = trim(($liv['livreur_prenom'] ?? '') . ' ' . ($liv['livreur_nom'] ?? ''));
+                                                $clientAdresse = trim(($liv['client_ville'] ?? '') . ' ' . ($liv['client_code_postal'] ?? ''));
+                                                ?>
+                                                <div class="agenda-item agenda-item-livraison" 
+                                                     data-livraison-id="<?= (int)$liv['id'] ?>"
+                                                     onclick="window.location.href='/public/livraison.php?ref=<?= urlencode($liv['reference']) ?>'">
+                                                    <div class="agenda-item-header">
+                                                        <div class="agenda-item-title">
+                                                            <strong><?= h($liv['reference']) ?></strong>
+                                                        </div>
+                                                        <span class="agenda-item-status" style="background: <?= h($statutColors[$liv['statut']] ?? '#6b7280') ?>;">
+                                                            <?= h($statutLabels[$liv['statut']] ?? $liv['statut']) ?>
+                                                        </span>
+                                                    </div>
+                                                    <div class="agenda-item-body">
+                                                        <div class="agenda-item-description">
+                                                            <?= h($liv['objet'] ?? '') ?>
+                                                        </div>
+                                                        <div class="agenda-item-meta">
+                                                            <span>👤 <?= h($liv['client_nom'] ?? 'N/A') ?></span>
+                                                            <?php if ($liv['adresse_livraison']): ?>
+                                                                <span>📍 <?= h($liv['adresse_livraison']) ?></span>
+                                                            <?php elseif ($clientAdresse): ?>
+                                                                <span>📍 <?= h($clientAdresse) ?></span>
+                                                            <?php endif; ?>
+                                                            <?php if ($livreurNom): ?>
+                                                                <span>🚚 <?= h($livreurNom) ?></span>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </section>
+    </section>
+</main>
+
+<script>
+// Navigation de dates
+function navigateDate(days) {
+    const currentDate = document.getElementById('datePicker').value;
+    const date = new Date(currentDate);
+    date.setDate(date.getDate() + days);
+    const newDate = date.toISOString().split('T')[0];
+    navigateToDate(newDate);
+}
+
+function navigateToDate(date) {
+    const viewMode = '<?= h($viewMode) ?>';
+    const userId = <?= $filterUser ? (int)$filterUser : 'null' ?>;
+    let url = `/public/agenda.php?view=${viewMode}&date=${date}`;
+    if (userId) {
+        url += `&user_id=${userId}`;
+    }
+    window.location.href = url;
+}
+
+function filterByUser(userId) {
+    const viewMode = '<?= h($viewMode) ?>';
+    const date = '<?= h($filterDate) ?>';
+    let url = `/public/agenda.php?view=${viewMode}&date=${date}`;
+    if (userId) {
+        url += `&user_id=${userId}`;
+    }
+    window.location.href = url;
+}
+</script>
+</body>
+</html>
+

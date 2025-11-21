@@ -1,0 +1,222 @@
+/* Styles spécifiques à l'agenda */
+
+.page-agenda .maps-layout {
+    margin-top: 1rem;
+}
+
+/* Container principal de l'agenda */
+.agenda-container {
+    padding: 1rem;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+/* Jour dans l'agenda */
+.agenda-day {
+    margin-bottom: 2rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.agenda-day-header {
+    padding: 1rem 1.25rem;
+    background: var(--bg-tertiary);
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.agenda-day-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: capitalize;
+}
+
+.agenda-day-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.agenda-day-content {
+    padding: 1rem 1.25rem;
+}
+
+/* Section (SAV ou Livraisons) */
+.agenda-section {
+    margin-bottom: 1.5rem;
+}
+
+.agenda-section:last-child {
+    margin-bottom: 0;
+}
+
+.agenda-section-title {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Liste des items */
+.agenda-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Item d'agenda (SAV ou Livraison) */
+.agenda-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.85rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.agenda-item:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.agenda-item-sav {
+    border-left: 4px solid #f59e0b;
+}
+
+.agenda-item-livraison {
+    border-left: 4px solid #3b82f6;
+}
+
+.agenda-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    gap: 0.5rem;
+}
+
+.agenda-item-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.agenda-item-title strong {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.agenda-item-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+}
+
+.agenda-item-priority,
+.agenda-item-status {
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+}
+
+.agenda-item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.agenda-item-description {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.agenda-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.agenda-item-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Statistiques */
+.agenda-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.agenda-stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.agenda-stat-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.agenda-stat-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* État vide */
+.agenda-empty {
+    padding: 3rem 1rem;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.agenda-empty p {
+    margin: 0;
+    font-size: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .agenda-day-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .agenda-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .agenda-item-meta {
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+}
+
