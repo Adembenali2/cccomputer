@@ -1012,23 +1012,41 @@ document.addEventListener('click', (e) => {
         
         (async () => {
             try {
+                console.log('Tentative de suppression du message ID:', messageId);
+                console.log('CSRF Token:', csrfToken ? 'présent' : 'manquant');
+                
                 const response = await fetch('/API/messagerie_delete.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({
                         csrf_token: csrfToken,
                         message_id: parseInt(messageId, 10)
                     })
                 });
                 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Erreur HTTP:', response.status, errorText);
-                    throw new Error(`Erreur HTTP ${response.status}: ${errorText}`);
+                console.log('Réponse reçue, status:', response.status);
+                
+                // Lire le texte de la réponse d'abord
+                const responseText = await response.text();
+                console.log('Réponse texte:', responseText);
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (parseErr) {
+                    console.error('Erreur parsing JSON:', parseErr);
+                    console.error('Texte reçu:', responseText);
+                    throw new Error('Réponse invalide du serveur. Vérifiez la console pour plus de détails.');
                 }
                 
-                const result = await response.json();
-                console.log('Résultat suppression:', result);
+                console.log('Résultat parsé:', result);
+                
+                if (!response.ok) {
+                    throw new Error(result.error || `Erreur HTTP ${response.status}`);
+                }
                 
                 if (result.ok) {
                     // Masquer le message avec animation
@@ -1045,13 +1063,16 @@ document.addEventListener('click', (e) => {
                         window.location.reload();
                     }
                 } else {
-                    alert('Erreur: ' + (result.error || 'Erreur inconnue'));
+                    const errorMsg = result.error || 'Erreur inconnue';
+                    console.error('Erreur API:', errorMsg);
+                    alert('Erreur: ' + errorMsg);
                     btn.disabled = false;
                     btn.textContent = '🗑️ Supprimer';
                 }
             } catch (err) {
-                console.error('Erreur suppression:', err);
-                alert('Erreur lors de la suppression du message: ' + err.message);
+                console.error('Erreur suppression complète:', err);
+                console.error('Stack trace:', err.stack);
+                alert('Erreur lors de la suppression du message:\n' + err.message + '\n\nVérifiez la console pour plus de détails.');
                 btn.disabled = false;
                 btn.textContent = '🗑️ Supprimer';
             }

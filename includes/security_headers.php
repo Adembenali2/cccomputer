@@ -26,7 +26,9 @@ if ($isSecure) {
 
 // Content Security Policy (CSP) - à ajuster selon les besoins
 // Cette politique est stricte, vous devrez peut-être l'ajuster
-$csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';";
+// Note: 'unsafe-eval' est nécessaire pour certaines bibliothèques JavaScript
+// En production, essayez de l'enlever si possible
+$csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';";
 header("Content-Security-Policy: {$csp}");
 
 // Permissions Policy (anciennement Feature Policy)

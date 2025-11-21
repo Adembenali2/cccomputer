@@ -62,20 +62,31 @@ if ($messageId <= 0) {
 
 try {
     // Vérifier que la table messagerie existe
-    $checkTable = $pdo->query("SHOW TABLES LIKE 'messagerie'");
-    if ($checkTable->rowCount() === 0) {
-        jsonResponse(['ok' => false, 'error' => 'Table messagerie introuvable. Veuillez exécuter la migration SQL.'], 500);
+    try {
+        $checkTable = $pdo->query("SHOW TABLES LIKE 'messagerie'");
+        if ($checkTable->rowCount() === 0) {
+            jsonResponse(['ok' => false, 'error' => 'Table messagerie introuvable. Veuillez exécuter la migration SQL.'], 500);
+        }
+    } catch (PDOException $e) {
+        error_log('messagerie_delete.php - Erreur vérification table: ' . $e->getMessage());
+        jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
     }
     
     // Vérifier si la colonne id_message_parent existe
-    $checkColumn = $pdo->query("
-        SELECT COUNT(*) as cnt 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'messagerie' 
-        AND COLUMN_NAME = 'id_message_parent'
-    ");
-    $hasParentColumn = ($checkColumn->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+    $hasParentColumn = false;
+    try {
+        $checkColumn = $pdo->query("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'messagerie' 
+            AND COLUMN_NAME = 'id_message_parent'
+        ");
+        $hasParentColumn = ($checkColumn->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+    } catch (PDOException $e) {
+        // Si on ne peut pas vérifier, on assume que la colonne n'existe pas
+        error_log('messagerie_delete.php - Erreur vérification colonne id_message_parent: ' . $e->getMessage());
+    }
     
     // Vérifier que le message existe et que l'utilisateur a le droit de le supprimer
     $selectFields = "id, id_expediteur, id_destinataire, sujet";
@@ -110,7 +121,11 @@ try {
             SET supprime_expediteur = 1
             WHERE id = :id
         ");
-        $update->execute([':id' => $messageId]);
+        $result = $update->execute([':id' => $messageId]);
+        if (!$result) {
+            error_log('messagerie_delete.php - Erreur UPDATE supprime_expediteur pour message ID: ' . $messageId);
+            jsonResponse(['ok' => false, 'error' => 'Erreur lors de la suppression'], 500);
+        }
         $whoDeleted = 'expéditeur';
     } else {
         // Pour les messages "à tous", utiliser la table de lectures si elle existe
@@ -123,6 +138,7 @@ try {
                 $deleteRead->execute([':id_message' => $messageId, ':user_id' => $userId]);
             } catch (PDOException $e) {
                 // Si la table n'existe pas, on continue
+                error_log('messagerie_delete.php - Table messagerie_lectures non disponible: ' . $e->getMessage());
             }
         }
         $update = $pdo->prepare("
@@ -130,7 +146,11 @@ try {
             SET supprime_destinataire = 1
             WHERE id = :id
         ");
-        $update->execute([':id' => $messageId]);
+        $result = $update->execute([':id' => $messageId]);
+        if (!$result) {
+            error_log('messagerie_delete.php - Erreur UPDATE supprime_destinataire pour message ID: ' . $messageId);
+            jsonResponse(['ok' => false, 'error' => 'Erreur lors de la suppression'], 500);
+        }
         $whoDeleted = 'destinataire';
     }
     
@@ -148,15 +168,16 @@ try {
         enregistrerAction($pdo, $userId, 'message_supprime', $details);
     } catch (Throwable $e) {
         error_log('messagerie_delete.php log error: ' . $e->getMessage());
+        // On continue même si l'historique échoue
     }
     
     jsonResponse(['ok' => true, 'message' => 'Message supprimé avec succès']);
     
 } catch (PDOException $e) {
-    error_log('messagerie_delete.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('messagerie_delete.php SQL error: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
 } catch (Throwable $e) {
-    error_log('messagerie_delete.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
+    error_log('messagerie_delete.php error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
 }
 
