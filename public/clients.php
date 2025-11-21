@@ -71,11 +71,17 @@ function rowHasAlert(array $row): bool {
 function generateClientNumber(PDO $pdo): string {
     $sql = "SELECT LPAD(COALESCE(MAX(CAST(SUBSTRING(numero_client, 2) AS UNSIGNED)), 0) + 1, 5, '0') AS next_num
             FROM clients WHERE numero_client REGEXP '^C[0-9]{5}$'";
-    $next = $pdo->query($sql)->fetchColumn();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    $next = $stmt->fetchColumn();
     if (!$next) $next = '00001';
     return 'C'.$next;
 }
-function nextClientId(PDO $pdo): int { return (int)$pdo->query("SELECT COALESCE(MAX(id),0)+1 FROM clients")->fetchColumn(); }
+function nextClientId(PDO $pdo): int { 
+    $stmt = $pdo->prepare("SELECT COALESCE(MAX(id),0)+1 FROM clients");
+    $stmt->execute();
+    return (int)$stmt->fetchColumn(); 
+}
 function isNoDefaultIdError(PDOException $e): bool { $code = (int)($e->errorInfo[1] ?? 0); return in_array($code, [1364,1048], true); }
 
 /** POST: ajout client **/
@@ -318,7 +324,8 @@ if ($view === 'unassigned') {
 }
 
 try {
-    $stmt = $pdo->query($sql);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('clients.php SQL error: ' . $e->getMessage());

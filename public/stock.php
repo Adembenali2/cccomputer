@@ -68,7 +68,8 @@ try {
       v.SerialNumber IS NULL, v.SerialNumber,
       v.MacAddress
   ";
-  $stmt = $pdo->query($sql);
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute();
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
   foreach ($rows as $r) {

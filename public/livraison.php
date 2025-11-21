@@ -1,5 +1,5 @@
 <?php
-// /public/livraisons.php
+// /public/livraison.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/historique.php';
@@ -268,7 +268,8 @@ try {
         LEFT JOIN utilisateurs u ON u.id = l.id_livreur
         ORDER BY l.date_prevue DESC, l.id DESC
     ";
-    $stmt = $pdo->query($sql);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('livraisons.php SQL error: ' . $e->getMessage());

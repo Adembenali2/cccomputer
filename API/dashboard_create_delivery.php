@@ -119,7 +119,7 @@ try {
     // ─────────────────────────────────────────────
     // Si aucun id_livreur envoyé, on choisit automatiquement un livreur actif
     if ($idLivreur <= 0) {
-        $autoLiv = $pdo->query("
+        $autoLiv = $pdo->prepare("
             SELECT id, nom, prenom, Emploi, statut
             FROM utilisateurs
             WHERE Emploi = 'Livreur'
@@ -127,6 +127,7 @@ try {
             ORDER BY RAND()
             LIMIT 1
         ");
+        $autoLiv->execute();
         $livreur = $autoLiv->fetch(PDO::FETCH_ASSOC);
         
         if (!$livreur) {

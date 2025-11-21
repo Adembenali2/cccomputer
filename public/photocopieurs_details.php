@@ -160,15 +160,17 @@ try {
 /* ---------- Liste des clients (pour la popup) ---------- */
 $clientsList = [];
 try {
-  $clientsList = $pdo->query("
+  $stmt = $pdo->prepare("
     SELECT id, numero_client, raison_sociale,
            COALESCE(nom_dirigeant,'') AS nom_dirigeant,
            COALESCE(prenom_dirigeant,'') AS prenom_dirigeant,
            telephone1
     FROM clients
     ORDER BY raison_sociale ASC
-    LIMIT " . CLIENT_OPTIONS_LIMIT
-  )->fetchAll(PDO::FETCH_ASSOC);
+    LIMIT 500
+  ");
+  $stmt->execute();
+  $clientsList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
   error_log('clients list error: '.$e->getMessage());
 }
