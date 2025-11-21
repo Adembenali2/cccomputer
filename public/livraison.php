@@ -292,6 +292,16 @@ foreach ($rows as $idx => $l) {
 // Vue (toutes / retard / aujourd’hui / archive)
 // ============================================================================
 $view = $_GET['view'] ?? 'toutes';
+$currentRole = currentUserRole();
+$isAdminOrDirigeant = in_array($currentRole, ['Admin', 'Dirigeant'], true);
+
+// Vérifier les permissions pour l'archive
+if ($view === 'archive' && !$isAdminOrDirigeant) {
+    // Rediriger vers la vue "toutes" si l'utilisateur n'est pas autorisé
+    $flash = ['type' => 'error', 'msg' => "Vous n'êtes pas autorisé à accéder à l'archive."];
+    $view = 'toutes';
+}
+
 if (!in_array($view, ['toutes', 'retard', 'aujourdhui', 'archive'], true)) {
     $view = 'toutes';
 }
@@ -388,7 +398,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       <?php if ($listedCount === 0): ?>
         <span class="meta-chip">Aucune donnée</span>
       <?php endif; ?>
-      <?php if ($view !== 'archive'): ?>
+      <?php if ($view !== 'archive' && $isAdminOrDirigeant): ?>
         <span class="meta-sub">Archive : <?= h((string)$archiveCount) ?> livraison(s)</span>
       <?php endif; ?>
     </div>
@@ -441,8 +451,10 @@ $lastRefreshLabel = date('d/m/Y à H:i');
          class="btn <?= $view === 'aujourdhui' ? 'btn-primary' : 'btn-outline' ?>">Aujourd'hui</a>
       <a href="/public/livraison.php?view=retard"
          class="btn <?= $view === 'retard' ? 'btn-primary' : 'btn-outline' ?>">En retard</a>
+      <?php if ($isAdminOrDirigeant): ?>
       <a href="/public/livraison.php?view=archive"
          class="btn <?= $view === 'archive' ? 'btn-primary' : 'btn-outline' ?>">📦 Archive</a>
+      <?php endif; ?>
     </div>
   </div>
 
