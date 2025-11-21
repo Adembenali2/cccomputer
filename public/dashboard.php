@@ -32,6 +32,17 @@ $safeFetchAll = static function (PDO $pdo, string $sql, array $params = [], stri
     }
 };
 
+/** CSRF minimal **/
+function ensureCsrfToken(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+// Générer un token CSRF si manquant
+ensureCsrfToken();
+
 // ==================================================================
 // Historique des actions (requêtes SQL réelles)
 // ==================================================================
@@ -309,6 +320,15 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         </svg>
                         Informations
                     </button>
+                    <button class="cdv-nav-btn" data-tab="livraison" aria-selected="false">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="1" y="3" width="15" height="13"/>
+                            <polygon points="16,8 20,8 23,11 23,16 16,16 16,8"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                        Livraisons
+                    </button>
                 </div>
                 <div class="cdv-main">
                     <div class="cdv-tab" data-tab="home">
@@ -372,6 +392,97 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                             <div class="cdv-field"><div class="lbl">PDF 4</div><div class="val" id="cf-pdf4">—</div></div>
                             <div class="cdv-field"><div class="lbl">PDF 5</div><div class="val" id="cf-pdf5">—</div></div>
                             <div class="cdv-field"><div class="lbl">PDF Contrat</div><div class="val" id="cf-pdfcontrat">—</div></div>
+                        </div>
+                    </div>
+
+                    <div class="cdv-tab" data-tab="livraison" style="display:none;">
+                        <div class="cdv-header">
+                            <div class="cdv-title">Gestion des livraisons</div>
+                            <div class="cdv-sub">Client : <span id="livraison-client-name">—</span></div>
+                        </div>
+                        
+                        <!-- Liste des livraisons existantes -->
+                        <div id="deliveryListContainer" style="margin-bottom: 1.5rem;">
+                            <h4 style="margin-bottom: 0.5rem;">Livraisons existantes</h4>
+                            <div id="deliveryList" style="max-height: 300px; overflow-y: auto;">
+                                <p class="hint">Chargement...</p>
+                            </div>
+                        </div>
+
+                        <!-- Formulaire de nouvelle livraison -->
+                        <div id="deliveryFormContainer">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4 style="margin: 0;">Nouvelle livraison</h4>
+                                <button type="button" id="toggleDeliveryForm" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">➕ Ajouter</button>
+                            </div>
+                            
+                            <form id="deliveryForm" style="display: none;" class="standard-form">
+                                <input type="hidden" id="deliveryClientId" name="client_id">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(ensureCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+                                
+                                <div class="form-row">
+                                    <label>Référence*</label>
+                                    <input type="text" id="deliveryReference" name="reference" required 
+                                           placeholder="Ex: LIV-2024-001" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Adresse de livraison*</label>
+                                    <textarea id="deliveryAddress" name="adresse_livraison" required rows="2"
+                                              placeholder="Adresse complète de livraison" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Type de produit*</label>
+                                    <select id="deliveryProductType" name="product_type" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                        <option value="">-- Sélectionner le type --</option>
+                                        <option value="papier">Papier</option>
+                                        <option value="toner">Toner</option>
+                                        <option value="lcd">LCD</option>
+                                        <option value="pc">PC</option>
+                                        <option value="autre">Autre</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="deliveryProductContainer" class="form-row" style="display: none;">
+                                    <label>Produit spécifique*</label>
+                                    <select id="deliveryProduct" name="product_id" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                        <option value="">-- Chargement... --</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Objet / Description*</label>
+                                    <input type="text" id="deliveryObjet" name="objet" required 
+                                           placeholder="Description de la livraison" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Livreur*</label>
+                                    <select id="deliveryLivreur" name="id_livreur" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                        <option value="">-- Chargement... --</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Date prévue*</label>
+                                    <input type="date" id="deliveryDatePrevue" name="date_prevue" required 
+                                           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                </div>
+                                
+                                <div class="form-row">
+                                    <label>Commentaire</label>
+                                    <textarea id="deliveryCommentaire" name="commentaire" rows="3"
+                                              placeholder="Notes supplémentaires..." style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                                </div>
+                                
+                                <div id="deliveryError" class="error-message" style="display: none; padding: 0.5rem; background: #fee2e2; color: #dc2626; border-radius: 4px; margin-bottom: 1rem;"></div>
+                                
+                                <div class="form-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                                    <button type="submit" class="btn-primary">✅ Créer la livraison</button>
+                                    <button type="button" id="cancelDeliveryForm" class="btn-secondary">Annuler</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -636,7 +747,176 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         function loadClientDetail(id){
             const client = (CLIENTS_DATA || []).find(c => String(c.id) === String(id)) || {};
             fillClientFields(client);
+            
+            // Mettre à jour l'ID client dans le formulaire de livraison
+            const deliveryClientIdEl = document.getElementById('deliveryClientId');
+            if (deliveryClientIdEl) {
+                deliveryClientIdEl.value = id;
+            }
+            
+            // Mettre à jour le nom du client dans l'onglet livraison
+            const clientNameEl = document.getElementById('livraison-client-name');
+            if (clientNameEl && client.raison_sociale) {
+                clientNameEl.textContent = client.raison_sociale;
+            }
+            
             showDetail();
+            
+            // Charger les livreurs
+            loadLivreurs();
+            
+            // Si l'onglet livraison est actif, charger les livraisons
+            const livraisonTab = document.querySelector('.cdv-nav-btn[data-tab="livraison"]');
+            if (livraisonTab && livraisonTab.getAttribute('aria-selected') === 'true') {
+                loadDeliveries(id);
+            }
+        }
+        
+        // Charger les livraisons du client
+        async function loadDeliveries(clientId) {
+            const deliveryList = document.getElementById('deliveryList');
+            if (!deliveryList) return;
+            
+            deliveryList.innerHTML = '<p class="hint">Chargement...</p>';
+            
+            try {
+                const response = await fetch(`/API/dashboard_get_deliveries.php?client_id=${clientId}`);
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    deliveryList.innerHTML = `<p class="hint" style="color: #dc2626;">Erreur: ${data.error || 'Erreur de chargement'}</p>`;
+                    return;
+                }
+                
+                const livraisons = data.livraisons || [];
+                
+                if (livraisons.length === 0) {
+                    deliveryList.innerHTML = '<p class="hint">Aucune livraison pour ce client.</p>';
+                    return;
+                }
+                
+                deliveryList.innerHTML = '';
+                livraisons.forEach(liv => {
+                    const statutLabels = {
+                        'planifiee': 'Planifiée',
+                        'en_cours': 'En cours',
+                        'livree': 'Livrée',
+                        'annulee': 'Annulée'
+                    };
+                    const statutColors = {
+                        'planifiee': '#f59e0b',
+                        'en_cours': '#3b82f6',
+                        'livree': '#16a34a',
+                        'annulee': '#dc2626'
+                    };
+                    
+                    const item = document.createElement('div');
+                    item.style.cssText = 'padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 0.5rem; background: #f9fafb;';
+                    item.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                            <div>
+                                <strong>${escapeHtml(liv.reference)}</strong>
+                                <span style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: ${statutColors[liv.statut] || '#666'}; color: white; font-size: 0.75rem;">
+                                    ${statutLabels[liv.statut] || liv.statut}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.9rem; margin-bottom: 0.25rem;">
+                            <strong>Objet:</strong> ${escapeHtml(liv.objet)}
+                        </div>
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.25rem;">
+                            <strong>Adresse:</strong> ${escapeHtml(liv.adresse_livraison)}
+                        </div>
+                        <div style="font-size: 0.85rem; color: #666;">
+                            <strong>Date prévue:</strong> ${escapeHtml(liv.date_prevue)}
+                            ${liv.livreur_nom ? `<br><strong>Livreur:</strong> ${escapeHtml(liv.livreur_prenom + ' ' + liv.livreur_nom)}` : ''}
+                        </div>
+                    `;
+                    deliveryList.appendChild(item);
+                });
+                
+            } catch (err) {
+                console.error('Erreur chargement livraisons:', err);
+                deliveryList.innerHTML = '<p class="hint" style="color: #dc2626;">Erreur de chargement des livraisons.</p>';
+            }
+        }
+        
+        // Charger les livreurs
+        async function loadLivreurs() {
+            const select = document.getElementById('deliveryLivreur');
+            if (!select) return;
+            
+            try {
+                const response = await fetch('/API/dashboard_get_livreurs.php');
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    select.innerHTML = '<option value="">Erreur de chargement</option>';
+                    return;
+                }
+                
+                const livreurs = data.livreurs || [];
+                select.innerHTML = '<option value="">-- Sélectionner un livreur --</option>';
+                
+                livreurs.forEach(liv => {
+                    const option = document.createElement('option');
+                    option.value = liv.id;
+                    option.textContent = liv.full_name + (liv.telephone ? ' (' + liv.telephone + ')' : '');
+                    select.appendChild(option);
+                });
+                
+            } catch (err) {
+                console.error('Erreur chargement livreurs:', err);
+                select.innerHTML = '<option value="">Erreur de chargement</option>';
+            }
+        }
+        
+        // Charger les produits du stock par type
+        async function loadStockProducts(type) {
+            const select = document.getElementById('deliveryProduct');
+            const container = document.getElementById('deliveryProductContainer');
+            if (!select || !container) return;
+            
+            if (!type || type === 'autre') {
+                container.style.display = 'none';
+                select.innerHTML = '<option value="">-- Sélectionner un produit --</option>';
+                return;
+            }
+            
+            container.style.display = 'block';
+            select.innerHTML = '<option value="">Chargement...</option>';
+            
+            try {
+                const response = await fetch(`/API/dashboard_get_stock_products.php?type=${encodeURIComponent(type)}`);
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    select.innerHTML = '<option value="">Erreur de chargement</option>';
+                    return;
+                }
+                
+                const products = data.products || [];
+                select.innerHTML = '<option value="">-- Sélectionner un produit --</option>';
+                
+                products.forEach(prod => {
+                    const option = document.createElement('option');
+                    option.value = prod.id;
+                    option.setAttribute('data-type', prod.type);
+                    option.textContent = prod.label + ' (Stock: ' + prod.qty_stock + ')';
+                    select.appendChild(option);
+                });
+                
+            } catch (err) {
+                console.error('Erreur chargement produits:', err);
+                select.innerHTML = '<option value="">Erreur de chargement</option>';
+            }
+        }
+        
+        // Helper pour échapper HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Gestion formulaire attribution : bouton Annuler
@@ -676,6 +956,147 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 handleClientClick(card);
             });
         }
+        
+        // Gestion de l'onglet Livraisons
+        const deliveryTab = document.querySelector('.cdv-nav-btn[data-tab="livraison"]');
+        const deliveryFormContainer = document.getElementById('deliveryFormContainer');
+        const toggleDeliveryForm = document.getElementById('toggleDeliveryForm');
+        const cancelDeliveryForm = document.getElementById('cancelDeliveryForm');
+        const deliveryForm = document.getElementById('deliveryForm');
+        const deliveryProductType = document.getElementById('deliveryProductType');
+        
+        // Quand on active l'onglet livraison, mettre à jour le nom du client
+        deliveryTab && deliveryTab.addEventListener('click', function() {
+            const clientId = document.getElementById('deliveryClientId')?.value;
+            const client = (CLIENTS_DATA || []).find(c => String(c.id) === String(clientId)) || {};
+            const clientNameEl = document.getElementById('livraison-client-name');
+            if (clientNameEl && client.raison_sociale) {
+                clientNameEl.textContent = client.raison_sociale;
+            }
+            if (clientId) {
+                loadDeliveries(clientId);
+            }
+        });
+        
+        // Toggle formulaire de livraison
+        toggleDeliveryForm && toggleDeliveryForm.addEventListener('click', function() {
+            if (deliveryForm.style.display === 'none') {
+                const clientId = document.getElementById('deliveryClientId')?.value;
+                const client = (CLIENTS_DATA || []).find(c => String(c.id) === String(clientId)) || {};
+                
+                // Préremplir les champs
+                if (client.id) {
+                    document.getElementById('deliveryClientId').value = client.id;
+                    if (client.adresse_livraison) {
+                        document.getElementById('deliveryAddress').value = client.adresse_livraison;
+                    } else {
+                        const address = [client.adresse, client.code_postal, client.ville].filter(Boolean).join(' ');
+                        document.getElementById('deliveryAddress').value = address;
+                    }
+                }
+                
+                // Générer une référence automatique
+                const now = new Date();
+                const ref = 'LIV-' + now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+                document.getElementById('deliveryReference').value = ref;
+                
+                // Définir la date prévue par défaut (aujourd'hui)
+                const today = now.toISOString().split('T')[0];
+                document.getElementById('deliveryDatePrevue').value = today;
+                
+                deliveryForm.style.display = 'block';
+                toggleDeliveryForm.textContent = '❌ Annuler';
+            } else {
+                deliveryForm.style.display = 'none';
+                deliveryForm.reset();
+                document.getElementById('deliveryProductContainer').style.display = 'none';
+                toggleDeliveryForm.textContent = '➕ Ajouter';
+                document.getElementById('deliveryError').style.display = 'none';
+            }
+        });
+        
+        cancelDeliveryForm && cancelDeliveryForm.addEventListener('click', function() {
+            deliveryForm.style.display = 'none';
+            deliveryForm.reset();
+            document.getElementById('deliveryProductContainer').style.display = 'none';
+            toggleDeliveryForm.textContent = '➕ Ajouter';
+            document.getElementById('deliveryError').style.display = 'none';
+        });
+        
+        // Sélection du type de produit
+        deliveryProductType && deliveryProductType.addEventListener('change', function() {
+            loadStockProducts(this.value);
+        });
+        
+        // Soumission du formulaire de livraison
+        deliveryForm && deliveryForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const errorDiv = document.getElementById('deliveryError');
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            
+            const formData = new FormData(deliveryForm);
+            const data = {
+                client_id: parseInt(formData.get('client_id'), 10),
+                reference: formData.get('reference').trim(),
+                adresse_livraison: formData.get('adresse_livraison').trim(),
+                objet: formData.get('objet').trim(),
+                id_livreur: parseInt(formData.get('id_livreur'), 10),
+                date_prevue: formData.get('date_prevue'),
+                commentaire: formData.get('commentaire').trim(),
+                csrf_token: formData.get('csrf_token')
+            };
+            
+            // Ajouter le produit sélectionné si disponible
+            const productType = formData.get('product_type');
+            const productId = formData.get('product_id');
+            if (productType && productId && productType !== 'autre') {
+                data.product_type = productType;
+                data.product_id = parseInt(productId, 10);
+                data.product_qty = 1; // Quantité par défaut
+            }
+            
+            try {
+                const response = await fetch('/API/dashboard_create_delivery.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (!result.ok) {
+                    errorDiv.textContent = result.error || 'Erreur lors de la création de la livraison';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Succès : recharger les livraisons et cacher le formulaire
+                const clientId = data.client_id;
+                await loadDeliveries(clientId);
+                
+                deliveryForm.style.display = 'none';
+                deliveryForm.reset();
+                document.getElementById('deliveryProductContainer').style.display = 'none';
+                toggleDeliveryForm.textContent = '➕ Ajouter';
+                errorDiv.style.display = 'none';
+                
+                // Afficher un message de succès temporaire
+                const successMsg = document.createElement('div');
+                successMsg.style.cssText = 'padding: 0.5rem; background: #d1fae5; color: #065f46; border-radius: 4px; margin-bottom: 1rem;';
+                successMsg.textContent = '✅ ' + (result.message || 'Livraison créée avec succès');
+                deliveryFormContainer.insertBefore(successMsg, deliveryFormContainer.firstChild);
+                setTimeout(() => successMsg.remove(), 3000);
+                
+            } catch (err) {
+                console.error('Erreur création livraison:', err);
+                errorDiv.textContent = 'Erreur de connexion lors de la création de la livraison';
+                errorDiv.style.display = 'block';
+            }
+        });
     })();
 
     // --- Import auto silencieux SFTP + badge (tick 20s, batch 10) ---
