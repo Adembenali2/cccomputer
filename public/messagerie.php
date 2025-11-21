@@ -127,6 +127,8 @@ try {
         $params[':user_id'] = $currentUserId;
         $params[':user_id2'] = $currentUserId;
     } elseif ($view === 'envoyes') {
+        // Inclut tous les messages envoyés par l'utilisateur, y compris les réponses
+        // (les réponses ont aussi id_expediteur = user_id)
         $where[] = "id_expediteur = :user_id";
         if ($hasSupprimeColumns) {
             $where[] = "supprime_expediteur = 0";
@@ -438,7 +440,7 @@ $totalMessages = count($messages);
                             
                             <div class="message-subject">
                                 <?php if (!empty($msg['id_message_parent'])): ?>
-                                    <span class="message-reply-indicator">↩️ Réponse à:</span>
+                                    <span class="message-reply-indicator" style="color: #3b82f6; font-weight: 600; margin-right: 0.5rem;">↩️ Réponse</span>
                                 <?php endif; ?>
                                 <strong><?= h($msg['sujet']) ?></strong>
                             </div>
