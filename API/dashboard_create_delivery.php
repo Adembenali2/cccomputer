@@ -289,7 +289,10 @@ try {
             objet,
             date_prevue,
             commentaire,
-            statut
+            statut,
+            product_type,
+            product_id,
+            product_qty
         ) VALUES (
             :id_client,
             :id_livreur,
@@ -298,7 +301,10 @@ try {
             :objet,
             :date_prevue,
             :commentaire,
-            'planifiee'
+            'planifiee',
+            :product_type,
+            :product_id,
+            :product_qty
         )
     ";
     
@@ -310,7 +316,10 @@ try {
         ':adresse_livraison' => $adresseLivraison,
         ':objet' => $objetFinal,
         ':date_prevue' => $datePrevue,
-        ':commentaire' => empty($commentaire) ? null : $commentaire
+        ':commentaire' => empty($commentaire) ? null : $commentaire,
+        ':product_type' => ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productType : null,
+        ':product_id' => ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productId : null,
+        ':product_qty' => ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productQty : null
     ]);
     
     $livraisonId = (int)$pdo->lastInsertId();

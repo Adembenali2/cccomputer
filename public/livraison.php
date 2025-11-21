@@ -100,24 +100,87 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     // - si on passe en "livree" et qu'il n'y a pas encore de date_reelle -> on met aujourd'hui
                     // - sinon on laisse la date_reelle telle quelle
                     $dateReelle = $liv['date_reelle'] ?? null;
+                    $oldStatut = $liv['statut'] ?? '';
+                    $isBecomingLivree = ($newStatut === 'livree' && $oldStatut !== 'livree');
+                    
                     if ($newStatut === 'livree' && empty($dateReelle)) {
                         $dateReelle = $today;
                     }
 
-                    $upd = $pdo->prepare("
-                        UPDATE livraisons
-                        SET statut = :statut,
-                            date_reelle = :date_reelle,
-                            updated_at = NOW()
-                        WHERE id = :id
-                    ");
-                    $upd->execute([
-                        ':statut'      => $newStatut,
-                        ':date_reelle' => $dateReelle,
-                        ':id'          => $livraisonId,
-                    ]);
+                    $pdo->beginTransaction();
+                    try {
+                        $upd = $pdo->prepare("
+                            UPDATE livraisons
+                            SET statut = :statut,
+                                date_reelle = :date_reelle,
+                                updated_at = NOW()
+                            WHERE id = :id
+                        ");
+                        $upd->execute([
+                            ':statut'      => $newStatut,
+                            ':date_reelle' => $dateReelle,
+                            ':id'          => $livraisonId,
+                        ]);
 
-                    $flash = ['type'=>'success','msg'=>"Livraison mise à jour avec succès."];
+                        // Si la livraison vient d'être marquée comme "livrée", ajouter au stock client
+                        if ($isBecomingLivree && !empty($liv['product_type']) && !empty($liv['product_id']) && !empty($liv['product_qty'])) {
+                            $productType = $liv['product_type'];
+                            $productId = (int)$liv['product_id'];
+                            $productQty = (int)$liv['product_qty'];
+                            $clientId = (int)$liv['id_client'];
+
+                            if (in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true) && $clientId > 0 && $productQty > 0) {
+                                // Vérifier si le stock client existe déjà pour ce produit
+                                $checkStock = $pdo->prepare("
+                                    SELECT id, qty_stock 
+                                    FROM client_stock 
+                                    WHERE id_client = :client_id 
+                                      AND product_type = :product_type 
+                                      AND product_id = :product_id 
+                                    LIMIT 1
+                                ");
+                                $checkStock->execute([
+                                    ':client_id' => $clientId,
+                                    ':product_type' => $productType,
+                                    ':product_id' => $productId
+                                ]);
+                                $existingStock = $checkStock->fetch(PDO::FETCH_ASSOC);
+
+                                if ($existingStock) {
+                                    // Mettre à jour le stock existant
+                                    $updateStock = $pdo->prepare("
+                                        UPDATE client_stock 
+                                        SET qty_stock = qty_stock + :qty,
+                                            updated_at = NOW()
+                                        WHERE id = :id
+                                    ");
+                                    $updateStock->execute([
+                                        ':qty' => $productQty,
+                                        ':id' => $existingStock['id']
+                                    ]);
+                                } else {
+                                    // Créer un nouveau stock client
+                                    $insertStock = $pdo->prepare("
+                                        INSERT INTO client_stock (id_client, product_type, product_id, qty_stock)
+                                        VALUES (:client_id, :product_type, :product_id, :qty)
+                                    ");
+                                    $insertStock->execute([
+                                        ':client_id' => $clientId,
+                                        ':product_type' => $productType,
+                                        ':product_id' => $productId,
+                                        ':qty' => $productQty
+                                    ]);
+                                }
+                            }
+                        }
+
+                        $pdo->commit();
+                        $flash = ['type'=>'success','msg'=>"Livraison mise à jour avec succès." . ($isBecomingLivree && !empty($liv['product_type']) ? " Stock client mis à jour." : "")];
+                    } catch (PDOException $e) {
+                        $pdo->rollBack();
+                        error_log('livraisons.php UPDATE/STOCK error: ' . $e->getMessage());
+                        $flash = ['type'=>'error','msg'=>"Erreur SQL : impossible de mettre à jour la livraison."];
+                    }
                 }
             } catch (PDOException $e) {
                 error_log('livraisons.php UPDATE error: ' . $e->getMessage());

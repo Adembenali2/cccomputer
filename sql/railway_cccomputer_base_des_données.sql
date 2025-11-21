@@ -156,6 +156,9 @@ CREATE TABLE `livraisons` (
   `date_reelle` date DEFAULT NULL,
   `statut` enum('planifiee','en_cours','livree','annulee') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'planifiee',
   `commentaire` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `product_type` enum('papier','toner','lcd','pc','autre') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `product_id` int DEFAULT NULL,
+  `product_qty` int DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -167,6 +170,22 @@ CREATE TABLE `livraisons` (
   KEY `idx_livraisons_statut` (`statut`),
   CONSTRAINT `fk_livraisons_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_livraisons_livreur` FOREIGN KEY (`id_livreur`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `client_stock`;
+CREATE TABLE `client_stock` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_client` int NOT NULL,
+  `product_type` enum('papier','toner','lcd','pc') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `product_id` int NOT NULL,
+  `qty_stock` int NOT NULL DEFAULT 0,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_client_stock` (`id_client`,`product_type`,`product_id`),
+  KEY `idx_client_stock_client` (`id_client`),
+  KEY `idx_client_stock_product` (`product_type`,`product_id`),
+  CONSTRAINT `fk_client_stock_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `paper_catalog`;
