@@ -448,7 +448,22 @@ $sectionImages = [
 </div>
 
 <script>
+// S'assurer que le DOM est chargé avant d'exécuter les scripts
+(function(){
+  function initStockScripts() {
+    initFilter();
+    initDetailModal();
+    initAddModal();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initStockScripts);
+  } else {
+    initStockScripts();
+  }
+
 /* ===== Filtre + réordonnancement ===== */
+function initFilter(){
 (function(){
   const q = document.getElementById('q');
   const mason = document.getElementById('stockMasonry');
@@ -487,6 +502,7 @@ $sectionImages = [
     mason.querySelectorAll('.card-section').forEach(sec => ro.observe(sec));
   }
 })();
+}
 
 /* ===== Datasets popup ===== */
 const DATASETS = <?= json_encode($datasets, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
@@ -508,6 +524,7 @@ function badgeEtat(e){
 }
 
 /* ===== Modal détails ===== */
+function initDetailModal(){
 (function(){
   const overlay = document.getElementById('detailOverlay');
   const modal   = document.getElementById('detailModal');
@@ -602,8 +619,10 @@ function badgeEtat(e){
     });
   });
 })();
+}
 
 /* ===== Modale ajout produit (papier / toner / lcd / pc) ===== */
+function initAddModal(){
 (function(){
   const overlay = document.getElementById('addOverlay');
   const modal   = document.getElementById('addModal');
@@ -697,9 +716,28 @@ function badgeEtat(e){
   }
 
   function openModal(type){
+    if (!type) {
+      console.error('Type manquant pour openModal');
+      return;
+    }
     currentType = type;
-    titleEl.textContent = 'Ajouter ' + type;
+    const typeNames = {
+      'toner': 'toner',
+      'papier': 'papier',
+      'lcd': 'LCD',
+      'pc': 'PC'
+    };
+    titleEl.textContent = 'Ajouter ' + (typeNames[type] || type);
     buildForm(type);
+    
+    // Focus sur le premier champ du formulaire après un court délai
+    setTimeout(() => {
+      const firstInput = fieldsContainer.querySelector('input, select, textarea');
+      if (firstInput) {
+        firstInput.focus();
+      }
+    }, 100);
+    
     document.body.classList.add('modal-open');
     overlay.style.display = 'block';
     overlay.setAttribute('aria-hidden','false');
@@ -715,14 +753,54 @@ function badgeEtat(e){
     clearForm();
   }
 
+  // Vérifier que tous les éléments nécessaires existent
+  if (!overlay || !modal || !titleEl || !fieldsContainer || !form || !errorBox) {
+    console.error('Éléments DOM manquants pour la modale d\'ajout:', {
+      overlay: !!overlay,
+      modal: !!modal,
+      titleEl: !!titleEl,
+      fieldsContainer: !!fieldsContainer,
+      form: !!form,
+      errorBox: !!errorBox
+    });
+    return;
+  }
+
   btnClose && btnClose.addEventListener('click', closeModal);
   btnCancel && btnCancel.addEventListener('click', function(e){ e.preventDefault(); closeModal(); });
   overlay && overlay.addEventListener('click', closeModal);
 
-  document.querySelectorAll('.btn-add[data-add-type]').forEach(btn => {
-    btn.addEventListener('click', () => {
+  // Attacher les event listeners aux boutons d'ajout
+  // Utiliser delegation d'evenement pour capturer les clics même si les boutons sont ajoutés dynamiquement
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.btn-add[data-add-type]');
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
       const t = btn.getAttribute('data-add-type');
-      openModal(t);
+      if (t) {
+        console.log('Ouverture modale pour type:', t);
+        openModal(t);
+      } else {
+        console.error('Attribut data-add-type manquant sur le bouton');
+      }
+    }
+  });
+
+  // Également attacher directement pour une meilleure compatibilité
+  const addButtons = document.querySelectorAll('.btn-add[data-add-type]');
+  console.log('Boutons d\'ajout trouvés:', addButtons.length);
+  addButtons.forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const t = btn.getAttribute('data-add-type');
+      if (t) {
+        console.log('Ouverture modale pour type (direct):', t);
+        openModal(t);
+      } else {
+        console.error('Attribut data-add-type manquant sur le bouton');
+      }
     });
   });
 
@@ -778,6 +856,8 @@ function badgeEtat(e){
     }
   });
 })();
+}
+})(); // Fin de initStockScripts
 </script>
 </body>
 </html>
