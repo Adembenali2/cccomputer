@@ -81,6 +81,18 @@
   filter: brightness(.96);
 }
 
+.maps-panel button.secondary {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.maps-panel button.secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+}
+
 .maps-panel .btn-group {
   display: flex;
   flex-wrap: wrap;
@@ -274,6 +286,58 @@
 
 .route-steps li {
   margin-bottom: 0.25rem;
+}
+
+/* Détails tour par tour */
+.route-turns {
+  margin-top: 0.6rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border-color);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  max-height: 260px;
+  overflow: auto;
+}
+
+.route-turns-leg {
+  margin-bottom: 0.5rem;
+}
+
+.route-turns-leg-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.route-turns-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.route-turns-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.route-turns-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.route-turns-step-text {
+  flex: 1;
 }
 
 /* Bloc carte à droite */

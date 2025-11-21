@@ -68,7 +68,7 @@ function h(?string $s): string {
                 <div class="section-title">2. Clients à visiter</div>
                 <p class="hint">
                     Recherchez un client (nom, code, adresse) puis ajoutez-le à la tournée.
-                    Vous pouvez gérer des dizaines ou centaines de clients sans liste infinie.
+                    Vous pouvez gérer des centaines / milliers de clients grâce à la recherche.
                 </p>
 
                 <div class="client-search">
@@ -92,7 +92,13 @@ function h(?string $s): string {
             <!-- 3. Calcul itinéraire -->
             <div>
                 <div class="section-title">3. Calculer l’itinéraire</div>
-                <button type="button" id="btnRoute" class="primary">🚐 Calculer l’itinéraire</button>
+                <div class="btn-group">
+                    <button type="button" id="btnRoute" class="primary">🚐 Calculer l’itinéraire</button>
+                    <button type="button" id="btnShowTurns" class="secondary" disabled>
+                        👁️ Voir l’itinéraire détaillé
+                    </button>
+                </div>
+
                 <p id="routeMessage" class="maps-message hint">
                     L’itinéraire utilise le service de routage public OSRM (OpenStreetMap).
                     L’ordre est optimisé selon la <strong>proximité</strong> et le niveau <strong>d’urgence</strong>.
@@ -117,8 +123,14 @@ function h(?string $s): string {
                     </div>
                 </div>
 
+                <!-- Résumé par grandes étapes (Départ -> Client 1, etc.) -->
                 <div id="routeSteps" class="route-steps">
                     <!-- Résumé des étapes rempli en JS -->
+                </div>
+
+                <!-- Détails “tourner à gauche / à droite” -->
+                <div id="routeTurns" class="route-turns" style="display:none;">
+                    <!-- Instructions détaillées remplies en JS -->
                 </div>
             </div>
         </aside>
@@ -145,7 +157,6 @@ function h(?string $s): string {
 // ==================
 
 // Clients codés en dur pour la démonstration (à remplacer plus tard par la base de données)
-// On ajoute un champ "basePriority" (1 normal, 2 urgent, 3 très urgent)
 const demoClients = [
     {
         id: 1,
@@ -329,9 +340,9 @@ function addClientToRoute(client) {
     if (!client) return;
 
     if (selectedClients.find(s => s.id === client.id)) {
-        // déjà présent
         clientSearchInput.value = '';
         clientResultsEl.innerHTML = '';
+        clientResultsEl.style.display = 'none';
         return;
     }
 
@@ -342,6 +353,7 @@ function addClientToRoute(client) {
 
     clientSearchInput.value = '';
     clientResultsEl.innerHTML = '';
+    clientResultsEl.style.display = 'none';
     renderSelectedClients();
 
     // focus visuel sur le client
@@ -372,16 +384,15 @@ clientSearchInput.addEventListener('input', () => {
     }
 
     const results = searchClients(q);
+    clientResultsEl.style.display = 'block';
+
     if (!results.length) {
-        clientResultsEl.style.display = 'block';
         const item = document.createElement('div');
         item.className = 'client-result-item empty';
         item.textContent = 'Aucun client trouvé.';
         clientResultsEl.appendChild(item);
         return;
     }
-
-    clientResultsEl.style.display = 'block';
 
     results.forEach(client => {
         const item = document.createElement('div');
@@ -412,7 +423,12 @@ const startInfoEl = document.getElementById('startInfo');
 const badgeStartEl = document.getElementById('badgeStart');
 const routeMessageEl = document.getElementById('routeMessage');
 let routeLayer = null;
-let lastOrderedStops = []; // pour résumer les étapes
+let lastOrderedStops = [];  // clients dans l'ordre optimisé
+let lastRouteLegs = [];     // legs renvoyés par OSRM
+
+const btnShowTurns = document.getElementById('btnShowTurns');
+const routeStepsEl = document.getElementById('routeSteps');
+const routeTurnsEl = document.getElementById('routeTurns');
 
 function setStartPoint(latlng, label) {
     startPoint = latlng;
@@ -556,7 +572,6 @@ function computeOrderedStops(startLatLng, clients) {
             const pr = c.priority || 1;
 
             // Plus l'urgence est forte, plus on réduit "le coût" de la distance
-            // (3 = très urgent -> weight plus faible)
             let weight;
             if (pr >= 3) weight = 0.4;
             else if (pr === 2) weight = 0.7;
@@ -578,9 +593,173 @@ function computeOrderedStops(startLatLng, clients) {
     return ordered;
 }
 
-document.getElementById('btnRoute').addEventListener('click', () => {
-    const routeStepsEl = document.getElementById('routeSteps');
+// Résumé des grandes étapes (Départ -> Client 1, etc.)
+function renderRouteSummary(legs) {
     routeStepsEl.innerHTML = '';
+
+    if (!legs || !legs.length) {
+        return;
+    }
+
+    const ul = document.createElement('ul');
+
+    legs.forEach((leg, index) => {
+        const li = document.createElement('li');
+
+        const fromLabel = (index === 0)
+            ? 'Départ'
+            : (lastOrderedStops[index - 1]?.name || 'Étape ' + index);
+
+        const toLabel = lastOrderedStops[index]?.name || 'Arrivée';
+
+        li.textContent = `Étape ${index + 1} : ${fromLabel} → ${toLabel} (${formatDistance(leg.distance)}, ${formatDuration(leg.duration)})`;
+        ul.appendChild(li);
+    });
+
+    routeStepsEl.appendChild(ul);
+}
+
+// Traduction simple des manœuvres OSRM en phrases FR
+function buildInstruction(step, indexGlobal) {
+    const man = step.maneuver || {};
+    const type = man.type || '';
+    const mod = man.modifier || '';
+    const name = step.name || '';
+    const dist = formatDistance(step.distance || 0);
+
+    const dirMap = {
+        'left': 'à gauche',
+        'right': 'à droite',
+        'slight left': 'légèrement à gauche',
+        'slight_right': 'légèrement à droite',
+        'sharp_left': 'franchement à gauche',
+        'sharp_right': 'franchement à droite',
+        'uturn': 'en faisant demi-tour',
+        'straight': 'tout droit'
+    };
+    const dir = dirMap[mod] || '';
+
+    let txt;
+
+    if (type === 'depart') {
+        if (name) {
+            txt = `Démarrer sur ${name}.`;
+        } else {
+            txt = 'Démarrer depuis votre position.';
+        }
+    } else if (type === 'arrive') {
+        txt = 'Vous êtes arrivé à destination.';
+    } else if (type === 'roundabout') {
+        const exit = man.exit ? `, prendre la sortie ${man.exit}` : '';
+        if (name) {
+            txt = `Au rond-point${exit}, suivre ${name}.`;
+        } else {
+            txt = `Au rond-point${exit}, continuer sur la voie principale.`;
+        }
+    } else if (type === 'turn' || type === 'continue') {
+        if (dir && name) {
+            txt = `Tourner ${dir} sur ${name} (${dist}).`;
+        } else if (dir) {
+            txt = `Tourner ${dir} (${dist}).`;
+        } else if (name) {
+            txt = `Suivre ${name} (${dist}).`;
+        } else {
+            txt = `Continuer tout droit (${dist}).`;
+        }
+    } else if (type === 'merge') {
+        txt = name ? `S’insérer sur ${name} (${dist}).` : `S’insérer sur la voie (${dist}).`;
+    } else if (type === 'on ramp') {
+        txt = name ? `Prendre la bretelle vers ${name} (${dist}).` : `Prendre la bretelle (${dist}).`;
+    } else if (type === 'off ramp') {
+        txt = name ? `Prendre la sortie vers ${name} (${dist}).` : `Prendre la sortie (${dist}).`;
+    } else {
+        // fallback générique
+        txt = name ? `Continuer sur ${name} (${dist}).` : `Continuer (${dist}).`;
+    }
+
+    return txt;
+}
+
+// Affichage détaillé tour par tour
+function renderTurnByTurn(legs) {
+    routeTurnsEl.innerHTML = '';
+
+    if (!legs || !legs.length) {
+        const p = document.createElement('p');
+        p.className = 'hint';
+        p.textContent = "Aucun détail d’itinéraire disponible.";
+        routeTurnsEl.appendChild(p);
+        return;
+    }
+
+    let stepIndex = 1;
+
+    legs.forEach((leg, legIndex) => {
+        const block = document.createElement('div');
+        block.className = 'route-turns-leg';
+
+        const title = document.createElement('div');
+        title.className = 'route-turns-leg-title';
+
+        const fromLabel = (legIndex === 0)
+            ? 'Départ'
+            : (lastOrderedStops[legIndex - 1]?.name || 'Étape ' + legIndex);
+
+        const toLabel = lastOrderedStops[legIndex]?.name || 'Arrivée';
+
+        title.textContent = `Trajet ${legIndex + 1} : ${fromLabel} → ${toLabel}`;
+        block.appendChild(title);
+
+        const list = document.createElement('ul');
+        list.className = 'route-turns-list';
+
+        (leg.steps || []).forEach(step => {
+            const li = document.createElement('li');
+            li.className = 'route-turns-step';
+
+            const instruction = buildInstruction(step, stepIndex);
+
+            const labelIndex = document.createElement('span');
+            labelIndex.className = 'route-turns-step-index';
+            labelIndex.textContent = stepIndex;
+
+            const text = document.createElement('div');
+            text.className = 'route-turns-step-text';
+            text.textContent = instruction;
+
+            li.appendChild(labelIndex);
+            li.appendChild(text);
+            list.appendChild(li);
+
+            stepIndex++;
+        });
+
+        block.appendChild(list);
+        routeTurnsEl.appendChild(block);
+    });
+}
+
+// Bouton pour afficher / masquer les instructions détaillées
+btnShowTurns.addEventListener('click', () => {
+    if (!lastRouteLegs.length) return;
+
+    const isHidden = routeTurnsEl.style.display === 'none' || routeTurnsEl.style.display === '';
+    routeTurnsEl.style.display = isHidden ? 'block' : 'none';
+    btnShowTurns.textContent = isHidden
+        ? '👁️ Masquer l’itinéraire détaillé'
+        : '👁️ Voir l’itinéraire détaillé';
+});
+
+// -------------------------------------
+// Lancement du calcul d'itinéraire
+// -------------------------------------
+
+document.getElementById('btnRoute').addEventListener('click', () => {
+    routeStepsEl.innerHTML = '';
+    routeTurnsEl.innerHTML = '';
+    routeTurnsEl.style.display = 'none';
+    btnShowTurns.disabled = true;
+    btnShowTurns.textContent = '👁️ Voir l’itinéraire détaillé';
 
     if (!startPoint) {
         routeMessageEl.textContent = "Définissez d'abord un point de départ (ma position ou clic sur la carte).";
@@ -605,6 +784,7 @@ document.getElementById('btnRoute').addEventListener('click', () => {
     // Calcul de l'ordre optimisé (proximité + urgence)
     const orderedStops = computeOrderedStops(startPoint, clientsForRouting);
     lastOrderedStops = orderedStops.slice();
+    lastRouteLegs = [];
 
     // Construction de la chaîne de coordonnées OSRM : lon,lat;lon,lat;...
     const waypoints = [
@@ -657,27 +837,17 @@ document.getElementById('btnRoute').addEventListener('click', () => {
             document.getElementById('statStops').textContent = orderedStops.length + ' client(s)';
             document.getElementById('statInfo').textContent = 'Conduite continue approximative';
 
-            // Résumé des étapes (comme un mini Google Maps)
-            if (route.legs && route.legs.length) {
-                const ul = document.createElement('ul');
+            // Stocker les legs pour les détails
+            lastRouteLegs = route.legs || [];
 
-                route.legs.forEach((leg, index) => {
-                    const li = document.createElement('li');
+            // Résumé des étapes + détails
+            renderRouteSummary(lastRouteLegs);
+            renderTurnByTurn(lastRouteLegs);
 
-                    const fromLabel = (index === 0)
-                        ? 'Départ'
-                        : (lastOrderedStops[index - 1]?.name || 'Étape ' + index);
+            // On laisse l'utilisateur choisir quand afficher les détails
+            btnShowTurns.disabled = false;
 
-                    const toLabel = lastOrderedStops[index]?.name || 'Arrivée';
-
-                    li.textContent = `Étape ${index + 1} : ${fromLabel} → ${toLabel} (${formatDistance(leg.distance)}, ${formatDuration(leg.duration)})`;
-                    ul.appendChild(li);
-                });
-
-                routeStepsEl.appendChild(ul);
-            }
-
-            routeMessageEl.textContent = "Itinéraire calculé avec succès (optimisé selon distance + urgence).";
+            routeMessageEl.textContent = "Itinéraire calculé avec succès (optimisé et détaillé).";
             routeMessageEl.className = 'maps-message success';
         })
         .catch(err => {
