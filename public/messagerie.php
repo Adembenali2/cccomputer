@@ -98,26 +98,50 @@ try {
 // Récupérer les messages selon la vue
 $messages = [];
 try {
+    // Vérifier si les colonnes de suppression existent
+    $hasSupprimeColumns = false;
+    try {
+        $checkCols = $pdo->query("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'messagerie' 
+            AND COLUMN_NAME IN ('supprime_expediteur', 'supprime_destinataire')
+        ");
+        $hasSupprimeColumns = ($checkCols->fetch(PDO::FETCH_ASSOC)['cnt'] >= 2);
+    } catch (PDOException $e) {
+        error_log('messagerie.php - Erreur vérification colonnes: ' . $e->getMessage());
+    }
+    
     $where = [];
     $params = [];
     
     if ($view === 'boite_reception') {
-        $where[] = "(id_destinataire = :user_id OR (id_destinataire IS NULL AND id_expediteur != :user_id))";
-        $where[] = "supprime_destinataire = 0";
+        // Messages directs à l'utilisateur OU messages "à tous" (pas envoyés par l'utilisateur)
+        if ($hasSupprimeColumns) {
+            $where[] = "((id_destinataire = :user_id AND supprime_destinataire = 0) OR (id_destinataire IS NULL AND id_expediteur != :user_id2))";
+        } else {
+            // Si les colonnes n'existent pas encore, on affiche tous les messages reçus
+            $where[] = "(id_destinataire = :user_id OR (id_destinataire IS NULL AND id_expediteur != :user_id2))";
+        }
         $params[':user_id'] = $currentUserId;
+        $params[':user_id2'] = $currentUserId;
     } elseif ($view === 'envoyes') {
         $where[] = "id_expediteur = :user_id";
-        $where[] = "supprime_expediteur = 0";
+        if ($hasSupprimeColumns) {
+            $where[] = "supprime_expediteur = 0";
+        }
         $params[':user_id'] = $currentUserId;
     } else { // tous
-        $where[] = "(id_expediteur = :user_id OR id_destinataire = :user_id2 OR (id_destinataire IS NULL AND id_expediteur != :user_id3))";
-        $where[] = "((id_expediteur = :user_id4 AND supprime_expediteur = 0) OR (id_destinataire = :user_id5 AND supprime_destinataire = 0) OR (id_destinataire IS NULL AND id_expediteur != :user_id6))";
+        // Messages envoyés OU messages reçus OU messages "à tous" (pas envoyés par l'utilisateur)
+        if ($hasSupprimeColumns) {
+            $where[] = "((id_expediteur = :user_id AND supprime_expediteur = 0) OR (id_destinataire = :user_id2 AND supprime_destinataire = 0) OR (id_destinataire IS NULL AND id_expediteur != :user_id3))";
+        } else {
+            $where[] = "(id_expediteur = :user_id OR id_destinataire = :user_id2 OR (id_destinataire IS NULL AND id_expediteur != :user_id3))";
+        }
         $params[':user_id'] = $currentUserId;
         $params[':user_id2'] = $currentUserId;
         $params[':user_id3'] = $currentUserId;
-        $params[':user_id4'] = $currentUserId;
-        $params[':user_id5'] = $currentUserId;
-        $params[':user_id6'] = $currentUserId;
     }
     
     if ($filterType) {
@@ -154,6 +178,13 @@ try {
     $sql .= ' ORDER BY m.date_envoi DESC LIMIT 200';
     
     $params[':current_user_id'] = $currentUserId;
+    
+    // Log pour débogage (en développement seulement)
+    if (defined('DEBUG') && DEBUG) {
+        error_log('messagerie.php - SQL: ' . $sql);
+        error_log('messagerie.php - Params: ' . json_encode($params));
+    }
+    
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -165,8 +196,15 @@ try {
         }
     }
     unset($msg);
+    
+    // Log pour débogage
+    if (defined('DEBUG') && DEBUG) {
+        error_log('messagerie.php - Messages trouvés: ' . count($messages));
+    }
 } catch (PDOException $e) {
     error_log('messagerie.php - Erreur récupération messages: ' . $e->getMessage());
+    error_log('messagerie.php - SQL Error Code: ' . $e->getCode());
+    error_log('messagerie.php - SQL: ' . ($sql ?? 'N/A'));
 }
 
 $totalMessages = count($messages);
