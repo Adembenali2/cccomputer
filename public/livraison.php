@@ -82,8 +82,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         } else {
             try {
                 // Récupération de la livraison pour vérifier permissions + date_reelle actuelle
+                // Inclure les colonnes product_type, product_id, product_qty
                 $stmt = $pdo->prepare("
-                    SELECT l.*
+                    SELECT l.id, l.id_client, l.id_livreur, l.reference, l.adresse_livraison, 
+                           l.objet, l.date_prevue, l.date_reelle, l.statut, l.commentaire,
+                           l.product_type, l.product_id, l.product_qty,
+                           l.created_at, l.updated_at
                     FROM livraisons l
                     WHERE l.id = :id
                     LIMIT 1
@@ -123,54 +127,70 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                         ]);
 
                         // Si la livraison vient d'être marquée comme "livrée", ajouter au stock client
-                        if ($isBecomingLivree && !empty($liv['product_type']) && !empty($liv['product_id']) && !empty($liv['product_qty'])) {
-                            $productType = $liv['product_type'];
-                            $productId = (int)$liv['product_id'];
-                            $productQty = (int)$liv['product_qty'];
-                            $clientId = (int)$liv['id_client'];
+                        if ($isBecomingLivree) {
+                            $productType = $liv['product_type'] ?? null;
+                            $productId = isset($liv['product_id']) ? (int)$liv['product_id'] : 0;
+                            $productQty = isset($liv['product_qty']) ? (int)$liv['product_qty'] : 0;
+                            $clientId = (int)($liv['id_client'] ?? 0);
 
-                            if (in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true) && $clientId > 0 && $productQty > 0) {
-                                // Vérifier si le stock client existe déjà pour ce produit
-                                $checkStock = $pdo->prepare("
-                                    SELECT id, qty_stock 
-                                    FROM client_stock 
-                                    WHERE id_client = :client_id 
-                                      AND product_type = :product_type 
-                                      AND product_id = :product_id 
-                                    LIMIT 1
-                                ");
-                                $checkStock->execute([
-                                    ':client_id' => $clientId,
-                                    ':product_type' => $productType,
-                                    ':product_id' => $productId
-                                ]);
-                                $existingStock = $checkStock->fetch(PDO::FETCH_ASSOC);
+                            // Log pour débogage
+                            error_log("Livraison #{$livraisonId} marquée livrée - Client: {$clientId}, Type: {$productType}, ID: {$productId}, Qty: {$productQty}");
 
-                                if ($existingStock) {
-                                    // Mettre à jour le stock existant
-                                    $updateStock = $pdo->prepare("
-                                        UPDATE client_stock 
-                                        SET qty_stock = qty_stock + :qty,
-                                            updated_at = NOW()
-                                        WHERE id = :id
-                                    ");
-                                    $updateStock->execute([
-                                        ':qty' => $productQty,
-                                        ':id' => $existingStock['id']
-                                    ]);
+                            if (!empty($productType) && $productId > 0 && $productQty > 0 && $clientId > 0) {
+                                if (in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) {
+                                    try {
+                                        // Vérifier si le stock client existe déjà pour ce produit
+                                        $checkStock = $pdo->prepare("
+                                            SELECT id, qty_stock 
+                                            FROM client_stock 
+                                            WHERE id_client = :client_id 
+                                              AND product_type = :product_type 
+                                              AND product_id = :product_id 
+                                            LIMIT 1
+                                        ");
+                                        $checkStock->execute([
+                                            ':client_id' => $clientId,
+                                            ':product_type' => $productType,
+                                            ':product_id' => $productId
+                                        ]);
+                                        $existingStock = $checkStock->fetch(PDO::FETCH_ASSOC);
+
+                                        if ($existingStock) {
+                                            // Mettre à jour le stock existant
+                                            $updateStock = $pdo->prepare("
+                                                UPDATE client_stock 
+                                                SET qty_stock = qty_stock + :qty,
+                                                    updated_at = NOW()
+                                                WHERE id = :id
+                                            ");
+                                            $updateStock->execute([
+                                                ':qty' => $productQty,
+                                                ':id' => $existingStock['id']
+                                            ]);
+                                            error_log("Stock client mis à jour - ID: {$existingStock['id']}, Nouvelle qty: " . ($existingStock['qty_stock'] + $productQty));
+                                        } else {
+                                            // Créer un nouveau stock client
+                                            $insertStock = $pdo->prepare("
+                                                INSERT INTO client_stock (id_client, product_type, product_id, qty_stock)
+                                                VALUES (:client_id, :product_type, :product_id, :qty)
+                                            ");
+                                            $insertStock->execute([
+                                                ':client_id' => $clientId,
+                                                ':product_type' => $productType,
+                                                ':product_id' => $productId,
+                                                ':qty' => $productQty
+                                            ]);
+                                            error_log("Nouveau stock client créé - Client: {$clientId}, Type: {$productType}, ID: {$productId}, Qty: {$productQty}");
+                                        }
+                                    } catch (PDOException $e) {
+                                        error_log("Erreur lors de l'ajout au stock client: " . $e->getMessage());
+                                        // Ne pas faire échouer la transaction pour cette erreur
+                                    }
                                 } else {
-                                    // Créer un nouveau stock client
-                                    $insertStock = $pdo->prepare("
-                                        INSERT INTO client_stock (id_client, product_type, product_id, qty_stock)
-                                        VALUES (:client_id, :product_type, :product_id, :qty)
-                                    ");
-                                    $insertStock->execute([
-                                        ':client_id' => $clientId,
-                                        ':product_type' => $productType,
-                                        ':product_id' => $productId,
-                                        ':qty' => $productQty
-                                    ]);
+                                    error_log("Type de produit invalide: {$productType}");
                                 }
+                            } else {
+                                error_log("Données produit manquantes ou invalides - Type: " . ($productType ?? 'null') . ", ID: {$productId}, Qty: {$productQty}, Client: {$clientId}");
                             }
                         }
 
