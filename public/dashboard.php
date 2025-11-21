@@ -318,14 +318,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         </svg>
                         Informations
                     </button>
-                    <button class="cdv-nav-btn" data-tab="devices" aria-selected="false">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="3" width="20" height="14" rx="2"/>
-                            <line x1="8" y1="21" x2="16" y2="21"/>
-                            <line x1="12" y1="17" x2="12" y2="21"/>
-                        </svg>
-                        Appareils
-                    </button>
                 </div>
                 <div class="cdv-main">
                     <div class="cdv-tab" data-tab="home">
@@ -390,24 +382,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                             <div class="cdv-field"><div class="lbl">PDF 5</div><div class="val" id="cf-pdf5">—</div></div>
                             <div class="cdv-field"><div class="lbl">PDF Contrat</div><div class="val" id="cf-pdfcontrat">—</div></div>
                         </div>
-                    </div>
-
-                    <div class="cdv-tab" data-tab="devices" style="display:none;">
-                        <div class="cdv-header">
-                            <div class="cdv-title">Appareils liés</div>
-                        </div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Série</th><th>MAC</th><th>Modèle</th><th>Statut</th>
-                                    <th>Toner N</th><th>Toner C</th><th>Toner M</th><th>Toner Y</th>
-                                    <th>Total N&B</th><th>Total Couleur</th><th>Dernière MAJ</th>
-                                </tr>
-                            </thead>
-                            <tbody id="devicesTbody">
-                                <tr><td colspan="11">Chargement...</td></tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
@@ -668,117 +642,10 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             });
         }
 
-        function fillDevices(devices){
-            const tbody = document.getElementById('devicesTbody');
-            if (!tbody) return;
-            tbody.innerHTML = '';
-
-            if(!devices || devices.length === 0){
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:2rem; color:var(--text-muted);">Aucun appareil lié à ce client.</td></tr>';
-                return;
-            }
-
-            devices.forEach(d => {
-                const tr = document.createElement('tr');
-                tr.className = 'device-row';
-
-                const formatToner = (val) => {
-                    if (val === null || val === undefined) return '—';
-                    return Math.max(0, Math.min(100, parseInt(val))) + '%';
-                };
-
-                const formatDate = (ts) => {
-                    if (!ts) return '—';
-                    try {
-                        const dt = new Date(ts);
-                        return dt.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    } catch (e) {
-                        return ts;
-                    }
-                };
-
-                const formatNumber = (val) => {
-                    if (val === null || val === undefined) return '—';
-                    return parseInt(val).toLocaleString('fr-FR');
-                };
-
-                const ageHours = d.last_age_hours !== null && d.last_age_hours !== undefined ? parseInt(d.last_age_hours) : null;
-                const isAlert = ageHours !== null && ageHours >= 48;
-                if (isAlert) {
-                    tr.classList.add('device-alert');
-                }
-
-                const macNorm = d.mac_norm || '';
-                const deviceHref = macNorm ? `/public/photocopieurs_details.php?mac=${encodeURIComponent(macNorm)}` : '';
-                
-                tr.innerHTML = `
-                    <td>${d.SerialNumber || '—'}</td>
-                    <td>${d.MacAddress || '—'}</td>
-                    <td><strong>${d.Model || '—'}</strong>${d.Nom ? '<br><small style="color:var(--text-muted);">' + d.Nom + '</small>' : ''}</td>
-                    <td><span class="status-badge ${d.Status === 'OK' || d.Status === 'Online' ? 'status-ok' : 'status-warn'}">${d.Status || '—'}</span></td>
-                    <td class="toner-cell toner-k"><div class="toner-bar-bg"><div class="toner-bar-fill" style="width:${d.TonerBlack !== null ? Math.max(0, Math.min(100, d.TonerBlack)) : 0}%"></div></div><span>${formatToner(d.TonerBlack)}</span></td>
-                    <td class="toner-cell toner-c"><div class="toner-bar-bg"><div class="toner-bar-fill" style="width:${d.TonerCyan !== null ? Math.max(0, Math.min(100, d.TonerCyan)) : 0}%"></div></div><span>${formatToner(d.TonerCyan)}</span></td>
-                    <td class="toner-cell toner-m"><div class="toner-bar-bg"><div class="toner-bar-fill" style="width:${d.TonerMagenta !== null ? Math.max(0, Math.min(100, d.TonerMagenta)) : 0}%"></div></div><span>${formatToner(d.TonerMagenta)}</span></td>
-                    <td class="toner-cell toner-y"><div class="toner-bar-bg"><div class="toner-bar-fill" style="width:${d.TonerYellow !== null ? Math.max(0, Math.min(100, d.TonerYellow)) : 0}%"></div></div><span>${formatToner(d.TonerYellow)}</span></td>
-                    <td class="number-cell">${formatNumber(d.TotalBW)}</td>
-                    <td class="number-cell">${formatNumber(d.TotalColor)}</td>
-                    <td class="date-cell ${isAlert ? 'date-alert' : ''}">${formatDate(d.last_ts)}${ageHours !== null && ageHours >= 48 ? '<br><small style="color:#ef4444; font-weight:600;">⚠️ Ancien</small>' : ''}</td>
-                `;
-
-                if (deviceHref) {
-                    tr.style.cursor = 'pointer';
-                    tr.addEventListener('click', () => {
-                        window.location.href = deviceHref;
-                    });
-                }
-
-                tbody.appendChild(tr);
-            });
-        }
-
-        async function loadClientDetail(id){
+        function loadClientDetail(id){
             const client = (CLIENTS_DATA || []).find(c => String(c.id) === String(id)) || {};
             fillClientFields(client);
             showDetail();
-
-            const tbody = document.getElementById('devicesTbody');
-            if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="11">Chargement...</td></tr>';
-            }
-
-            try {
-                const res = await fetch('/api/client_devices.php?id=' + encodeURIComponent(id), {
-                    credentials: 'same-origin'
-                });
-                
-                const contentType = res.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('Réponse non-JSON reçue');
-                }
-                
-                const data = await res.json();
-                
-                if (!res.ok) {
-                    const errorMsg = (data && data.error) ? data.error : 'Erreur HTTP ' + res.status;
-                    throw new Error(errorMsg);
-                }
-                
-                if (Array.isArray(data)) {
-                    fillDevices(data);
-                } else if (data && data.error) {
-                    throw new Error(data.error);
-                } else {
-                    fillDevices([]);
-                }
-            } catch (err) {
-                console.error('Erreur chargement appareils', err);
-                const errorMsg = err.message || 'Erreur de chargement des appareils.';
-                if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:2rem; color:var(--text-muted);">' + 
-                        (errorMsg.includes('Non authentifié') ? 'Session expirée. Veuillez vous reconnecter.' : errorMsg) + 
-                        '</td></tr>';
-                }
-            }
         }
 
         // Gestion formulaire attribution : bouton Annuler
