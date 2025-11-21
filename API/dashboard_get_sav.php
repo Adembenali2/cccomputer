@@ -62,6 +62,7 @@ try {
             s.date_fermeture,
             s.statut,
             s.priorite,
+            s.type_panne,
             s.commentaire,
             s.id_technicien,
             u.nom AS technicien_nom,

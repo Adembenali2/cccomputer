@@ -558,6 +558,16 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 </div>
                                 
                                 <div class="form-row">
+                                    <label>Type de panne</label>
+                                    <select id="savTypePanne" name="type_panne" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                                        <option value="">— Non spécifié —</option>
+                                        <option value="logiciel">Logiciel</option>
+                                        <option value="materiel">Matériel</option>
+                                        <option value="piece_rechangeable">Pièce rechargeable</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-row">
                                     <label>Technicien</label>
                                     <select id="savTechnicien" name="id_technicien" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
                                         <option value="">-- Non assigné --</option>
@@ -1370,6 +1380,16 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         'haute': '#f59e0b',
                         'urgente': '#dc2626'
                     };
+                    const typePanneLabels = {
+                        'logiciel': 'Logiciel',
+                        'materiel': 'Matériel',
+                        'piece_rechangeable': 'Pièce rechargeable'
+                    };
+                    const typePanneColors = {
+                        'logiciel': '#8b5cf6',
+                        'materiel': '#ec4899',
+                        'piece_rechangeable': '#10b981'
+                    };
                     
                     const item = document.createElement('div');
                     item.style.cssText = 'padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 0.5rem; background: #f9fafb;';
@@ -1383,6 +1403,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 <span style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: #6b7280; color: white; font-size: 0.75rem;">
                                     ${statutLabels[sav.statut] || sav.statut}
                                 </span>
+                                ${sav.type_panne ? `<span style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: ${typePanneColors[sav.type_panne] || '#666'}; color: white; font-size: 0.75rem;">
+                                    ${typePanneLabels[sav.type_panne] || sav.type_panne}
+                                </span>` : ''}
                             </div>
                         </div>
                         <div style="font-size: 0.9rem; margin-bottom: 0.25rem;">
@@ -1487,6 +1510,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 reference: formData.get('reference').trim(),
                 description: formData.get('description').trim(),
                 priorite: formData.get('priorite'),
+                type_panne: formData.get('type_panne').trim(),
                 date_ouverture: formData.get('date_ouverture'),
                 commentaire: formData.get('commentaire').trim(),
                 csrf_token: formData.get('csrf_token')

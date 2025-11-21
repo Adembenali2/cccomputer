@@ -83,17 +83,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         $savId = (int)($_POST['sav_id'] ?? 0);
         $newStatut   = $_POST['statut'] ?? '';
         $newPriorite = $_POST['priorite'] ?? '';
+        $newTypePanne = trim($_POST['type_panne'] ?? '');
 
         $allowedStatuts = ['ouvert','en_cours','resolu','annule'];
         $allowedPriorites = ['basse','normale','haute','urgente'];
+        $allowedTypePanne = ['logiciel','materiel','piece_rechangeable'];
+        
         if (!$savId || !in_array($newStatut, $allowedStatuts, true) || !in_array($newPriorite, $allowedPriorites, true)) {
             $flash = ['type'=>'error','msg'=>"Données invalides pour la mise à jour du SAV."];
+        } elseif (!empty($newTypePanne) && !in_array($newTypePanne, $allowedTypePanne, true)) {
+            $flash = ['type'=>'error','msg'=>"Type de panne invalide."];
         } else {
             try {
                 // Récupération du SAV pour vérifier permissions
                 $stmt = $pdo->prepare("
                     SELECT s.id, s.id_client, s.id_technicien, s.reference, s.description, 
-                           s.date_ouverture, s.date_fermeture, s.statut, s.priorite, s.commentaire,
+                           s.date_ouverture, s.date_fermeture, s.statut, s.priorite, s.type_panne, s.commentaire,
                            s.created_at, s.updated_at
                     FROM sav s
                     WHERE s.id = :id
@@ -126,6 +131,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                             UPDATE sav
                             SET statut = :statut,
                                 priorite = :priorite,
+                                type_panne = :type_panne,
                                 date_fermeture = :date_fermeture,
                                 updated_at = NOW()
                             WHERE id = :id
@@ -133,6 +139,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                         $upd->execute([
                             ':statut'      => $newStatut,
                             ':priorite'    => $newPriorite,
+                            ':type_panne'  => !empty($newTypePanne) ? $newTypePanne : null,
                             ':date_fermeture' => $dateFermeture,
                             ':id'          => $savId,
                         ]);
@@ -426,6 +433,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           <th>Client</th>
           <th>Référence</th>
           <th>Description</th>
+          <th>Type de panne</th>
           <th>Date ouverture</th>
           <th>Date fermeture</th>
           <th>Technicien</th>
@@ -488,6 +496,20 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           ];
           $prioriteColor = $prioriteColors[$priorite] ?? '#6b7280';
 
+          $typePanne = $s['type_panne'] ?? null;
+          $typePanneLabels = [
+              'logiciel' => 'Logiciel',
+              'materiel' => 'Matériel',
+              'piece_rechangeable' => 'Pièce rechargeable'
+          ];
+          $typePanneLabel = $typePanne ? ($typePanneLabels[$typePanne] ?? $typePanne) : '—';
+          $typePanneColors = [
+              'logiciel' => '#8b5cf6',
+              'materiel' => '#ec4899',
+              'piece_rechangeable' => '#10b981'
+          ];
+          $typePanneColor = $typePanne ? ($typePanneColors[$typePanne] ?? '#6b7280') : '#6b7280';
+
           $commentaire = $s['commentaire'] ?? '';
 
           $searchText = strtolower(
@@ -510,6 +532,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           data-fermeture="<?= h($fermetureLabel) ?>"
           data-statut="<?= h($statut) ?>"
           data-priorite="<?= h($priorite) ?>"
+          data-type-panne="<?= h($typePanne ?? '') ?>"
           data-technicien="<?= h($technicienNomComplet) ?>"
           data-commentaire="<?= h($commentaire) ?>"
           data-can-edit="<?= $canEditThis ? '1' : '0' ?>"
@@ -529,6 +552,15 @@ $lastRefreshLabel = date('d/m/Y à H:i');
                 <div class="machine-sub">Note: <?= h($commentaire) ?></div>
               <?php endif; ?>
             </div>
+          </td>
+          <td data-th="Type de panne">
+            <?php if ($typePanne): ?>
+              <span style="padding: 0.25rem 0.5rem; border-radius: 4px; background: <?= h($typePanneColor) ?>; color: white; font-size: 0.75rem;">
+                <?= h($typePanneLabel) ?>
+              </span>
+            <?php else: ?>
+              <span style="color: #9ca3af;">—</span>
+            <?php endif; ?>
           </td>
           <td class="td-date" data-th="Date ouverture"><?= h($ouvertureLabel) ?></td>
           <td class="td-date" data-th="Date fermeture"><?= h($fermetureLabel) ?></td>
@@ -608,6 +640,14 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           <option value="urgente">Urgente</option>
         </select>
 
+        <label>Type de panne</label>
+        <select name="type_panne" id="modal_type_panne">
+          <option value="">— Non spécifié —</option>
+          <option value="logiciel">Logiciel</option>
+          <option value="materiel">Matériel</option>
+          <option value="piece_rechangeable">Pièce rechargeable</option>
+        </select>
+
         <label>Statut</label>
         <select name="statut" id="modal_statut">
           <option value="ouvert">Ouvert</option>
@@ -684,6 +724,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       const technicien   = tr.getAttribute('data-technicien') || '';
       const priorite    = tr.getAttribute('data-priorite') || 'normale';
       const statut    = tr.getAttribute('data-statut') || 'ouvert';
+      const typePanne = tr.getAttribute('data-type-panne') || '';
       const com       = tr.getAttribute('data-commentaire') || '';
       const canEdit   = tr.getAttribute('data-can-edit') === '1';
 
@@ -704,6 +745,10 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       if (selectStatut) {
         selectStatut.value = statut;
         selectStatut.disabled = !canEdit;
+      }
+      if (selectTypePanne) {
+        selectTypePanne.value = typePanne;
+        selectTypePanne.disabled = !canEdit;
       }
 
       if (submitBtn) {

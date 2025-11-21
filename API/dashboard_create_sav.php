@@ -70,6 +70,7 @@ $description = trim($data['description'] ?? '');
 $idTechnicien = isset($data['id_technicien']) ? (int)$data['id_technicien'] : 0;
 $dateOuverture = trim($data['date_ouverture'] ?? '');
 $priorite = trim($data['priorite'] ?? 'normale');
+$typePanne = trim($data['type_panne'] ?? '');
 $commentaire = trim($data['commentaire'] ?? '');
 
 $errors = [];
@@ -81,6 +82,11 @@ if (empty($dateOuverture)) $errors[] = "Date d'ouverture obligatoire";
 $allowedPriorites = ['basse', 'normale', 'haute', 'urgente'];
 if (!in_array($priorite, $allowedPriorites, true)) {
     $priorite = 'normale';
+}
+
+$allowedTypePanne = ['logiciel', 'materiel', 'piece_rechangeable'];
+if (!empty($typePanne) && !in_array($typePanne, $allowedTypePanne, true)) {
+    $typePanne = null; // Si invalide, on laisse NULL
 }
 
 if (!empty($errors)) {
@@ -128,10 +134,10 @@ try {
     $sql = "
         INSERT INTO sav (
             id_client, id_technicien, reference, description, 
-            date_ouverture, statut, priorite, commentaire
+            date_ouverture, statut, priorite, type_panne, commentaire
         ) VALUES (
             :id_client, :id_technicien, :reference, :description,
-            :date_ouverture, 'ouvert', :priorite, :commentaire
+            :date_ouverture, 'ouvert', :priorite, :type_panne, :commentaire
         )
     ";
     
@@ -143,6 +149,7 @@ try {
         ':description' => $description,
         ':date_ouverture' => $dateOuverture,
         ':priorite' => $priorite,
+        ':type_panne' => !empty($typePanne) ? $typePanne : null,
         ':commentaire' => empty($commentaire) ? null : $commentaire
     ]);
     
@@ -153,14 +160,16 @@ try {
     // Enregistrer dans l'historique
     try {
         $technicienNom = $technicien ? ($technicien['prenom'] . ' ' . $technicien['nom']) : 'Non assigné';
+        $typePanneLabel = $typePanne ? ('type: ' . $typePanne) : '';
         $details = sprintf(
-            'SAV créé: %s pour client %s (ID %d), technicien %s, date ouverture: %s, priorité: %s', 
+            'SAV créé: %s pour client %s (ID %d), technicien %s, date ouverture: %s, priorité: %s%s', 
             $reference,
             $client['raison_sociale'],
             $idClient, 
             $technicienNom,
             $dateOuverture,
-            $priorite
+            $priorite,
+            $typePanneLabel ? (', ' . $typePanneLabel) : ''
         );
         enregistrerAction($pdo, $_SESSION['user_id'], 'sav_cree', $details);
     } catch (Throwable $e) {
