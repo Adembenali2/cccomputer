@@ -1,0 +1,753 @@
+<?php
+// /public/sav.php
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/historique.php';
+
+/** PDO en mode exceptions **/
+if (method_exists($pdo, 'setAttribute')) {
+    try {
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    } catch (\Throwable $e) {}
+}
+
+/** Helpers **/
+function h(?string $s): string {
+    return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8');
+}
+
+function currentUserId(): ?int {
+    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
+    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
+    return null;
+}
+
+function currentUserRole(): ?string {
+    if (isset($_SESSION['emploi'])) return $_SESSION['emploi'];
+    if (isset($_SESSION['user']['Emploi'])) return $_SESSION['user']['Emploi'];
+    if (isset($_SESSION['user']['emploi'])) return $_SESSION['user']['emploi'];
+    return null;
+}
+
+/** CSRF minimal **/
+function ensureCsrfToken(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+function assertValidCsrf(string $token): void {
+    if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+        throw new RuntimeException("Session expirée. Veuillez recharger la page.");
+    }
+}
+
+/** Permissions : qui peut éditer un SAV ? **/
+function canEditSav(array $sav): bool {
+    $uid  = currentUserId();
+    $role = currentUserRole();
+    if (!$uid || !$role) return false;
+
+    // Les Admin et Dirigeant peuvent modifier tous les SAV
+    if (in_array($role, ['Admin', 'Dirigeant'], true)) {
+        return true;
+    }
+
+    // Les techniciens ne peuvent modifier QUE leurs propres SAV assignés
+    if ($role === 'Technicien') {
+        $technicienId = isset($sav['id_technicien']) ? (int)$sav['id_technicien'] : 0;
+        return $technicienId > 0 && $technicienId === (int)$uid;
+    }
+
+    // Tous les autres rôles ne peuvent pas modifier
+    return false;
+}
+
+/** Flash simple **/
+$flash = ['type' => null, 'msg' => null];
+
+$CSRF  = ensureCsrfToken();
+$today = date('Y-m-d');
+
+// ============================================================================
+// POST : mise à jour de SAV (statut, éventuellement date_fermeture)
+// ============================================================================
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'update_sav') {
+    try {
+        assertValidCsrf($_POST['csrf_token'] ?? '');
+    } catch (RuntimeException $csrfEx) {
+        $flash = ['type' => 'error', 'msg' => $csrfEx->getMessage()];
+    }
+
+    if (!$flash['type']) {
+        $savId = (int)($_POST['sav_id'] ?? 0);
+        $newStatut   = $_POST['statut'] ?? '';
+        $newPriorite = $_POST['priorite'] ?? '';
+
+        $allowedStatuts = ['ouvert','en_cours','resolu','annule'];
+        $allowedPriorites = ['basse','normale','haute','urgente'];
+        if (!$savId || !in_array($newStatut, $allowedStatuts, true) || !in_array($newPriorite, $allowedPriorites, true)) {
+            $flash = ['type'=>'error','msg'=>"Données invalides pour la mise à jour du SAV."];
+        } else {
+            try {
+                // Récupération du SAV pour vérifier permissions
+                $stmt = $pdo->prepare("
+                    SELECT s.id, s.id_client, s.id_technicien, s.reference, s.description, 
+                           s.date_ouverture, s.date_fermeture, s.statut, s.priorite, s.commentaire,
+                           s.created_at, s.updated_at
+                    FROM sav s
+                    WHERE s.id = :id
+                    LIMIT 1
+                ");
+                $stmt->execute([':id' => $savId]);
+                $sav = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$sav) {
+                    $flash = ['type'=>'error','msg'=>"SAV introuvable."];
+                } elseif (!canEditSav($sav)) {
+                    $flash = ['type'=>'error','msg'=>"Vous n'êtes pas autorisé à modifier ce SAV."];
+                } else {
+                    // Gestion automatique de la date_fermeture :
+                    // - si on passe en "resolu" et qu'il n'y a pas encore de date_fermeture -> on met aujourd'hui
+                    // - si on passe en autre statut et qu'il y a une date_fermeture -> on la met à NULL
+                    $dateFermeture = $sav['date_fermeture'] ?? null;
+                    $oldStatut = $sav['statut'] ?? '';
+                    $isBecomingResolu = ($newStatut === 'resolu' && $oldStatut !== 'resolu');
+                    
+                    if ($newStatut === 'resolu' && empty($dateFermeture)) {
+                        $dateFermeture = $today;
+                    } elseif ($newStatut !== 'resolu' && !empty($dateFermeture)) {
+                        $dateFermeture = null;
+                    }
+
+                    $pdo->beginTransaction();
+                    try {
+                        $upd = $pdo->prepare("
+                            UPDATE sav
+                            SET statut = :statut,
+                                priorite = :priorite,
+                                date_fermeture = :date_fermeture,
+                                updated_at = NOW()
+                            WHERE id = :id
+                        ");
+                        $upd->execute([
+                            ':statut'      => $newStatut,
+                            ':priorite'    => $newPriorite,
+                            ':date_fermeture' => $dateFermeture,
+                            ':id'          => $savId,
+                        ]);
+
+                        $pdo->commit();
+                        
+                        // Enregistrer dans l'historique
+                        try {
+                            $statutLabels = [
+                                'ouvert' => 'Ouvert',
+                                'en_cours' => 'En cours',
+                                'resolu' => 'Résolu',
+                                'annule' => 'Annulé'
+                            ];
+                            $prioriteLabels = [
+                                'basse' => 'Basse',
+                                'normale' => 'Normale',
+                                'haute' => 'Haute',
+                                'urgente' => 'Urgente'
+                            ];
+                            $oldStatutLabel = $statutLabels[$oldStatut] ?? $oldStatut;
+                            $newStatutLabel = $statutLabels[$newStatut] ?? $newStatut;
+                            
+                            $details = sprintf(
+                                'SAV #%d (%s) : statut changé de "%s" à "%s", priorité: %s',
+                                $savId,
+                                $sav['reference'] ?? 'N/A',
+                                $oldStatutLabel,
+                                $newStatutLabel,
+                                $prioriteLabels[$newPriorite] ?? $newPriorite
+                            );
+                            
+                            if (!empty($dateFermeture) && $newStatut === 'resolu') {
+                                $details .= sprintf(' - Date de fermeture: %s', $dateFermeture);
+                            }
+                            
+                            enregistrerAction($pdo, currentUserId(), 'sav_modifie', $details);
+                        } catch (Throwable $e) {
+                            error_log('sav.php historique error: ' . $e->getMessage());
+                        }
+                        
+                        $flash = ['type'=>'success','msg'=>"SAV mis à jour avec succès."];
+                    } catch (PDOException $e) {
+                        $pdo->rollBack();
+                        error_log('sav.php UPDATE error: ' . $e->getMessage());
+                        $flash = ['type'=>'error','msg'=>"Erreur SQL : impossible de mettre à jour le SAV."];
+                    }
+                }
+            } catch (PDOException $e) {
+                error_log('sav.php UPDATE error: ' . $e->getMessage());
+                $flash = ['type'=>'error','msg'=>"Erreur SQL : impossible de mettre à jour le SAV."];
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Récupération des SAV depuis la base (pour l'affichage)
+// ============================================================================
+try {
+    $sql = "
+        SELECT
+            s.*,
+            c.raison_sociale AS client_nom,
+            u.nom    AS technicien_nom,
+            u.prenom AS technicien_prenom
+        FROM sav s
+        LEFT JOIN clients c      ON c.id = s.id_client
+        LEFT JOIN utilisateurs u ON u.id = s.id_technicien
+        ORDER BY 
+            CASE s.priorite
+                WHEN 'urgente' THEN 1
+                WHEN 'haute' THEN 2
+                WHEN 'normale' THEN 3
+                WHEN 'basse' THEN 4
+            END,
+            s.date_ouverture DESC, s.id DESC
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('sav.php SQL error: ' . $e->getMessage());
+    $rows = [];
+}
+
+// ============================================================================
+// Calcul des flags et stats globales
+// ============================================================================
+$totalSav = count($rows);
+$urgentCount = 0;
+$todayCount = 0;
+$archiveCount = 0;
+
+foreach ($rows as $idx => $s) {
+    $statut = $s['statut'] ?? '';
+    $isResolu = ($statut === 'resolu');
+    
+    // Compter les SAV archivés
+    if ($isResolu) {
+        $archiveCount++;
+        $rows[$idx]['is_today'] = false;
+        $rows[$idx]['is_urgent'] = false;
+        continue;
+    }
+    
+    $ouverture = $s['date_ouverture'] ?? null;
+    $fermeture = $s['date_fermeture'] ?? null;
+
+    $isToday = false;
+    if ($ouverture && $ouverture === $today) {
+        $isToday = true;
+    }
+    if ($fermeture && $fermeture === $today) {
+        $isToday = true;
+    }
+
+    $isUrgent = ($s['priorite'] ?? 'normale') === 'urgente';
+
+    $rows[$idx]['is_today'] = $isToday;
+    $rows[$idx]['is_urgent'] = $isUrgent;
+
+    if ($isUrgent)  $urgentCount++;
+    if ($isToday) $todayCount++;
+}
+
+// ============================================================================
+// Vue (toutes / urgent / aujourd'hui / archive)
+// ============================================================================
+$view = $_GET['view'] ?? 'toutes';
+$currentRole = currentUserRole();
+$isAdminOrDirigeant = in_array($currentRole, ['Admin', 'Dirigeant'], true);
+
+// Vérifier les permissions pour l'archive
+if ($view === 'archive' && !$isAdminOrDirigeant) {
+    $flash = ['type' => 'error', 'msg' => "Vous n'êtes pas autorisé à accéder à l'archive."];
+    $view = 'toutes';
+}
+
+if (!in_array($view, ['toutes', 'urgent', 'aujourdhui', 'archive'], true)) {
+    $view = 'toutes';
+}
+
+$filteredSav = array_values(array_filter($rows, function($s) use ($view, $today) {
+    $statut = $s['statut'] ?? '';
+    
+    // Vue "archive" : afficher uniquement les SAV résolus
+    if ($view === 'archive') {
+        return $statut === 'resolu';
+    }
+    
+    // Pour toutes les autres vues, exclure les SAV résolus
+    if ($statut === 'resolu') {
+        return false;
+    }
+    
+    // Vue "urgent" : afficher uniquement les SAV urgents
+    if ($view === 'urgent') {
+        $isUrgent = !empty($s['is_urgent']);
+        if (!$isUrgent) {
+            $isUrgent = ($s['priorite'] ?? 'normale') === 'urgente';
+        }
+        return $isUrgent;
+    }
+    
+    // Vue "aujourdhui" : afficher les SAV ouverts ou fermés aujourd'hui
+    if ($view === 'aujourdhui') {
+        $isToday = !empty($s['is_today']);
+        if (!$isToday) {
+            $ouverture = $s['date_ouverture'] ?? null;
+            $fermeture = $s['date_fermeture'] ?? null;
+            if ($ouverture && $ouverture === $today) {
+                $isToday = true;
+            }
+            if ($fermeture && $fermeture === $today) {
+                $isToday = true;
+            }
+        }
+        return $isToday;
+    }
+    
+    // Vue "toutes" : afficher tous les SAV sauf les résolus
+    return true;
+}));
+
+$listedCount      = count($filteredSav);
+$lastRefreshLabel = date('d/m/Y à H:i');
+?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gestion des SAV - CCComputer</title>
+
+  <link rel="stylesheet" href="/assets/css/main.css" />
+  <link rel="stylesheet" href="/assets/css/livraison.css" />
+</head>
+<body class="page-livraisons">
+<?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+
+<div class="page-container">
+  <div class="page-header">
+    <h2 class="page-title">Gestion des SAV</h2>
+    <p class="page-sub">
+      Vue des interventions SAV — dernière mise à jour <?= h($lastRefreshLabel) ?>.
+    </p>
+  </div>
+
+  <!-- Flash -->
+  <?php if ($flash['type']): ?>
+    <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
+      <?= $flash['msg'] ?>
+    </div>
+  <?php endif; ?>
+
+  <!-- Meta cards -->
+  <section class="clients-meta">
+    <div class="meta-card">
+      <span class="meta-label">SAV listés</span>
+      <strong class="meta-value"><?= h((string)$listedCount) ?></strong>
+      <?php if ($listedCount === 0): ?>
+        <span class="meta-chip">Aucune donnée</span>
+      <?php endif; ?>
+      <?php if ($view !== 'archive' && $isAdminOrDirigeant): ?>
+        <span class="meta-sub">Archive : <?= h((string)$archiveCount) ?> SAV résolu(s)</span>
+      <?php endif; ?>
+    </div>
+
+    <div class="meta-card">
+      <span class="meta-label">SAV urgents</span>
+      <strong class="meta-value <?= $urgentCount > 0 ? 'danger' : 'success' ?>">
+        <?= h((string)$urgentCount) ?>
+      </strong>
+      <span class="meta-sub">
+        <?= $urgentCount > 0 ? 'À traiter en priorité' : 'Aucun SAV urgent' ?>
+      </span>
+    </div>
+
+    <div class="meta-card">
+      <span class="meta-label">Aujourd'hui</span>
+      <strong class="meta-value"><?= h((string)$todayCount) ?></strong>
+      <span class="meta-sub">SAV ouverts ou fermés aujourd'hui</span>
+    </div>
+
+    <div class="meta-card">
+      <span class="meta-label">Vue active</span>
+      <strong class="meta-value">
+        <?php
+          if ($view === 'archive') {
+              echo 'Archive';
+          } elseif ($view === 'urgent') {
+              echo 'Urgents';
+          } elseif ($view === 'aujourdhui') {
+              echo 'Aujourd\'hui';
+          } else {
+              echo 'Toutes';
+          }
+        ?>
+      </strong>
+      <span class="meta-sub">Filtrer en un clic</span>
+    </div>
+  </section>
+
+  <!-- Barre de filtres -->
+  <div class="filters-row">
+    <div class="filters-left">
+      <input type="text" id="q" class="filter-input" placeholder="Filtrer (client, référence, description, technicien)…">
+      <button id="clearQ" class="btn btn-secondary" type="button">Effacer</button>
+    </div>
+    <div class="filters-actions">
+      <a href="/public/sav.php?view=toutes"
+         class="btn <?= $view === 'toutes' ? 'btn-primary' : 'btn-outline' ?>">Toutes</a>
+      <a href="/public/sav.php?view=urgent"
+         class="btn <?= $view === 'urgent' ? 'btn-primary' : 'btn-outline' ?>">Urgents</a>
+      <a href="/public/sav.php?view=aujourdhui"
+         class="btn <?= $view === 'aujourdhui' ? 'btn-primary' : 'btn-outline' ?>">Aujourd'hui</a>
+      <?php if ($isAdminOrDirigeant): ?>
+      <a href="/public/sav.php?view=archive"
+         class="btn <?= $view === 'archive' ? 'btn-primary' : 'btn-outline' ?>">📦 Archive</a>
+      <?php endif; ?>
+    </div>
+  </div>
+
+  <!-- Tableau -->
+  <div class="table-wrapper">
+    <table class="tbl-livraisons" id="tbl">
+      <thead>
+        <tr>
+          <th>Client</th>
+          <th>Référence</th>
+          <th>Description</th>
+          <th>Date ouverture</th>
+          <th>Date fermeture</th>
+          <th>Technicien</th>
+          <th>Priorité</th>
+          <th>Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+      <?php if (!$filteredSav): ?>
+        <tr>
+          <td colspan="8" style="padding:1rem; color:var(--text-secondary);">
+            Aucun SAV à afficher pour cette vue.
+          </td>
+        </tr>
+      <?php else: ?>
+        <?php foreach ($filteredSav as $s):
+
+          $clientNom = $s['client_nom'] ?: '—';
+          $ref       = $s['reference'] ?? '—';
+          $description = $s['description'] ?? '—';
+
+          $ouverture    = $s['date_ouverture'] ?? null;
+          $fermeture    = $s['date_fermeture'] ?? null;
+
+          $ouvertureLabel = $ouverture ? date('d/m/Y', strtotime($ouverture)) : '—';
+          $fermetureLabel = $fermeture ? date('d/m/Y', strtotime($fermeture)) : '—';
+
+          $technicienNomComplet = trim(
+              ($s['technicien_prenom'] ?? '') . ' ' . ($s['technicien_nom'] ?? '')
+          );
+          if ($technicienNomComplet === '') {
+              $technicienNomComplet = '—';
+          }
+
+          $isUrgent  = !empty($s['is_urgent']);
+          $isToday = !empty($s['is_today']);
+
+          $statut = $s['statut'] ?? 'ouvert';
+          $statutLabels = [
+              'ouvert' => 'Ouvert',
+              'en_cours' => 'En cours',
+              'resolu' => 'Résolu',
+              'annule' => 'Annulé'
+          ];
+          $statutLabel = $statutLabels[$statut] ?? $statut;
+
+          $priorite = $s['priorite'] ?? 'normale';
+          $prioriteLabels = [
+              'basse' => 'Basse',
+              'normale' => 'Normale',
+              'haute' => 'Haute',
+              'urgente' => 'Urgente'
+          ];
+          $prioriteLabel = $prioriteLabels[$priorite] ?? $priorite;
+          $prioriteColors = [
+              'basse' => '#6b7280',
+              'normale' => '#3b82f6',
+              'haute' => '#f59e0b',
+              'urgente' => '#dc2626'
+          ];
+          $prioriteColor = $prioriteColors[$priorite] ?? '#6b7280';
+
+          $commentaire = $s['commentaire'] ?? '';
+
+          $searchText = strtolower(
+              $clientNom . ' ' . $ref . ' ' . $description . ' ' . $technicienNomComplet
+          );
+
+          $canEditThis = canEditSav($s);
+          $rowClasses = [];
+          if ($isUrgent)  $rowClasses[] = 'row-alert';
+          if ($isToday) $rowClasses[] = 'row-today';
+          $rowClassAttr = $rowClasses ? ' class="'.h(implode(' ', $rowClasses)).'"' : '';
+        ?>
+        <tr
+          data-id="<?= (int)$s['id'] ?>"
+          data-search="<?= h($searchText) ?>"
+          data-client="<?= h($clientNom) ?>"
+          data-ref="<?= h($ref) ?>"
+          data-description="<?= h($description) ?>"
+          data-ouverture="<?= h($ouvertureLabel) ?>"
+          data-fermeture="<?= h($fermetureLabel) ?>"
+          data-statut="<?= h($statut) ?>"
+          data-priorite="<?= h($priorite) ?>"
+          data-technicien="<?= h($technicienNomComplet) ?>"
+          data-commentaire="<?= h($commentaire) ?>"
+          data-can-edit="<?= $canEditThis ? '1' : '0' ?>"
+          <?= $rowClassAttr ?>
+        >
+          <td data-th="Client">
+            <div class="client-cell">
+              <div class="client-raison"><?= h($clientNom) ?></div>
+              <div class="client-num"><?= h($ref) ?></div>
+            </div>
+          </td>
+          <td data-th="Référence"><?= h($ref) ?></td>
+          <td data-th="Description">
+            <div class="machine-cell">
+              <div class="machine-line"><?= h($description) ?></div>
+              <?php if ($commentaire): ?>
+                <div class="machine-sub">Note: <?= h($commentaire) ?></div>
+              <?php endif; ?>
+            </div>
+          </td>
+          <td class="td-date" data-th="Date ouverture"><?= h($ouvertureLabel) ?></td>
+          <td class="td-date" data-th="Date fermeture"><?= h($fermetureLabel) ?></td>
+          <td data-th="Technicien"><?= h($technicienNomComplet) ?></td>
+          <td data-th="Priorité">
+            <span style="padding: 0.25rem 0.5rem; border-radius: 4px; background: <?= h($prioriteColor) ?>; color: white; font-size: 0.75rem;">
+              <?= h($prioriteLabel) ?>
+            </span>
+          </td>
+          <td class="td-date has-pullout" data-th="Statut">
+            <?= h($statutLabel) ?>
+            <?php if ($isUrgent): ?>
+              <span class="alert-pullout" title="SAV urgent">
+                ⚠️ Urgent
+              </span>
+            <?php elseif ($isToday): ?>
+              <span class="badge-today" title="Ouvert ou fermé aujourd'hui">
+                📅 Aujourd'hui
+              </span>
+            <?php endif; ?>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Popup édition SAV -->
+<div id="savModalOverlay" class="popup-overlay" aria-hidden="true"></div>
+<div id="editSavModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="editSavModalTitle" style="display:none;">
+  <div class="modal-header">
+    <h3 id="editSavModalTitle">Modifier le SAV</h3>
+    <button type="button" id="btnCloseSavModal" class="icon-btn icon-btn--close" aria-label="Fermer"><span aria-hidden="true">×</span></button>
+  </div>
+
+  <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form" novalidate>
+    <input type="hidden" name="action" value="update_sav">
+    <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+    <input type="hidden" name="sav_id" id="sav_id">
+
+    <div class="form-grid-2">
+      <div class="card-like">
+        <div class="subsection-title">Informations</div>
+        <label>Client</label>
+        <input type="text" id="modal_client" readonly>
+
+        <label>Référence</label>
+        <input type="text" id="modal_ref" readonly>
+
+        <label>Description</label>
+        <textarea id="modal_description" rows="3" readonly></textarea>
+      </div>
+
+      <div class="card-like">
+        <div class="subsection-title">Statut & dates</div>
+        <div class="grid-two">
+          <div>
+            <label>Date ouverture</label>
+            <input type="text" id="modal_ouverture" readonly>
+          </div>
+          <div>
+            <label>Date fermeture</label>
+            <input type="text" id="modal_fermeture" readonly>
+          </div>
+        </div>
+
+        <label>Technicien</label>
+        <input type="text" id="modal_technicien" readonly>
+
+        <label>Priorité</label>
+        <select name="priorite" id="modal_priorite">
+          <option value="basse">Basse</option>
+          <option value="normale">Normale</option>
+          <option value="haute">Haute</option>
+          <option value="urgente">Urgente</option>
+        </select>
+
+        <label>Statut</label>
+        <select name="statut" id="modal_statut">
+          <option value="ouvert">Ouvert</option>
+          <option value="en_cours">En cours</option>
+          <option value="resolu">Résolu</option>
+          <option value="annule">Annulé</option>
+        </select>
+
+        <label>Commentaire (lecture seule)</label>
+        <textarea id="modal_commentaire" rows="3" readonly></textarea>
+
+        <div id="modal_permission_msg" style="margin-top:0.5rem; font-size:0.85rem;"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <div class="modal-hint">
+        <strong>Permissions :</strong> Seul le technicien assigné à ce SAV peut modifier son statut. Les administrateurs et dirigeants peuvent modifier tous les SAV.
+      </div>
+      <button type="submit" id="modal_submit_btn" class="fiche-action-btn">Enregistrer</button>
+    </div>
+  </form>
+</div>
+
+<script>
+// Gestion modale
+(function(){
+  const overlay   = document.getElementById('savModalOverlay');
+  const modal     = document.getElementById('editSavModal');
+  const closeBtn  = document.getElementById('btnCloseSavModal');
+
+  const inputId        = document.getElementById('sav_id');
+  const inputClient    = document.getElementById('modal_client');
+  const inputRef       = document.getElementById('modal_ref');
+  const inputDescription = document.getElementById('modal_description');
+  const inputOuverture    = document.getElementById('modal_ouverture');
+  const inputFermeture    = document.getElementById('modal_fermeture');
+  const inputTechnicien   = document.getElementById('modal_technicien');
+  const selectPriorite   = document.getElementById('modal_priorite');
+  const selectStatut   = document.getElementById('modal_statut');
+  const textareaCom    = document.getElementById('modal_commentaire');
+  const permMsg        = document.getElementById('modal_permission_msg');
+  const submitBtn      = document.getElementById('modal_submit_btn');
+
+  function openModal(){
+    document.body.classList.add('modal-open');
+    overlay.setAttribute('aria-hidden','false');
+    overlay.style.display='block';
+    modal.style.display='block';
+  }
+  function closeModal(){
+    document.body.classList.remove('modal-open');
+    overlay.setAttribute('aria-hidden','true');
+    overlay.style.display='none';
+    modal.style.display='none';
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (overlay)  overlay.addEventListener('click', closeModal);
+
+  // Lignes cliquables -> ouverture modale d'édition
+  const rows = document.querySelectorAll('table#tbl tbody tr[data-id]');
+  rows.forEach(tr => {
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', (e) => {
+      if (window.getSelection && String(window.getSelection())) return;
+
+      const id        = tr.getAttribute('data-id');
+      const client    = tr.getAttribute('data-client') || '';
+      const ref       = tr.getAttribute('data-ref') || '';
+      const description   = tr.getAttribute('data-description') || '';
+      const ouverture    = tr.getAttribute('data-ouverture') || '';
+      const fermeture    = tr.getAttribute('data-fermeture') || '';
+      const technicien   = tr.getAttribute('data-technicien') || '';
+      const priorite    = tr.getAttribute('data-priorite') || 'normale';
+      const statut    = tr.getAttribute('data-statut') || 'ouvert';
+      const com       = tr.getAttribute('data-commentaire') || '';
+      const canEdit   = tr.getAttribute('data-can-edit') === '1';
+
+      if (inputId)      inputId.value = id;
+      if (inputClient)  inputClient.value = client;
+      if (inputRef)     inputRef.value = ref;
+      if (inputDescription) inputDescription.value = description;
+      if (inputOuverture)  inputOuverture.value = ouverture;
+      if (inputFermeture)  inputFermeture.value = fermeture;
+      if (inputTechnicien) inputTechnicien.value = technicien;
+      if (textareaCom)  textareaCom.value = com;
+
+      if (selectPriorite) {
+        selectPriorite.value = priorite;
+        selectPriorite.disabled = !canEdit;
+      }
+
+      if (selectStatut) {
+        selectStatut.value = statut;
+        selectStatut.disabled = !canEdit;
+      }
+
+      if (submitBtn) {
+        submitBtn.disabled = !canEdit;
+      }
+
+      if (permMsg) {
+        if (canEdit) {
+          permMsg.textContent = '';
+          permMsg.style.color = '';
+        } else {
+          const currentTechnicien = tr.getAttribute('data-technicien') || '—';
+          permMsg.textContent = "Vous ne pouvez pas modifier ce SAV. Seul le technicien assigné (" + currentTechnicien + ") ou un administrateur/dirigeant peut modifier le statut.";
+          permMsg.style.color = '#dc2626';
+        }
+      }
+
+      openModal();
+    });
+  });
+
+  // Filtre rapide
+  const q = document.getElementById('q');
+  const clear = document.getElementById('clearQ');
+  if (q) {
+    const lines = Array.from(document.querySelectorAll('table#tbl tbody tr'));
+    function apply(){
+      const v = (q.value || '').trim().toLowerCase();
+      lines.forEach(tr => {
+        const t = (tr.getAttribute('data-search') || '').toLowerCase();
+        tr.style.display = !v || t.includes(v) ? '' : 'none';
+      });
+    }
+    q.addEventListener('input', apply);
+    if (clear) {
+      clear.addEventListener('click', () => {
+        q.value = '';
+        apply();
+        q.focus();
+      });
+    }
+  }
+})();
+</script>
+</body>
+</html>
+

@@ -67,10 +67,18 @@ $historique_par_jour = $safeFetchAll(
 // ==================================================================
 // Compteurs réels depuis la BDD
 // ==================================================================
-// Note: Les tables 'paiements' et 'sav' n'existent pas dans le schéma actuel
-// Ces compteurs sont désactivés jusqu'à la création de ces tables
+// Note: La table 'paiements' n'existe pas dans le schéma actuel
 $nb_paiements_en_attente = 0; // Table 'paiements' non présente dans le schéma
-$nb_sav_a_traiter = 0; // Table 'sav' non présente dans le schéma
+
+// Pour SAV, les statuts ENUM sont: 'ouvert','en_cours','resolu','annule'
+// On compte les SAV ouverts et en cours comme "à traiter"
+$nb_sav_a_traiter = (int)($safeFetchColumn(
+    $pdo,
+    "SELECT COUNT(*) FROM sav WHERE statut IN (:stat1, :stat2)",
+    ['stat1' => 'ouvert', 'stat2' => 'en_cours'],
+    0,
+    'sav_a_traiter'
+) ?? 0);
 
 // Pour livraisons, les statuts ENUM sont: 'planifiee','en_cours','livree','annulee'
 // On compte les livraisons planifiées et en cours comme "à faire"
@@ -158,7 +166,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 </p>
             </div>
 
-            <div class="dash-card" data-href="sav.php" tabindex="0" role="button" aria-label="Accéder au SAV">
+            <div class="dash-card" data-href="/public/sav.php" tabindex="0" role="button" aria-label="Accéder au SAV">
                 <div class="card-icon sav" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
                         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
