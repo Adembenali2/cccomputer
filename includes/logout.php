@@ -6,21 +6,7 @@ require_once __DIR__ . '/session_config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/historique.php';
 
-// 2) Journaliser la déconnexion (best-effort, ne pas bloquer)
-if (!empty($_SESSION['user_id'])) {
-    try {
-        if (isset($pdo)) {
-            enregistrerAction(
-                $pdo,
-                (int)$_SESSION['user_id'],
-                'deconnexion',
-                'Déconnexion manuelle via le bouton'
-            );
-        }
-    } catch (Throwable $e) {
-        // no-op
-    }
-}
+// 2) Note: Les connexions/déconnexions ne sont plus enregistrées dans l'historique
 
 // 3) Purge de la session
 $_SESSION = [];

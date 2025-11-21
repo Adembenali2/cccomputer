@@ -2,6 +2,7 @@
 // /public/livraisons.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/historique.php';
 
 /** PDO en mode exceptions **/
 if (method_exists($pdo, 'setAttribute')) {
@@ -203,6 +204,40 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                         }
 
                         $pdo->commit();
+                        
+                        // Enregistrer dans l'historique
+                        try {
+                            $statutLabels = [
+                                'planifiee' => 'Planifiée',
+                                'en_cours' => 'En cours',
+                                'livree' => 'Livrée',
+                                'annulee' => 'Annulée'
+                            ];
+                            $oldStatutLabel = $statutLabels[$oldStatut] ?? $oldStatut;
+                            $newStatutLabel = $statutLabels[$newStatut] ?? $newStatut;
+                            
+                            $details = sprintf(
+                                'Livraison #%d (%s) : statut changé de "%s" à "%s"',
+                                $livraisonId,
+                                $liv['reference'] ?? 'N/A',
+                                $oldStatutLabel,
+                                $newStatutLabel
+                            );
+                            
+                            if ($isBecomingLivree && !empty($liv['product_type'])) {
+                                $details .= ' - Stock client mis à jour';
+                            }
+                            
+                            if (!empty($dateReelle) && $newStatut === 'livree') {
+                                $details .= sprintf(' - Date réelle: %s', $dateReelle);
+                            }
+                            
+                            enregistrerAction($pdo, currentUserId(), 'livraison_modifiee', $details);
+                        } catch (Throwable $e) {
+                            error_log('livraison.php historique error: ' . $e->getMessage());
+                            // Ne pas faire échouer la transaction pour une erreur d'historique
+                        }
+                        
                         $flash = ['type'=>'success','msg'=>"Livraison mise à jour avec succès." . ($isBecomingLivree && !empty($liv['product_type']) ? " Stock client mis à jour." : "")];
                     } catch (PDOException $e) {
                         $pdo->rollBack();
