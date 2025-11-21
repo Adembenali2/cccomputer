@@ -450,6 +450,13 @@ if (selectTypeLien && lienContainer && lienSearch) {
                 lienResults.style.display = 'none';
                 lienResults.innerHTML = '';
             }
+            // Si c'est un client, charger les 3 premiers au focus
+            if (type === 'client') {
+                // Attendre un peu pour que le champ soit visible
+                setTimeout(() => {
+                    if (lienSearch) lienSearch.focus();
+                }, 100);
+            }
         } else {
             lienContainer.style.display = 'none';
             if (idLienInput) idLienInput.value = '';
@@ -463,20 +470,121 @@ if (selectTypeLien && lienContainer && lienSearch) {
     });
 }
 
+// Fonction pour afficher les résultats de recherche
+function displaySearchResults(results, type) {
+    if (!lienResults) return;
+    
+    lienResults.innerHTML = '';
+    
+    if (!results || results.length === 0) {
+        const item = document.createElement('div');
+        item.className = 'client-result-item empty';
+        item.textContent = 'Aucun résultat trouvé.';
+        lienResults.appendChild(item);
+        return;
+    }
+    
+    results.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'client-result-item';
+        
+        if (type === 'client') {
+            // Affichage amélioré pour les clients : raison sociale + dirigeant + adresse
+            let html = `<strong>${escapeHtml(item.name || 'N/A')}</strong>`;
+            if (item.dirigeant) {
+                html += `<br><span style="color: var(--text-secondary); font-size: 0.85rem;">👤 ${escapeHtml(item.dirigeant)}</span>`;
+            }
+            if (item.address) {
+                html += `<br><span style="color: var(--text-muted); font-size: 0.8rem;">📍 ${escapeHtml(item.address)}</span>`;
+            }
+            div.innerHTML = html;
+        } else {
+            // Pour livraisons et SAV, affichage simple
+            div.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong>`;
+        }
+        
+        div.addEventListener('click', () => {
+            if (type === 'client') {
+                const displayText = item.dirigeant 
+                    ? `${item.name} (${item.dirigeant})`
+                    : item.name;
+                if (idLienInput) idLienInput.value = item.id;
+                if (lienSelected) {
+                    lienSelected.innerHTML = `<strong>${escapeHtml(displayText)}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
+                    lienSelected.style.display = 'block';
+                }
+            } else {
+                if (idLienInput) idLienInput.value = item.id;
+                if (lienSelected) {
+                    lienSelected.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
+                    lienSelected.style.display = 'block';
+                }
+            }
+            if (lienSearch) lienSearch.value = '';
+            if (lienResults) lienResults.style.display = 'none';
+        });
+        lienResults.appendChild(div);
+    });
+}
+
+// Fonction pour charger les premiers clients (par défaut)
+async function loadFirstClients() {
+    if (!lienResults || !selectTypeLien || selectTypeLien.value !== 'client') return;
+    
+    try {
+        const response = await fetch('/API/messagerie_get_first_clients.php?limit=3');
+        const data = await response.json();
+        
+        if (data.ok && data.clients) {
+            const results = data.clients.map(c => ({
+                id: c.id,
+                name: c.name,
+                dirigeant: c.dirigeant_complet || (c.prenom_dirigeant && c.nom_dirigeant ? `${c.prenom_dirigeant} ${c.nom_dirigeant}` : null),
+                address: c.address,
+                code: c.code
+            }));
+            displaySearchResults(results, 'client');
+            if (lienResults) lienResults.style.display = 'block';
+        }
+    } catch (err) {
+        console.error('Erreur chargement premiers clients:', err);
+    }
+}
+
 // Recherche de client/livraison/SAV
 if (lienSearch) {
+    // Au focus, charger les 3 premiers clients si type = client
+    lienSearch.addEventListener('focus', () => {
+        const type = selectTypeLien ? selectTypeLien.value : '';
+        if (type === 'client' && (!lienSearch.value || lienSearch.value.trim().length === 0)) {
+            loadFirstClients();
+        }
+    });
+    
     lienSearch.addEventListener('input', () => {
         const query = lienSearch.value.trim();
         const type = selectTypeLien ? selectTypeLien.value : '';
         
         clearTimeout(searchTimeout);
-        if (lienResults) {
-            lienResults.innerHTML = '';
-            lienResults.style.display = 'none';
+        
+        if (!type) {
+            if (lienResults) {
+                lienResults.innerHTML = '';
+                lienResults.style.display = 'none';
+            }
+            return;
         }
         
-        // Minimum 1 caractère pour la recherche
-        if (!query || query.length < 1 || !type) {
+        // Si le champ est vide, afficher les 3 premiers clients
+        if (!query || query.length === 0) {
+            if (type === 'client') {
+                loadFirstClients();
+            } else {
+                if (lienResults) {
+                    lienResults.innerHTML = '';
+                    lienResults.style.display = 'none';
+                }
+            }
             return;
         }
         
@@ -497,18 +605,14 @@ if (lienSearch) {
                     url = `/API/messagerie_search_sav.php?q=${encodeURIComponent(query)}&limit=15`;
                 }
                 
-                console.log('Recherche:', type, query, url);
-                
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
-                console.log('Réponse API:', data);
                 
                 if (!lienResults) return;
-                lienResults.innerHTML = '';
                 
                 let results = [];
                 if (type === 'client' && data.ok && data.clients) {
@@ -523,57 +627,7 @@ if (lienSearch) {
                     results = data.results;
                 }
                 
-                console.log('Résultats formatés:', results);
-                
-                if (!results || results.length === 0) {
-                    const item = document.createElement('div');
-                    item.className = 'client-result-item empty';
-                    item.textContent = 'Aucun résultat trouvé.';
-                    lienResults.appendChild(item);
-                    return;
-                }
-                
-                results.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'client-result-item';
-                    
-                    if (type === 'client') {
-                        // Affichage amélioré pour les clients : raison sociale + dirigeant + adresse
-                        let html = `<strong>${escapeHtml(item.name || 'N/A')}</strong>`;
-                        if (item.dirigeant) {
-                            html += `<br><span style="color: var(--text-secondary); font-size: 0.85rem;">👤 ${escapeHtml(item.dirigeant)}</span>`;
-                        }
-                        if (item.address) {
-                            html += `<br><span style="color: var(--text-muted); font-size: 0.8rem;">📍 ${escapeHtml(item.address)}</span>`;
-                        }
-                        div.innerHTML = html;
-                    } else {
-                        // Pour livraisons et SAV, affichage simple
-                        div.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong>`;
-                    }
-                    
-                    div.addEventListener('click', () => {
-                        if (type === 'client') {
-                            const displayText = item.dirigeant 
-                                ? `${item.name} (${item.dirigeant})`
-                                : item.name;
-                            if (idLienInput) idLienInput.value = item.id;
-                            if (lienSelected) {
-                                lienSelected.innerHTML = `<strong>${escapeHtml(displayText)}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
-                                lienSelected.style.display = 'block';
-                            }
-                        } else {
-                            if (idLienInput) idLienInput.value = item.id;
-                            if (lienSelected) {
-                                lienSelected.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
-                                lienSelected.style.display = 'block';
-                            }
-                        }
-                        if (lienSearch) lienSearch.value = '';
-                        if (lienResults) lienResults.style.display = 'none';
-                    });
-                    if (lienResults) lienResults.appendChild(div);
-                });
+                displaySearchResults(results, type);
             } catch (err) {
                 console.error('Erreur recherche:', err);
                 if (lienResults) {
