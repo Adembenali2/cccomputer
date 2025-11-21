@@ -1,0 +1,461 @@
+/* =========================================================
+   Livraisons (Desktop = tableau complet, Mobile = cartes)
+   ========================================================= */
+
+/* Empêche toute barre horizontale globale */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Quand la popup est ouverte, on bloque le scroll de la page */
+body.modal-open { overflow: hidden; }
+
+/* Désactive le masquage pour cette page -> permet au badge de dépasser à droite */
+.page-livraisons .page-container { overflow: visible; }
+.page-livraisons .page-title { margin-bottom: 0.2rem; }
+.page-livraisons .page-sub { color: var(--text-secondary); margin-top: 0; font-size: 0.95rem; }
+
+/* Meta cards */
+.clients-meta {
+  margin: 1rem 0 1.35rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.85rem;
+}
+.meta-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.meta-label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.meta-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.meta-value.success { color: #16a34a; }
+.meta-value.danger { color: #dc2626; }
+.meta-sub {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.meta-chip {
+  font-size: 0.75rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--border-color);
+  width: fit-content;
+  color: var(--text-secondary);
+}
+
+/* Filters row */
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem;
+  box-shadow: var(--shadow-sm);
+}
+.filters-left {
+  display: flex;
+  flex: 1 1 280px;
+  gap: 0.6rem;
+  align-items: center;
+}
+.filters-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.filter-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+.btn-secondary { background: var(--bg-secondary); }
+.btn-outline {
+  background: transparent;
+  border-color: var(--border-color);
+}
+.btn-primary {
+  background: var(--accent-primary);
+  color: #fff;
+  border: 1px solid var(--accent-primary);
+}
+.btn-primary:hover { filter: brightness(.97); }
+
+.row-alert {
+  background: rgba(239, 68, 68, 0.08);
+}
+.row-alert:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+/* ligne marquée "aujourd’hui" */
+.row-today {
+  box-shadow: inset 3px 0 0 0 var(--accent-primary);
+}
+
+/* ---------- Wrapper & Table (desktop) ---------- */
+.table-wrapper {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: visible;              /* important pour le badge */
+}
+
+.tbl-livraisons {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto; /* autosize selon contenu */
+}
+
+/* En-têtes */
+.tbl-livraisons thead th {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+/* Lignes & cellules */
+.tbl-livraisons tbody tr { position: relative; } /* ancre pour le badge */
+
+.tbl-livraisons tbody td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.tbl-livraisons tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+/* Dernière colonne: ancre locale pour le badge */
+.tbl-livraisons tbody td.td-date,
+.tbl-livraisons tbody td.has-pullout { position: relative; }
+
+/* --- Badge d'alerte tiré à droite, hors tableau --- */
+.alert-pullout {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px); /* à droite du bord de la cellule */
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #b91c1c;
+  background: #ef44441a;
+  border: 1px solid #ef4444;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none; /* ne gêne pas les clics */
+}
+
+/* Badge "Aujourd’hui" plus discret */
+.badge-today {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px);
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Afficher et repositionner les badges en mode cartes */
+@media (max-width: 900px) {
+  .alert-pullout,
+  .badge-today {
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none;
+    display: inline-flex;
+    margin-top: 0.35rem;
+    white-space: normal;
+  }
+
+  /* Aligner à droite et prévoir un peu d'espace */
+  .tbl-livraisons tbody td.has-pullout,
+  .tbl-livraisons tbody td.td-date {
+    text-align: right;
+    padding-bottom: 0.95rem;
+  }
+}
+
+/* ---------- Cellules de contenu ---------- */
+.client-cell .client-raison { font-weight: 700; color: var(--text-primary); }
+.client-cell .client-num    { font-size: 0.85rem; color: var(--text-muted); }
+
+.machine-cell .machine-line { margin-bottom: 0.1rem; }
+.machine-cell .machine-sub  {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* chiffres */
+.td-metric { font-weight: 700; text-align: right; }
+.td-date   { color: var(--text-secondary); }
+
+/* ---------- Boutons génériques ---------- */
+.filters-row .btn { color: var(--text-primary); }
+.btn-primary {
+  background: var(--accent-primary);
+  color: #fff;
+  border: 1px solid var(--accent-primary);
+}
+
+/* =========================================================
+   Popup "Planifier une livraison" (reprend styles popup client)
+   ========================================================= */
+
+/* Overlay plein écran, fixe */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+}
+
+/* Fenêtre popup centrée, ne déborde jamais de l'écran */
+.support-popup {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(980px, calc(100dvw - 48px)); /* évite le débordement de 100vw */
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overflow-x: hidden;             /* pas de barre horizontale dans la modale */
+  padding: 1.25rem 1.25rem 1rem;
+  border-radius: 1.25rem;
+  backdrop-filter: saturate(140%) blur(4px);
+}
+
+/* En-tête : titre centré, bouton X */
+.modal-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-right: 2.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.icon-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  transition: background-color .2s ease, transform .08s ease;
+}
+.icon-btn:hover { background: var(--bg-tertiary); }
+.icon-btn:active { transform: scale(0.98); }
+
+.icon-btn--close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* Cartes/formulaires */
+.card-like {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.9rem;
+}
+
+.subsection-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.6rem;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+  min-width: 0;                  /* évite le débordement */
+}
+
+.grid-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.card-like { min-width: 0; }
+
+/* Les champs ne dépassent pas */
+.modal-form input,
+.modal-form select,
+.modal-form textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Bas de la popup */
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .75rem;
+  margin-top: 1rem;
+}
+
+.modal-hint {
+  margin-right: auto;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Messages flash (au cas où tu en ajoutes plus tard) */
+.flash { padding: 0.6rem 0.8rem; border-radius: var(--radius-md); }
+.flash-success { background: #0ea5e91a; border: 1px solid #0ea5e9; color: var(--text-primary); }
+.flash-error   { background: #ef44441a; border: 1px solid #ef4444; color: var(--text-primary); }
+
+/* =========================================================
+   Mode "Cartes" responsive (<= 900px)
+   ========================================================= */
+@media (max-width: 900px) {
+  .clients-meta { grid-template-columns: 1fr 1fr; }
+  .filters-row { flex-direction: column; align-items: stretch; }
+  .filters-actions { width: 100%; justify-content: stretch; }
+  .filters-actions .btn { flex: 1 1 auto; justify-content: center; }
+
+  .tbl-livraisons thead {
+    position: absolute;
+    left: -9999px;
+    height: 0;
+    overflow: hidden;
+  }
+
+  .tbl-livraisons,
+  .tbl-livraisons tbody,
+  .tbl-livraisons tr,
+  .tbl-livraisons td {
+    display: block;
+    width: 100%;
+  }
+
+  .tbl-livraisons tbody tr {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    background: var(--bg-primary);
+    margin: 0.75rem 0;
+    overflow: hidden;
+  }
+
+  .tbl-livraisons tbody td {
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 0.95rem;
+    position: relative;
+  }
+
+  .tbl-livraisons tbody td::before {
+    content: attr(data-th);
+    display: block;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-bottom: 0.2rem;
+    letter-spacing: .02em;
+  }
+
+  .td-metric, .td-date { text-align: left; white-space: normal; }
+
+  .form-grid-2 { grid-template-columns: 1fr; }
+  .modal-hint { margin-left: 0; }
+}
+
+/* =========================================================
+   Petits écrans (<= 480px)
+   ========================================================= */
+@media (max-width: 480px) {
+  .clients-meta { grid-template-columns: 1fr; }
+
+  .machine-cell .machine-sub { font-size: 0.8rem; }
+  .client-cell .client-num   { font-size: 0.78rem; }
+
+  .filters-row input { font-size: 0.95rem !important; }
+
+  .modal-actions { flex-wrap: wrap; }
+  .modal-hint { width: 100%; order: -1; margin: 0 0 .5rem 0; }
+}
