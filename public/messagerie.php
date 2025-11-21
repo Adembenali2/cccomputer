@@ -151,6 +151,22 @@ try {
         $params[':filter_type'] = $filterType;
     }
     
+    // Vérifier si la colonne id_message_parent existe
+    $hasParentColumn = false;
+    try {
+        $checkParentCol = $pdo->query("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'messagerie' 
+            AND COLUMN_NAME = 'id_message_parent'
+        ");
+        $hasParentColumn = ($checkParentCol->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+    } catch (PDOException $e) {
+        error_log('messagerie.php - Erreur vérification colonne id_message_parent: ' . $e->getMessage());
+    }
+    
+    // Requête principale : messages correspondant aux critères
     $sql = "
         SELECT 
             m.*,
@@ -180,16 +196,108 @@ try {
     $sql .= ' ORDER BY m.date_envoi DESC LIMIT 200';
     
     $params[':current_user_id'] = $currentUserId;
-    
-    // Log pour débogage (en développement seulement)
-    if (defined('DEBUG') && DEBUG) {
-        error_log('messagerie.php - SQL: ' . $sql);
-        error_log('messagerie.php - Params: ' . json_encode($params));
-    }
-    
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Si la colonne id_message_parent existe, récupérer aussi les réponses et les parents
+    if ($hasParentColumn && !empty($messages)) {
+        $messageIds = array_map(function($m) { return (int)$m['id']; }, $messages);
+        $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
+        
+        // Récupérer les réponses aux messages affichés
+        $sqlReplies = "
+            SELECT 
+                m.*,
+                exp.nom AS expediteur_nom,
+                exp.prenom AS expediteur_prenom,
+                exp.Emploi AS expediteur_role,
+                dest.nom AS destinataire_nom,
+                dest.prenom AS destinataire_prenom,
+                dest.Emploi AS destinataire_role,
+                c.raison_sociale AS client_nom,
+                l.reference AS livraison_ref,
+                s.reference AS sav_ref,
+                ml.id AS lu_par_moi
+            FROM messagerie m
+            LEFT JOIN utilisateurs exp ON exp.id = m.id_expediteur
+            LEFT JOIN utilisateurs dest ON dest.id = m.id_destinataire
+            LEFT JOIN clients c ON c.id = m.id_lien AND m.type_lien = 'client'
+            LEFT JOIN livraisons l ON l.id = m.id_lien AND m.type_lien = 'livraison'
+            LEFT JOIN sav s ON s.id = m.id_lien AND m.type_lien = 'sav'
+            LEFT JOIN messagerie_lectures ml ON ml.id_message = m.id AND ml.id_utilisateur = ?
+            WHERE m.id_message_parent IN ({$placeholders})
+        ";
+        
+        $paramsReplies = array_merge([$currentUserId], $messageIds);
+        $stmtReplies = $pdo->prepare($sqlReplies);
+        $stmtReplies->execute($paramsReplies);
+        $replies = $stmtReplies->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Récupérer les parents des réponses affichées (si une réponse correspond aux critères, afficher aussi son parent)
+        $replyParentIds = [];
+        foreach ($messages as $msg) {
+            if (!empty($msg['id_message_parent'])) {
+                $replyParentIds[] = (int)$msg['id_message_parent'];
+            }
+        }
+        
+        if (!empty($replyParentIds)) {
+            $parentPlaceholders = implode(',', array_fill(0, count($replyParentIds), '?'));
+            $sqlParents = "
+                SELECT 
+                    m.*,
+                    exp.nom AS expediteur_nom,
+                    exp.prenom AS expediteur_prenom,
+                    exp.Emploi AS expediteur_role,
+                    dest.nom AS destinataire_nom,
+                    dest.prenom AS destinataire_prenom,
+                    dest.Emploi AS destinataire_role,
+                    c.raison_sociale AS client_nom,
+                    l.reference AS livraison_ref,
+                    s.reference AS sav_ref,
+                    ml.id AS lu_par_moi
+                FROM messagerie m
+                LEFT JOIN utilisateurs exp ON exp.id = m.id_expediteur
+                LEFT JOIN utilisateurs dest ON dest.id = m.id_destinataire
+                LEFT JOIN clients c ON c.id = m.id_lien AND m.type_lien = 'client'
+                LEFT JOIN livraisons l ON l.id = m.id_lien AND m.type_lien = 'livraison'
+                LEFT JOIN sav s ON s.id = m.id_lien AND m.type_lien = 'sav'
+                LEFT JOIN messagerie_lectures ml ON ml.id_message = m.id AND ml.id_utilisateur = ?
+                WHERE m.id IN ({$parentPlaceholders})
+            ";
+            
+            $paramsParents = array_merge([$currentUserId], $replyParentIds);
+            $stmtParents = $pdo->prepare($sqlParents);
+            $stmtParents->execute($paramsParents);
+            $parents = $stmtParents->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Combiner tous les messages
+            $allMessages = array_merge($messages, $replies, $parents);
+        } else {
+            $allMessages = array_merge($messages, $replies);
+        }
+        
+        // Supprimer les doublons (basé sur l'ID)
+        $uniqueMessages = [];
+        $seenIds = [];
+        foreach ($allMessages as $msg) {
+            $msgId = (int)$msg['id'];
+            if (!in_array($msgId, $seenIds)) {
+                $uniqueMessages[] = $msg;
+                $seenIds[] = $msgId;
+            }
+        }
+        
+        // Trier par date d'envoi
+        usort($uniqueMessages, function($a, $b) {
+            $dateA = strtotime($a['date_envoi'] ?? '');
+            $dateB = strtotime($b['date_envoi'] ?? '');
+            return $dateB - $dateA; // Décroissant
+        });
+        
+        $messages = array_slice($uniqueMessages, 0, 200);
+    }
     
     // Pour les messages "à tous", vérifier si lus via la table de lectures
     foreach ($messages as &$msg) {
