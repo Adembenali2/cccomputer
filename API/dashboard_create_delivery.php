@@ -68,7 +68,7 @@ $idClient = isset($data['client_id']) ? (int)$data['client_id'] : 0;
 $reference = trim($data['reference'] ?? '');
 $adresseLivraison = trim($data['adresse_livraison'] ?? '');
 $objet = trim($data['objet'] ?? '');
-$idLivreur = isset($data['id_livreur']) ? (int)$data['id_livreur'] : 0;
+$idLivreur = isset($data['id_livreur']) ? (int)$data['id_livreur'] : 0;   // peut être 0 => auto-assign
 $datePrevue = trim($data['date_prevue'] ?? '');
 $commentaire = trim($data['commentaire'] ?? '');
 
@@ -82,7 +82,7 @@ if ($idClient <= 0) $errors[] = "ID client invalide";
 if (empty($reference)) $errors[] = "Référence obligatoire";
 if (empty($adresseLivraison)) $errors[] = "Adresse de livraison obligatoire";
 if (empty($objet)) $errors[] = "Objet obligatoire";
-if ($idLivreur <= 0) $errors[] = "Livreur obligatoire";
+// ⚠️ ON NE MET PLUS "Livreur obligatoire" ici, car on va l’auto-sélectionner si besoin
 if (empty($datePrevue)) $errors[] = "Date prévue obligatoire";
 
 if (!empty($errors)) {
@@ -114,24 +114,49 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
     }
     
-    // Vérifier que le livreur existe et est bien un utilisateur avec Emploi = 'Livreur' et statut = 'actif'
-    // Le champ Emploi est un ENUM, on vérifie strictement que c'est bien un livreur
-    $checkLivreur = $pdo->prepare("
-        SELECT id, nom, prenom, Emploi, statut 
-        FROM utilisateurs 
-        WHERE id = :id 
-          AND Emploi = 'Livreur' 
-          AND statut = 'actif' 
-        LIMIT 1
-    ");
-    $checkLivreur->execute([':id' => $idLivreur]);
-    $livreur = $checkLivreur->fetch(PDO::FETCH_ASSOC);
-    if (!$livreur) {
-        $pdo->rollBack();
-        jsonResponse(['ok' => false, 'error' => 'Livreur introuvable ou inactif. Vérifiez que l\'utilisateur a le rôle "Livreur" et est actif.'], 404);
+    // ─────────────────────────────────────────────
+    // SÉLECTION / VÉRIFICATION DU LIVREUR
+    // ─────────────────────────────────────────────
+    // Si aucun id_livreur envoyé, on choisit automatiquement un livreur actif
+    if ($idLivreur <= 0) {
+        $autoLiv = $pdo->query("
+            SELECT id, nom, prenom, Emploi, statut
+            FROM utilisateurs
+            WHERE Emploi = 'Livreur'
+              AND statut = 'actif'
+            ORDER BY RAND()
+            LIMIT 1
+        ");
+        $livreur = $autoLiv->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$livreur) {
+            $pdo->rollBack();
+            jsonResponse([
+                'ok'    => false,
+                'error' => 'Aucun livreur actif trouvé (Emploi = \"Livreur\").'
+            ], 404);
+        }
+        
+        $idLivreur = (int)$livreur['id']; // on force l’ID trouvé
+    } else {
+        // Si un livreur est fourni, on vérifie qu'il est bien livreur actif
+        $checkLivreur = $pdo->prepare("
+            SELECT id, nom, prenom, Emploi, statut 
+            FROM utilisateurs 
+            WHERE id = :id 
+              AND Emploi = 'Livreur' 
+              AND statut = 'actif' 
+            LIMIT 1
+        ");
+        $checkLivreur->execute([':id' => $idLivreur]);
+        $livreur = $checkLivreur->fetch(PDO::FETCH_ASSOC);
+        if (!$livreur) {
+            $pdo->rollBack();
+            jsonResponse(['ok' => false, 'error' => 'Livreur introuvable ou inactif. Vérifiez que l\'utilisateur a le rôle \"Livreur\" et est actif.'], 404);
+        }
     }
     
-    // Double vérification que c'est bien un livreur (sécurité supplémentaire)
+    // Double vérification (sécurité supplémentaire)
     if (($livreur['Emploi'] ?? '') !== 'Livreur' || ($livreur['statut'] ?? '') !== 'actif') {
         $pdo->rollBack();
         jsonResponse(['ok' => false, 'error' => 'L\'utilisateur sélectionné n\'est pas un livreur actif.'], 400);
@@ -294,10 +319,16 @@ try {
     
     // Enregistrer dans l'historique
     try {
-        $details = sprintf('Livraison créée: %s pour client %s (ID %d), livreur %s %s (ID %d), date prévue: %s', 
-            $reference, $client['raison_sociale'], $idClient, 
-            $livreur['prenom'], $livreur['nom'], $idLivreur, 
-            $datePrevue);
+        $details = sprintf(
+            'Livraison créée: %s pour client %s (ID %d), livreur %s %s (ID %d), date prévue: %s', 
+            $reference,
+            $client['raison_sociale'],
+            $idClient, 
+            $livreur['prenom'],
+            $livreur['nom'],
+            $idLivreur, 
+            $datePrevue
+        );
         if ($productType && $productId > 0) {
             $details .= ', produit: ' . $stockLabel . ' (quantité: ' . $productQty . ')';
         }
@@ -306,7 +337,11 @@ try {
         error_log('dashboard_create_delivery.php log error: ' . $e->getMessage());
     }
     
-    jsonResponse(['ok' => true, 'livraison_id' => $livraisonId, 'message' => 'Livraison créée avec succès' . ($productType && $productId > 0 ? ' et stock déduit' : '')]);
+    jsonResponse([
+        'ok'           => true,
+        'livraison_id' => $livraisonId,
+        'message'      => 'Livraison créée avec succès' . ($productType && $productId > 0 ? ' et stock déduit' : '')
+    ]);
     
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) {
@@ -321,4 +356,3 @@ try {
     error_log('dashboard_create_delivery.php error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
 }
-
