@@ -1,93 +1,90 @@
 <?php
 // /public/livraisons.php
 require_once __DIR__ . '/../includes/auth.php';
-// Pas de db.php ici : page 100% statique pour l’instant.
+require_once __DIR__ . '/../includes/db.php';
+
+/** PDO en mode exceptions **/
+if (method_exists($pdo, 'setAttribute')) {
+    try {
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    } catch (\Throwable $e) {}
+}
 
 /** Helper d’échappement **/
 function h(?string $s): string {
     return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8');
 }
 
-/** Jeu de données de démonstration (à remplacer plus tard par la BDD) **/
-$livraisons = [
-    [
-        'client'       => 'ACME SARL',
-        'ref'          => 'CMD-2025-001',
-        'adresse'      => '12 Rue des Fleurs, 75012 Paris',
-        'objet'        => 'Livraison photocopieur MX-2651',
-        'date_prevue'  => '2025-11-20',
-        'date_reelle'  => '2025-11-20',
-        'livreur'      => 'Julien',
-        'commentaire'  => 'Installation + mise en route',
-    ],
-    [
-        'client'       => 'Boulangerie Du Coin',
-        'ref'          => 'CMD-2025-002',
-        'adresse'      => '4 Rue de la Gare, 69003 Lyon',
-        'objet'        => 'Livraison consommables',
-        'date_prevue'  => '2025-11-21',
-        'date_reelle'  => null,
-        'livreur'      => 'Sophie',
-        'commentaire'  => 'Prévenir 30 min avant',
-    ],
-    [
-        'client'       => 'Mairie de Lille',
-        'ref'          => 'CMD-2025-003',
-        'adresse'      => 'Place Augustin Laurent, 59000 Lille',
-        'objet'        => 'Reprise ancien matériel + livraison nouveau',
-        'date_prevue'  => '2025-11-19',
-        'date_reelle'  => '2025-11-21',
-        'livreur'      => 'Karim',
-        'commentaire'  => 'Accès par entrée de service',
-    ],
-    [
-        'client'       => 'Clinique Pasteur',
-        'ref'          => 'CMD-2025-004',
-        'adresse'      => '8 Avenue de la Santé, 31000 Toulouse',
-        'objet'        => 'Livraison MFP couleur',
-        'date_prevue'  => '2025-11-18',
-        'date_reelle'  => null,
-        'livreur'      => 'Nathalie',
-        'commentaire'  => 'Zone sensible, badge obligatoire',
-    ],
-];
-
 $today = date('Y-m-d');
 
-// Calculs des stats & flags (retard / aujourd’hui)
-$totalLivraisons = count($livraisons);
+// -----------------------------------------------------------------------------
+// Récupération des livraisons depuis la base
+// -----------------------------------------------------------------------------
+try {
+    $sql = "
+        SELECT
+            l.*,
+            c.raison_sociale AS client_nom,
+            u.nom    AS livreur_nom,
+            u.prenom AS livreur_prenom
+        FROM livraisons l
+        LEFT JOIN clients c      ON c.id = l.id_client
+        LEFT JOIN utilisateurs u ON u.id = l.id_livreur
+        ORDER BY l.date_prevue DESC, l.id DESC
+    ";
+    $stmt = $pdo->query($sql);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('livraisons.php SQL error: ' . $e->getMessage());
+    $rows = [];
+}
+
+// -----------------------------------------------------------------------------
+// Calcul des flags (retard / aujourd’hui) et stats globales
+// -----------------------------------------------------------------------------
+$totalLivraisons = count($rows);
 $retardCount     = 0;
 $todayCount      = 0;
 
-foreach ($livraisons as $idx => $l) {
-    $prevue  = $l['date_prevue'] ?? null;
-    $reelle  = $l['date_reelle'] ?? null;
+foreach ($rows as $idx => $l) {
+    $prevue = $l['date_prevue'] ?? null;
+    $reelle = $l['date_reelle'] ?? null;
 
-    $isToday = ($prevue === $today) || ($reelle === $today && $reelle !== null);
-
-    $isLate = false;
-    if ($reelle !== null && $prevue !== null && $reelle > $prevue) {
-        $isLate = true;
-    } elseif ($reelle === null && $prevue !== null && $prevue < $today) {
-        // Pas encore livrée alors que la date prévue est passée
-        $isLate = true;
+    $isToday = false;
+    if ($prevue && $prevue === $today) {
+        $isToday = true;
+    }
+    if ($reelle && $reelle === $today) {
+        $isToday = true;
     }
 
-    $livraisons[$idx]['is_today'] = $isToday;
-    $livraisons[$idx]['is_late']  = $isLate;
+    $isLate = false;
+    if ($prevue) {
+        if ($reelle) {
+            // Livrée après la date prévue
+            if ($reelle > $prevue) $isLate = true;
+        } else {
+            // Non livrée alors que la date prévue est passée
+            if ($prevue < $today) $isLate = true;
+        }
+    }
+
+    $rows[$idx]['is_today'] = $isToday;
+    $rows[$idx]['is_late']  = $isLate;
 
     if ($isLate)  $retardCount++;
     if ($isToday) $todayCount++;
 }
 
-// Gestion de la vue (toutes / retard / aujourd’hui)
+// -----------------------------------------------------------------------------
+// Vue (toutes / retard / aujourd’hui)
+// -----------------------------------------------------------------------------
 $view = $_GET['view'] ?? 'toutes';
-if (!in_array($view, ['toutes','retard','aujourdhui'], true)) {
+if (!in_array($view, ['toutes', 'retard', 'aujourdhui'], true)) {
     $view = 'toutes';
 }
 
-// Filtrage selon la vue
-$filteredLivraisons = array_values(array_filter($livraisons, function($l) use ($view) {
+$filteredLivraisons = array_values(array_filter($rows, function($l) use ($view) {
     if ($view === 'retard') {
         return !empty($l['is_late']);
     }
@@ -180,8 +177,6 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     </div>
   </div>
 
-  <!-- Ici, pas encore de flash/POST : la page est statique pour le moment -->
-
   <!-- Tableau -->
   <div class="table-wrapper">
     <table class="tbl-livraisons" id="tbl">
@@ -206,21 +201,27 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         </tr>
       <?php else: ?>
         <?php foreach ($filteredLivraisons as $liv):
-          $client      = $liv['client']      ?? '—';
-          $ref         = $liv['ref']         ?? '—';
-          $adresse     = $liv['adresse']     ?? '—';
-          $objet       = $liv['objet']       ?? '—';
-          $prevue      = $liv['date_prevue'] ?? null;
-          $reelle      = $liv['date_reelle'] ?? null;
-          $livreur     = $liv['livreur']     ?? '—';
-          $commentaire = $liv['commentaire'] ?? '';
 
-          $isLate      = !empty($liv['is_late']);
-          $isToday     = !empty($liv['is_today']);
+          $clientNom = $liv['client_nom'] ?: '—';
+          $ref       = $liv['reference'] ?? '—';
+          $adresse   = $liv['adresse_livraison'] ?? '—';
+          $objet     = $liv['objet'] ?? '—';
 
-          // Formats de dates simples (Y-m-d -> d/m/Y)
+          $prevue    = $liv['date_prevue'] ?? null;
+          $reelle    = $liv['date_reelle'] ?? null;
+
           $prevueLabel = $prevue ? date('d/m/Y', strtotime($prevue)) : '—';
           $reelleLabel = $reelle ? date('d/m/Y', strtotime($reelle)) : '—';
+
+          $livreurNomComplet = trim(
+              ($liv['livreur_prenom'] ?? '') . ' ' . ($liv['livreur_nom'] ?? '')
+          );
+          if ($livreurNomComplet === '') {
+              $livreurNomComplet = '—';
+          }
+
+          $isLate  = !empty($liv['is_late']);
+          $isToday = !empty($liv['is_today']);
 
           if ($reelle) {
               if ($isLate) {
@@ -232,8 +233,10 @@ $lastRefreshLabel = date('d/m/Y à H:i');
               $statutLabel = $isLate ? 'En retard' : 'Planifiée';
           }
 
+          $commentaire = $liv['commentaire'] ?? '';
+
           $searchText = strtolower(
-              $client . ' ' . $ref . ' ' . $adresse . ' ' . $objet . ' ' . $livreur
+              $clientNom . ' ' . $ref . ' ' . $adresse . ' ' . $objet . ' ' . $livreurNomComplet
           );
 
           $rowClasses = [];
@@ -244,7 +247,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         <tr data-search="<?= h($searchText) ?>"<?= $rowClassAttr ?>>
           <td data-th="Client">
             <div class="client-cell">
-              <div class="client-raison"><?= h($client) ?></div>
+              <div class="client-raison"><?= h($clientNom) ?></div>
               <div class="client-num"><?= h($ref) ?></div>
             </div>
           </td>
@@ -260,7 +263,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           <td data-th="Objet"><?= h($objet) ?></td>
           <td class="td-date" data-th="Date prévue"><?= h($prevueLabel) ?></td>
           <td class="td-date" data-th="Date réelle"><?= h($reelleLabel) ?></td>
-          <td data-th="Livré par"><?= h($livreur) ?></td>
+          <td data-th="Livré par"><?= h($livreurNomComplet) ?></td>
           <td class="td-date has-pullout" data-th="Statut">
             <?= h($statutLabel) ?>
             <?php if ($isLate): ?>
@@ -281,7 +284,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   </div>
 </div>
 
-<!-- Popup + JS : pour plus tard, on ne fait qu’un bouton non-fonctionnel pour l’instant -->
+<!-- Popup "Planifier une livraison" (pour l’instant sans INSERT) -->
 <div id="deliveryModalOverlay" class="popup-overlay" aria-hidden="true"></div>
 <div id="deliveryModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="deliveryModalTitle" style="display:none;">
   <div class="modal-header">
@@ -290,15 +293,15 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   </div>
 
   <div style="padding:0.75rem 0; color:var(--text-secondary); font-size:0.95rem;">
-    Pour l’instant cette fenêtre est uniquement visuelle.  
-    Tu pourras plus tard connecter ce formulaire à ta base de données.
+    Pour l’instant cette fenêtre est uniquement visuelle.
+    Tu pourras ensuite connecter ce formulaire à la base de données (INSERT dans <code>livraisons</code>).
   </div>
 
   <form method="post" action="#" class="standard-form modal-form" novalidate>
     <div class="form-grid-2">
       <div class="card-like">
         <div class="subsection-title">Infos client & livraison</div>
-        <label>Client</label>
+        <label>Client (texte libre pour le moment)</label>
         <input type="text" name="client" placeholder="Nom du client">
         <label>Référence commande</label>
         <input type="text" name="ref" placeholder="CMD-2025-XXX">
@@ -314,7 +317,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         <input type="date" name="date_prevue">
         <label>Date réelle</label>
         <input type="date" name="date_reelle">
-        <label>Livré par</label>
+        <label>Livré par (nom du livreur)</label>
         <input type="text" name="livreur" placeholder="Nom du livreur">
         <label>Commentaire</label>
         <textarea name="commentaire" rows="3" placeholder="Notes internes, contraintes d’accès…"></textarea>
