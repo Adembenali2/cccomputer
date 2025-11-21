@@ -3,7 +3,7 @@
 
 // ÉTAPE 1 : SÉCURITÉ D'ABORD
 require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
-authorize_roles(['Admin', 'Dirigeant']);           // Utilise les valeurs exactes de la base de données (ENUM)
+authorize_roles(['Admin', 'Dirigeant', 'Livreur']);           // Utilise les valeurs exactes de la base de données (ENUM)
 require_once __DIR__ . '/../includes/db.php';               // $pdo (PDO connecté)
 require_once __DIR__ . '/../includes/historique.php';
 
@@ -110,9 +110,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = $_POST['action'] ?? '';
+    
+    // Vérifier si l'utilisateur est un livreur (restrictions pour les livreurs)
+    $isLivreur = ($currentUser['Emploi'] ?? '') === 'Livreur';
+    $isAdminOrDirigeant = in_array($currentUser['Emploi'] ?? '', ['Admin', 'Dirigeant'], true);
 
     try {
+        // Les livreurs ne peuvent pas créer de nouveaux utilisateurs
         if ($action === 'create') {
+            if ($isLivreur) {
+                throw new RuntimeException('Vous n\'êtes pas autorisé à créer des utilisateurs.');
+            }
             $email  = trim($_POST['Email'] ?? '');
             $pwd    = (string)($_POST['password'] ?? '');
             $nom    = trim($_POST['nom'] ?? '');
@@ -146,9 +154,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $before = safeFetch($pdo, "SELECT Email, nom, prenom, telephone, Emploi, statut, date_debut FROM utilisateurs WHERE id=?", [$id], 'profil_update_fetch');
             if (!$before) throw new RuntimeException('Utilisateur introuvable.');
 
-            // Empêche un admin/dirigeant de changer son propre rôle
+            // Les livreurs ne peuvent modifier que leur propre profil
+            if ($isLivreur && $id !== $currentUser['id']) {
+                throw new RuntimeException('Vous ne pouvez modifier que votre propre profil.');
+            }
+            
+            // Empêche un admin/dirigeant/livreur de changer son propre rôle
             if ($id === $currentUser['id'] && isset($_POST['Emploi']) && $_POST['Emploi'] !== $currentUser['Emploi']) {
                 throw new RuntimeException('Vous ne pouvez pas modifier votre propre rôle.');
+            }
+            
+            // Les livreurs ne peuvent pas modifier certains champs sensibles (statut, Emploi) sauf pour leur propre profil avec restrictions
+            if ($isLivreur && $id === $currentUser['id']) {
+                // Un livreur peut modifier son profil mais pas son rôle ni son statut
+                if (isset($_POST['Emploi']) && $_POST['Emploi'] !== $before['Emploi']) {
+                    throw new RuntimeException('Vous ne pouvez pas modifier votre propre rôle.');
+                }
+                if (isset($_POST['statut']) && $_POST['statut'] !== $before['statut']) {
+                    throw new RuntimeException('Vous ne pouvez pas modifier votre propre statut.');
+                }
             }
 
             $email  = trim($_POST['Email'] ?? '');
@@ -193,6 +217,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur mis à jour."];
         }
         elseif ($action === 'toggle') {
+            // Les livreurs ne peuvent pas activer/désactiver des comptes
+            if ($isLivreur) {
+                throw new RuntimeException('Vous n\'êtes pas autorisé à modifier le statut des utilisateurs.');
+            }
+            
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('Identifiant manquant.');
             // Empêche de se désactiver soi-même
@@ -208,6 +237,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         elseif ($action === 'resetpwd') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('Identifiant manquant.');
+
+            // Les livreurs ne peuvent réinitialiser que leur propre mot de passe
+            if ($isLivreur && $id !== $currentUser['id']) {
+                throw new RuntimeException('Vous ne pouvez réinitialiser que votre propre mot de passe.');
+            }
+
+            // Les livreurs ne peuvent réinitialiser que leur propre mot de passe
+            if ($isLivreur && $id !== $currentUser['id']) {
+                throw new RuntimeException('Vous ne pouvez réinitialiser que votre propre mot de passe.');
+            }
 
             $newpwd = (string)($_POST['new_password'] ?? '');
             if (strlen($newpwd) < 8) throw new RuntimeException('Mot de passe trop court (min. 8).');
@@ -383,7 +422,7 @@ function decode_msg($row) {
 <main class="page-container page-profil">
     <header class="page-header">
         <h1 class="page-title">Gestion des utilisateurs</h1>
-        <p class="page-sub">Page réservée aux administrateurs (Admin) et dirigeants pour créer, modifier et activer/désactiver des comptes.</p>
+        <p class="page-sub">Page réservée aux administrateurs (Admin), dirigeants et livreurs pour créer, modifier et activer/désactiver des comptes.</p>
 
         <!-- ——— Icône Import (ouvre panneau des derniers imports) ——— -->
         <div class="import-mini" id="impMini">
@@ -563,8 +602,9 @@ function decode_msg($row) {
                 <button class="fiche-action-btn" type="submit">Créer</button>
             </form>
         </div>
+        <?php endif; ?>
 
-        <div class="panel">
+        <div class="panel <?= !$isAdminOrDirigeant ? 'grid-full' : '' ?>">
             <h2 class="panel-title">Utilisateurs (<?= count($users) ?>)</h2>
             <div class="table-responsive">
                 <table class="users-table">
@@ -588,16 +628,22 @@ function decode_msg($row) {
                                 <td data-label="Statut"><span class="badge <?= $u['statut']==='actif'?'success':'muted' ?>"><?= h($u['statut']) ?></span></td>
                                 <td data-label="Début"><?= h($u['date_debut']) ?></td>
                                 <td data-label="Actions" class="actions">
-                                    <a class="btn btn-primary" href="/public/profil.php?edit=<?= (int)$u['id'] ?>">Modifier</a>
-                                    <form method="post" action="/public/profil.php" class="inline">
-                                        <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
-                                        <input type="hidden" name="action" value="toggle">
-                                        <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                        <input type="hidden" name="to" value="<?= $u['statut']==='actif'?'inactif':'actif' ?>">
-                                        <button type="submit" class="btn <?= $u['statut']==='actif'?'btn-danger':'btn-success' ?>">
-                                            <?= $u['statut']==='actif'?'Désactiver':'Activer' ?>
-                                        </button>
-                                    </form>
+                                    <?php if ($isLivreur && (int)$u['id'] !== $currentUser['id']): ?>
+                                        <span class="text-muted">Non autorisé</span>
+                                    <?php else: ?>
+                                        <a class="btn btn-primary" href="/public/profil.php?edit=<?= (int)$u['id'] ?>">Modifier</a>
+                                        <?php if ($isAdminOrDirigeant): ?>
+                                        <form method="post" action="/public/profil.php" class="inline">
+                                            <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+                                            <input type="hidden" name="action" value="toggle">
+                                            <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                            <input type="hidden" name="to" value="<?= $u['statut']==='actif'?'inactif':'actif' ?>">
+                                            <button type="submit" class="btn <?= $u['statut']==='actif'?'btn-danger':'btn-success' ?>">
+                                                <?= $u['statut']==='actif'?'Désactiver':'Activer' ?>
+                                            </button>
+                                        </form>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -622,21 +668,32 @@ function decode_msg($row) {
                     <label>Prénom<input type="text" name="prenom" value="<?= h($editing['prenom']) ?>" required></label>
                 </div>
                 <label>Téléphone<input type="tel" name="telephone" value="<?= h($editing['telephone'] ?? '') ?>" pattern="[0-9+\-.\s]{6,}" inputmode="tel"></label>
+                <?php if ($isAdminOrDirigeant): ?>
                 <div class="grid-2">
                     <label>Rôle (Emploi)
-                        <select name="Emploi" required>
+                        <select name="Emploi" required <?= ($isLivreur && (int)$editing['id'] === $currentUser['id']) ? 'disabled' : '' ?>>
                             <?php foreach ($ROLES as $r): ?>
                                 <option value="<?= h($r) ?>" <?= ($editing['Emploi'] ?? '')===$r?'selected':'' ?>><?= h($r) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <?php if ($isLivreur && (int)$editing['id'] === $currentUser['id']): ?>
+                            <input type="hidden" name="Emploi" value="<?= h($editing['Emploi'] ?? '') ?>">
+                        <?php endif; ?>
                     </label>
                     <label>Statut
-                        <select name="statut">
+                        <select name="statut" <?= ($isLivreur && (int)$editing['id'] === $currentUser['id']) ? 'disabled' : '' ?>>
                             <option value="actif"   <?= ($editing['statut'] ?? '')==='actif'?'selected':'' ?>>Actif</option>
                             <option value="inactif" <?= ($editing['statut'] ?? '')==='inactif'?'selected':'' ?>>Inactif</option>
                         </select>
+                        <?php if ($isLivreur && (int)$editing['id'] === $currentUser['id']): ?>
+                            <input type="hidden" name="statut" value="<?= h($editing['statut'] ?? '') ?>">
+                        <?php endif; ?>
                     </label>
                 </div>
+                <?php else: ?>
+                <input type="hidden" name="Emploi" value="<?= h($editing['Emploi'] ?? '') ?>">
+                <input type="hidden" name="statut" value="<?= h($editing['statut'] ?? '') ?>">
+                <?php endif; ?>
                 <label>Date de début<input type="date" name="date_debut" value="<?= h($editing['date_debut']) ?>" required></label>
                 <button class="fiche-action-btn" type="submit">Enregistrer</button>
                 <a class="link-reset" href="/public/profil.php">Fermer</a>
