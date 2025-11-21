@@ -851,10 +851,22 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 deliveryClientIdEl.value = id;
             }
             
+            // Mettre à jour l'ID client dans le formulaire de SAV
+            const savClientIdEl = document.getElementById('savClientId');
+            if (savClientIdEl) {
+                savClientIdEl.value = id;
+            }
+            
             // Mettre à jour le nom du client dans l'onglet livraison
             const clientNameEl = document.getElementById('livraison-client-name');
             if (clientNameEl && client.raison_sociale) {
                 clientNameEl.textContent = client.raison_sociale;
+            }
+            
+            // Mettre à jour le nom du client dans l'onglet SAV
+            const savClientNameEl = document.getElementById('sav-client-name');
+            if (savClientNameEl && client.raison_sociale) {
+                savClientNameEl.textContent = client.raison_sociale;
             }
             
             showDetail();
@@ -862,10 +874,22 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             // Charger les livreurs
             loadLivreurs();
             
+            // Charger les techniciens
+            loadTechniciens();
+            
             // Si l'onglet livraison est actif, charger les livraisons
             const livraisonTab = document.querySelector('.cdv-nav-btn[data-tab="livraison"]');
             if (livraisonTab && livraisonTab.getAttribute('aria-selected') === 'true') {
                 loadDeliveries(id);
+            }
+            
+            // Si l'onglet sav est actif, charger les SAV
+            const savTab = document.querySelector('.cdv-nav-btn[data-tab="sav"]');
+            if (savTab && savTab.getAttribute('aria-selected') === 'true') {
+                const clientIdNum = parseInt(id, 10);
+                if (clientIdNum && clientIdNum > 0) {
+                    loadSavs(clientIdNum);
+                }
             }
         }
         
@@ -1090,8 +1114,14 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             if (clientNameEl && client.raison_sociale) {
                 clientNameEl.textContent = client.raison_sociale;
             }
-            if (clientId) {
-                loadSavs(clientId);
+            const clientIdNum = parseInt(clientId, 10);
+            if (clientIdNum && clientIdNum > 0) {
+                loadSavs(clientIdNum);
+            } else {
+                const savList = document.getElementById('savList');
+                if (savList) {
+                    savList.innerHTML = '<p class="hint">Sélectionnez un client d\'abord</p>';
+                }
             }
         });
         
@@ -1280,10 +1310,29 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             const savList = document.getElementById('savList');
             if (!savList) return;
             
+            // Vérifier que clientId est valide
+            if (!clientId || clientId <= 0) {
+                savList.innerHTML = '<p class="hint">ID client invalide</p>';
+                return;
+            }
+            
             savList.innerHTML = '<p class="hint">Chargement...</p>';
             
             try {
                 const response = await fetch(`/API/dashboard_get_sav.php?client_id=${clientId}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorData = null;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        // Pas de JSON, utiliser le texte brut
+                    }
+                    savList.innerHTML = `<p class="hint" style="color: #dc2626;">Erreur ${response.status}: ${errorData?.error || errorText || 'Erreur de chargement'}</p>`;
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (!data.ok) {

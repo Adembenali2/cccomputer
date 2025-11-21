@@ -37,7 +37,8 @@ if (empty($_SESSION['user_id'])) {
 $clientId = isset($_GET['client_id']) ? (int)$_GET['client_id'] : 0;
 
 if ($clientId <= 0) {
-    jsonResponse(['ok' => false, 'error' => 'ID client invalide'], 400);
+    error_log('dashboard_get_sav.php: ID client invalide ou manquant - client_id=' . ($_GET['client_id'] ?? 'non défini'));
+    jsonResponse(['ok' => false, 'error' => 'ID client invalide ou manquant'], 400);
 }
 
 if (!isset($pdo) || !($pdo instanceof PDO)) {
@@ -45,6 +46,13 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 }
 
 try {
+    // Vérifier si la table sav existe
+    $checkTable = $pdo->query("SHOW TABLES LIKE 'sav'");
+    if ($checkTable->rowCount() === 0) {
+        // Table n'existe pas encore, retourner une liste vide
+        jsonResponse(['ok' => true, 'savs' => []]);
+    }
+    
     $sql = "
         SELECT 
             s.id,
@@ -81,7 +89,11 @@ try {
     
 } catch (PDOException $e) {
     error_log('dashboard_get_sav.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    // Si la table n'existe pas, retourner une liste vide au lieu d'une erreur
+    if (strpos($e->getMessage(), "doesn't exist") !== false || strpos($e->getMessage(), "Unknown table") !== false) {
+        jsonResponse(['ok' => true, 'savs' => []]);
+    }
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
 } catch (Throwable $e) {
     error_log('dashboard_get_sav.php error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
