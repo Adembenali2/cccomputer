@@ -265,6 +265,20 @@ CREATE TABLE `toner_moves` (
   CONSTRAINT `fk_toner_moves_catalog` FOREIGN KEY (`toner_id`) REFERENCES `toner_catalog` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+DROP TABLE IF EXISTS `pc_moves`;
+CREATE TABLE `pc_moves` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `pc_id` int NOT NULL,
+  `qty_delta` int NOT NULL,
+  `reason` enum('ajustement','achat','retour','correction') NOT NULL,
+  `reference` varchar(255) DEFAULT NULL,
+  `user_id` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_pc_time` (`pc_id`,`created_at`),
+  CONSTRAINT `fk_pc_moves_catalog` FOREIGN KEY (`pc_id`) REFERENCES `pc_catalog` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 DROP TABLE IF EXISTS `utilisateurs`;
 CREATE TABLE `utilisateurs` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -283,13 +297,113 @@ CREATE TABLE `utilisateurs` (
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP VIEW IF EXISTS `v_compteur_last`;
-with `t` as (select `r`.`id` AS `id`,`r`.`Timestamp` AS `Timestamp`,`r`.`IpAddress` AS `IpAddress`,`r`.`Nom` AS `Nom`,`r`.`Model` AS `Model`,`r`.`SerialNumber` AS `SerialNumber`,`r`.`MacAddress` AS `MacAddress`,`r`.`Status` AS `Status`,`r`.`TonerBlack` AS `TonerBlack`,`r`.`TonerCyan` AS `TonerCyan`,`r`.`TonerMagenta` AS `TonerMagenta`,`r`.`TonerYellow` AS `TonerYellow`,`r`.`TotalPages` AS `TotalPages`,`r`.`FaxPages` AS `FaxPages`,`r`.`CopiedPages` AS `CopiedPages`,`r`.`PrintedPages` AS `PrintedPages`,`r`.`BWCopies` AS `BWCopies`,`r`.`ColorCopies` AS `ColorCopies`,`r`.`MonoCopies` AS `MonoCopies`,`r`.`BichromeCopies` AS `BichromeCopies`,`r`.`BWPrinted` AS `BWPrinted`,`r`.`BichromePrinted` AS `BichromePrinted`,`r`.`MonoPrinted` AS `MonoPrinted`,`r`.`ColorPrinted` AS `ColorPrinted`,`r`.`TotalColor` AS `TotalColor`,`r`.`TotalBW` AS `TotalBW`,`r`.`DateInsertion` AS `DateInsertion`,`r`.`mac_norm` AS `mac_norm`,row_number() OVER (PARTITION BY `r`.`mac_norm` ORDER BY `r`.`Timestamp` desc )  AS `rn` from `railway`.`compteur_relevee` `r`) select `t`.`id` AS `id`,`t`.`Timestamp` AS `Timestamp`,`t`.`IpAddress` AS `IpAddress`,`t`.`Nom` AS `Nom`,`t`.`Model` AS `Model`,`t`.`SerialNumber` AS `SerialNumber`,`t`.`MacAddress` AS `MacAddress`,`t`.`Status` AS `Status`,`t`.`TonerBlack` AS `TonerBlack`,`t`.`TonerCyan` AS `TonerCyan`,`t`.`TonerMagenta` AS `TonerMagenta`,`t`.`TonerYellow` AS `TonerYellow`,`t`.`TotalPages` AS `TotalPages`,`t`.`FaxPages` AS `FaxPages`,`t`.`CopiedPages` AS `CopiedPages`,`t`.`PrintedPages` AS `PrintedPages`,`t`.`BWCopies` AS `BWCopies`,`t`.`ColorCopies` AS `ColorCopies`,`t`.`MonoCopies` AS `MonoCopies`,`t`.`BichromeCopies` AS `BichromeCopies`,`t`.`BWPrinted` AS `BWPrinted`,`t`.`BichromePrinted` AS `BichromePrinted`,`t`.`MonoPrinted` AS `MonoPrinted`,`t`.`ColorPrinted` AS `ColorPrinted`,`t`.`TotalColor` AS `TotalColor`,`t`.`TotalBW` AS `TotalBW`,`t`.`DateInsertion` AS `DateInsertion`,`t`.`mac_norm` AS `mac_norm`,`t`.`rn` AS `rn` from `t` where (`t`.`rn` = 1);
+CREATE VIEW `v_compteur_last` AS
+WITH t AS (
+    SELECT 
+        r.id, r.Timestamp, r.IpAddress, r.Nom, r.Model, r.SerialNumber, 
+        r.MacAddress, r.Status, r.TonerBlack, r.TonerCyan, r.TonerMagenta, 
+        r.TonerYellow, r.TotalPages, r.FaxPages, r.CopiedPages, r.PrintedPages, 
+        r.BWCopies, r.ColorCopies, r.MonoCopies, r.BichromeCopies, r.BWPrinted, 
+        r.BichromePrinted, r.MonoPrinted, r.ColorPrinted, r.TotalColor, 
+        r.TotalBW, r.DateInsertion, r.mac_norm,
+        ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.Timestamp DESC) AS rn
+    FROM compteur_relevee r
+)
+SELECT * FROM t WHERE t.rn = 1;
 
 DROP VIEW IF EXISTS `v_lcd_stock`;
-select `l`.`id` AS `lcd_id`,`l`.`marque` AS `marque`,`l`.`reference` AS `reference`,`l`.`etat` AS `etat`,`l`.`modele` AS `modele`,`l`.`taille` AS `taille`,`l`.`resolution` AS `resolution`,`l`.`connectique` AS `connectique`,`l`.`prix` AS `prix`,coalesce(sum(`m`.`qty_delta`),0) AS `qty_stock` from (`railway`.`lcd_catalog` `l` left join `railway`.`lcd_moves` `m` on((`m`.`lcd_id` = `l`.`id`))) group by `l`.`id`,`l`.`marque`,`l`.`reference`,`l`.`etat`,`l`.`modele`,`l`.`taille`,`l`.`resolution`,`l`.`connectique`,`l`.`prix`;
+CREATE VIEW `v_lcd_stock` AS
+SELECT 
+    l.id AS lcd_id,
+    l.marque,
+    l.reference,
+    l.etat,
+    l.modele,
+    l.taille,
+    l.resolution,
+    l.connectique,
+    l.prix,
+    COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+FROM lcd_catalog l
+LEFT JOIN lcd_moves m ON m.lcd_id = l.id
+GROUP BY l.id, l.marque, l.reference, l.etat, l.modele, l.taille, 
+         l.resolution, l.connectique, l.prix;
 
 DROP VIEW IF EXISTS `v_paper_stock`;
-select `c`.`id` AS `paper_id`,`c`.`marque` AS `marque`,`c`.`modele` AS `modele`,`c`.`poids` AS `poids`,coalesce(sum(`m`.`qty_delta`),0) AS `qty_stock` from (`railway`.`paper_catalog` `c` left join `railway`.`paper_moves` `m` on((`m`.`paper_id` = `c`.`id`))) group by `c`.`id`,`c`.`marque`,`c`.`modele`,`c`.`poids`;
+CREATE VIEW `v_paper_stock` AS
+SELECT 
+    c.id AS paper_id,
+    c.marque,
+    c.modele,
+    c.poids,
+    COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+FROM paper_catalog c
+LEFT JOIN paper_moves m ON m.paper_id = c.id
+GROUP BY c.id, c.marque, c.modele, c.poids;
 
 DROP VIEW IF EXISTS `v_photocopieurs_clients_last`;
-select coalesce(`pc`.`mac_norm`,`railway`.`v`.`mac_norm`) AS `mac_norm`,`pc`.`SerialNumber` AS `SerialNumber`,`pc`.`MacAddress` AS `MacAddress`,`railway`.`v`.`Model` AS `Model`,`railway`.`v`.`Nom` AS `Nom`,`railway`.`v`.`Timestamp` AS `last_ts`,`railway`.`v`.`TonerBlack` AS `TonerBlack`,`railway`
+CREATE VIEW `v_photocopieurs_clients_last` AS
+WITH v_compteur_last AS (
+    SELECT 
+        r.*,
+        ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+    FROM compteur_relevee r
+    WHERE r.mac_norm IS NOT NULL AND r.mac_norm != ''
+),
+v_last AS (
+    SELECT * FROM v_compteur_last WHERE rn = 1
+)
+SELECT 
+    COALESCE(pc.mac_norm, v.mac_norm) AS mac_norm,
+    pc.id_client AS client_id,
+    pc.SerialNumber,
+    pc.MacAddress,
+    v.Model,
+    v.Nom,
+    v.`Timestamp` AS last_ts,
+    v.TonerBlack,
+    v.TonerCyan,
+    v.TonerMagenta,
+    v.TonerYellow,
+    v.TotalBW,
+    v.TotalColor,
+    v.TotalPages,
+    v.Status,
+    v.IpAddress
+FROM photocopieurs_clients pc
+LEFT JOIN v_last v ON v.mac_norm = pc.mac_norm
+WHERE pc.id_client IS NOT NULL;
+
+DROP VIEW IF EXISTS `v_toner_stock`;
+CREATE VIEW `v_toner_stock` AS
+SELECT 
+    t.id AS toner_id,
+    t.marque,
+    t.modele,
+    t.couleur,
+    COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+FROM toner_catalog t
+LEFT JOIN toner_moves m ON m.toner_id = t.id
+GROUP BY t.id, t.marque, t.modele, t.couleur;
+
+DROP VIEW IF EXISTS `v_pc_stock`;
+CREATE VIEW `v_pc_stock` AS
+SELECT 
+    p.id AS pc_id,
+    p.etat,
+    p.reference,
+    p.marque,
+    p.modele,
+    p.cpu,
+    p.ram,
+    p.stockage,
+    p.os,
+    p.gpu,
+    p.reseau,
+    p.ports,
+    p.prix,
+    COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+FROM pc_catalog p
+LEFT JOIN pc_moves m ON m.pc_id = p.id
+GROUP BY p.id, p.etat, p.reference, p.marque, p.modele, p.cpu, p.ram, 
+         p.stockage, p.os, p.gpu, p.reseau, p.ports, p.prix;

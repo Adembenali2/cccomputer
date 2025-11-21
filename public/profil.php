@@ -260,11 +260,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Vous ne pouvez réinitialiser que votre propre mot de passe.');
             }
 
-            // Les livreurs ne peuvent réinitialiser que leur propre mot de passe
-            if ($isLivreur && $id !== $currentUser['id']) {
-                throw new RuntimeException('Vous ne pouvez réinitialiser que votre propre mot de passe.');
-            }
-
             $newpwd = (string)($_POST['new_password'] ?? '');
             if (strlen($newpwd) < 8) throw new RuntimeException('Mot de passe trop court (min. 8).');
 
