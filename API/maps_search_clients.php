@@ -43,8 +43,20 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 $query = trim($_GET['q'] ?? '');
 $limit = min((int)($_GET['limit'] ?? 20), 50); // Max 50 résultats
 
-if (empty($query) || strlen($query) < 2) {
+if (empty($query) || strlen($query) < 1) {
     jsonResponse(['ok' => true, 'clients' => []]);
+}
+
+// Vérifier que la table clients existe
+try {
+    $checkTable = $pdo->query("SHOW TABLES LIKE 'clients'");
+    if ($checkTable->rowCount() === 0) {
+        error_log('maps_search_clients.php: Table clients does not exist');
+        jsonResponse(['ok' => false, 'error' => 'Table clients introuvable'], 500);
+    }
+} catch (PDOException $e) {
+    error_log('maps_search_clients.php table check error: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Erreur de vérification'], 500);
 }
 
 try {
@@ -53,8 +65,9 @@ try {
     
     // S'assurer que $limit est un entier valide
     $limit = max(1, min((int)$limit, 50));
+    $limitInt = (int)$limit;
     
-    // Utiliser une approche plus simple - LIMIT doit être un entier direct, pas un paramètre lié
+    // Simplifier la requête - utiliser une approche plus basique
     $sql = "
         SELECT 
             id,
@@ -72,33 +85,62 @@ try {
         FROM clients
         WHERE 
             raison_sociale LIKE :q
-            OR COALESCE(nom_dirigeant, '') LIKE :q
-            OR COALESCE(prenom_dirigeant, '') LIKE :q
-            OR CONCAT(COALESCE(nom_dirigeant, ''), ' ', COALESCE(prenom_dirigeant, '')) LIKE :q
-            OR CONCAT(COALESCE(prenom_dirigeant, ''), ' ', COALESCE(nom_dirigeant, '')) LIKE :q
+            OR nom_dirigeant LIKE :q
+            OR prenom_dirigeant LIKE :q
             OR numero_client LIKE :q
-            OR COALESCE(adresse, '') LIKE :q
-            OR COALESCE(ville, '') LIKE :q
-            OR COALESCE(code_postal, '') LIKE :q
-            OR CONCAT(COALESCE(adresse, ''), ' ', COALESCE(code_postal, ''), ' ', COALESCE(ville, '')) LIKE :q
+            OR adresse LIKE :q
+            OR ville LIKE :q
+            OR code_postal LIKE :q
         ORDER BY raison_sociale ASC
-        LIMIT " . (int)$limit . "
+        LIMIT {$limitInt}
     ";
     
     $stmt = $pdo->prepare($sql);
     if (!$stmt) {
         $errorInfo = $pdo->errorInfo();
-        throw new PDOException('Erreur de préparation SQL: ' . ($errorInfo[2] ?? 'Erreur inconnue'));
+        error_log('maps_search_clients.php prepare error: ' . json_encode($errorInfo));
+        throw new PDOException('Erreur de préparation SQL');
     }
     
     $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
     
-    if (!$stmt->execute()) {
+    $execResult = $stmt->execute();
+    if (!$execResult) {
         $errorInfo = $stmt->errorInfo();
-        throw new PDOException('Erreur d\'exécution SQL: ' . ($errorInfo[2] ?? 'Erreur inconnue'));
+        error_log('maps_search_clients.php execute error: ' . json_encode($errorInfo));
+        throw new PDOException('Erreur d\'exécution SQL');
     }
     
     $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Filtrer les résultats pour les combinaisons nom+prenom (fait en PHP pour éviter les problèmes SQL)
+    if (!empty($clients)) {
+        $filteredClients = [];
+        foreach ($clients as $c) {
+            $nomComplet = trim(($c['nom_dirigeant'] ?? '') . ' ' . ($c['prenom_dirigeant'] ?? ''));
+            $prenomNom = trim(($c['prenom_dirigeant'] ?? '') . ' ' . ($c['nom_dirigeant'] ?? ''));
+            $adresseComplete = trim(($c['adresse'] ?? '') . ' ' . ($c['code_postal'] ?? '') . ' ' . ($c['ville'] ?? ''));
+            
+            $searchLower = strtolower($query);
+            $match = false;
+            
+            if (stripos($c['raison_sociale'] ?? '', $query) !== false) $match = true;
+            if (stripos($c['nom_dirigeant'] ?? '', $query) !== false) $match = true;
+            if (stripos($c['prenom_dirigeant'] ?? '', $query) !== false) $match = true;
+            if (stripos($nomComplet, $query) !== false) $match = true;
+            if (stripos($prenomNom, $query) !== false) $match = true;
+            if (stripos($c['numero_client'] ?? '', $query) !== false) $match = true;
+            if (stripos($c['adresse'] ?? '', $query) !== false) $match = true;
+            if (stripos($c['ville'] ?? '', $query) !== false) $match = true;
+            if (stripos($c['code_postal'] ?? '', $query) !== false) $match = true;
+            if (stripos($adresseComplete, $query) !== false) $match = true;
+            
+            if ($match) {
+                $filteredClients[] = $c;
+            }
+        }
+        $clients = array_slice($filteredClients, 0, $limitInt);
+    }
     
     // Formater les résultats - Utiliser exactement les données de la base de données
     $formatted = [];
