@@ -54,10 +54,16 @@ echo "✅ Connexion à la base établie.\n";
 require __DIR__ . '/../vendor/autoload.php';
 use phpseclib3\Net\SFTP;
 
-$sftp_host = 'home298245733.1and1-data.host';
-$sftp_user = 'acc984891385';
-$sftp_pass = 'RTC@4oEMh?orqP&pgir5rz&f';
-$sftp_port = 22;
+// Utiliser uniquement les variables d'environnement pour la sécurité
+$sftp_host = getenv('SFTP_HOST') ?: '';
+$sftp_user = getenv('SFTP_USER') ?: '';
+$sftp_pass = getenv('SFTP_PASS') ?: '';
+$sftp_port = (int)(getenv('SFTP_PORT') ?: 22);
+
+if (empty($sftp_host) || empty($sftp_user) || empty($sftp_pass)) {
+    http_response_code(500);
+    exit("❌ Erreur: Variables d'environnement SFTP manquantes (SFTP_HOST, SFTP_USER, SFTP_PASS)\n");
+}
 
 $sftp = new SFTP($sftp_host, $sftp_port);
 if (!$sftp->login($sftp_user, $sftp_pass)) {

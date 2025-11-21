@@ -188,7 +188,6 @@ $sectionImages = [
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="csrf-token" content="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
   <title>Stock - CCComputer</title>
 
   <link rel="stylesheet" href="/assets/css/main.css" />
@@ -666,25 +665,33 @@ function badgeEtat(e){
     const payload = {};
     formData.forEach((v,k) => { payload[k] = v; });
 
-    // Récupérer le token CSRF depuis la page
-    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
-
     try {
       const res = await fetch('/api/stock_add.php', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ type: currentType, data: payload, csrf_token: csrfToken })
+        body: JSON.stringify({ type: currentType, data: payload })
       });
-      const json = await res.json();
-      if (!json.ok) {
+
+      const text = await res.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        console.error('Réponse non JSON de /api/stock_add.php :', text);
+        throw new Error('Réponse invalide du serveur (pas du JSON).');
+      }
+
+      if (!res.ok || !json.ok) {
+        console.error('Erreur API :', json);
         errorBox.textContent = json.error || 'Erreur lors de l’enregistrement.';
         errorBox.style.display = 'block';
         return;
       }
+
       closeModal();
       window.location.reload();
     } catch (err) {
+      console.error('Erreur fetch :', err);
       errorBox.textContent = 'Erreur réseau ou serveur.';
       errorBox.style.display = 'block';
     }

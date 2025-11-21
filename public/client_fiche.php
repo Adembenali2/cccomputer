@@ -61,9 +61,9 @@ function uploads_base_path(): string {
 }
 
 function ensure_upload_dir(int $id): string {
-  $base = uploads_base_path() . '/' . $id;
+  $base = uploads_base_path() . '/' . (int)$id; // Sécuriser l'ID
   if (!is_dir($base)) {
-    @mkdir($base, 0775, true);
+    @mkdir($base, 0755, true); // Permissions plus restrictives (0755 au lieu de 0775)
   }
   return $base;
 }
@@ -89,10 +89,26 @@ function store_upload(array $file, int $id): ?string {
   if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) return null;
   if (!is_uploaded_file($file['tmp_name'])) return null;
   if (!allowed_ext($file['name'])) return null;
+  
+  // Vérification de la taille (max 10MB)
+  $maxSize = 10 * 1024 * 1024; // 10MB
+  if (($file['size'] ?? 0) > $maxSize) return null;
+  
+  // Vérification du type MIME basique (sécurité supplémentaire)
+  $finfo = finfo_open(FILEINFO_MIME_TYPE);
+  $mimeType = finfo_file($finfo, $file['tmp_name']);
+  finfo_close($finfo);
+  $allowedMimes = ['application/pdf', 'image/jpeg', 'image/png'];
+  if (!in_array($mimeType, $allowedMimes, true)) return null;
+  
   $dir = ensure_upload_dir($id);
   $base = date('Ymd_His').'_'.safe_filename($file['name']);
   $destAbs = $dir.'/'.$base;
   if (!move_uploaded_file($file['tmp_name'], $destAbs)) return null;
+  
+  // Sécuriser les permissions du fichier
+  @chmod($destAbs, 0644);
+  
   // chemin relatif web
   $rel = '/uploads/clients/'.$id.'/'.$base;
   return $rel;
