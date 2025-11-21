@@ -1,9 +1,18 @@
 <?php
 // /api/stock_add.php
 
+// Activer le buffer de sortie IMMÉDIATEMENT pour capturer toute sortie accidentelle
+ob_start();
+
 // Désactiver l'affichage des erreurs HTML pour retourner uniquement du JSON
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
+ini_set('html_errors', 0);
+
+// Définir le header JSON en premier (avant toute autre sortie)
+if (!headers_sent()) {
+    header('Content-Type: application/json; charset=utf-8');
+}
 
 // Fonction pour envoyer une réponse JSON propre
 function jsonResponse(array $data, int $statusCode = 200) {
@@ -12,13 +21,12 @@ function jsonResponse(array $data, int $statusCode = 200) {
         ob_end_clean();
     }
     http_response_code($statusCode);
-    header('Content-Type: application/json; charset=utf-8');
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+    }
     echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK);
     exit;
 }
-
-// Démarrer le buffer de sortie
-ob_start();
 
 // Gestion de la session pour les API (sans redirection HTML)
 try {

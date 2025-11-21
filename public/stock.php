@@ -671,7 +671,7 @@ function badgeEtat(e){
     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
     try {
-      const res = await fetch('../api/stock_add.php', {
+      const res = await fetch('../API/stock_add.php', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ 
@@ -686,7 +686,7 @@ function badgeEtat(e){
       try {
         json = JSON.parse(text);
       } catch (e) {
-        console.error('Réponse non JSON de ../api/stock_add.php :', text);
+        console.error('Réponse non JSON de ../API/stock_add.php :', text);
         throw new Error('Réponse invalide du serveur (pas du JSON).');
       }
 
