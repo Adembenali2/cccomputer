@@ -1,15 +1,40 @@
 <?php
 // /api/stock_add.php
 
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/db.php';
+// Désactiver l'affichage des erreurs HTML pour retourner uniquement du JSON
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
 
-header('Content-Type: application/json; charset=utf-8');
+// Fonction pour envoyer une réponse JSON propre
+function jsonResponse(array $data, int $statusCode = 200) {
+    // Nettoyer tout buffer de sortie avant d'envoyer le JSON
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    http_response_code($statusCode);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK);
+    exit;
+}
+
+// Démarrer le buffer de sortie
+ob_start();
+
+try {
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/db.php';
+} catch (Throwable $e) {
+    error_log('stock_add.php require error: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+}
+
+// Vérifier que la connexion existe
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    jsonResponse(['ok' => false, 'error' => 'Connexion base de données manquante'], 500);
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['ok' => false, 'error' => 'Méthode non autorisée']);
-    exit;
+    jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
 
 // Lire et décoder le JSON une seule fois
@@ -20,17 +45,13 @@ $jsonData = json_decode($raw, true);
 $csrfToken = $jsonData['csrf_token'] ?? '';
 $csrfSession = $_SESSION['csrf_token'] ?? '';
 if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrfToken)) {
-    http_response_code(403);
-    echo json_encode(['ok' => false, 'error' => 'Token CSRF invalide']);
-    exit;
+    jsonResponse(['ok' => false, 'error' => 'Token CSRF invalide'], 403);
 }
 
 // Utiliser les données décodées
 $data = $jsonData ?? [];
 if (!is_array($data)) {
-    http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => 'JSON invalide']);
-    exit;
+    jsonResponse(['ok' => false, 'error' => 'JSON invalide'], 400);
 }
 
 $type    = $data['type'] ?? '';
@@ -357,11 +378,17 @@ try {
             throw new RuntimeException('Type inconnu.');
     }
 
-    echo json_encode(['ok' => true]);
+    jsonResponse(['ok' => true], 200);
+} catch (PDOException $e) {
+    if (isset($pdo) && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('stock_add.php PDO error: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+    error_log('stock_add.php error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    jsonResponse(['ok' => false, 'error' => $e->getMessage()], 400);
 }

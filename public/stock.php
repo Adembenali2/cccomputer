@@ -188,6 +188,7 @@ $sectionImages = [
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="csrf-token" content="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
   <title>Stock - CCComputer</title>
 
   <link rel="stylesheet" href="/assets/css/main.css" />
@@ -665,11 +666,19 @@ function badgeEtat(e){
     const payload = {};
     formData.forEach((v,k) => { payload[k] = v; });
 
+    // Récupérer le token CSRF depuis le meta tag
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
     try {
       const res = await fetch('/api/stock_add.php', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ type: currentType, data: payload })
+        body: JSON.stringify({ 
+          type: currentType, 
+          data: payload,
+          csrf_token: csrfToken
+        })
       });
 
       const text = await res.text();
