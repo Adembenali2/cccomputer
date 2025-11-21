@@ -24,15 +24,17 @@ function authorize_roles(array $allowed_roles) {
 
 /**
  * Accès réservé aux administrateurs
+ * Note: Utilise 'Admin' (valeur exacte de la base de données ENUM)
  */
 function requireAdmin() {
-    return authorize_roles(['Administrateur']);
+    return authorize_roles(['Admin']);
 }
 
 /**
- * Accès réservé aux commerciaux et administrateurs
+ * Accès réservé aux chargés relation clients et administrateurs
+ * Note: 'Chargé relation clients' est la valeur exacte dans la base, pas 'Commercial'
  */
 function requireCommercial() {
-    return authorize_roles(['Commercial', 'Administrateur']);
+    return authorize_roles(['Chargé relation clients', 'Admin']);
 }
 ?>

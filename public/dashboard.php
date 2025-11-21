@@ -56,28 +56,19 @@ $historique_par_jour = $safeFetchAll(
 // ==================================================================
 // Compteurs réels depuis la BDD
 // ==================================================================
-$nb_paiements_en_attente = (int)($safeFetchColumn(
-    $pdo,
-    "SELECT COUNT(*) FROM paiements WHERE statut = :statut",
-    ['statut' => 'en_attente'],
-    0,
-    'paiements_en_attente'
-) ?? 0);
+// Note: Les tables 'paiements' et 'sav' n'existent pas dans le schéma actuel
+// Ces compteurs sont désactivés jusqu'à la création de ces tables
+$nb_paiements_en_attente = 0; // Table 'paiements' non présente dans le schéma
+$nb_sav_a_traiter = 0; // Table 'sav' non présente dans le schéma
 
-$nb_sav_a_traiter = (int)($safeFetchColumn(
-    $pdo,
-    "SELECT COUNT(*) FROM sav WHERE statut = :statut",
-    ['statut' => 'a_traiter'],
-    0,
-    'sav_a_traiter'
-) ?? 0);
-
+// Pour livraisons, les statuts ENUM sont: 'planifiee','en_cours','livree','annulee'
+// On compte les livraisons planifiées et en cours comme "à faire"
 $nb_livraisons_a_faire = (int)($safeFetchColumn(
     $pdo,
-    "SELECT COUNT(*) FROM livraisons WHERE statut = :statut",
-    ['statut' => 'en_attente'],
+    "SELECT COUNT(*) FROM livraisons WHERE statut IN (:stat1, :stat2)",
+    ['stat1' => 'planifiee', 'stat2' => 'en_cours'],
     0,
-    'livraisons_en_attente'
+    'livraisons_a_faire'
 ) ?? 0);
 
 $payClass = ($nb_paiements_en_attente > 0) ? 'count-bad' : 'count-ok';

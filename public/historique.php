@@ -2,7 +2,7 @@
 // /public/historique.php
 
 require_once __DIR__ . '/../includes/auth_role.php';
-authorize_roles(['Admin', 'Dirigeant']);
+authorize_roles(['Admin', 'Dirigeant']); // Utilise les valeurs exactes de la base de données
 require_once __DIR__ . '/../includes/db.php'; // fournit $pdo (PDO connecté)
 
 const HISTORIQUE_PAGE_LIMIT = 200;

@@ -4,8 +4,8 @@
 // On lit les infos de session si elles existent (la page appelante gère la session)
 $emploi          = $_SESSION['emploi']        ?? '';
 $csrf            = $_SESSION['csrf_token']    ?? '';
-$isAdmin         = ($emploi === 'Administrateur');
-$canCommercial   = in_array($emploi, ['Commercial', 'Administrateur'], true);
+$isAdmin         = ($emploi === 'Admin'); // Utilise la valeur exacte de la base de données
+$canCommercial   = in_array($emploi, ['Chargé relation clients', 'Admin'], true); // 'Chargé relation clients' remplace 'Commercial'
 
 // Helper très léger si besoin d’échapper (pas utilisé ici)
 if (!function_exists('h')) {

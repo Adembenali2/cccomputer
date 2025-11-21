@@ -3,7 +3,7 @@
 
 // ÉTAPE 1 : SÉCURITÉ D'ABORD
 require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
-authorize_roles(['Administrateur', 'Dirigeant']);           // rôles cohérents avec le reste
+authorize_roles(['Admin', 'Dirigeant']);           // Utilise les valeurs exactes de la base de données (ENUM)
 require_once __DIR__ . '/../includes/db.php';               // $pdo (PDO connecté)
 require_once __DIR__ . '/../includes/historique.php';
 
@@ -87,8 +87,8 @@ function logProfilAction(PDO $pdo, string $action, string $details): void {
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
-// Rôles autorisés dans le champ Emploi
-$DEFAULT_ROLES = ['Administrateur', 'Dirigeant', 'Technicien', 'Secrétaire', 'Livreur', 'Chargé relation clients'];
+// Rôles autorisés dans le champ Emploi (correspondent exactement aux valeurs ENUM de la base de données)
+$DEFAULT_ROLES = ['Chargé relation clients', 'Livreur', 'Technicien', 'Secrétaire', 'Dirigeant', 'Admin'];
 $roleRows = safeFetchAll($pdo, "SELECT DISTINCT Emploi FROM utilisateurs WHERE Emploi IS NOT NULL AND Emploi <> '' ORDER BY Emploi ASC", [], 'roles_distinct');
 $ROLES = [];
 foreach ($roleRows as $row) {
@@ -383,7 +383,7 @@ function decode_msg($row) {
 <main class="page-container page-profil">
     <header class="page-header">
         <h1 class="page-title">Gestion des utilisateurs</h1>
-        <p class="page-sub">Page réservée aux administrateurs/dirigeants pour créer, modifier et activer/désactiver des comptes.</p>
+        <p class="page-sub">Page réservée aux administrateurs (Admin) et dirigeants pour créer, modifier et activer/désactiver des comptes.</p>
 
         <!-- ——— Icône Import (ouvre panneau des derniers imports) ——— -->
         <div class="import-mini" id="impMini">
