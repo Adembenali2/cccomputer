@@ -1,9 +1,37 @@
 <?php
 // /api/client_devices.php - Retourne les derniers relevés des photocopieurs d'un client
+
+// Désactiver toute sortie d'erreur HTML
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+
+// Définir le header JSON en premier
 header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/db.php';
+// Gestion de la session pour les API (sans redirection HTML)
+try {
+    require_once __DIR__ . '/../includes/session_config.php';
+    require_once __DIR__ . '/../includes/db.php';
+} catch (Throwable $e) {
+    error_log('client_devices.php require error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['error' => 'Erreur d\'initialisation']);
+    exit;
+}
+
+// Vérifier l'authentification sans redirection HTML
+if (empty($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Non authentifié']);
+    exit;
+}
+
+// Vérifier que la connexion existe
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Connexion base de données manquante']);
+    exit;
+}
 
 $clientId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
@@ -52,11 +80,22 @@ try {
     $stmt->execute([':client_id' => $clientId]);
     $devices = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    echo json_encode($devices ?: [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT);
+    // Normaliser les données pour éviter les valeurs NULL problématiques
+    $devices = array_map(function($device) {
+        return array_map(function($value) {
+            return $value === null ? null : $value;
+        }, $device);
+    }, $devices);
+    
+    echo json_encode($devices ?: [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK);
     
 } catch (PDOException $e) {
     error_log('client_devices.php SQL error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'Erreur de base de données']);
+    echo json_encode(['error' => 'Erreur de base de données: ' . $e->getMessage()]);
+} catch (Throwable $e) {
+    error_log('client_devices.php error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['error' => 'Erreur inattendue']);
 }
 

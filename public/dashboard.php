@@ -750,17 +750,33 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const res = await fetch('/api/client_devices.php?id=' + encodeURIComponent(id), {
                     credentials: 'same-origin'
                 });
-                if (!res.ok) throw new Error('HTTP ' + res.status);
+                
+                const contentType = res.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Réponse non-JSON reçue');
+                }
+                
                 const data = await res.json();
+                
+                if (!res.ok) {
+                    const errorMsg = (data && data.error) ? data.error : 'Erreur HTTP ' + res.status;
+                    throw new Error(errorMsg);
+                }
+                
                 if (Array.isArray(data)) {
                     fillDevices(data);
+                } else if (data && data.error) {
+                    throw new Error(data.error);
                 } else {
                     fillDevices([]);
                 }
             } catch (err) {
                 console.error('Erreur chargement appareils', err);
+                const errorMsg = err.message || 'Erreur de chargement des appareils.';
                 if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="11">Erreur de chargement des appareils.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:2rem; color:var(--text-muted);">' + 
+                        (errorMsg.includes('Non authentifié') ? 'Session expirée. Veuillez vous reconnecter.' : errorMsg) + 
+                        '</td></tr>';
                 }
             }
         }
