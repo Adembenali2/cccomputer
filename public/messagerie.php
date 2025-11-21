@@ -228,15 +228,15 @@ $totalMessages = count($messages);
                     <option value="sav">🔧 SAV</option>
                 </select>
 
-                <div id="lienContainer" style="display:none;">
+                <div id="lienContainer" style="display:none; margin-top: 0.5rem;">
                     <input type="text" 
                            id="lienSearch" 
                            class="client-search-input" 
-                           placeholder="Rechercher..." 
+                           placeholder="Tapez pour rechercher..." 
                            autocomplete="off">
                     <div id="lienResults" class="client-results" style="display:none;"></div>
                     <input type="hidden" name="id_lien" id="idLien" value="">
-                    <div id="lienSelected" class="lien-selected" style="display:none;"></div>
+                    <div id="lienSelected" class="lien-selected" style="display:none; margin-top: 0.5rem;"></div>
                 </div>
 
                 <div class="section-title">3. Sujet</div>
@@ -431,117 +431,158 @@ const messageStatus = document.getElementById('messageStatus');
 let searchTimeout = null;
 
 // Afficher/masquer le champ de recherche selon le type de lien
-selectTypeLien.addEventListener('change', () => {
-    const type = selectTypeLien.value;
-    if (type) {
-        lienContainer.style.display = 'block';
-        lienSearch.placeholder = type === 'client' ? 'Rechercher un client...' 
-                                : type === 'livraison' ? 'Rechercher une livraison...'
-                                : 'Rechercher un SAV...';
-    } else {
-        lienContainer.style.display = 'none';
-        idLienInput.value = '';
-        lienSelected.style.display = 'none';
-    }
-});
+if (selectTypeLien && lienContainer && lienSearch) {
+    selectTypeLien.addEventListener('change', () => {
+        const type = selectTypeLien.value;
+        if (type) {
+            lienContainer.style.display = 'block';
+            lienSearch.placeholder = type === 'client' ? 'Tapez le nom, prénom du dirigeant ou raison sociale...' 
+                                    : type === 'livraison' ? 'Rechercher une livraison...'
+                                    : 'Rechercher un SAV...';
+            // Réinitialiser les valeurs
+            if (lienSearch) lienSearch.value = '';
+            if (idLienInput) idLienInput.value = '';
+            if (lienSelected) {
+                lienSelected.style.display = 'none';
+                lienSelected.innerHTML = '';
+            }
+            if (lienResults) {
+                lienResults.style.display = 'none';
+                lienResults.innerHTML = '';
+            }
+        } else {
+            lienContainer.style.display = 'none';
+            if (idLienInput) idLienInput.value = '';
+            if (lienSelected) lienSelected.style.display = 'none';
+            if (lienSearch) lienSearch.value = '';
+            if (lienResults) {
+                lienResults.style.display = 'none';
+                lienResults.innerHTML = '';
+            }
+        }
+    });
+}
 
 // Recherche de client/livraison/SAV
-lienSearch.addEventListener('input', () => {
-    const query = lienSearch.value.trim();
-    const type = selectTypeLien.value;
-    
-    clearTimeout(searchTimeout);
-    lienResults.innerHTML = '';
-    lienResults.style.display = 'none';
-    
-    // Minimum 1 caractère pour la recherche (au lieu de 2)
-    if (!query || query.length < 1 || !type) {
-        return;
-    }
-    
-    lienResults.innerHTML = '<div class="client-result-item loading">Recherche en cours…</div>';
-    lienResults.style.display = 'block';
-    
-    // Debounce réduit à 200ms pour une recherche plus réactive
-    searchTimeout = setTimeout(async () => {
-        try {
-            let url = '';
-            if (type === 'client') {
-                url = `/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=15`;
-            } else if (type === 'livraison') {
-                url = `/API/messagerie_search_livraisons.php?q=${encodeURIComponent(query)}&limit=15`;
-            } else if (type === 'sav') {
-                url = `/API/messagerie_search_sav.php?q=${encodeURIComponent(query)}&limit=15`;
-            }
-            
-            const response = await fetch(url);
-            const data = await response.json();
-            
+if (lienSearch) {
+    lienSearch.addEventListener('input', () => {
+        const query = lienSearch.value.trim();
+        const type = selectTypeLien ? selectTypeLien.value : '';
+        
+        clearTimeout(searchTimeout);
+        if (lienResults) {
             lienResults.innerHTML = '';
-            
-            let results = [];
-            if (type === 'client' && data.ok && data.clients) {
-                results = data.clients.map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    dirigeant: c.dirigeant_complet || (c.prenom_dirigeant && c.nom_dirigeant ? `${c.prenom_dirigeant} ${c.nom_dirigeant}` : null),
-                    address: c.address,
-                    code: c.code
-                }));
-            } else if ((type === 'livraison' || type === 'sav') && data.ok && data.results) {
-                results = data.results;
-            }
-            
-            if (!results || results.length === 0) {
-                const item = document.createElement('div');
-                item.className = 'client-result-item empty';
-                item.textContent = 'Aucun résultat trouvé.';
-                lienResults.appendChild(item);
-                return;
-            }
-            
-            results.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'client-result-item';
-                
+            lienResults.style.display = 'none';
+        }
+        
+        // Minimum 1 caractère pour la recherche
+        if (!query || query.length < 1 || !type) {
+            return;
+        }
+        
+        if (lienResults) {
+            lienResults.innerHTML = '<div class="client-result-item loading">Recherche en cours…</div>';
+            lienResults.style.display = 'block';
+        }
+        
+        // Debounce réduit à 200ms pour une recherche plus réactive
+        searchTimeout = setTimeout(async () => {
+            try {
+                let url = '';
                 if (type === 'client') {
-                    // Affichage amélioré pour les clients : raison sociale + dirigeant + adresse
-                    let html = `<strong>${escapeHtml(item.name || 'N/A')}</strong>`;
-                    if (item.dirigeant) {
-                        html += `<br><span style="color: var(--text-secondary); font-size: 0.85rem;">👤 ${escapeHtml(item.dirigeant)}</span>`;
-                    }
-                    if (item.address) {
-                        html += `<br><span style="color: var(--text-muted); font-size: 0.8rem;">📍 ${escapeHtml(item.address)}</span>`;
-                    }
-                    div.innerHTML = html;
-                } else {
-                    // Pour livraisons et SAV, affichage simple
-                    div.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong>`;
+                    url = `/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=15`;
+                } else if (type === 'livraison') {
+                    url = `/API/messagerie_search_livraisons.php?q=${encodeURIComponent(query)}&limit=15`;
+                } else if (type === 'sav') {
+                    url = `/API/messagerie_search_sav.php?q=${encodeURIComponent(query)}&limit=15`;
                 }
                 
-                div.addEventListener('click', () => {
+                console.log('Recherche:', type, query, url);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Réponse API:', data);
+                
+                if (!lienResults) return;
+                lienResults.innerHTML = '';
+                
+                let results = [];
+                if (type === 'client' && data.ok && data.clients) {
+                    results = data.clients.map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        dirigeant: c.dirigeant_complet || (c.prenom_dirigeant && c.nom_dirigeant ? `${c.prenom_dirigeant} ${c.nom_dirigeant}` : null),
+                        address: c.address,
+                        code: c.code
+                    }));
+                } else if ((type === 'livraison' || type === 'sav') && data.ok && data.results) {
+                    results = data.results;
+                }
+                
+                console.log('Résultats formatés:', results);
+                
+                if (!results || results.length === 0) {
+                    const item = document.createElement('div');
+                    item.className = 'client-result-item empty';
+                    item.textContent = 'Aucun résultat trouvé.';
+                    lienResults.appendChild(item);
+                    return;
+                }
+                
+                results.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'client-result-item';
+                    
                     if (type === 'client') {
-                        const displayText = item.dirigeant 
-                            ? `${item.name} (${item.dirigeant})`
-                            : item.name;
-                        idLienInput.value = item.id;
-                        lienSelected.innerHTML = `<strong>${escapeHtml(displayText)}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
+                        // Affichage amélioré pour les clients : raison sociale + dirigeant + adresse
+                        let html = `<strong>${escapeHtml(item.name || 'N/A')}</strong>`;
+                        if (item.dirigeant) {
+                            html += `<br><span style="color: var(--text-secondary); font-size: 0.85rem;">👤 ${escapeHtml(item.dirigeant)}</span>`;
+                        }
+                        if (item.address) {
+                            html += `<br><span style="color: var(--text-muted); font-size: 0.8rem;">📍 ${escapeHtml(item.address)}</span>`;
+                        }
+                        div.innerHTML = html;
                     } else {
-                        idLienInput.value = item.id;
-                        lienSelected.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
+                        // Pour livraisons et SAV, affichage simple
+                        div.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong>`;
                     }
-                    lienSelected.style.display = 'block';
-                    lienSearch.value = '';
-                    lienResults.style.display = 'none';
+                    
+                    div.addEventListener('click', () => {
+                        if (type === 'client') {
+                            const displayText = item.dirigeant 
+                                ? `${item.name} (${item.dirigeant})`
+                                : item.name;
+                            if (idLienInput) idLienInput.value = item.id;
+                            if (lienSelected) {
+                                lienSelected.innerHTML = `<strong>${escapeHtml(displayText)}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
+                                lienSelected.style.display = 'block';
+                            }
+                        } else {
+                            if (idLienInput) idLienInput.value = item.id;
+                            if (lienSelected) {
+                                lienSelected.innerHTML = `<strong>${escapeHtml(item.label || item.name || item.reference || '')}</strong> <button type="button" onclick="clearLien()" style="margin-left: 0.5rem; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-tertiary); cursor: pointer;">✕</button>`;
+                                lienSelected.style.display = 'block';
+                            }
+                        }
+                        if (lienSearch) lienSearch.value = '';
+                        if (lienResults) lienResults.style.display = 'none';
+                    });
+                    if (lienResults) lienResults.appendChild(div);
                 });
-                lienResults.appendChild(div);
-            });
-        } catch (err) {
-            console.error('Erreur recherche:', err);
-            lienResults.innerHTML = '<div class="client-result-item empty">Erreur de recherche.</div>';
-        }
-    }, 200);
-});
+            } catch (err) {
+                console.error('Erreur recherche:', err);
+                if (lienResults) {
+                    lienResults.innerHTML = '<div class="client-result-item empty">Erreur de recherche: ' + escapeHtml(err.message) + '</div>';
+                }
+            }
+        }, 200);
+    });
+}
 
 function clearLien() {
     idLienInput.value = '';
