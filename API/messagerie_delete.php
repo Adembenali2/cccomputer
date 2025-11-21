@@ -61,9 +61,30 @@ if ($messageId <= 0) {
 }
 
 try {
+    // Vérifier que la table messagerie existe
+    $checkTable = $pdo->query("SHOW TABLES LIKE 'messagerie'");
+    if ($checkTable->rowCount() === 0) {
+        jsonResponse(['ok' => false, 'error' => 'Table messagerie introuvable. Veuillez exécuter la migration SQL.'], 500);
+    }
+    
+    // Vérifier si la colonne id_message_parent existe
+    $checkColumn = $pdo->query("
+        SELECT COUNT(*) as cnt 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'messagerie' 
+        AND COLUMN_NAME = 'id_message_parent'
+    ");
+    $hasParentColumn = ($checkColumn->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+    
     // Vérifier que le message existe et que l'utilisateur a le droit de le supprimer
+    $selectFields = "id, id_expediteur, id_destinataire, sujet";
+    if ($hasParentColumn) {
+        $selectFields .= ", id_message_parent";
+    }
+    
     $check = $pdo->prepare("
-        SELECT id, id_expediteur, id_destinataire, sujet, id_message_parent
+        SELECT {$selectFields}
         FROM messagerie 
         WHERE id = :id
         LIMIT 1
@@ -115,7 +136,7 @@ try {
     
     // Enregistrer dans l'historique
     try {
-        $isReply = !empty($message['id_message_parent']);
+        $isReply = $hasParentColumn && !empty($message['id_message_parent'] ?? null);
         $messageType = $isReply ? 'réponse' : 'message';
         $details = sprintf(
             'Suppression d\'un %s (ID %d) : "%s" - Supprimé par %s',

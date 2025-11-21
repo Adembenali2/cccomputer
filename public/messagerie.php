@@ -994,10 +994,21 @@ document.addEventListener('click', (e) => {
     if (e.target.closest('.btn-delete-message')) {
         const btn = e.target.closest('.btn-delete-message');
         const messageId = btn.getAttribute('data-message-id');
+        const messageItem = btn.closest('.message-item');
+        
+        if (!messageId) {
+            console.error('ID de message manquant');
+            alert('Erreur: ID de message manquant');
+            return;
+        }
         
         if (!confirm('Êtes-vous sûr de vouloir supprimer ce message ?')) {
             return;
         }
+        
+        // Désactiver le bouton pendant la requête
+        btn.disabled = true;
+        btn.textContent = 'Suppression...';
         
         (async () => {
             try {
@@ -1006,23 +1017,43 @@ document.addEventListener('click', (e) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         csrf_token: csrfToken,
-                        message_id: messageId
+                        message_id: parseInt(messageId, 10)
                     })
                 });
                 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erreur HTTP:', response.status, errorText);
+                    throw new Error(`Erreur HTTP ${response.status}: ${errorText}`);
+                }
+                
                 const result = await response.json();
+                console.log('Résultat suppression:', result);
                 
                 if (result.ok) {
-                    // Masquer le message ou recharger la page
-                    btn.closest('.message-item').style.display = 'none';
-                    // Ou recharger pour mettre à jour la liste
-                    setTimeout(() => window.location.reload(), 500);
+                    // Masquer le message avec animation
+                    if (messageItem) {
+                        messageItem.style.transition = 'opacity 0.3s ease';
+                        messageItem.style.opacity = '0';
+                        setTimeout(() => {
+                            messageItem.style.display = 'none';
+                            // Recharger pour mettre à jour la liste complète
+                            window.location.reload();
+                        }, 300);
+                    } else {
+                        // Si l'élément n'est pas trouvé, recharger directement
+                        window.location.reload();
+                    }
                 } else {
                     alert('Erreur: ' + (result.error || 'Erreur inconnue'));
+                    btn.disabled = false;
+                    btn.textContent = '🗑️ Supprimer';
                 }
             } catch (err) {
                 console.error('Erreur suppression:', err);
-                alert('Erreur lors de la suppression du message');
+                alert('Erreur lors de la suppression du message: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = '🗑️ Supprimer';
             }
         })();
     }
