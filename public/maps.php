@@ -269,21 +269,27 @@ async function geocodeAddress(address) {
 }
 
 // Fonction pour charger un client avec géocodage
+// Utilise l'adresse exacte de la base de données (ou adresse de livraison si différente)
 async function loadClientWithGeocode(client) {
     if (clientsCache.has(client.id)) {
         return clientsCache.get(client.id);
     }
     
-    const coords = await geocodeAddress(client.address);
+    // Utiliser address_geocode si disponible (adresse de livraison), sinon address (adresse principale)
+    const addressToGeocode = client.address_geocode || client.address;
+    
+    const coords = await geocodeAddress(addressToGeocode);
     if (!coords) {
-        console.warn('Impossible de géocoder:', client.address);
+        console.warn('Impossible de géocoder:', addressToGeocode);
         return null;
     }
     
     const clientWithCoords = {
         ...client,
         lat: coords.lat,
-        lng: coords.lng
+        lng: coords.lng,
+        // Conserver l'adresse originale de la BDD pour l'affichage
+        displayAddress: client.address
     };
     
     clientsCache.set(client.id, clientWithCoords);
@@ -302,11 +308,16 @@ function addClientToMap(client) {
         icon: createPriorityIcon(client.basePriority || 1)
     }).addTo(map);
     
+    // Afficher l'adresse exacte de la base de données
+    const displayAddress = client.displayAddress || client.address || 
+        `${escapeHtml(client.adresse || '')} ${escapeHtml(client.code_postal || '')} ${escapeHtml(client.ville || '')}`.trim();
+    
     const popupContent = `
         <strong>${escapeHtml(client.name)}</strong><br>
-        ${escapeHtml(client.address)}<br>
+        ${displayAddress}<br>
         <small>Code : ${escapeHtml(client.code)}</small>
         ${client.telephone ? `<br><small>Tel: ${escapeHtml(client.telephone)}</small>` : ''}
+        ${client.adresse_livraison && !client.livraison_identique ? `<br><small style="color:#666;">Livraison: ${escapeHtml(client.adresse_livraison)}</small>` : ''}
     `;
     
     marker.bindPopup(popupContent);
@@ -359,11 +370,15 @@ function renderSelectedClients() {
         const chip = document.createElement('div');
         chip.className = 'selected-client-chip';
 
+        // Afficher l'adresse exacte de la base de données
+        const displayAddress = client.displayAddress || client.address || 
+            `${client.adresse || ''} ${client.code_postal || ''} ${client.ville || ''}`.trim();
+        
         const text = document.createElement('div');
         text.className = 'selected-client-main';
         text.innerHTML =
-            `<strong>${idx + 1}. ${client.name}</strong>` +
-            `<span>${client.address} — ${client.code}</span>`;
+            `<strong>${idx + 1}. ${escapeHtml(client.name)}</strong>` +
+            `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>`;
 
         const controls = document.createElement('div');
         controls.className = 'selected-client-controls';
@@ -544,11 +559,15 @@ clientSearchInput.addEventListener('input', () => {
         }
         
         results.forEach(client => {
+            // Afficher l'adresse exacte de la base de données
+            const displayAddress = client.address || 
+                `${client.adresse || ''} ${client.code_postal || ''} ${client.ville || ''}`.trim();
+            
             const item = document.createElement('div');
             item.className = 'client-result-item';
             item.innerHTML =
                 `<strong>${escapeHtml(client.name)}</strong>` +
-                `<span>${escapeHtml(client.address)} — ${escapeHtml(client.code)}</span>`;
+                `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>`;
             item.addEventListener('click', () => {
                 addClientToRoute(client);
             });

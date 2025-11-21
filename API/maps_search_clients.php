@@ -77,18 +77,36 @@ try {
     
     $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Formater les résultats
+    // Formater les résultats - Utiliser exactement les données de la base de données
     $formatted = [];
     foreach ($clients as $c) {
-        $address = trim($c['adresse'] . ' ' . $c['code_postal'] . ' ' . $c['ville']);
+        // Construire l'adresse complète exactement comme stockée dans la base de données
+        // Utiliser adresse + code_postal + ville
+        $adresseComplete = trim($c['adresse']);
+        $codePostal = trim($c['code_postal']);
+        $ville = trim($c['ville']);
+        
+        // Construire l'adresse complète avec les données exactes de la base
+        $address = trim(sprintf('%s %s %s', $adresseComplete, $codePostal, $ville));
+        
+        // Pour le géocodage, utiliser l'adresse de livraison si elle est différente et existe
+        $addressForGeocode = $address;
+        if (!empty($c['adresse_livraison']) && empty($c['livraison_identique'])) {
+            // Si adresse de livraison existe et est différente, l'utiliser
+            $addressForGeocode = trim($c['adresse_livraison'] . ' ' . $codePostal . ' ' . $ville);
+        }
+        
         $formatted[] = [
             'id' => (int)$c['id'],
             'code' => $c['numero_client'],
             'name' => $c['raison_sociale'],
-            'address' => $address,
-            'adresse' => $c['adresse'],
-            'code_postal' => $c['code_postal'],
-            'ville' => $c['ville'],
+            'address' => $address, // Adresse principale (exactement comme dans la BDD)
+            'address_geocode' => $addressForGeocode, // Adresse à utiliser pour le géocodage
+            'adresse' => $c['adresse'], // Rue exacte de la BDD
+            'code_postal' => $c['code_postal'], // Code postal exact de la BDD
+            'ville' => $c['ville'], // Ville exacte de la BDD
+            'adresse_livraison' => $c['adresse_livraison'] ?? null,
+            'livraison_identique' => (bool)($c['livraison_identique'] ?? false),
             'telephone' => $c['telephone1'],
             'email' => $c['email'],
             'basePriority' => 1 // Par défaut, peut être basé sur livraisons en attente plus tard
