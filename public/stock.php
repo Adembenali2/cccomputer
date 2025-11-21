@@ -838,7 +838,7 @@ function initAddModal(){
 
       if (!res.ok || !json.ok) {
         console.error('Erreur API :', json);
-        errorBox.textContent = json.error || 'Erreur lors de l'enregistrement.';
+        errorBox.textContent = json.error || "Erreur lors de l'enregistrement.";
         errorBox.style.display = 'block';
         return;
       }
