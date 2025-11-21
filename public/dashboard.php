@@ -332,7 +332,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         <div class="cdv-header">
                             <div>
                                 <div class="cdv-title" id="cf-raison_sociale">—</div>
-                                <div class="cdv-sub">N° <span id="cf-numero_client">—</span></div>
+                                <div class="cdv-sub">N° client : <span id="cf-numero_client">—</span></div>
                             </div>
                         </div>
                         <div class="cdv-grid">
@@ -344,15 +344,23 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                             </div>
                             <div class="cdv-field">
                                 <div class="lbl">Email</div>
-                                <div class="val" id="cf-email">—</div>
+                                <div class="val" id="cf-email-home">—</div>
                             </div>
                             <div class="cdv-field">
-                                <div class="lbl">Téléphone 1</div>
-                                <div class="val" id="cf-telephone1">—</div>
+                                <div class="lbl">Téléphone</div>
+                                <div class="val" id="cf-telephone1-home">—</div>
                             </div>
                             <div class="cdv-field">
                                 <div class="lbl">Offre</div>
-                                <div class="val" id="cf-offre">—</div>
+                                <div class="val" id="cf-offre-home">—</div>
+                            </div>
+                            <div class="cdv-field">
+                                <div class="lbl">Ville</div>
+                                <div class="val" id="cf-ville-home">—</div>
+                            </div>
+                            <div class="cdv-field">
+                                <div class="lbl">Code Postal</div>
+                                <div class="val" id="cf-code_postal-home">—</div>
                             </div>
                         </div>
                     </div>
@@ -536,6 +544,28 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             activateTab(this.dataset.tab);
         }));
 
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === '—') return '—';
+            try {
+                const dt = new Date(dateStr);
+                return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            } catch (e) {
+                return dateStr;
+            }
+        }
+
+        function formatOffre(offre) {
+            if (!offre) return '—';
+            const map = { 'packbronze': 'Pack Bronze', 'packargent': 'Pack Argent' };
+            return map[offre] || offre;
+        }
+
+        function formatDepotMode(mode) {
+            if (!mode) return '—';
+            const map = { 'espece': 'Espèces', 'cheque': 'Chèque', 'virement': 'Virement', 'paiement_carte': 'Carte' };
+            return map[mode] || mode;
+        }
+
         function fillClientFields(client){
             const map = {
                 numero_client: client.numero_client,
@@ -547,16 +577,16 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 livraison_identique: client.livraison_identique ? 'Oui' : 'Non',
                 siret: client.siret,
                 numero_tva: client.numero_tva,
-                depot_mode: client.depot_mode,
+                depot_mode: formatDepotMode(client.depot_mode),
                 nom_dirigeant: client.nom_dirigeant,
                 prenom_dirigeant: client.prenom_dirigeant,
                 telephone1: client.telephone1,
                 telephone2: client.telephone2,
                 email: client.email,
                 parrain: client.parrain,
-                offre: client.offre,
-                date_creation: client.date_creation,
-                date_dajout: client.date_dajout,
+                offre: formatOffre(client.offre),
+                date_creation: formatDate(client.date_creation),
+                date_dajout: formatDate(client.date_dajout),
                 pdf1: client.pdf1, pdf2: client.pdf2, pdf3: client.pdf3, pdf4: client.pdf4, pdf5: client.pdf5,
                 pdfcontrat: client.pdfcontrat,
                 iban: client.iban
@@ -574,12 +604,66 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                             .replace(/"/g,'&quot;')
                             .replace(/</g,'&lt;')
                             .replace(/>/g,'&gt;');
-                        el.innerHTML = '<a href="'+safe+'" target="_blank" rel="noopener noreferrer">Ouvrir</a>';
+                        el.innerHTML = '<a href="'+safe+'" target="_blank" rel="noopener noreferrer" class="pdf-link">📄 Ouvrir le PDF</a>';
+                    } else {
+                        el.textContent = '—';
+                    }
+                } else if(k === 'email' && v !== '—') {
+                    el.innerHTML = '<a href="mailto:' + v.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '" class="email-link">' + v.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</a>';
+                } else if(k === 'telephone1' || k === 'telephone2') {
+                    if(v !== '—') {
+                        el.innerHTML = '<a href="tel:' + v.replace(/[^\d+]/g,'') + '" class="tel-link">' + v.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</a>';
                     } else {
                         el.textContent = '—';
                     }
                 } else {
                     el.textContent = v;
+                }
+                
+                // Mise à jour de l'onglet home
+                if (k === 'email') {
+                    const homeEl = document.getElementById('cf-email-home');
+                    if (homeEl && v !== '—') {
+                        homeEl.innerHTML = '<a href="mailto:' + v.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '" class="email-link">' + v.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</a>';
+                    } else if (homeEl) {
+                        homeEl.textContent = '—';
+                    }
+                }
+                if (k === 'telephone1') {
+                    const homeEl = document.getElementById('cf-telephone1-home');
+                    if (homeEl && v !== '—') {
+                        homeEl.innerHTML = '<a href="tel:' + v.replace(/[^\d+]/g,'') + '" class="tel-link">' + v.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</a>';
+                    } else if (homeEl) {
+                        homeEl.textContent = '—';
+                    }
+                }
+                if (k === 'offre') {
+                    const homeEl = document.getElementById('cf-offre-home');
+                    if (homeEl) homeEl.textContent = formatOffre(client.offre) || '—';
+                }
+                if (k === 'ville') {
+                    const homeEl = document.getElementById('cf-ville-home');
+                    if (homeEl) homeEl.textContent = v;
+                }
+                if (k === 'code_postal') {
+                    const homeEl = document.getElementById('cf-code_postal-home');
+                    if (homeEl) homeEl.textContent = v;
+                }
+                if (k === 'raison_sociale') {
+                    const homeEl = document.getElementById('cf-raison_sociale');
+                    if (homeEl) homeEl.textContent = v;
+                }
+                if (k === 'numero_client') {
+                    const homeEl = document.getElementById('cf-numero_client');
+                    if (homeEl) homeEl.textContent = v;
+                }
+                if (k === 'prenom_dirigeant') {
+                    const homeEl = document.getElementById('cf-prenom_dirigeant');
+                    if (homeEl) homeEl.textContent = v;
+                }
+                if (k === 'nom_dirigeant') {
+                    const homeEl = document.getElementById('cf-nom_dirigeant');
+                    if (homeEl) homeEl.textContent = v;
                 }
             });
         }
@@ -590,41 +674,64 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             tbody.innerHTML = '';
 
             if(!devices || devices.length === 0){
-                tbody.innerHTML = '<tr><td colspan="11">Aucun appareil lié.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:2rem; color:var(--text-muted);">Aucun appareil lié à ce client.</td></tr>';
                 return;
             }
 
             devices.forEach(d => {
                 const tr = document.createElement('tr');
+                tr.className = 'device-row';
 
-                const td = (t) => {
-                    const x = document.createElement('td');
-                    x.textContent = (t ?? '—');
-                    return x;
+                const formatToner = (val) => {
+                    if (val === null || val === undefined) return '—';
+                    return Math.max(0, Math.min(100, parseInt(val))) + '%';
                 };
 
-                const tonerBlackText  = (d.TonerBlack  != null ? d.TonerBlack  + '%' : '000');
-                const tonerCyanText   = (d.TonerCyan   != null ? d.TonerCyan   + '%' : '000');
-                const tonerMagentaText= (d.TonerMagenta!= null ? d.TonerMagenta+ '%' : '000');
-                const tonerYellowText = (d.TonerYellow != null ? d.TonerYellow + '%' : '000');
+                const formatDate = (ts) => {
+                    if (!ts) return '—';
+                    try {
+                        const dt = new Date(ts);
+                        return dt.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    } catch (e) {
+                        return ts;
+                    }
+                };
 
-                const totalBWText     = (d.TotalBW     != null ? d.TotalBW     : '000');
-                const totalColorText  = (d.TotalColor  != null ? d.TotalColor  : '000');
+                const formatNumber = (val) => {
+                    if (val === null || val === undefined) return '—';
+                    return parseInt(val).toLocaleString('fr-FR');
+                };
 
-                const tsRaw = d.Timestamp || d.last_ts;
-                const tsText = tsRaw ? tsRaw : 'Pas attribué';
+                const ageHours = d.last_age_hours !== null && d.last_age_hours !== undefined ? parseInt(d.last_age_hours) : null;
+                const isAlert = ageHours !== null && ageHours >= 48;
+                if (isAlert) {
+                    tr.classList.add('device-alert');
+                }
 
-                tr.appendChild(td(d.SerialNumber));
-                tr.appendChild(td(d.MacAddress));
-                tr.appendChild(td(d.Model));
-                tr.appendChild(td(d.Status));
-                tr.appendChild(td(tonerBlackText));
-                tr.appendChild(td(tonerCyanText));
-                tr.appendChild(td(tonerMagentaText));
-                tr.appendChild(td(tonerYellowText));
-                tr.appendChild(td(totalBWText));
-                tr.appendChild(td(totalColorText));
-                tr.appendChild(td(tsText));
+                const macNorm = d.mac_norm || '';
+                const deviceHref = macNorm ? `/public/photocopieurs_details.php?mac=${encodeURIComponent(macNorm)}` : '';
+                
+                tr.innerHTML = `
+                    <td>${d.SerialNumber || '—'}</td>
+                    <td>${d.MacAddress || '—'}</td>
+                    <td><strong>${d.Model || '—'}</strong>${d.Nom ? '<br><small style="color:var(--text-muted);">' + d.Nom + '</small>' : ''}</td>
+                    <td><span class="status-badge ${d.Status === 'OK' || d.Status === 'Online' ? 'status-ok' : 'status-warn'}">${d.Status || '—'}</span></td>
+                    <td class="toner-cell toner-k"><div class="toner-bar-bg"><div class="toner-bar-fill" style="width:${d.TonerBlack !== null ? Math.max(0, Math.min(100, d.TonerBlack)) : 0}%"></div></div><span>${formatToner(d.TonerBlack)}</span></td>
+                    <td class="toner-cell toner-c"><div class="toner-bar-bg"><div class="toner-bar-fill" style="width:${d.TonerCyan !== null ? Math.max(0, Math.min(100, d.TonerCyan)) : 0}%"></div></div><span>${formatToner(d.TonerCyan)}</span></td>
+                    <td class="toner-cell toner-m"><div class="toner-bar-bg"><div class="toner-bar-fill" style="width:${d.TonerMagenta !== null ? Math.max(0, Math.min(100, d.TonerMagenta)) : 0}%"></div></div><span>${formatToner(d.TonerMagenta)}</span></td>
+                    <td class="toner-cell toner-y"><div class="toner-bar-bg"><div class="toner-bar-fill" style="width:${d.TonerYellow !== null ? Math.max(0, Math.min(100, d.TonerYellow)) : 0}%"></div></div><span>${formatToner(d.TonerYellow)}</span></td>
+                    <td class="number-cell">${formatNumber(d.TotalBW)}</td>
+                    <td class="number-cell">${formatNumber(d.TotalColor)}</td>
+                    <td class="date-cell ${isAlert ? 'date-alert' : ''}">${formatDate(d.last_ts)}${ageHours !== null && ageHours >= 48 ? '<br><small style="color:#ef4444; font-weight:600;">⚠️ Ancien</small>' : ''}</td>
+                `;
+
+                if (deviceHref) {
+                    tr.style.cursor = 'pointer';
+                    tr.addEventListener('click', () => {
+                        window.location.href = deviceHref;
+                    });
+                }
+
                 tbody.appendChild(tr);
             });
         }
@@ -675,42 +782,8 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const id = card.dataset.clientId;
                 if (!id) return;
 
-                const clientName = card.querySelector('strong')?.textContent || 'Client';
-
-                try {
-                    const res = await fetch('/api/get_client_photocopieur.php?id=' + encodeURIComponent(id), {
-                        credentials: 'same-origin'
-                    });
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    const data = await res.json();
-
-                    if (data.ok && data.assigned && data.redirect_url) {
-                        // Le client a déjà une photocopieuse → redirection
-                        window.location.href = data.redirect_url;
-                        return;
-                    }
-
-                    // Pas de photocopieuse, on affiche le formulaire d’attribution
-                    if (assignView && listView) {
-                        listView.style.display = 'none';
-                        detailView.style.display = 'none';
-                        detailView.setAttribute('aria-hidden','true');
-                        assignView.style.display = 'block';
-                        assignView.setAttribute('aria-hidden','false');
-
-                        const assignNameSpan = document.getElementById('assign-client-name');
-                        const assignIdInput  = document.getElementById('assign-id-client');
-                        if (assignNameSpan) assignNameSpan.textContent = clientName;
-                        if (assignIdInput)  assignIdInput.value = id;
-
-                        document.getElementById('popupTitle').textContent = 'Attribuer une photocopieuse';
-                    }
-
-                } catch (err) {
-                    console.error('Erreur get_client_photocopieur', err);
-                    // En cas d’erreur, retour au comportement fiche client classique
-                    loadClientDetail(id);
-                }
+                // Afficher directement la fiche client
+                loadClientDetail(id);
             }
 
             list.addEventListener('click', function(e){
