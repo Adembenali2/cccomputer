@@ -4,6 +4,9 @@
 // 1) Démarrer la session avec les bons paramètres (cookie path="/", secure, etc.)
 require_once __DIR__ . '/includes/session_config.php';
 
+// 2) Headers de sécurité
+require_once __DIR__ . '/includes/security_headers.php';
+
 // 2) Choisir la destination selon l'état de connexion
 $redirectUrl = !empty($_SESSION['user_id'])
     ? '/public/dashboard.php'

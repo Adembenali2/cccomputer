@@ -294,13 +294,17 @@ $where  = [];
 if ($search !== '') {
     $tokens = preg_split('/\s+/', $search);
     $tokenIndex = 0;
+    $searchConditions = [];
     foreach ($tokens as $token) {
         if ($token === '') {
             continue;
         }
         $key = ':q' . $tokenIndex++;
-        $where[] = "(Email LIKE {$key} OR nom LIKE {$key} OR prenom LIKE {$key} OR telephone LIKE {$key})";
+        $searchConditions[] = "(Email LIKE {$key} OR nom LIKE {$key} OR prenom LIKE {$key} OR telephone LIKE {$key})";
         $params[$key] = "%{$token}%";
+    }
+    if (!empty($searchConditions)) {
+        $where[] = '(' . implode(' AND ', $searchConditions) . ')';
     }
 }
 

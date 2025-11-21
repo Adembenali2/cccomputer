@@ -31,16 +31,21 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// Optionnel: vérifier que l'utilisateur existe toujours
-$stmt = $pdo->prepare("SELECT id FROM utilisateurs WHERE id = :id LIMIT 1");
-$stmt->execute(['id' => $user_id]);
-if (!$stmt->fetch()) {
-    $_SESSION = [];
-    if (ini_get('session.use_cookies')) {
-        $p = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
+// Optionnel: vérifier que l'utilisateur existe toujours (avec cache pour éviter requêtes répétées)
+// On vérifie seulement toutes les 5 minutes pour améliorer les performances
+$lastCheck = $_SESSION['user_check_time'] ?? 0;
+if (time() - $lastCheck > 300) { // 5 minutes
+    $stmt = $pdo->prepare("SELECT id FROM utilisateurs WHERE id = :id LIMIT 1");
+    $stmt->execute(['id' => $user_id]);
+    if (!$stmt->fetch()) {
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $p = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
+        }
+        session_destroy();
+        header('Location: /public/login.php');
+        exit;
     }
-    session_destroy();
-    header('Location: /public/login.php');
-    exit;
+    $_SESSION['user_check_time'] = time();
 }

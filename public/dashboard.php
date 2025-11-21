@@ -93,8 +93,10 @@ $nb_livraisons_a_faire = (int)($safeFetchColumn(
 $payClass = ($nb_paiements_en_attente > 0) ? 'count-bad' : 'count-ok';
 
 // ==================================================================
-// Récupération clients depuis la BDD
+// Récupération clients depuis la BDD (limité pour performance)
 // ==================================================================
+// Limite à 1000 clients pour éviter les problèmes de mémoire
+// Pour plus de clients, utiliser la pagination ou le chargement à la demande
 $clients = $safeFetchAll(
     $pdo,
     "SELECT 
@@ -122,7 +124,8 @@ $clients = $safeFetchAll(
         pdfcontrat,
         iban
     FROM clients
-    ORDER BY raison_sociale ASC",
+    ORDER BY raison_sociale ASC
+    LIMIT 1000",
     [],
     'clients_list'
 );

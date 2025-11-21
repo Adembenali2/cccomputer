@@ -118,13 +118,19 @@ try {
     // SÉLECTION / VÉRIFICATION DU LIVREUR
     // ─────────────────────────────────────────────
     // Si aucun id_livreur envoyé, on choisit automatiquement un livreur actif
+    // Optimisation: au lieu de RAND() (lent), on prend le premier disponible ou celui avec le moins de livraisons
     if ($idLivreur <= 0) {
+        // Sélection optimisée: prendre le livreur avec le moins de livraisons planifiées/en cours
         $autoLiv = $pdo->prepare("
-            SELECT id, nom, prenom, Emploi, statut
-            FROM utilisateurs
-            WHERE Emploi = 'Livreur'
-              AND statut = 'actif'
-            ORDER BY RAND()
+            SELECT u.id, u.nom, u.prenom, u.Emploi, u.statut,
+                   COUNT(l.id) AS livraisons_count
+            FROM utilisateurs u
+            LEFT JOIN livraisons l ON l.id_livreur = u.id 
+                AND l.statut IN ('planifiee', 'en_cours')
+            WHERE u.Emploi = 'Livreur'
+              AND u.statut = 'actif'
+            GROUP BY u.id, u.nom, u.prenom, u.Emploi, u.statut
+            ORDER BY livraisons_count ASC, u.id ASC
             LIMIT 1
         ");
         $autoLiv->execute();
