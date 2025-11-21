@@ -37,12 +37,13 @@ if (empty($_SESSION['user_id'])) {
 $query = trim($_GET['q'] ?? '');
 $limit = min((int)($_GET['limit'] ?? 10), 20);
 
-if (empty($query) || strlen($query) < 2) {
+if (empty($query) || strlen($query) < 1) {
     jsonResponse(['ok' => true, 'results' => []]);
 }
 
 try {
     $searchTerm = '%' . $query . '%';
+    $limitInt = (int)$limit;
     $sql = "
         SELECT 
             s.id,
@@ -55,12 +56,11 @@ try {
            OR s.description LIKE :q
            OR c.raison_sociale LIKE :q
         ORDER BY s.date_ouverture DESC, s.id DESC
-        LIMIT :limit
+        LIMIT {$limitInt}
     ";
     
     $stmt = $pdo->prepare($sql);
     $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
     
     $savs = $stmt->fetchAll(PDO::FETCH_ASSOC);

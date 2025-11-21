@@ -539,37 +539,59 @@ function displaySearchResults(results, type) {
     console.log('Results displayed, lienResults.style.display set to block');
 }
 
-// Fonction pour charger les premiers clients (par défaut)
-async function loadFirstClients() {
-    if (!lienResults || !selectTypeLien || selectTypeLien.value !== 'client') return;
+// Fonction pour charger les premiers éléments (par défaut)
+async function loadFirstItems() {
+    if (!lienResults || !selectTypeLien) return;
+    
+    const type = selectTypeLien.value;
+    if (!type) return;
     
     try {
-        const response = await fetch('/API/messagerie_get_first_clients.php?limit=3');
+        let url = '';
+        if (type === 'client') {
+            url = '/API/messagerie_get_first_clients.php?limit=3';
+        } else if (type === 'livraison') {
+            url = '/API/messagerie_get_first_livraisons.php?limit=3';
+        } else if (type === 'sav') {
+            url = '/API/messagerie_get_first_sav.php?limit=3';
+        } else {
+            return;
+        }
+        
+        const response = await fetch(url);
         const data = await response.json();
         
-        if (data.ok && data.clients) {
-            const results = data.clients.map(c => ({
-                id: c.id,
-                name: c.name,
-                dirigeant: c.dirigeant_complet || (c.prenom_dirigeant && c.nom_dirigeant ? `${c.prenom_dirigeant} ${c.nom_dirigeant}` : null),
-                address: c.address,
-                code: c.code
-            }));
-            displaySearchResults(results, 'client');
-            if (lienResults) lienResults.style.display = 'block';
+        if (data.ok) {
+            let results = [];
+            if (type === 'client' && data.clients) {
+                results = data.clients.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    dirigeant: c.dirigeant_complet || (c.prenom_dirigeant && c.nom_dirigeant ? `${c.prenom_dirigeant} ${c.nom_dirigeant}` : null),
+                    address: c.address,
+                    code: c.code
+                }));
+            } else if ((type === 'livraison' || type === 'sav') && data.results) {
+                results = data.results;
+            }
+            
+            if (results.length > 0) {
+                displaySearchResults(results, type);
+                if (lienResults) lienResults.style.display = 'block';
+            }
         }
     } catch (err) {
-        console.error('Erreur chargement premiers clients:', err);
+        console.error('Erreur chargement premiers éléments:', err);
     }
 }
 
 // Recherche de client/livraison/SAV
 if (lienSearch) {
-    // Au focus, charger les 3 premiers clients si type = client
+    // Au focus, charger les 3 premiers éléments selon le type
     lienSearch.addEventListener('focus', () => {
         const type = selectTypeLien ? selectTypeLien.value : '';
-        if (type === 'client' && (!lienSearch.value || lienSearch.value.trim().length === 0)) {
-            loadFirstClients();
+        if (type && (!lienSearch.value || lienSearch.value.trim().length === 0)) {
+            loadFirstItems();
         }
     });
     
@@ -587,10 +609,10 @@ if (lienSearch) {
             return;
         }
         
-        // Si le champ est vide, afficher les 3 premiers clients
+        // Si le champ est vide, afficher les 3 premiers éléments
         if (!query || query.length === 0) {
-            if (type === 'client') {
-                loadFirstClients();
+            if (type) {
+                loadFirstItems();
             } else {
                 if (lienResults) {
                     lienResults.innerHTML = '';

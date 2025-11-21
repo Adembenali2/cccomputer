@@ -1,5 +1,5 @@
 <?php
-// API pour rechercher des livraisons dans la messagerie
+// API pour récupérer les premiers SAV (pour affichage par défaut)
 ob_start();
 
 error_reporting(E_ALL);
@@ -26,7 +26,7 @@ try {
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/db.php';
 } catch (Throwable $e) {
-    error_log('messagerie_search_livraisons.php require error: ' . $e->getMessage());
+    error_log('messagerie_get_first_sav.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
 }
 
@@ -34,53 +34,56 @@ if (empty($_SESSION['user_id'])) {
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
 }
 
-$query = trim($_GET['q'] ?? '');
-$limit = min((int)($_GET['limit'] ?? 10), 20);
-
-if (empty($query) || strlen($query) < 1) {
-    jsonResponse(['ok' => true, 'results' => []]);
-}
+$limit = min((int)($_GET['limit'] ?? 3), 10);
 
 try {
-    $searchTerm = '%' . $query . '%';
-    $limitInt = (int)$limit;
     $sql = "
         SELECT 
-            l.id,
-            l.reference,
-            l.objet,
+            s.id,
+            s.reference,
+            s.description,
+            s.date_ouverture,
             c.raison_sociale AS client_nom
-        FROM livraisons l
-        LEFT JOIN clients c ON c.id = l.id_client
-        WHERE l.reference LIKE :q
-           OR l.objet LIKE :q
-           OR c.raison_sociale LIKE :q
-        ORDER BY l.date_prevue DESC, l.id DESC
-        LIMIT {$limitInt}
+        FROM sav s
+        LEFT JOIN clients c ON c.id = s.id_client
+        ORDER BY s.date_ouverture DESC, s.id DESC
+        LIMIT " . (int)$limit . "
     ";
     
     $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
     $stmt->execute();
     
-    $livraisons = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $savs = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     $results = [];
-    foreach ($livraisons as $l) {
+    foreach ($savs as $s) {
+        $descriptionShort = mb_substr($s['description'] ?? '', 0, 50);
+        if (mb_strlen($s['description'] ?? '') > 50) {
+            $descriptionShort .= '...';
+        }
+        
+        $label = $s['reference'];
+        if ($s['client_nom']) {
+            $label .= ' - ' . $s['client_nom'];
+        }
+        if ($descriptionShort) {
+            $label .= ' (' . $descriptionShort . ')';
+        }
+        
         $results[] = [
-            'id' => (int)$l['id'],
-            'reference' => $l['reference'],
-            'label' => $l['reference'] . ' - ' . ($l['client_nom'] ?? 'N/A') . ' (' . ($l['objet'] ?? '') . ')'
+            'id' => (int)$s['id'],
+            'reference' => $s['reference'],
+            'label' => $label
         ];
     }
     
     jsonResponse(['ok' => true, 'results' => $results]);
     
 } catch (PDOException $e) {
-    error_log('messagerie_search_livraisons.php SQL error: ' . $e->getMessage());
+    error_log('messagerie_get_first_sav.php SQL error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
 } catch (Throwable $e) {
-    error_log('messagerie_search_livraisons.php error: ' . $e->getMessage());
+    error_log('messagerie_get_first_sav.php error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
 }
 
