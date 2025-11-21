@@ -12,8 +12,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Lire et décoder le JSON une seule fois
 $raw = file_get_contents('php://input');
-$data = json_decode($raw, true);
+$jsonData = json_decode($raw, true);
+
+// Vérification CSRF
+$csrfToken = $jsonData['csrf_token'] ?? '';
+$csrfSession = $_SESSION['csrf_token'] ?? '';
+if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrfToken)) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'error' => 'Token CSRF invalide']);
+    exit;
+}
+
+// Utiliser les données décodées
+$data = $jsonData ?? [];
 if (!is_array($data)) {
     http_response_code(400);
     echo json_encode(['ok' => false, 'error' => 'JSON invalide']);

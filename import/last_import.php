@@ -4,7 +4,9 @@ header('Content-Type: application/json; charset=utf-8');
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/db.php';
 
-$row = $pdo->query("SELECT id, ran_at, imported, skipped, ok, msg FROM import_run ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$stmt = $pdo->prepare("SELECT id, ran_at, imported, skipped, ok, msg FROM import_run ORDER BY id DESC LIMIT 1");
+$stmt->execute();
+$row = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$row) { echo json_encode(['has_run'=>false]); exit; }
 
 $summary = null;

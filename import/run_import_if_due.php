@@ -19,7 +19,9 @@ $pdo->exec("
 $INTERVAL = (int)(getenv('SFTP_IMPORT_INTERVAL_SEC') ?: 20);
 $key      = 'sftp_last_run';
 
-$last = $pdo->query("SELECT v FROM app_kv WHERE k='{$key}'")->fetchColumn();
+$stmt = $pdo->prepare("SELECT v FROM app_kv WHERE k = ? LIMIT 1");
+$stmt->execute([$key]);
+$last = $stmt->fetchColumn();
 $due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
 
 if (!$due) {

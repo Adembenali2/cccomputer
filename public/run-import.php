@@ -12,12 +12,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
   header('Allow: POST');
   exit("Method Not Allowed\n");
 }
-if (empty($_POST['csrf']) || empty($_SESSION['csrf']) || !hash_equals($_SESSION['csrf'], $_SESSION['csrf'] = $_SESSION['csrf'])) {
-  // NB: on compare à la valeur en session, set plus bas dans dashboard.php
-  if (!hash_equals($_POST['csrf'] ?? '', $_SESSION['csrf'] ?? '')) {
-    http_response_code(403);
-    exit("forbidden\n");
-  }
+// Vérification CSRF
+$csrfPost = $_POST['csrf'] ?? '';
+$csrfSession = $_SESSION['csrf_token'] ?? $_SESSION['csrf'] ?? '';
+if (empty($csrfPost) || empty($csrfSession) || !hash_equals($csrfSession, $csrfPost)) {
+  http_response_code(403);
+  exit("forbidden\n");
 }
 
 // — pour forcer l’affichage des logs en direct
