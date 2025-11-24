@@ -1,45 +1,10 @@
 <?php
 // /api/client_devices.php - Retourne les derniers relevés des photocopieurs d'un client
+require_once __DIR__ . '/../includes/api_helpers.php';
 
-// Activer le buffer de sortie pour capturer toute sortie accidentelle
-ob_start();
-
-// Désactiver toute sortie d'erreur HTML
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('html_errors', 0);
-
-// Définir le header JSON en premier (avant toute sortie)
-if (!headers_sent()) {
-    header('Content-Type: application/json; charset=utf-8');
-}
-
-// Fonction helper pour nettoyer le buffer et renvoyer du JSON
-function jsonResponse($data, $statusCode = 200) {
-    ob_clean();
-    http_response_code($statusCode);
-    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK);
-    exit;
-}
-
-// Gestion de la session pour les API (sans redirection HTML)
-try {
-    require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
-} catch (Throwable $e) {
-    error_log('client_devices.php require error: ' . $e->getMessage());
-    jsonResponse(['error' => 'Erreur d\'initialisation'], 500);
-}
-
-// Vérifier l'authentification sans redirection HTML
-if (empty($_SESSION['user_id'])) {
-    jsonResponse(['error' => 'Non authentifié'], 401);
-}
-
-// Vérifier que la connexion existe
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    jsonResponse(['error' => 'Connexion base de données manquante'], 500);
-}
+initApi();
+requireApiAuth();
+$pdo = requirePdoConnection();
 
 $clientId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
@@ -114,8 +79,8 @@ try {
     
 } catch (PDOException $e) {
     error_log('client_devices.php SQL error: ' . $e->getMessage());
-    jsonResponse(['error' => 'Erreur de base de données'], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
 } catch (Throwable $e) {
     error_log('client_devices.php error: ' . $e->getMessage());
-    jsonResponse(['error' => 'Erreur inattendue'], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
 }

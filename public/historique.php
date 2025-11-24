@@ -234,12 +234,25 @@ try {
 } catch (PDOException $e) {
     $dbError = 'Impossible de charger l\'historique pour le moment.';
     // Log détaillé pour le débogage
+    $errorDetails = [
+        'message' => $e->getMessage(),
+        'code' => $e->getCode(),
+        'sql' => $sql,
+        'params' => $params,
+        'searchUser' => $searchUser,
+        'rawUser' => $rawUser ?? '',
+    ];
+    
     error_log('❌ ERREUR SQL (historique): ' . $e->getMessage());
     error_log('❌ Code erreur: ' . $e->getCode());
     error_log('❌ SQL: ' . $sql);
     error_log('❌ Params: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
     error_log('❌ SearchUser: ' . $searchUser);
     error_log('❌ Stack trace: ' . $e->getTraceAsString());
+    
+    // AFFICHAGE TEMPORAIRE POUR DÉBOGAGE (à retirer en production)
+    $dbError .= ' [DEBUG: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . ']';
+    
     $historique = [];
 }
 
@@ -409,6 +422,17 @@ function formatAction(?string $action): string {
                         <td colspan="5" class="aucun" role="alert">
                             <span class="error-icon" aria-hidden="true">⚠</span>
                             <?= h($dbError) ?>
+                            <?php if (isset($errorDetails)): ?>
+                                <div style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; font-size: 0.85rem; text-align: left; max-width: 800px; margin-left: auto; margin-right: auto;">
+                                    <strong>Détails de l'erreur (DEBUG):</strong><br>
+                                    <strong>Message:</strong> <?= h($errorDetails['message']) ?><br>
+                                    <strong>Code:</strong> <?= h((string)$errorDetails['code']) ?><br>
+                                    <strong>SearchUser:</strong> <?= h($errorDetails['searchUser']) ?><br>
+                                    <strong>RawUser:</strong> <?= h($errorDetails['rawUser']) ?><br>
+                                    <strong>SQL:</strong> <code style="word-break: break-all;"><?= h($errorDetails['sql']) ?></code><br>
+                                    <strong>Params:</strong> <code><?= h(json_encode($errorDetails['params'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></code>
+                                </div>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php elseif (empty($historique)): ?>

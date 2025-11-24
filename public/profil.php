@@ -469,8 +469,8 @@ $currentUserInfo = safeFetch($pdo,
 
 // Utilisateurs en ligne (activité récente dans les 5 dernières minutes)
 // Utilise le champ last_activity si disponible, sinon utilise date_modification comme fallback
-$onlineUsers = safeFetchColumn($pdo, "
-    SELECT COUNT(DISTINCT id)
+$onlineUsersList = safeFetchAll($pdo, "
+    SELECT id, nom, prenom, Email, Emploi, last_activity
     FROM utilisateurs
     WHERE statut = 'actif'
     AND (
@@ -478,7 +478,10 @@ $onlineUsers = safeFetchColumn($pdo, "
         OR 
         (last_activity IS NULL AND date_modification >= DATE_SUB(NOW(), INTERVAL 5 MINUTE))
     )
-", [], 0, 'online_users_count');
+    ORDER BY nom ASC, prenom ASC
+", [], 'online_users_list');
+
+$onlineUsers = count($onlineUsersList);
 
 $filtersActive = ($search !== '' || ($status !== '' && in_array($status, ['actif', 'inactif'], true)) || ($role !== '' && in_array($role, $ROLES, true)));
 
@@ -665,6 +668,119 @@ function decode_msg($row) {
         .link-reset:hover {
             color: var(--accent-primary);
         }
+
+        /* Tooltip utilisateurs en ligne */
+        .online-users-wrapper {
+            position: relative;
+        }
+        .online-count {
+            cursor: help;
+            transition: opacity 0.2s ease;
+        }
+        .online-count:hover {
+            opacity: 0.8;
+        }
+        .online-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            width: 280px;
+            max-width: 90vw;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            padding: 12px;
+            z-index: 50;
+            display: none;
+            animation: tooltipFadeIn 0.2s ease;
+        }
+        @keyframes tooltipFadeIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(4px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+        .online-users-wrapper:hover .online-tooltip,
+        .online-tooltip:hover {
+            display: block;
+        }
+        .tooltip-header {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .tooltip-header strong {
+            font-size: 13px;
+            color: var(--text-primary);
+        }
+        .tooltip-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .tooltip-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .tooltip-list::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+        .tooltip-list::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 2px;
+        }
+        .tooltip-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 12px;
+        }
+        .tooltip-item + .tooltip-item {
+            border-top: 1px solid var(--bg-secondary);
+        }
+        .tooltip-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .tooltip-role {
+            font-size: 11px;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            padding: 2px 6px;
+            border-radius: 999px;
+        }
+        /* Flèche du tooltip */
+        .online-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid var(--bg-primary);
+        }
+        .online-tooltip::before {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-top: 7px solid var(--border-color);
+            margin-top: 1px;
+        }
     </style>
 </head>
 <body>
@@ -784,8 +900,26 @@ function decode_msg($row) {
         </div>
         <div class="meta-card">
             <span class="meta-label">En ligne</span>
-            <strong class="meta-value" style="color: #16a34a;"><?= h((string)$onlineUsers) ?></strong>
-            <span class="meta-sub">Dernières 5 min</span>
+            <div class="online-users-wrapper" style="position: relative;">
+                <strong class="meta-value online-count" style="color: #16a34a; cursor: help;" 
+                        id="onlineCount" aria-describedby="onlineTooltip"><?= h((string)$onlineUsers) ?></strong>
+                <span class="meta-sub">Dernières 5 min</span>
+                <?php if ($onlineUsers > 0): ?>
+                <div class="online-tooltip" id="onlineTooltip" role="tooltip" aria-hidden="true">
+                    <div class="tooltip-header">
+                        <strong>Utilisateurs connectés (<?= $onlineUsers ?>)</strong>
+                    </div>
+                    <div class="tooltip-list">
+                        <?php foreach ($onlineUsersList as $onlineUser): ?>
+                            <div class="tooltip-item">
+                                <span class="tooltip-name"><?= h($onlineUser['prenom'] . ' ' . $onlineUser['nom']) ?></span>
+                                <span class="tooltip-role"><?= h($onlineUser['Emploi']) ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
         </div>
     </section>
 
