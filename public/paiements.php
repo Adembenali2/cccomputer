@@ -62,6 +62,42 @@ for ($i = 1; $i <= 10; $i++) {
         $totalYearAmount += $totalAmount;
     }
     
+    // Générer les factures (période du 20 au 20)
+    // La facture est générée le 20 de chaque mois pour la période du 20 du mois précédent au 20 du mois actuel
+    $invoices = [];
+    for ($m = 11; $m >= 0; $m--) {
+        $invoiceMonth = date('Y-m', strtotime("-$m months"));
+        // Date de facturation : le 20 du mois
+        $invoiceDate = date('Y-m-20', strtotime($invoiceMonth . '-01'));
+        // Période : du 20 du mois précédent au 20 du mois actuel
+        $periodStart = date('Y-m-20', strtotime($invoiceMonth . '-01 -1 month'));
+        $periodEnd = date('Y-m-20', strtotime($invoiceMonth . '-01'));
+        // Date d'échéance : le 20 du mois suivant
+        $dueDate = date('Y-m-20', strtotime($invoiceMonth . '-01 +1 month'));
+        
+        // Trouver la consommation pour cette période (du 20 au 20)
+        $invoiceConsumption = $monthlyConsumption[11 - $m] ?? null;
+        
+        if ($invoiceConsumption) {
+            $invoiceNumber = 'FAC-' . date('Ymd', strtotime($invoiceDate)) . '-' . str_pad($i, 5, '0', STR_PAD_LEFT);
+            
+            $invoices[] = [
+                'invoice_number' => $invoiceNumber,
+                'invoice_date' => $invoiceDate,
+                'due_date' => $dueDate,
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
+                'nb_pages' => $invoiceConsumption['nb']['pages'],
+                'nb_amount' => $invoiceConsumption['nb']['amount'],
+                'color_pages' => $invoiceConsumption['color']['pages'],
+                'color_amount' => $invoiceConsumption['color']['amount'],
+                'total_pages' => $invoiceConsumption['total']['pages'],
+                'total_amount' => $invoiceConsumption['total']['amount'],
+                'status' => (strtotime($dueDate) < time()) ? 'overdue' : (rand(0, 1) ? 'paid' : 'pending')
+            ];
+        }
+    }
+    
     $clientsData[] = [
         'id' => $i,
         'name' => $clientNames[$i - 1] ?? "Client $i",
@@ -73,7 +109,8 @@ for ($i = 1; $i <= 10; $i++) {
             'total' => round($totalYearAmount, 2)
         ],
         'pending_amount' => round(rand(100, 2000), 2),
-        'status' => rand(0, 1) ? 'paid' : 'pending'
+        'status' => rand(0, 1) ? 'paid' : 'pending',
+        'invoices' => $invoices
     ];
 }
 
@@ -796,9 +833,124 @@ if (empty($_SESSION['csrf_token'])) {
                 </div>
             `;
 
+            // Section Factures
+            html += `
+                <div class="detail-invoices-section">
+                    <h4>Factures</h4>
+                    <div class="invoices-list">
+            `;
+            
+            if (client.invoices && client.invoices.length > 0) {
+                client.invoices.forEach(invoice => {
+                    const invoiceDate = new Date(invoice.invoice_date);
+                    const dueDate = new Date(invoice.due_date);
+                    const periodStart = new Date(invoice.period_start);
+                    const periodEnd = new Date(invoice.period_end);
+                    
+                    let statusClass = 'invoice-status-';
+                    let statusText = '';
+                    if (invoice.status === 'paid') {
+                        statusClass += 'paid';
+                        statusText = '✓ Payée';
+                    } else if (invoice.status === 'overdue') {
+                        statusClass += 'overdue';
+                        statusText = '⚠ En retard';
+                    } else {
+                        statusClass += 'pending';
+                        statusText = '⏳ En attente';
+                    }
+                    
+                    html += `
+                        <div class="invoice-item">
+                            <div class="invoice-header">
+                                <div class="invoice-info">
+                                    <span class="invoice-number"><strong>${invoice.invoice_number}</strong></span>
+                                    <span class="invoice-date">Date: ${invoiceDate.toLocaleDateString('fr-FR')}</span>
+                                    <span class="invoice-period">Période: ${periodStart.toLocaleDateString('fr-FR')} - ${periodEnd.toLocaleDateString('fr-FR')}</span>
+                                </div>
+                                <div class="invoice-actions">
+                                    <span class="invoice-status ${statusClass}">${statusText}</span>
+                                    <button class="btn-download-invoice" data-invoice-id="${invoice.invoice_number}" data-client-id="${client.id}">
+                                        📥 Télécharger
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="invoice-details">
+                                <div class="invoice-detail-row">
+                                    <span>NB: ${invoice.nb_pages.toLocaleString('fr-FR')} pages</span>
+                                    <span class="invoice-amount">${invoice.nb_amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
+                                </div>
+                                <div class="invoice-detail-row">
+                                    <span>Couleur: ${invoice.color_pages.toLocaleString('fr-FR')} pages</span>
+                                    <span class="invoice-amount">${invoice.color_amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
+                                </div>
+                                <div class="invoice-detail-row total">
+                                    <span><strong>Total: ${invoice.total_pages.toLocaleString('fr-FR')} pages</strong></span>
+                                    <span class="invoice-amount"><strong>${invoice.total_amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</strong></span>
+                                </div>
+                                <div class="invoice-due-date">
+                                    <span>Échéance: ${dueDate.toLocaleDateString('fr-FR')}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                html += `<p class="no-invoices">Aucune facture disponible</p>`;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+
             modalBody.innerHTML = html;
             // Afficher la section d'export avec filtres
             document.getElementById('modalExportSection').style.display = 'block';
+            
+            // Attacher les événements de téléchargement
+            document.querySelectorAll('.btn-download-invoice').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const invoiceNumber = this.dataset.invoiceId;
+                    const clientId = parseInt(this.dataset.clientId);
+                    downloadInvoice(clientId, invoiceNumber);
+                });
+            });
+        }
+        
+        // Fonction pour télécharger une facture
+        function downloadInvoice(clientId, invoiceNumber) {
+            const client = clientsDataJS.find(c => c.id === clientId);
+            if (!client) {
+                alert('Client introuvable');
+                return;
+            }
+            
+            const invoice = client.invoices.find(inv => inv.invoice_number === invoiceNumber);
+            if (!invoice) {
+                alert('Facture introuvable');
+                return;
+            }
+            
+            // Créer un document Excel pour la facture
+            const invoiceData = [{
+                'Numéro Facture': invoice.invoice_number,
+                'Date Facture': new Date(invoice.invoice_date).toLocaleDateString('fr-FR'),
+                'Période Début': new Date(invoice.period_start).toLocaleDateString('fr-FR'),
+                'Période Fin': new Date(invoice.period_end).toLocaleDateString('fr-FR'),
+                'Échéance': new Date(invoice.due_date).toLocaleDateString('fr-FR'),
+                'Client': client.name,
+                'Numéro Client': client.numero_client,
+                'NB - Pages': invoice.nb_pages,
+                'NB - Montant (€)': invoice.nb_amount,
+                'Couleur - Pages': invoice.color_pages,
+                'Couleur - Montant (€)': invoice.color_amount,
+                'Total Pages': invoice.total_pages,
+                'Total Montant (€)': invoice.total_amount,
+                'Statut': invoice.status === 'paid' ? 'Payée' : (invoice.status === 'overdue' ? 'En retard' : 'En attente')
+            }];
+            
+            exportToExcel(invoiceData, `${invoice.invoice_number}.xlsx`);
         }
 
         // Fermeture de la modal

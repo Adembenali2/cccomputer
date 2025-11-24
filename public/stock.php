@@ -486,15 +486,21 @@ $sectionImages = [
 // S'assurer que le DOM est chargé avant d'exécuter les scripts
 (function(){
   function initStockScripts() {
+    console.log('Initialisation des scripts stock...');
     initFilter();
     initDetailModal();
     initAddModal();
+    console.log('Scripts stock initialisés');
   }
 
+  // Attendre que le DOM soit complètement chargé
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initStockScripts);
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(initStockScripts, 100); // Petit délai pour s'assurer que tout est prêt
+    });
   } else {
-    initStockScripts();
+    // Si le DOM est déjà chargé, attendre un peu quand même
+    setTimeout(initStockScripts, 100);
   }
 
 /* ===== Filtre + réordonnancement ===== */
@@ -648,6 +654,17 @@ function initDetailModal(){
   const grid    = document.getElementById('detailGrid');
   const titleEl = document.getElementById('modalTitle');
 
+  if (!overlay || !modal || !close || !grid || !titleEl) {
+    console.error('Éléments de la modale de détails manquants:', {
+      overlay: !!overlay,
+      modal: !!modal,
+      close: !!close,
+      grid: !!grid,
+      titleEl: !!titleEl
+    });
+    return;
+  }
+
   let lastFocused = null;
   function focusFirst(){
     const f = modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
@@ -666,18 +683,22 @@ function initDetailModal(){
     lastFocused = document.activeElement;
     document.body.classList.add('modal-open');
     overlay.setAttribute('aria-hidden','false');
-    overlay.style.display='block'; modal.style.display='block';
-    document.addEventListener('keydown', onKeydown); focusFirst();
+    overlay.style.display='block'; 
+    modal.style.display='block';
+    document.addEventListener('keydown', onKeydown); 
+    focusFirst();
   }
   function closeFn(){
     document.body.classList.remove('modal-open');
     overlay.setAttribute('aria-hidden','true');
-    overlay.style.display='none'; modal.style.display='none';
+    overlay.style.display='none'; 
+    modal.style.display='none';
     document.removeEventListener('keydown', onKeydown);
     if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
   }
-  close.addEventListener('click', closeFn);
-  overlay.addEventListener('click', closeFn);
+  
+  if (close) close.addEventListener('click', closeFn);
+  if (overlay) overlay.addEventListener('click', closeFn);
 
   function renderDetails(type, row){
     grid.innerHTML = '';
@@ -739,35 +760,70 @@ function initDetailModal(){
   }
 
   // Rendre toutes les lignes cliquables (toners, papier, lcd, pc)
-  document.querySelectorAll('.click-rows tbody tr[data-type][data-id]').forEach(tr=>{
+  const clickableRows = document.querySelectorAll('.click-rows tbody tr[data-type][data-id]');
+  console.log('Lignes cliquables trouvées:', clickableRows.length);
+  
+  clickableRows.forEach(tr=>{
     tr.style.cursor = 'pointer';
     tr.tabIndex = 0;
     tr.setAttribute('role', 'button');
     tr.setAttribute('aria-label', 'Afficher les détails');
     
-    tr.addEventListener('click', (e)=>{
+    tr.addEventListener('click', function(e){
       // Ne pas ouvrir si l'utilisateur est en train de sélectionner du texte
-      if (window.getSelection && String(window.getSelection())) return;
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length > 0) {
+        return;
+      }
+      
+      // Empêcher la propagation si on clique sur un bouton ou un lien
+      if (e.target.closest('button, a, input, select')) {
+        return;
+      }
+      
+      e.preventDefault();
+      e.stopPropagation();
       
       const type = tr.getAttribute('data-type');
       const id   = tr.getAttribute('data-id');
-      const rows = (DATASETS[type]||[]);
-      const row  = rows.find(r=>String(r.id)===String(id));
-      if (!row) {
-        console.warn('Ligne non trouvée dans le dataset:', {type, id});
+      
+      console.log('Clic sur ligne:', {type, id, datasets: Object.keys(DATASETS)});
+      
+      if (!type || !id) {
+        console.warn('Type ou ID manquant:', {type, id});
         return;
       }
+      
+      const rows = (DATASETS[type]||[]);
+      console.log('Dataset pour type', type, ':', rows.length, 'éléments');
+      
+      const row  = rows.find(r=>String(r.id)===String(id));
+      if (!row) {
+        console.warn('Ligne non trouvée dans le dataset:', {type, id, availableIds: rows.map(r=>r.id)});
+        return;
+      }
+      
+      console.log('Ouverture modale pour:', type, row);
       renderDetails(type, row); 
       open();
     });
     
-    tr.addEventListener('keydown', (e)=>{
+    tr.addEventListener('keydown', function(e){
       if (e.key === 'Enter' || e.key === ' ') { 
         e.preventDefault(); 
+        e.stopPropagation();
         tr.click(); 
       }
     });
   });
+  
+  // Si aucune ligne n'est trouvée, essayer une approche alternative
+  if (clickableRows.length === 0) {
+    console.warn('Aucune ligne cliquable trouvée avec .click-rows tbody tr[data-type][data-id]');
+    // Essayer de trouver toutes les lignes avec data-type et data-id
+    const allRows = document.querySelectorAll('tbody tr[data-type][data-id]');
+    console.log('Lignes avec data-type et data-id trouvées:', allRows.length);
+  }
 })();
 }
 
