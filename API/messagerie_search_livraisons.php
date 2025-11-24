@@ -13,9 +13,15 @@ if (empty($query) || strlen($query) < 1) {
 
 try {
     // Vérifier que la table livraisons existe
-    $checkTable = $pdo->prepare("SHOW TABLES LIKE :table");
+    // Note: SHOW TABLES LIKE ne supporte pas les paramètres liés, on utilise INFORMATION_SCHEMA
+    $checkTable = $pdo->prepare("
+        SELECT COUNT(*) as cnt 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = :table
+    ");
     $checkTable->execute([':table' => 'livraisons']);
-    if ($checkTable->rowCount() === 0) {
+    if (((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt']) === 0) {
         jsonResponse(['ok' => true, 'results' => []]); // Retourne vide si la table n'existe pas
     }
     

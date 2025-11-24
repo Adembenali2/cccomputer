@@ -47,9 +47,16 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 
 try {
     // Vérifier si la table sav existe
-    $checkTable = $pdo->prepare("SHOW TABLES LIKE :table");
+    // Note: SHOW TABLES LIKE ne supporte pas les paramètres liés, on utilise une requête INFORMATION_SCHEMA à la place
+    $checkTable = $pdo->prepare("
+        SELECT COUNT(*) as cnt 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = :table
+    ");
     $checkTable->execute([':table' => 'sav']);
-    if ($checkTable->rowCount() === 0) {
+    $tableExists = ((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+    if (!$tableExists) {
         // Table n'existe pas encore, retourner une liste vide
         jsonResponse(['ok' => true, 'savs' => []]);
     }

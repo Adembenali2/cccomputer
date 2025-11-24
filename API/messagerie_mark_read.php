@@ -61,9 +61,15 @@ if ($messageId <= 0) {
 
 try {
     // Vérifier si la table messagerie existe
-    $checkTable = $pdo->prepare("SHOW TABLES LIKE :table");
+    // Note: SHOW TABLES LIKE ne supporte pas les paramètres liés, on utilise INFORMATION_SCHEMA
+    $checkTable = $pdo->prepare("
+        SELECT COUNT(*) as cnt 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = :table
+    ");
     $checkTable->execute([':table' => 'messagerie']);
-    if ($checkTable->rowCount() === 0) {
+    if (((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt']) === 0) {
         jsonResponse(['ok' => false, 'error' => 'La table de messagerie n\'existe pas.'], 500);
     }
     
@@ -88,9 +94,14 @@ try {
         // Message "à tous" : utiliser la table de lectures
         try {
             // Vérifier si la table existe
-            $checkLectures = $pdo->prepare("SHOW TABLES LIKE :table");
+            $checkLectures = $pdo->prepare("
+                SELECT COUNT(*) as cnt 
+                FROM INFORMATION_SCHEMA.TABLES 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = :table
+            ");
             $checkLectures->execute([':table' => 'messagerie_lectures']);
-            if ($checkLectures->rowCount() > 0) {
+            if (((int)$checkLectures->fetch(PDO::FETCH_ASSOC)['cnt']) > 0) {
                 $insert = $pdo->prepare("
                     INSERT IGNORE INTO messagerie_lectures (id_message, id_utilisateur, date_lecture)
                     VALUES (:id_message, :user_id, NOW())
