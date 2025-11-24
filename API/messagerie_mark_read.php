@@ -23,10 +23,8 @@ function jsonResponse(array $data, int $statusCode = 200): void {
 }
 
 try {
-    // Démarrer la session AVANT tout
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
-    }
+    // Inclure session_config.php EN PREMIER (il démarre la session si nécessaire)
+    // session_config.php configure les paramètres de session AVANT de démarrer la session
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/db.php';
 } catch (Throwable $e) {

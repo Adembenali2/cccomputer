@@ -73,12 +73,8 @@ register_shutdown_function(function() {
 });
 
 try {
-    // Démarrer la session AVANT tout (sans générer de sortie)
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        @session_start();
-    }
-    
-    // Inclure les fichiers nécessaires (en vérifiant qu'ils n'ont pas de sortie)
+    // Inclure session_config.php EN PREMIER (il démarre la session si nécessaire)
+    // session_config.php configure les paramètres de session AVANT de démarrer la session
     $outputBefore = ob_get_contents();
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/db.php';
