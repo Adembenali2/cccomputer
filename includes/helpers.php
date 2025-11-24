@@ -14,13 +14,26 @@ if (!function_exists('h')) {
 
 /**
  * Valide et nettoie un email
+ * Retourne l'email nettoyé si valide, sinon lance une exception
  */
-function validateEmail(string $email): string {
-    $email = trim($email);
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        throw new InvalidArgumentException('Email invalide');
+if (!function_exists('validateEmail')) {
+    function validateEmail(string $email): string {
+        $email = trim($email);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException('Email invalide');
+        }
+        return $email;
     }
-    return $email;
+}
+
+/**
+ * Valide un email (version bool pour compatibilité)
+ * Utilisée dans clients.php pour validation simple
+ */
+if (!function_exists('validateEmailBool')) {
+    function validateEmailBool(string $email): bool {
+        return (bool)filter_var(trim($email), FILTER_VALIDATE_EMAIL);
+    }
 }
 
 /**
@@ -55,15 +68,17 @@ if (!function_exists('validateString')) {
 /**
  * Formate une date pour l'affichage
  */
-function formatDate(?string $date, string $format = 'd/m/Y'): string {
-    if (!$date) {
-        return '—';
-    }
-    try {
-        $dt = new DateTime($date);
-        return $dt->format($format);
-    } catch (Exception $e) {
-        return $date;
+if (!function_exists('formatDate')) {
+    function formatDate(?string $date, string $format = 'd/m/Y'): string {
+        if (!$date) {
+            return '—';
+        }
+        try {
+            $dt = new DateTime($date);
+            return $dt->format($format);
+        } catch (Exception $e) {
+            return $date;
+        }
     }
 }
 
@@ -82,53 +97,61 @@ if (!function_exists('ensureCsrfToken')) {
 /**
  * Vérifie le token CSRF
  */
-function verifyCsrfToken(?string $token = null): bool {
-    $token = $token ?? ($_POST['csrf_token'] ?? $_GET['csrf_token'] ?? '');
-    $sessionToken = $_SESSION['csrf_token'] ?? '';
-    return !empty($token) && !empty($sessionToken) && hash_equals($sessionToken, $token);
+if (!function_exists('verifyCsrfToken')) {
+    function verifyCsrfToken(?string $token = null): bool {
+        $token = $token ?? ($_POST['csrf_token'] ?? $_GET['csrf_token'] ?? '');
+        $sessionToken = $_SESSION['csrf_token'] ?? '';
+        return !empty($token) && !empty($sessionToken) && hash_equals($sessionToken, $token);
+    }
 }
 
 /**
  * Requête SQL sécurisée avec gestion d'erreurs
  */
-function safeFetchAll(PDO $pdo, string $sql, array $params = [], string $context = 'query'): array {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return is_array($rows) ? $rows : [];
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return [];
+if (!function_exists('safeFetchAll')) {
+    function safeFetchAll(PDO $pdo, string $sql, array $params = [], string $context = 'query'): array {
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return is_array($rows) ? $rows : [];
+        } catch (PDOException $e) {
+            error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+            return [];
+        }
     }
 }
 
 /**
  * Requête SQL sécurisée pour une seule ligne
  */
-function safeFetch(PDO $pdo, string $sql, array $params = [], string $context = 'query'): ?array {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row !== false ? $row : null;
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return null;
+if (!function_exists('safeFetch')) {
+    function safeFetch(PDO $pdo, string $sql, array $params = [], string $context = 'query'): ?array {
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $row !== false ? $row : null;
+        } catch (PDOException $e) {
+            error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+            return null;
+        }
     }
 }
 
 /**
  * Requête SQL sécurisée pour une valeur unique
  */
-function safeFetchColumn(PDO $pdo, string $sql, array $params = [], $default = null, string $context = 'query') {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchColumn() ?: $default;
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return $default;
+if (!function_exists('safeFetchColumn')) {
+    function safeFetchColumn(PDO $pdo, string $sql, array $params = [], $default = null, string $context = 'query') {
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchColumn() ?: $default;
+        } catch (PDOException $e) {
+            error_log("Erreur SQL ({$context}) : " . $e->getMessage());
+            return $default;
+        }
     }
 }
 

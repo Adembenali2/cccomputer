@@ -24,9 +24,9 @@ function currentUserId(): ?int {
     if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
     return null;
 }
-function validateEmail(string $email): bool {
-    return (bool)filter_var($email, FILTER_VALIDATE_EMAIL);
-}
+// La fonction validateEmailBool() est définie dans includes/helpers.php
+// Utiliser validateEmailBool() pour validation simple (retourne bool)
+// ou validateEmail() pour validation stricte (retourne string, lance exception)
 function validatePhone(?string $phone): bool {
     if ($phone === null || $phone === '') return true;
     return (bool)preg_match(PHONE_PATTERN, $phone);
@@ -119,7 +119,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     if ($telephone1==='')       $errors[]="Le téléphone est obligatoire.";
     if ($email==='')            $errors[]="L'email est obligatoire.";
     if ($siret==='')            $errors[]="Le SIRET est obligatoire.";
-    if ($email && !validateEmail($email)) $errors[] = "L'email est invalide.";
+    if ($email && !validateEmailBool($email)) $errors[] = "L'email est invalide.";
     if ($telephone1 && !validatePhone($telephone1)) $errors[] = "Le téléphone doit contenir au moins 6 caractères valides.";
     if ($telephone2 && !validatePhone($telephone2)) $errors[] = "Le téléphone 2 doit contenir au moins 6 caractères valides.";
     if ($code_postal && !validatePostalCode($code_postal)) $errors[] = "Code postal invalide.";

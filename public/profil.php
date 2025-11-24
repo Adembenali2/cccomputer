@@ -37,29 +37,7 @@ function sanitizeSearch(?string $value): string {
     return $value;
 }
 
-function safeFetchAll(PDO $pdo, string $sql, array $params = [], string $context = 'query'): array {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return is_array($rows) ? $rows : [];
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return [];
-    }
-}
-
-function safeFetch(PDO $pdo, string $sql, array $params = [], string $context = 'query'): ?array {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row !== false ? $row : null;
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return null;
-    }
-}
+// Les fonctions safeFetchAll() et safeFetch() sont définies dans includes/helpers.php
 
 function validateTelephone(?string $tel): bool {
     if ($tel === null || $tel === '') {

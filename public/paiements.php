@@ -4,8 +4,7 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
-
-// La fonction h() est définie dans includes/helpers.php
+require_once __DIR__ . '/../includes/helpers.php';
 
 // Données factices pour le développement
 // TODO: Remplacer par des requêtes à la base de données
@@ -617,7 +616,12 @@ if (empty($_SESSION['csrf_token'])) {
         let consumptionChart;
         const ctx = document.getElementById('consumptionChart');
         
+        if (!ctx) {
+            console.error('Canvas element not found');
+        }
+        
         function initChart(period = 'monthly') {
+            if (!ctx) return;
             const data = chartData[period];
             let labels, nbPagesData, colorPagesData, amountData;
             
@@ -738,10 +742,14 @@ if (empty($_SESSION['csrf_token'])) {
         });
         
         // Initialiser avec les données mensuelles
-        initChart('monthly');
+        if (ctx) {
+            initChart('monthly');
+        }
         
         // Recherche de clients
-        document.getElementById('clientSearch').addEventListener('input', function() {
+        const clientSearchEl = document.getElementById('clientSearch');
+        if (clientSearchEl) {
+            clientSearchEl.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase().trim();
             document.querySelectorAll('.client-card').forEach(card => {
                 const name = card.dataset.clientName || '';
@@ -752,18 +760,8 @@ if (empty($_SESSION['csrf_token'])) {
                     card.style.display = 'none';
                 }
             });
-        });
-        
-        // Mise à jour du montant dû lors de la sélection d'un client
-        document.getElementById('paymentClient').addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            const pendingAmount = selectedOption.dataset.pending || '0.00';
-            document.getElementById('pendingAmount').textContent = parseFloat(pendingAmount).toLocaleString('fr-FR', { 
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 2 
             });
-            document.getElementById('paymentAmount').value = pendingAmount;
-        });
+        }
         
         // Filtres de l'historique
         function filterHistory() {
@@ -781,11 +779,15 @@ if (empty($_SESSION['csrf_token'])) {
             });
         }
         
-        document.getElementById('historyClientFilter').addEventListener('change', filterHistory);
-        document.getElementById('historyStatusFilter').addEventListener('change', filterHistory);
+        const historyClientFilter = document.getElementById('historyClientFilter');
+        const historyStatusFilter = document.getElementById('historyStatusFilter');
+        if (historyClientFilter) historyClientFilter.addEventListener('change', filterHistory);
+        if (historyStatusFilter) historyStatusFilter.addEventListener('change', filterHistory);
         
         // Gestion de l'affichage conditionnel des champs selon le type de paiement
-        document.getElementById('paymentType').addEventListener('change', function() {
+        const paymentTypeEl = document.getElementById('paymentType');
+        if (paymentTypeEl) {
+            paymentTypeEl.addEventListener('change', function() {
             const paymentType = this.value;
             const ibanGroup = document.getElementById('ibanGroup');
             const justificatifGroup = document.getElementById('justificatifGroup');
@@ -808,20 +810,26 @@ if (empty($_SESSION['csrf_token'])) {
                 justificatifInput.setAttribute('required', 'required');
             }
             // Espèces : aucun champ supplémentaire requis
-        });
+            });
+        }
 
         // Mise à jour du montant dû quand on sélectionne un client
-        document.getElementById('paymentClient').addEventListener('change', function() {
+        const paymentClientEl = document.getElementById('paymentClient');
+        if (paymentClientEl) {
+            paymentClientEl.addEventListener('change', function() {
             const selectedOption = this.options[this.selectedIndex];
             const pending = selectedOption ? parseFloat(selectedOption.dataset.pending || 0) : 0;
             document.getElementById('pendingAmount').textContent = pending.toLocaleString('fr-FR', { 
                 minimumFractionDigits: 2, 
                 maximumFractionDigits: 2 
             });
-        });
+            });
+        }
 
         // Gestion du formulaire de paiement
-        document.getElementById('paymentForm').addEventListener('submit', function(e) {
+        const paymentFormEl = document.getElementById('paymentForm');
+        if (paymentFormEl) {
+            paymentFormEl.addEventListener('submit', function(e) {
             e.preventDefault();
             
             const errorDiv = document.getElementById('paymentError');
@@ -909,7 +917,8 @@ if (empty($_SESSION['csrf_token'])) {
                 errorDiv.textContent = 'Erreur de communication avec le serveur';
                 errorDiv.style.display = 'block';
             });
-        });
+            });
+        }
 
         // Gestion de la modal "Voir les détails"
         const clientsDataJS = <?= json_encode($clientsData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;

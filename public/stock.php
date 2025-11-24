@@ -13,18 +13,7 @@ function stateBadge(?string $etat): string {
   return '<span class="state state-'.$e.'">'.$e.'</span>';
 }
 
-// Helper pour requêtes sécurisées
-function safeFetchAll(PDO $pdo, string $sql, array $params = [], string $context = 'query'): array {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return is_array($rows) ? $rows : [];
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return [];
-    }
-}
+// La fonction safeFetchAll() est définie dans includes/helpers.php
 
 // Gestion des messages flash
 $flash = $_SESSION['flash'] ?? null;
