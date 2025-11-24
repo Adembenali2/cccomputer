@@ -56,6 +56,24 @@ try {
         exit;
     }
 
+    // Récupérer les mentions (@username)
+    $mentions = [];
+    if (!empty($data['mentions']) && is_array($data['mentions'])) {
+        $mentions = array_filter(array_map('intval', $data['mentions']));
+    }
+
+    // Récupérer le lien (client/SAV/livraison)
+    $typeLien = null;
+    $idLien = null;
+    if (!empty($data['type_lien']) && in_array($data['type_lien'], ['client', 'livraison', 'sav'], true)) {
+        $typeLien = $data['type_lien'];
+        $idLien = isset($data['id_lien']) ? (int)$data['id_lien'] : null;
+        if ($idLien <= 0) {
+            $idLien = null;
+            $typeLien = null;
+        }
+    }
+
     // Vérifier que la table existe
     $tableExists = false;
     try {
@@ -71,18 +89,87 @@ try {
         exit;
     }
 
+    // Préparer les mentions en JSON
+    $mentionsJson = !empty($mentions) ? json_encode($mentions) : null;
+
     // Insérer le message
     $stmt = $pdo->prepare("
-        INSERT INTO chatroom_messages (id_user, message, date_envoi)
-        VALUES (:id_user, :message, NOW())
+        INSERT INTO chatroom_messages (id_user, message, date_envoi, mentions, type_lien, id_lien)
+        VALUES (:id_user, :message, NOW(), :mentions, :type_lien, :id_lien)
     ");
 
     $stmt->execute([
         ':id_user' => $userId,
-        ':message' => $message
+        ':message' => $message,
+        ':mentions' => $mentionsJson,
+        ':type_lien' => $typeLien,
+        ':id_lien' => $idLien
     ]);
 
     $messageId = (int)$pdo->lastInsertId();
+
+    // Créer les notifications pour les utilisateurs mentionnés
+    if (!empty($mentions)) {
+        try {
+            $notifTableExists = false;
+            $checkNotifTable = $pdo->query("SHOW TABLES LIKE 'chatroom_notifications'");
+            $notifTableExists = $checkNotifTable->rowCount() > 0;
+
+            if ($notifTableExists) {
+                $notifStmt = $pdo->prepare("
+                    INSERT INTO chatroom_notifications (id_user, id_message, type, lu, date_creation)
+                    VALUES (:id_user, :id_message, 'mention', 0, NOW())
+                ");
+                foreach ($mentions as $mentionedUserId) {
+                    if ($mentionedUserId != $userId) { // Ne pas se notifier soi-même
+                        $notifStmt->execute([
+                            ':id_user' => $mentionedUserId,
+                            ':id_message' => $messageId
+                        ]);
+                    }
+                }
+            }
+        } catch (PDOException $e) {
+            error_log('chatroom_send.php - Erreur création notifications: ' . $e->getMessage());
+            // On continue même si les notifications échouent
+        }
+    }
+
+    // Créer une notification pour tous les utilisateurs (nouveau message dans la chatroom)
+    // Sauf pour l'expéditeur et les utilisateurs déjà mentionnés
+    try {
+        $notifTableExists = false;
+        $checkNotifTable = $pdo->query("SHOW TABLES LIKE 'chatroom_notifications'");
+        $notifTableExists = $checkNotifTable->rowCount() > 0;
+
+        if ($notifTableExists) {
+            $excludeUsers = array_merge([$userId], $mentions);
+            $placeholders = implode(',', array_fill(0, count($excludeUsers), '?'));
+            
+            $allUsersStmt = $pdo->prepare("
+                SELECT id FROM utilisateurs 
+                WHERE statut = 'actif' AND id NOT IN ($placeholders)
+            ");
+            $allUsersStmt->execute($excludeUsers);
+            $allUsers = $allUsersStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            if (!empty($allUsers)) {
+                $notifStmt = $pdo->prepare("
+                    INSERT INTO chatroom_notifications (id_user, id_message, type, lu, date_creation)
+                    VALUES (:id_user, :id_message, 'message', 0, NOW())
+                ");
+                foreach ($allUsers as $notifyUserId) {
+                    $notifStmt->execute([
+                        ':id_user' => $notifyUserId,
+                        ':id_message' => $messageId
+                    ]);
+                }
+            }
+        }
+    } catch (PDOException $e) {
+        error_log('chatroom_send.php - Erreur création notifications générales: ' . $e->getMessage());
+        // On continue même si les notifications échouent
+    }
 
     // Récupérer les informations complètes du message pour la réponse
     $stmt = $pdo->prepare("
@@ -91,6 +178,9 @@ try {
             m.id_user,
             m.message,
             m.date_envoi,
+            m.mentions,
+            m.type_lien,
+            m.id_lien,
             u.nom,
             u.prenom,
             u.Emploi
@@ -108,6 +198,55 @@ try {
         exit;
     }
 
+    // Récupérer les infos du lien si présent
+    $lienInfo = null;
+    if ($messageData['type_lien'] && $messageData['id_lien']) {
+        try {
+            if ($messageData['type_lien'] === 'client') {
+                $lienStmt = $pdo->prepare("SELECT id, raison_sociale FROM clients WHERE id = :id LIMIT 1");
+                $lienStmt->execute([':id' => $messageData['id_lien']]);
+                $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
+                if ($lienData) {
+                    $lienInfo = [
+                        'type' => 'client',
+                        'id' => (int)$lienData['id'],
+                        'label' => $lienData['raison_sociale']
+                    ];
+                }
+            } elseif ($messageData['type_lien'] === 'livraison') {
+                $lienStmt = $pdo->prepare("SELECT id, reference FROM livraisons WHERE id = :id LIMIT 1");
+                $lienStmt->execute([':id' => $messageData['id_lien']]);
+                $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
+                if ($lienData) {
+                    $lienInfo = [
+                        'type' => 'livraison',
+                        'id' => (int)$lienData['id'],
+                        'label' => $lienData['reference']
+                    ];
+                }
+            } elseif ($messageData['type_lien'] === 'sav') {
+                $lienStmt = $pdo->prepare("SELECT id, reference FROM sav WHERE id = :id LIMIT 1");
+                $lienStmt->execute([':id' => $messageData['id_lien']]);
+                $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
+                if ($lienData) {
+                    $lienInfo = [
+                        'type' => 'sav',
+                        'id' => (int)$lienData['id'],
+                        'label' => $lienData['reference']
+                    ];
+                }
+            }
+        } catch (PDOException $e) {
+            error_log('chatroom_send.php - Erreur récupération lien: ' . $e->getMessage());
+        }
+    }
+
+    // Parser les mentions
+    $mentionsArray = [];
+    if (!empty($messageData['mentions'])) {
+        $mentionsArray = json_decode($messageData['mentions'], true) ?: [];
+    }
+
     // Formater la réponse
     echo json_encode([
         'ok' => true,
@@ -118,7 +257,9 @@ try {
             'date_envoi' => $messageData['date_envoi'],
             'user_nom' => $messageData['nom'],
             'user_prenom' => $messageData['prenom'],
-            'user_emploi' => $messageData['Emploi']
+            'user_emploi' => $messageData['Emploi'],
+            'mentions' => $mentionsArray,
+            'lien' => $lienInfo
         ]
     ]);
 

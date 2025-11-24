@@ -207,13 +207,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- BADGE MESSAGERIE (nombre de messages non lus) ---
+  // --- BADGE MESSAGERIE (nombre de messages non lus + notifications chatroom) ---
   const messagerieBadge = document.getElementById('messagerie-badge');
   if (messagerieBadge) {
     let isUpdating = false;
     let lastUpdate = 0;
-    const UPDATE_INTERVAL = 30000; // 30 secondes
-    const MIN_UPDATE_INTERVAL = 5000; // Minimum 5 secondes entre mises à jour
+    const UPDATE_INTERVAL = 10000; // 10 secondes (plus fréquent pour les notifications chatroom)
+    const MIN_UPDATE_INTERVAL = 3000; // Minimum 3 secondes entre mises à jour
     
     async function updateMessagerieBadge() {
       // Éviter les requêtes simultanées
@@ -227,25 +227,51 @@ document.addEventListener('DOMContentLoaded', () => {
       
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 secondes
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        const response = await fetch('/API/messagerie_get_unread_count.php', {
-          signal: controller.signal,
-          cache: 'no-cache',
-          credentials: 'same-origin'
-        });
+        // Récupérer les notifications de chatroom
+        let chatroomCount = 0;
+        try {
+          const chatroomResponse = await fetch('/API/chatroom_get_notifications.php', {
+            signal: controller.signal,
+            cache: 'no-cache',
+            credentials: 'same-origin'
+          });
+          if (chatroomResponse.ok) {
+            const chatroomData = await chatroomResponse.json();
+            if (chatroomData.ok) {
+              chatroomCount = chatroomData.count || 0;
+            }
+          }
+        } catch (err) {
+          // Ignorer les erreurs de chatroom (table peut ne pas exister)
+        }
+        
+        // Récupérer les messages non lus de l'ancienne messagerie
+        let oldMessagerieCount = 0;
+        try {
+          const messagerieResponse = await fetch('/API/messagerie_get_unread_count.php', {
+            signal: controller.signal,
+            cache: 'no-cache',
+            credentials: 'same-origin'
+          });
+          if (messagerieResponse.ok) {
+            const messagerieData = await messagerieResponse.json();
+            if (messagerieData.ok) {
+              oldMessagerieCount = messagerieData.count || 0;
+            }
+          }
+        } catch (err) {
+          // Ignorer les erreurs
+        }
         
         clearTimeout(timeoutId);
         
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        if (data.ok && data.count > 0) {
-          messagerieBadge.textContent = data.count > 99 ? '99+' : String(data.count);
+        const totalCount = chatroomCount + oldMessagerieCount;
+        if (totalCount > 0) {
+          messagerieBadge.textContent = totalCount > 99 ? '99+' : String(totalCount);
           messagerieBadge.style.display = 'inline-block';
-          messagerieBadge.setAttribute('aria-label', `${data.count} message${data.count > 1 ? 's' : ''} non lu${data.count > 1 ? 's' : ''}`);
+          messagerieBadge.setAttribute('aria-label', `${totalCount} notification${totalCount > 1 ? 's' : ''} non lu${totalCount > 1 ? 'es' : 'e'}`);
         } else {
           messagerieBadge.style.display = 'none';
           messagerieBadge.removeAttribute('aria-label');
@@ -254,7 +280,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (err.name !== 'AbortError') {
           console.error('Erreur mise à jour badge messagerie:', err);
         }
-        // En cas d'erreur, ne pas afficher le badge
         messagerieBadge.style.display = 'none';
       } finally {
         isUpdating = false;
