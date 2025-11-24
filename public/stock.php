@@ -237,38 +237,47 @@ $sectionImages = [
   </div>
 
   <?php if ($flash && isset($flash['type'])): ?>
-    <div class="flash <?= h($flash['type']) ?>" role="alert" style="margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 8px; background: <?= $flash['type']==='success'?'#dcfce7':'#fee2e2' ?>; color: <?= $flash['type']==='success'?'#16a34a':'#dc2626' ?>; border: 1px solid <?= $flash['type']==='success'?'#86efac':'#fecaca' ?>;">
+    <div class="flash <?= h($flash['type']) ?>" role="alert">
       <?= h($flash['msg'] ?? '') ?>
     </div>
   <?php endif; ?>
 
-  <section class="stock-meta" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; margin-bottom: 1rem;">
-    <div class="meta-card" style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem; text-align: center;">
-      <span style="display: block; font-size: .875rem; color: #6b7280; margin-bottom: .25rem;">Total Papier</span>
-      <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #111827;"><?= h((string)$totalPapier) ?></strong>
+  <section class="stock-meta">
+    <div class="meta-card" data-type="papier">
+      <div class="meta-card-icon">📄</div>
+      <span class="meta-card-label">Total Papier</span>
+      <strong class="meta-card-value"><?= h((string)$totalPapier) ?></strong>
     </div>
-    <div class="meta-card" style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem; text-align: center;">
-      <span style="display: block; font-size: .875rem; color: #6b7280; margin-bottom: .25rem;">Total Toners</span>
-      <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #111827;"><?= h((string)$totalToners) ?></strong>
+    <div class="meta-card" data-type="toners">
+      <div class="meta-card-icon">🖨️</div>
+      <span class="meta-card-label">Total Toners</span>
+      <strong class="meta-card-value"><?= h((string)$totalToners) ?></strong>
     </div>
-    <div class="meta-card" style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem; text-align: center;">
-      <span style="display: block; font-size: .875rem; color: #6b7280; margin-bottom: .25rem;">Total LCD</span>
-      <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #111827;"><?= h((string)$totalLCD) ?></strong>
+    <div class="meta-card" data-type="lcd">
+      <div class="meta-card-icon">🖥️</div>
+      <span class="meta-card-label">Total LCD</span>
+      <strong class="meta-card-value"><?= h((string)$totalLCD) ?></strong>
     </div>
-    <div class="meta-card" style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem; text-align: center;">
-      <span style="display: block; font-size: .875rem; color: #6b7280; margin-bottom: .25rem;">Total PC</span>
-      <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #111827;"><?= h((string)$totalPC) ?></strong>
+    <div class="meta-card" data-type="pc">
+      <div class="meta-card-icon">💻</div>
+      <span class="meta-card-label">Total PC</span>
+      <strong class="meta-card-value"><?= h((string)$totalPC) ?></strong>
     </div>
     <?php if ($nbStockFaible > 0): ?>
-      <div class="meta-card" style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: .75rem; text-align: center;">
-        <span style="display: block; font-size: .875rem; color: #92400e; margin-bottom: .25rem;">⚠ Stock faible</span>
-        <strong style="display: block; font-size: 1.5rem; font-weight: 700; color: #78350f;"><?= h((string)$nbStockFaible) ?></strong>
+      <div class="meta-card meta-warning" data-type="warning">
+        <div class="meta-card-icon">⚠️</div>
+        <span class="meta-card-label">Stock faible</span>
+        <strong class="meta-card-value"><?= h((string)$nbStockFaible) ?></strong>
       </div>
     <?php endif; ?>
   </section>
 
   <div class="filters-row">
-    <input type="text" id="q" placeholder="Filtrer partout (réf., modèle, SN, MAC, CPU…)" aria-label="Filtrer" />
+    <div class="search-wrapper">
+      <input type="text" id="q" placeholder="Filtrer partout (réf., modèle, SN, MAC, CPU…)" aria-label="Filtrer" />
+      <button type="button" class="search-clear-btn" id="clearSearch" aria-label="Effacer la recherche" title="Effacer">×</button>
+    </div>
+    <span class="search-results-count" id="searchResultsCount" style="display: none;"></span>
   </div>
 
   <!-- Masonry 2 colonnes -->
@@ -468,36 +477,117 @@ function initFilter(){
 (function(){
   const q = document.getElementById('q');
   const mason = document.getElementById('stockMasonry');
+  const clearBtn = document.getElementById('clearSearch');
+  const resultsCount = document.getElementById('searchResultsCount');
+  const allRows = Array.from(document.querySelectorAll('.tbl-stock tbody tr'));
 
   function visibleRowCount(section){
     const rows = section.querySelectorAll('tbody tr');
     let n = 0; rows.forEach(r => { if (r.style.display !== 'none') n++; });
     return n;
   }
+  
+  function getTotalVisibleRows() {
+    return allRows.filter(tr => tr.style.display !== 'none').length;
+  }
+  
+  function updateResultsCount() {
+    if (!resultsCount) return;
+    const visible = getTotalVisibleRows();
+    const total = allRows.length;
+    if (q && q.value.trim()) {
+      resultsCount.textContent = `${visible} / ${total} résultats`;
+      resultsCount.style.display = 'inline-block';
+    } else {
+      resultsCount.style.display = 'none';
+    }
+  }
+  
   function reorderSections(){
     const sections = Array.from(mason.querySelectorAll('.card-section'));
     const scored = sections.map((s, i)=>({el:s, score: visibleRowCount(s), idx:i}));
     scored.sort((a,b)=> b.score - a.score || a.idx - b.idx);
     scored.forEach(x => mason.appendChild(x.el));
   }
+  
   function norm(s){
     return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   }
+  
   let filterTimeout = null;
   function applyFilter(){
     const v = norm(q.value||'');
+    let visibleCount = 0;
     document.querySelectorAll('.tbl-stock tbody tr').forEach(tr=>{
       const t = norm(tr.getAttribute('data-search')||'');
-      tr.style.display = !v || t.includes(v) ? '' : 'none';
+      const isVisible = !v || t.includes(v);
+      tr.style.display = isVisible ? '' : 'none';
+      if (isVisible) visibleCount++;
     });
     reorderSections();
+    updateResultsCount();
+    
+    // Masquer les sections vides avec animation
+    document.querySelectorAll('.card-section').forEach(section => {
+      const hasVisible = section.querySelectorAll('tbody tr[style=""]').length > 0;
+      if (!hasVisible && v) {
+        section.style.opacity = '0.5';
+        section.style.transform = 'scale(0.98)';
+      } else {
+        section.style.opacity = '1';
+        section.style.transform = 'scale(1)';
+      }
+    });
   }
+  
   // Debounce pour améliorer les performances
-  q && q.addEventListener('input', function(){
-    clearTimeout(filterTimeout);
-    filterTimeout = setTimeout(applyFilter, 200);
-  });
+  if (q) {
+    const searchWrapper = q.parentElement;
+    
+    function updateSearchState() {
+      if (q.value.trim()) {
+        searchWrapper.classList.add('has-value');
+      } else {
+        searchWrapper.classList.remove('has-value');
+      }
+    }
+    
+    q.addEventListener('input', function(){
+      updateSearchState();
+      clearTimeout(filterTimeout);
+      filterTimeout = setTimeout(applyFilter, 200);
+    });
+    
+    // Focus amélioré
+    q.addEventListener('focus', function() {
+      searchWrapper.classList.add('focused');
+    });
+    
+    q.addEventListener('blur', function() {
+      searchWrapper.classList.remove('focused');
+    });
+    
+    // Initialisation
+    updateSearchState();
+  }
+  
+  // Bouton clear
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (q) {
+        q.value = '';
+        q.focus();
+        applyFilter();
+      }
+    });
+  }
+  
+  // Initialisation
   reorderSections();
+  updateResultsCount();
+  
   if ('ResizeObserver' in window){
     const ro = new ResizeObserver(()=> reorderSections());
     mason.querySelectorAll('.card-section').forEach(sec => ro.observe(sec));
