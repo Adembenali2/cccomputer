@@ -1,175 +1,336 @@
 <?php
 // /public/paiements.php
-// Page de gestion des paiements et factures
+// Page de gestion des paiements et factures - Version refaite complète
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
 
-// Données factices pour le développement
-// TODO: Remplacer par des requêtes à la base de données
+// ============================================
+// RÉCUPÉRATION DES DONNÉES DEPUIS LA BASE
+// ============================================
 
-// Génération de données factices pour les clients
-$clientsData = [];
-$clientNames = [
-    'Entreprise ABC', 'Société XYZ', 'Comptabilité DEF', 'Bureau GHI', 
-    'Services JKL', 'Solutions MNO', 'Expertise PQR', 'Consulting STU',
-    'Groupe VWX', 'Partners YZ'
-];
+// Récupérer tous les clients
+$clients = [];
+try {
+    $stmt = $pdo->prepare("
+        SELECT id, numero_client, raison_sociale
+        FROM clients
+        ORDER BY raison_sociale ASC
+    ");
+    $stmt->execute();
+    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('paiements.php - Erreur récupération clients: ' . $e->getMessage());
+    $clients = [];
+}
 
-for ($i = 1; $i <= 10; $i++) {
-    $monthlyConsumption = [];
-    $totalYearNB = 0;
-    $totalYearColor = 0;
-    $totalYearAmount = 0;
+// Récupérer les données de consommation depuis compteur_relevee
+// On agrège par jour, mois et année pour tous les clients ou un client spécifique
+function getConsumptionData($pdo, $clientId = null, $dateStart = null, $dateEnd = null) {
+    $data = [
+        'daily' => [],
+        'monthly' => [],
+        'yearly' => []
+    ];
     
-    // Générer consommation mensuelle pour les 12 derniers mois
-    for ($m = 11; $m >= 0; $m--) {
-        $month = date('Y-m', strtotime("-$m months"));
+    try {
+        // Jointure avec photocopieurs_clients pour filtrer par client
+        $clientFilter = '';
+        $params = [];
         
-        // Consommation Noir et Blanc (généralement plus élevée)
-        $consumptionNB = rand(1000, 8000);
-        $amountNB = $consumptionNB * 0.03; // 0.03€ par page NB
+        if ($clientId) {
+            $clientFilter = "AND pc.id_client = :client_id";
+            $params[':client_id'] = $clientId;
+        }
         
-        // Consommation Couleur (généralement plus faible mais plus chère)
-        $consumptionColor = rand(100, 2000);
-        $amountColor = $consumptionColor * 0.15; // 0.15€ par page couleur
+        $dateFilter = '';
+        if ($dateStart) {
+            $dateFilter .= "AND DATE(cr.Timestamp) >= :date_start ";
+            $params[':date_start'] = $dateStart;
+        }
+        if ($dateEnd) {
+            $dateFilter .= "AND DATE(cr.Timestamp) <= :date_end ";
+            $params[':date_end'] = $dateEnd;
+        }
         
-        $totalMonth = $consumptionNB + $consumptionColor;
-        $totalAmount = $amountNB + $amountColor;
+        // Données quotidiennes (30 derniers jours si pas de filtre de date)
+        if (!$dateStart && !$dateEnd) {
+            $dateStart = date('Y-m-d', strtotime('-30 days'));
+            $dateEnd = date('Y-m-d');
+        }
         
-        $monthlyConsumption[] = [
-            'month' => $month,
-            'nb' => [
-                'pages' => $consumptionNB,
-                'amount' => round($amountNB, 2)
-            ],
-            'color' => [
-                'pages' => $consumptionColor,
-                'amount' => round($amountColor, 2)
-            ],
-            'total' => [
-                'pages' => $totalMonth,
-                'amount' => round($totalAmount, 2)
-            ]
-        ];
+        // Requête pour données quotidiennes
+        $sqlDaily = "
+            SELECT 
+                DATE(cr.Timestamp) as date,
+                SUM(cr.TotalBW) as nb_pages,
+                SUM(cr.TotalColor) as color_pages,
+                SUM(cr.TotalBW + cr.TotalColor) as total_pages,
+                SUM(cr.TotalBW) * 0.03 + SUM(cr.TotalColor) * 0.15 as amount
+            FROM compteur_relevee cr
+            LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = cr.mac_norm
+            WHERE cr.Timestamp IS NOT NULL
+            {$clientFilter}
+            {$dateFilter}
+            GROUP BY DATE(cr.Timestamp)
+            ORDER BY date DESC
+            LIMIT 365
+        ";
         
-        $totalYearNB += $amountNB;
-        $totalYearColor += $amountColor;
-        $totalYearAmount += $totalAmount;
-    }
-    
-    // Générer les factures (période du 20 au 20)
-    // La facture est générée le 20 de chaque mois pour la période du 20 du mois précédent au 20 du mois actuel
-    $invoices = [];
-    for ($m = 11; $m >= 0; $m--) {
-        $invoiceMonth = date('Y-m', strtotime("-$m months"));
-        // Date de facturation : le 20 du mois
-        $invoiceDate = date('Y-m-20', strtotime($invoiceMonth . '-01'));
-        // Période : du 20 du mois précédent au 20 du mois actuel
-        $periodStart = date('Y-m-20', strtotime($invoiceMonth . '-01 -1 month'));
-        $periodEnd = date('Y-m-20', strtotime($invoiceMonth . '-01'));
-        // Date d'échéance : le 20 du mois suivant
-        $dueDate = date('Y-m-20', strtotime($invoiceMonth . '-01 +1 month'));
+        $stmt = $pdo->prepare($sqlDaily);
+        $stmt->execute($params);
+        $dailyRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Trouver la consommation pour cette période (du 20 au 20)
-        $invoiceConsumption = $monthlyConsumption[11 - $m] ?? null;
-        
-        if ($invoiceConsumption) {
-            $invoiceNumber = 'FAC-' . date('Ymd', strtotime($invoiceDate)) . '-' . str_pad($i, 5, '0', STR_PAD_LEFT);
-            
-            $invoices[] = [
-                'invoice_number' => $invoiceNumber,
-                'invoice_date' => $invoiceDate,
-                'due_date' => $dueDate,
-                'period_start' => $periodStart,
-                'period_end' => $periodEnd,
-                'nb_pages' => $invoiceConsumption['nb']['pages'],
-                'nb_amount' => $invoiceConsumption['nb']['amount'],
-                'color_pages' => $invoiceConsumption['color']['pages'],
-                'color_amount' => $invoiceConsumption['color']['amount'],
-                'total_pages' => $invoiceConsumption['total']['pages'],
-                'total_amount' => $invoiceConsumption['total']['amount'],
-                'status' => (strtotime($dueDate) < time()) ? 'overdue' : (rand(0, 1) ? 'paid' : 'pending')
+        foreach ($dailyRows as $row) {
+            $data['daily'][] = [
+                'date' => $row['date'],
+                'nb_pages' => (int)($row['nb_pages'] ?? 0),
+                'color_pages' => (int)($row['color_pages'] ?? 0),
+                'total_pages' => (int)($row['total_pages'] ?? 0),
+                'amount' => round((float)($row['amount'] ?? 0), 2)
             ];
         }
+        
+        // Requête pour données mensuelles
+        $sqlMonthly = "
+            SELECT 
+                DATE_FORMAT(cr.Timestamp, '%Y-%m') as month,
+                SUM(cr.TotalBW) as nb_pages,
+                SUM(cr.TotalColor) as color_pages,
+                SUM(cr.TotalBW + cr.TotalColor) as total_pages,
+                SUM(cr.TotalBW) * 0.03 + SUM(cr.TotalColor) * 0.15 as amount
+            FROM compteur_relevee cr
+            LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = cr.mac_norm
+            WHERE cr.Timestamp IS NOT NULL
+            {$clientFilter}
+            {$dateFilter}
+            GROUP BY DATE_FORMAT(cr.Timestamp, '%Y-%m')
+            ORDER BY month DESC
+            LIMIT 24
+        ";
+        
+        $stmt = $pdo->prepare($sqlMonthly);
+        $stmt->execute($params);
+        $monthlyRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        foreach ($monthlyRows as $row) {
+            $data['monthly'][] = [
+                'month' => $row['month'],
+                'nb_pages' => (int)($row['nb_pages'] ?? 0),
+                'color_pages' => (int)($row['color_pages'] ?? 0),
+                'total_pages' => (int)($row['total_pages'] ?? 0),
+                'amount' => round((float)($row['amount'] ?? 0), 2)
+            ];
+        }
+        
+        // Requête pour données annuelles
+        $sqlYearly = "
+            SELECT 
+                YEAR(cr.Timestamp) as year,
+                SUM(cr.TotalBW) as nb_pages,
+                SUM(cr.TotalColor) as color_pages,
+                SUM(cr.TotalBW + cr.TotalColor) as total_pages,
+                SUM(cr.TotalBW) * 0.03 + SUM(cr.TotalColor) * 0.15 as amount
+            FROM compteur_relevee cr
+            LEFT JOIN photocopieurs_clients pc ON pc.mac_norm = cr.mac_norm
+            WHERE cr.Timestamp IS NOT NULL
+            {$clientFilter}
+            {$dateFilter}
+            GROUP BY YEAR(cr.Timestamp)
+            ORDER BY year DESC
+            LIMIT 10
+        ";
+        
+        $stmt = $pdo->prepare($sqlYearly);
+        $stmt->execute($params);
+        $yearlyRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        foreach ($yearlyRows as $row) {
+            $data['yearly'][] = [
+                'year' => (string)$row['year'],
+                'nb_pages' => (int)($row['nb_pages'] ?? 0),
+                'color_pages' => (int)($row['color_pages'] ?? 0),
+                'total_pages' => (int)($row['total_pages'] ?? 0),
+                'amount' => round((float)($row['amount'] ?? 0), 2)
+            ];
+        }
+        
+    } catch (PDOException $e) {
+        error_log('paiements.php - Erreur récupération consommation: ' . $e->getMessage());
     }
     
-    $clientsData[] = [
-        'id' => $i,
-        'name' => $clientNames[$i - 1] ?? "Client $i",
-        'numero_client' => 'C' . str_pad($i, 5, '0', STR_PAD_LEFT),
-        'monthly_consumption' => $monthlyConsumption,
-        'total_year' => [
-            'nb' => round($totalYearNB, 2),
-            'color' => round($totalYearColor, 2),
-            'total' => round($totalYearAmount, 2)
-        ],
-        'pending_amount' => round(rand(100, 2000), 2),
-        'status' => rand(0, 1) ? 'paid' : 'pending',
-        'invoices' => $invoices
-    ];
+    return $data;
 }
 
-// Générer données pour le diagramme (consommation globale avec distinction NB/Couleur)
-$chartData = [
-    'daily' => [],
-    'monthly' => [],
-    'yearly' => []
-];
+// Récupérer les données par défaut (tous les clients, 12 derniers mois)
+$defaultDateStart = date('Y-m-d', strtotime('-12 months'));
+$defaultDateEnd = date('Y-m-d');
+$chartData = getConsumptionData($pdo, null, $defaultDateStart, $defaultDateEnd);
 
-// Données quotidiennes (30 derniers jours)
-for ($d = 29; $d >= 0; $d--) {
-    $date = date('Y-m-d', strtotime("-$d days"));
-    $nbPages = rand(50000, 200000);
-    $colorPages = rand(5000, 30000);
-    $nbAmount = $nbPages * 0.03;
-    $colorAmount = $colorPages * 0.15;
-    $chartData['daily'][] = [
-        'date' => $date,
-        'nb_pages' => $nbPages,
-        'color_pages' => $colorPages,
-        'total_pages' => $nbPages + $colorPages,
-        'amount' => round($nbAmount + $colorAmount, 2)
+// Si pas de données, générer des données factices pour le développement
+if (empty($chartData['daily']) && empty($chartData['monthly']) && empty($chartData['yearly'])) {
+    // Génération de données factices pour le développement
+    $chartData = [
+        'daily' => [],
+        'monthly' => [],
+        'yearly' => []
     ];
+    
+    // Données quotidiennes (30 derniers jours)
+    for ($d = 29; $d >= 0; $d--) {
+        $date = date('Y-m-d', strtotime("-$d days"));
+        $nbPages = rand(50000, 200000);
+        $colorPages = rand(5000, 30000);
+        $chartData['daily'][] = [
+            'date' => $date,
+            'nb_pages' => $nbPages,
+            'color_pages' => $colorPages,
+            'total_pages' => $nbPages + $colorPages,
+            'amount' => round($nbPages * 0.03 + $colorPages * 0.15, 2)
+        ];
+    }
+    
+    // Données mensuelles (12 derniers mois)
+    for ($m = 11; $m >= 0; $m--) {
+        $month = date('Y-m', strtotime("-$m months"));
+        $nbPages = rand(200000, 800000);
+        $colorPages = rand(20000, 150000);
+        $chartData['monthly'][] = [
+            'month' => $month,
+            'nb_pages' => $nbPages,
+            'color_pages' => $colorPages,
+            'total_pages' => $nbPages + $colorPages,
+            'amount' => round($nbPages * 0.03 + $colorPages * 0.15, 2)
+        ];
+    }
+    
+    // Données annuelles (5 dernières années)
+    for ($y = 4; $y >= 0; $y--) {
+        $year = date('Y', strtotime("-$y years"));
+        $nbPages = rand(2000000, 8000000);
+        $colorPages = rand(200000, 1500000);
+        $chartData['yearly'][] = [
+            'year' => $year,
+            'nb_pages' => $nbPages,
+            'color_pages' => $colorPages,
+            'total_pages' => $nbPages + $colorPages,
+            'amount' => round($nbPages * 0.03 + $colorPages * 0.15, 2)
+        ];
+    }
 }
 
-// Données mensuelles (12 derniers mois)
-for ($m = 11; $m >= 0; $m--) {
-    $month = date('Y-m', strtotime("-$m months"));
-    $nbPages = rand(200000, 800000);
-    $colorPages = rand(20000, 150000);
-    $nbAmount = $nbPages * 0.03;
-    $colorAmount = $colorPages * 0.15;
-    $chartData['monthly'][] = [
-        'month' => $month,
-        'nb_pages' => $nbPages,
-        'color_pages' => $colorPages,
-        'total_pages' => $nbPages + $colorPages,
-        'amount' => round($nbAmount + $colorAmount, 2)
+// ============================================
+// CALCUL DES ESTIMATIONS
+// ============================================
+
+function calculateEstimations($data) {
+    $estimations = [
+        'next_months' => [],
+        'next_year' => null
     ];
+    
+    if (empty($data['monthly'])) {
+        return $estimations;
+    }
+    
+    // Prendre les 6 derniers mois pour calculer la moyenne et la tendance
+    $recentMonths = array_slice($data['monthly'], 0, 6);
+    $recentMonths = array_reverse($recentMonths); // Du plus ancien au plus récent
+    
+    if (count($recentMonths) < 2) {
+        return $estimations;
+    }
+    
+    // Calculer la moyenne et la tendance
+    $avgNB = 0;
+    $avgColor = 0;
+    $trendNB = 0;
+    $trendColor = 0;
+    
+    foreach ($recentMonths as $month) {
+        $avgNB += $month['nb_pages'];
+        $avgColor += $month['color_pages'];
+    }
+    $avgNB = $avgNB / count($recentMonths);
+    $avgColor = $avgColor / count($recentMonths);
+    
+    // Calcul de la tendance (régression linéaire simple)
+    $n = count($recentMonths);
+    $sumX = 0;
+    $sumYNB = 0;
+    $sumYColor = 0;
+    $sumXYNB = 0;
+    $sumXYColor = 0;
+    $sumX2 = 0;
+    
+    for ($i = 0; $i < $n; $i++) {
+        $x = $i;
+        $yNB = $recentMonths[$i]['nb_pages'];
+        $yColor = $recentMonths[$i]['color_pages'];
+        
+        $sumX += $x;
+        $sumYNB += $yNB;
+        $sumYColor += $yColor;
+        $sumXYNB += $x * $yNB;
+        $sumXYColor += $x * $yColor;
+        $sumX2 += $x * $x;
+    }
+    
+    if ($n > 1 && $sumX2 > 0) {
+        $trendNB = ($n * $sumXYNB - $sumX * $sumYNB) / ($n * $sumX2 - $sumX * $sumX);
+        $trendColor = ($n * $sumXYColor - $sumX * $sumYColor) / ($n * $sumX2 - $sumX * $sumX);
+    }
+    
+    // Générer les prévisions pour les 6 prochains mois
+    $lastMonth = $recentMonths[count($recentMonths) - 1];
+    $lastMonthDate = new DateTime($lastMonth['month'] . '-01');
+    
+    for ($i = 1; $i <= 6; $i++) {
+        $forecastDate = clone $lastMonthDate;
+        $forecastDate->modify("+$i months");
+        $monthKey = $forecastDate->format('Y-m');
+        
+        // Estimation basée sur la moyenne + tendance
+        $estimatedNB = max(0, $avgNB + ($trendNB * ($n + $i)));
+        $estimatedColor = max(0, $avgColor + ($trendColor * ($n + $i)));
+        $estimatedTotal = $estimatedNB + $estimatedColor;
+        $estimatedAmount = round($estimatedNB * 0.03 + $estimatedColor * 0.15, 2);
+        
+        $estimations['next_months'][] = [
+            'month' => $monthKey,
+            'nb_pages' => (int)$estimatedNB,
+            'color_pages' => (int)$estimatedColor,
+            'total_pages' => (int)$estimatedTotal,
+            'amount' => $estimatedAmount,
+            'is_forecast' => true
+        ];
+    }
+    
+    // Estimation pour l'année prochaine (moyenne des 12 derniers mois * 12)
+    $yearlyData = array_slice($data['yearly'], 0, 1);
+    if (!empty($yearlyData)) {
+        $currentYear = $yearlyData[0];
+        $nextYear = (string)((int)$currentYear['year'] + 1);
+        
+        $estimations['next_year'] = [
+            'year' => $nextYear,
+            'nb_pages' => (int)($avgNB * 12),
+            'color_pages' => (int)($avgColor * 12),
+            'total_pages' => (int)(($avgNB + $avgColor) * 12),
+            'amount' => round(($avgNB * 0.03 + $avgColor * 0.15) * 12, 2),
+            'is_forecast' => true
+        ];
+    }
+    
+    return $estimations;
 }
 
-// Données annuelles (5 dernières années)
-for ($y = 4; $y >= 0; $y--) {
-    $year = date('Y', strtotime("-$y years"));
-    $nbPages = rand(2000000, 8000000);
-    $colorPages = rand(200000, 1500000);
-    $nbAmount = $nbPages * 0.03;
-    $colorAmount = $colorPages * 0.15;
-    $chartData['yearly'][] = [
-        'year' => $year,
-        'nb_pages' => $nbPages,
-        'color_pages' => $colorPages,
-        'total_pages' => $nbPages + $colorPages,
-        'amount' => round($nbAmount + $colorAmount, 2)
-    ];
-}
+$estimations = calculateEstimations($chartData);
 
-// Récupérer l'historique des paiements depuis la base de données
+// Récupérer l'historique des paiements
 $paymentHistory = [];
 try {
-    // Vérifier si la table existe
     $checkTable = $pdo->prepare("
         SELECT COUNT(*) as cnt 
         FROM INFORMATION_SCHEMA.TABLES 
@@ -226,7 +387,6 @@ try {
     }
 } catch (PDOException $e) {
     error_log('paiements.php - Erreur récupération historique: ' . $e->getMessage());
-    // En cas d'erreur, utiliser un tableau vide
     $paymentHistory = [];
 }
 
@@ -244,6 +404,147 @@ if (empty($_SESSION['csrf_token'])) {
     <title>Paiements - CCComputer</title>
     <link rel="stylesheet" href="/assets/css/paiements.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        /* Styles additionnels pour la nouvelle version */
+        .filters-section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .filter-group label {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+        
+        .filter-group input,
+        .filter-group select {
+            padding: 0.625rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+        
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .filter-actions {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        
+        .btn-filter {
+            padding: 0.625rem 1.25rem;
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .btn-filter:hover {
+            background: var(--accent-secondary);
+        }
+        
+        .btn-reset {
+            padding: 0.625rem 1.25rem;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-reset:hover {
+            background: var(--border-color);
+        }
+        
+        .estimations-section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .estimations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .estimation-card {
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+        }
+        
+        .estimation-card-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        
+        .estimation-card-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 1rem;
+        }
+        
+        .forecast-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        
+        .forecast-indicator.real {
+            background: #3b82f6;
+        }
+        
+        .forecast-indicator.forecast {
+            background: #f59e0b;
+        }
+    </style>
 </head>
 <body class="page-paiements">
     <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -254,10 +555,51 @@ if (empty($_SESSION['csrf_token'])) {
             <p class="page-subtitle">Consommation et facturation des clients</p>
         </div>
 
+        <!-- Section Filtres -->
+        <div class="filters-section">
+            <h3 style="margin: 0 0 1rem 0; font-size: 1.25rem; font-weight: 600;">Filtres de Consommation</h3>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label for="filterClient">Client</label>
+                    <select id="filterClient">
+                        <option value="">Tous les clients</option>
+                        <?php foreach ($clients as $client): ?>
+                            <option value="<?= $client['id'] ?>">
+                                <?= h($client['raison_sociale']) ?> (<?= h($client['numero_client']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="filterDateStart">Date de début</label>
+                    <input type="date" id="filterDateStart" value="<?= $defaultDateStart ?>" />
+                </div>
+                
+                <div class="filter-group">
+                    <label for="filterDateEnd">Date de fin</label>
+                    <input type="date" id="filterDateEnd" value="<?= $defaultDateEnd ?>" />
+                </div>
+            </div>
+            
+            <div class="filter-actions">
+                <button class="btn-filter" id="applyFilters">Appliquer les filtres</button>
+                <button class="btn-reset" id="resetFilters">Réinitialiser</button>
+            </div>
+        </div>
+
+        <!-- Section Estimations -->
+        <div class="estimations-section">
+            <h3 style="margin: 0 0 1rem 0; font-size: 1.25rem; font-weight: 600;">Prévisions de Consommation</h3>
+            <div class="estimations-grid" id="estimationsGrid">
+                <!-- Rempli dynamiquement par JavaScript -->
+            </div>
+        </div>
+
         <!-- Diagramme de consommation -->
         <div class="chart-section">
             <div class="chart-header">
-                <h3>Diagramme de Consommation</h3>
+                <h3>Diagramme de Consommation de Papier</h3>
                 <div class="chart-controls">
                     <button class="chart-btn active" data-period="daily">Jour</button>
                     <button class="chart-btn" data-period="monthly">Mois</button>
@@ -267,122 +609,9 @@ if (empty($_SESSION['csrf_token'])) {
             <div class="chart-container">
                 <canvas id="consumptionChart"></canvas>
             </div>
-        </div>
-
-        <!-- Section Export Tous les Clients (après le diagramme) -->
-        <div class="export-section">
-            <div class="section-header">
-                <h3>Export des Consommations - Tous les Clients</h3>
-            </div>
-            
-            <div class="export-filters">
-                <div class="filter-group">
-                    <label for="exportPeriod">Période *</label>
-                    <select id="exportPeriod" required>
-                        <option value="all_months">Tous les mois disponibles</option>
-                        <option value="specific_month">Mois spécifique</option>
-                        <option value="specific_year">Toute une année</option>
-                        <option value="from_first">Depuis le premier compteur reçu</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group" id="monthFilterGroup" style="display: none;">
-                    <label for="exportMonth">Mois</label>
-                    <input type="month" id="exportMonth" />
-                </div>
-                
-                <div class="filter-group" id="yearFilterGroup" style="display: none;">
-                    <label for="exportYear">Année</label>
-                    <select id="exportYear">
-                        <?php
-                        $currentYear = (int)date('Y');
-                        for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
-                            echo '<option value="' . h((string)$y) . '">' . h((string)$y) . '</option>';
-                        }
-                        ?>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="export-buttons">
-                <button class="btn-export" id="exportAllClients">
-                    📊 Exporter tous les clients en Excel
-                </button>
-            </div>
-        </div>
-
-        <!-- Liste des clients avec consommation -->
-        <div class="clients-section">
-            <div class="section-header">
-                <h3>Consommation Mensuelle par Client</h3>
-                <div class="search-box">
-                    <input type="text" id="clientSearch" placeholder="🔍 Rechercher un client..." />
-                </div>
-            </div>
-            
-            <div class="clients-grid" id="clientsGrid">
-                <?php foreach ($clientsData as $client): ?>
-                    <div class="client-card" data-client-name="<?= h(strtolower($client['name'])) ?>" data-client-num="<?= h(strtolower($client['numero_client'])) ?>">
-                        <div class="client-card-header">
-                            <div>
-                                <h4 class="client-name"><?= h($client['name']) ?></h4>
-                                <span class="client-number"><?= h($client['numero_client']) ?></span>
-                            </div>
-                            <span class="status-badge <?= $client['status'] === 'paid' ? 'status-paid' : 'status-pending' ?>">
-                                <?= $client['status'] === 'paid' ? '✓ Payé' : '⏳ En attente' ?>
-                            </span>
-                        </div>
-                        
-                        <div class="client-stats">
-                            <div class="stat-item">
-                                <span class="stat-label">Total annuel</span>
-                                <span class="stat-value"><?= number_format($client['total_year']['total'], 2, ',', ' ') ?> €</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">En attente</span>
-                                <span class="stat-value pending"><?= number_format($client['pending_amount'], 2, ',', ' ') ?> €</span>
-                            </div>
-                        </div>
-
-                        <div class="consumption-summary">
-                            <div class="summary-item">
-                                <span class="summary-label">NB</span>
-                                <span class="summary-value"><?= number_format($client['total_year']['nb'], 2, ',', ' ') ?> €</span>
-                            </div>
-                            <div class="summary-item">
-                                <span class="summary-label">Couleur</span>
-                                <span class="summary-value"><?= number_format($client['total_year']['color'], 2, ',', ' ') ?> €</span>
-                            </div>
-                        </div>
-
-                        <div class="monthly-breakdown">
-                            <div class="breakdown-header">
-                                <span>Derniers 3 mois</span>
-                            </div>
-                            <div class="breakdown-list">
-                                <?php 
-                                $last3Months = array_slice($client['monthly_consumption'], -3);
-                                foreach ($last3Months as $month): 
-                                ?>
-                                    <div class="breakdown-item">
-                                        <span class="month-name"><?= h(date('M Y', strtotime($month['month'] . '-01'))) ?></span>
-                                        <span class="month-stats">
-                                            <span class="month-pages">
-                                                <?= number_format($month['total']['pages'], 0, ',', ' ') ?> pages
-                                                <small>(<?= number_format($month['nb']['pages'], 0, ',', ' ') ?> NB / <?= number_format($month['color']['pages'], 0, ',', ' ') ?> C)</small>
-                                            </span>
-                                            <span class="month-amount"><?= number_format($month['total']['amount'], 2, ',', ' ') ?> €</span>
-                                        </span>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-
-                        <button class="btn-view-details" data-client-id="<?= $client['id'] ?>">
-                            Voir les détails
-                        </button>
-                    </div>
-                <?php endforeach; ?>
+            <div style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary);">
+                <span><span class="forecast-indicator real"></span> Données réelles</span>
+                <span style="margin-left: 1rem;"><span class="forecast-indicator forecast"></span> Prévisions</span>
             </div>
         </div>
 
@@ -400,10 +629,9 @@ if (empty($_SESSION['csrf_token'])) {
                         <label for="paymentClient">Client *</label>
                         <select id="paymentClient" name="client_id" required>
                             <option value="">-- Sélectionner un client --</option>
-                            <?php foreach ($clientsData as $client): ?>
-                                <option value="<?= $client['id'] ?>" data-pending="<?= $client['pending_amount'] ?>">
-                                    <?= h($client['name']) ?> (<?= h($client['numero_client']) ?>) - 
-                                    <?= number_format($client['pending_amount'], 2, ',', ' ') ?> € en attente
+                            <?php foreach ($clients as $client): ?>
+                                <option value="<?= $client['id'] ?>">
+                                    <?= h($client['raison_sociale']) ?> (<?= h($client['numero_client']) ?>)
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -414,7 +642,6 @@ if (empty($_SESSION['csrf_token'])) {
                             <label for="paymentAmount">Montant (€) *</label>
                             <input type="number" id="paymentAmount" name="amount" step="0.01" min="0.01" required 
                                    placeholder="0.00" />
-                            <small class="form-hint">Montant dû: <span id="pendingAmount">0.00</span> €</small>
                         </div>
 
                         <div class="form-group">
@@ -428,21 +655,16 @@ if (empty($_SESSION['csrf_token'])) {
                         </div>
                     </div>
 
-                    <!-- Champ IBAN (visible uniquement pour virement) -->
                     <div class="form-group" id="ibanGroup" style="display: none;">
                         <label for="paymentIban">IBAN du client *</label>
                         <input type="text" id="paymentIban" name="iban" 
-                               placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" 
-                               pattern="[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}" />
-                        <small class="form-hint">Format: FR76 XXXX XXXX XXXX XXXX XXXX XXX</small>
+                               placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" />
                     </div>
 
-                    <!-- Champ justificatif (visible pour chèque et virement) -->
                     <div class="form-group" id="justificatifGroup" style="display: none;">
                         <label for="paymentJustificatif">Justificatif de paiement *</label>
                         <input type="file" id="paymentJustificatif" name="justificatif" 
                                accept=".pdf,.jpg,.jpeg,.png" />
-                        <small class="form-hint">Formats acceptés: PDF, JPG, PNG (max 10 Mo)</small>
                     </div>
 
                     <div class="form-group">
@@ -455,12 +677,6 @@ if (empty($_SESSION['csrf_token'])) {
                         <label for="paymentReference">Référence</label>
                         <input type="text" id="paymentReference" name="reference" 
                                placeholder="Référence du paiement (optionnel)" />
-                    </div>
-
-                    <div class="form-group">
-                        <label for="paymentNotes">Notes</label>
-                        <textarea id="paymentNotes" name="notes" rows="3" 
-                                  placeholder="Notes supplémentaires (optionnel)"></textarea>
                     </div>
 
                     <div id="paymentError" class="error-message" style="display: none;"></div>
@@ -478,20 +694,6 @@ if (empty($_SESSION['csrf_token'])) {
         <div class="history-section">
             <div class="section-header">
                 <h3>Historique des Paiements</h3>
-                <div class="history-filters">
-                    <select id="historyClientFilter">
-                        <option value="">Tous les clients</option>
-                        <?php foreach ($clientsData as $client): ?>
-                            <option value="<?= $client['id'] ?>"><?= h($client['name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <select id="historyStatusFilter">
-                        <option value="">Tous les statuts</option>
-                        <option value="completed">Complété</option>
-                        <option value="pending">En attente</option>
-                        <option value="failed">Échoué</option>
-                    </select>
-                </div>
             </div>
 
             <div class="history-table-container">
@@ -509,8 +711,7 @@ if (empty($_SESSION['csrf_token'])) {
                     </thead>
                     <tbody id="historyTableBody">
                         <?php foreach ($paymentHistory as $payment): ?>
-                            <tr data-client-id="<?= $payment['client_id'] ?>" 
-                                data-status="<?= $payment['status'] ?>">
+                            <tr>
                                 <td><?= !empty($payment['date']) ? h(date('d/m/Y', strtotime($payment['date']))) : '—' ?></td>
                                 <td><?= h($payment['client_name']) ?></td>
                                 <td class="amount-cell"><?= number_format($payment['amount'], 2, ',', ' ') ?> €</td>
@@ -520,30 +721,18 @@ if (empty($_SESSION['csrf_token'])) {
                                     <?php if (!empty($payment['justificatif_pdf'])): ?>
                                         <a href="<?= h($payment['justificatif_pdf']) ?>" 
                                            target="_blank" 
-                                           class="btn-download-receipt"
-                                           title="Télécharger le justificatif PDF">
-                                            📄 PDF
-                                        </a>
+                                           class="btn-download-receipt">📄 PDF</a>
                                     <?php elseif (!empty($payment['justificatif_upload'])): ?>
                                         <a href="<?= h($payment['justificatif_upload']) ?>" 
                                            target="_blank"
-                                           class="btn-download-receipt"
-                                           title="Voir le justificatif">
-                                            📎 Fichier
-                                        </a>
+                                           class="btn-download-receipt">📎 Fichier</a>
                                     <?php else: ?>
                                         <span class="no-receipt">—</span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
                                     <span class="status-badge status-<?= $payment['status'] ?>">
-                                        <?php
-                                        switch($payment['status']) {
-                                            case 'completed': echo '✓ Complété'; break;
-                                            case 'pending': echo '⏳ En attente'; break;
-                                            case 'failed': echo '✗ Échoué'; break;
-                                        }
-                                        ?>
+                                        ✓ Complété
                                     </span>
                                 </td>
                             </tr>
@@ -554,100 +743,117 @@ if (empty($_SESSION['csrf_token'])) {
         </div>
     </div>
 
-    <!-- Modal Détails Client -->
-    <div class="modal-overlay" id="clientDetailsModal" aria-hidden="true">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalClientName">Détails du Client</h3>
-                <button class="modal-close" id="closeModal" aria-label="Fermer">&times;</button>
-            </div>
-            <div class="modal-body" id="modalBody">
-                <!-- Contenu chargé dynamiquement -->
-            </div>
-            
-            <!-- Filtres d'export pour le client sélectionné -->
-            <div class="modal-export-section" id="modalExportSection" style="display: none;">
-                <div class="modal-export-header">
-                    <h4>Exporter les consommations de ce client</h4>
-                </div>
-                <div class="export-filters">
-                    <div class="filter-group">
-                        <label for="modalExportPeriod">Période *</label>
-                        <select id="modalExportPeriod" required>
-                            <option value="all_months">Tous les mois disponibles</option>
-                            <option value="specific_month">Mois spécifique</option>
-                            <option value="specific_year">Toute une année</option>
-                            <option value="from_first">Depuis le premier compteur reçu</option>
-                        </select>
-                    </div>
-                    
-                    <div class="filter-group" id="modalMonthFilterGroup" style="display: none;">
-                        <label for="modalExportMonth">Mois</label>
-                        <input type="month" id="modalExportMonth" />
-                    </div>
-                    
-                    <div class="filter-group" id="modalYearFilterGroup" style="display: none;">
-                        <label for="modalExportYear">Année</label>
-                        <select id="modalExportYear">
-                            <?php
-                            $currentYear = (int)date('Y');
-                            for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
-                                echo '<option value="' . h((string)$y) . '">' . h((string)$y) . '</option>';
-                            }
-                            ?>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="modal-footer">
-                <button class="btn-export" id="exportThisClient">📊 Exporter en Excel</button>
-                <button class="btn-secondary" id="closeModalBtn">Fermer</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
-        // Données pour le diagramme
+        // ============================================
+        // DONNÉES INITIALES
+        // ============================================
         const chartData = <?= json_encode($chartData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+        const estimations = <?= json_encode($estimations, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+        const clients = <?= json_encode($clients, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
         
-        // Initialisation du diagramme
-        let consumptionChart;
-        const ctx = document.getElementById('consumptionChart');
+        let consumptionChart = null;
+        let currentPeriod = 'monthly';
+        let currentFilters = {
+            clientId: null,
+            dateStart: null,
+            dateEnd: null
+        };
         
-        if (!ctx) {
-            console.error('Canvas element not found');
+        // ============================================
+        // INITIALISATION DES ESTIMATIONS
+        // ============================================
+        function updateEstimationsDisplay() {
+            const grid = document.getElementById('estimationsGrid');
+            if (!grid) return;
+            
+            let html = '';
+            
+            // Afficher les prévisions pour les prochains mois
+            if (estimations.next_months && estimations.next_months.length > 0) {
+                estimations.next_months.slice(0, 3).forEach(month => {
+                    const monthName = new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                    html += `
+                        <div class="estimation-card">
+                            <div class="estimation-card-label">${monthName}</div>
+                            <div class="estimation-card-value">${month.total_pages.toLocaleString('fr-FR')} pages</div>
+                            <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                ${month.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Afficher l'estimation pour l'année prochaine
+            if (estimations.next_year) {
+                html += `
+                    <div class="estimation-card" style="border: 2px solid var(--accent-primary);">
+                        <div class="estimation-card-label">Année ${estimations.next_year.year}</div>
+                        <div class="estimation-card-value">${estimations.next_year.total_pages.toLocaleString('fr-FR')} pages</div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                            ${estimations.next_year.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            grid.innerHTML = html || '<p style="color: var(--text-secondary);">Aucune prévision disponible</p>';
         }
         
-        function initChart(period = 'monthly') {
+        // ============================================
+        // INITIALISATION DU DIAGRAMME
+        // ============================================
+        function initChart(period = 'monthly', data = null, forecastData = null) {
+            const ctx = document.getElementById('consumptionChart');
             if (!ctx) return;
-            const data = chartData[period];
-            let labels, nbPagesData, colorPagesData, amountData;
             
+            const chartDataToUse = data || chartData[period] || [];
+            let labels = [];
+            let nbPagesData = [];
+            let colorPagesData = [];
+            let amountData = [];
+            let isForecastData = [];
+            
+            // Préparer les données selon la période
             if (period === 'daily') {
-                labels = data.map(d => new Date(d.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }));
-                nbPagesData = data.map(d => d.nb_pages);
-                colorPagesData = data.map(d => d.color_pages);
-                amountData = data.map(d => d.amount);
+                labels = chartDataToUse.map(d => {
+                    const date = new Date(d.date);
+                    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                });
+                nbPagesData = chartDataToUse.map(d => d.nb_pages || 0);
+                colorPagesData = chartDataToUse.map(d => d.color_pages || 0);
+                amountData = chartDataToUse.map(d => d.amount || 0);
+                isForecastData = chartDataToUse.map(d => d.is_forecast || false);
             } else if (period === 'monthly') {
-                labels = data.map(d => {
+                // Combiner les données réelles et les prévisions
+                const allData = [...chartDataToUse];
+                if (forecastData && forecastData.next_months) {
+                    allData.push(...forecastData.next_months);
+                }
+                
+                labels = allData.map(d => {
                     const date = new Date(d.month + '-01');
                     return date.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
                 });
-                nbPagesData = data.map(d => d.nb_pages);
-                colorPagesData = data.map(d => d.color_pages);
-                amountData = data.map(d => d.amount);
+                nbPagesData = allData.map(d => d.nb_pages || 0);
+                colorPagesData = allData.map(d => d.color_pages || 0);
+                amountData = allData.map(d => d.amount || 0);
+                isForecastData = allData.map(d => d.is_forecast || false);
             } else {
-                labels = data.map(d => d.year);
-                nbPagesData = data.map(d => d.nb_pages);
-                colorPagesData = data.map(d => d.color_pages);
-                amountData = data.map(d => d.amount);
+                labels = chartDataToUse.map(d => d.year);
+                nbPagesData = chartDataToUse.map(d => d.nb_pages || 0);
+                colorPagesData = chartDataToUse.map(d => d.color_pages || 0);
+                amountData = chartDataToUse.map(d => d.amount || 0);
+                isForecastData = chartDataToUse.map(d => d.is_forecast || false);
             }
             
             if (consumptionChart) {
                 consumptionChart.destroy();
             }
+            
+            // Trouver l'index où commencent les prévisions
+            const forecastStartIndex = isForecastData.indexOf(true);
+            const hasForecast = forecastStartIndex !== -1;
             
             consumptionChart = new Chart(ctx, {
                 type: 'line',
@@ -660,7 +866,14 @@ if (empty($_SESSION['csrf_token'])) {
                             borderColor: 'rgb(59, 130, 246)',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
                             yAxisID: 'y',
-                            tension: 0.4
+                            tension: 0.4,
+                            borderDash: hasForecast ? (() => {
+                                const dash = new Array(labels.length).fill(0);
+                                for (let i = forecastStartIndex; i < labels.length; i++) {
+                                    dash[i] = 5;
+                                }
+                                return dash;
+                            })() : []
                         },
                         {
                             label: 'Couleur (pages)',
@@ -668,7 +881,14 @@ if (empty($_SESSION['csrf_token'])) {
                             borderColor: 'rgb(236, 72, 153)',
                             backgroundColor: 'rgba(236, 72, 153, 0.1)',
                             yAxisID: 'y',
-                            tension: 0.4
+                            tension: 0.4,
+                            borderDash: hasForecast ? (() => {
+                                const dash = new Array(labels.length).fill(0);
+                                for (let i = forecastStartIndex; i < labels.length; i++) {
+                                    dash[i] = 5;
+                                }
+                                return dash;
+                            })() : []
                         },
                         {
                             label: 'Montant (€)',
@@ -676,7 +896,14 @@ if (empty($_SESSION['csrf_token'])) {
                             borderColor: 'rgb(16, 185, 129)',
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
                             yAxisID: 'y1',
-                            tension: 0.4
+                            tension: 0.4,
+                            borderDash: hasForecast ? (() => {
+                                const dash = new Array(labels.length).fill(0);
+                                for (let i = forecastStartIndex; i < labels.length; i++) {
+                                    dash[i] = 5;
+                                }
+                                return dash;
+                            })() : []
                         }
                     ]
                 },
@@ -694,12 +921,14 @@ if (empty($_SESSION['csrf_token'])) {
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
+                                    const isForecast = isForecastData[context.dataIndex];
+                                    const forecastLabel = isForecast ? ' (Prévision)' : '';
                                     if (context.datasetIndex === 0) {
-                                        return 'NB: ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                                        return 'NB: ' + context.parsed.y.toLocaleString('fr-FR') + ' pages' + forecastLabel;
                                     } else if (context.datasetIndex === 1) {
-                                        return 'Couleur: ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                                        return 'Couleur: ' + context.parsed.y.toLocaleString('fr-FR') + ' pages' + forecastLabel;
                                     } else {
-                                        return 'Montant: ' + context.parsed.y.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+                                        return 'Montant: ' + context.parsed.y.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) + forecastLabel;
                                     }
                                 }
                             }
@@ -732,689 +961,154 @@ if (empty($_SESSION['csrf_token'])) {
             });
         }
         
-        // Gestion des boutons de période
-        const chartBtns = document.querySelectorAll('.chart-btn');
-        if (chartBtns.length > 0) {
-            chartBtns.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    chartBtns.forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    const period = this.dataset.period || 'monthly';
-                    initChart(period);
-                });
-            });
-        }
-        
-        // Initialiser avec les données mensuelles
-        if (ctx) {
-            initChart('monthly');
-        }
-        
-        // Recherche de clients
-        const clientSearchEl = document.getElementById('clientSearch');
-        if (clientSearchEl) {
-            clientSearchEl.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            document.querySelectorAll('.client-card').forEach(card => {
-                const name = card.dataset.clientName || '';
-                const num = card.dataset.clientNum || '';
-                if (name.includes(searchTerm) || num.includes(searchTerm)) {
-                    card.style.display = '';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-            });
-        }
-        
-        // Filtres de l'historique
-        function filterHistory() {
-            const clientFilter = document.getElementById('historyClientFilter').value;
-            const statusFilter = document.getElementById('historyStatusFilter').value;
+        // ============================================
+        // GESTION DES FILTRES
+        // ============================================
+        document.getElementById('applyFilters')?.addEventListener('click', async function() {
+            const clientId = document.getElementById('filterClient').value;
+            const dateStart = document.getElementById('filterDateStart').value;
+            const dateEnd = document.getElementById('filterDateEnd').value;
             
-            document.querySelectorAll('#historyTableBody tr').forEach(row => {
-                const clientId = row.dataset.clientId || '';
-                const status = row.dataset.status || '';
+            currentFilters = {
+                clientId: clientId || null,
+                dateStart: dateStart || null,
+                dateEnd: dateEnd || null
+            };
+            
+            // Charger les nouvelles données depuis le serveur
+            try {
+                const params = new URLSearchParams();
+                if (clientId) params.append('client_id', clientId);
+                if (dateStart) params.append('date_start', dateStart);
+                if (dateEnd) params.append('date_end', dateEnd);
                 
-                const showClient = !clientFilter || clientId === clientFilter;
-                const showStatus = !statusFilter || status === statusFilter;
+                const response = await fetch(`/API/get_consumption_data.php?${params.toString()}`);
+                const result = await response.json();
                 
-                row.style.display = (showClient && showStatus) ? '' : 'none';
+                if (result.ok && result.data) {
+                    // Mettre à jour le diagramme avec les nouvelles données
+                    initChart(currentPeriod, result.data, result.estimations);
+                } else {
+                    alert('Erreur lors du chargement des données filtrées');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                alert('Erreur de communication avec le serveur');
+            }
+        });
+        
+        document.getElementById('resetFilters')?.addEventListener('click', function() {
+            document.getElementById('filterClient').value = '';
+            document.getElementById('filterDateStart').value = '<?= $defaultDateStart ?>';
+            document.getElementById('filterDateEnd').value = '<?= $defaultDateEnd ?>';
+            currentFilters = {
+                clientId: null,
+                dateStart: null,
+                dateEnd: null
+            };
+            initChart(currentPeriod, chartData, estimations);
+        });
+        
+        // ============================================
+        // GESTION DES BOUTONS DE PÉRIODE
+        // ============================================
+        document.querySelectorAll('.chart-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentPeriod = this.dataset.period || 'monthly';
+                initChart(currentPeriod, chartData[currentPeriod], currentPeriod === 'monthly' ? estimations : null);
             });
-        }
+        });
         
-        const historyClientFilter = document.getElementById('historyClientFilter');
-        const historyStatusFilter = document.getElementById('historyStatusFilter');
-        if (historyClientFilter) historyClientFilter.addEventListener('change', filterHistory);
-        if (historyStatusFilter) historyStatusFilter.addEventListener('change', filterHistory);
-        
-        // Gestion de l'affichage conditionnel des champs selon le type de paiement
+        // ============================================
+        // GESTION DU FORMULAIRE DE PAIEMENT
+        // ============================================
         const paymentTypeEl = document.getElementById('paymentType');
         if (paymentTypeEl) {
             paymentTypeEl.addEventListener('change', function() {
-            const paymentType = this.value;
-            const ibanGroup = document.getElementById('ibanGroup');
-            const justificatifGroup = document.getElementById('justificatifGroup');
-            const ibanInput = document.getElementById('paymentIban');
-            const justificatifInput = document.getElementById('paymentJustificatif');
-            
-            // Réinitialiser
-            ibanGroup.style.display = 'none';
-            justificatifGroup.style.display = 'none';
-            ibanInput.removeAttribute('required');
-            justificatifInput.removeAttribute('required');
-            
-            if (paymentType === 'virement') {
-                ibanGroup.style.display = 'block';
-                justificatifGroup.style.display = 'block';
-                ibanInput.setAttribute('required', 'required');
-                justificatifInput.setAttribute('required', 'required');
-            } else if (paymentType === 'cheque') {
-                justificatifGroup.style.display = 'block';
-                justificatifInput.setAttribute('required', 'required');
-            }
-            // Espèces : aucun champ supplémentaire requis
+                const paymentType = this.value;
+                const ibanGroup = document.getElementById('ibanGroup');
+                const justificatifGroup = document.getElementById('justificatifGroup');
+                const ibanInput = document.getElementById('paymentIban');
+                const justificatifInput = document.getElementById('paymentJustificatif');
+                
+                ibanGroup.style.display = 'none';
+                justificatifGroup.style.display = 'none';
+                ibanInput?.removeAttribute('required');
+                justificatifInput?.removeAttribute('required');
+                
+                if (paymentType === 'virement') {
+                    ibanGroup.style.display = 'block';
+                    justificatifGroup.style.display = 'block';
+                    ibanInput?.setAttribute('required', 'required');
+                    justificatifInput?.setAttribute('required', 'required');
+                } else if (paymentType === 'cheque') {
+                    justificatifGroup.style.display = 'block';
+                    justificatifInput?.setAttribute('required', 'required');
+                }
             });
         }
-
-        // Mise à jour du montant dû quand on sélectionne un client
-        const paymentClientEl = document.getElementById('paymentClient');
-        if (paymentClientEl) {
-            paymentClientEl.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            const pending = selectedOption ? parseFloat(selectedOption.dataset.pending || 0) : 0;
-            document.getElementById('pendingAmount').textContent = pending.toLocaleString('fr-FR', { 
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 2 
-            });
-            });
-        }
-
-        // Gestion du formulaire de paiement
+        
         const paymentFormEl = document.getElementById('paymentForm');
         if (paymentFormEl) {
             paymentFormEl.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const errorDiv = document.getElementById('paymentError');
-            const successDiv = document.getElementById('paymentSuccess');
-            errorDiv.style.display = 'none';
-            successDiv.style.display = 'none';
-            
-            // Validation
-            const amountInput = document.getElementById('paymentAmount');
-            const pendingAmountEl = document.getElementById('pendingAmount');
-            const paymentTypeEl = document.getElementById('paymentType');
-            const ibanInput = document.getElementById('paymentIban');
-            const justificatifInput = document.getElementById('paymentJustificatif');
-            
-            if (!amountInput || !pendingAmountEl || !paymentTypeEl) {
-                errorDiv.textContent = 'Erreur: éléments du formulaire introuvables';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            const amount = parseFloat(amountInput.value);
-            const pending = parseFloat(pendingAmountEl.textContent.replace(/\s/g, '').replace(',', '.'));
-            const paymentType = paymentTypeEl.value;
-            const iban = ibanInput ? ibanInput.value.trim() : '';
-            const justificatif = justificatifInput ? justificatifInput.files[0] : null;
-            
-            if (isNaN(amount) || amount <= 0) {
-                errorDiv.textContent = 'Veuillez saisir un montant valide';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            if (amount > pending) {
-                errorDiv.textContent = 'Le montant ne peut pas dépasser le montant dû (' + pending.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) + ')';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            // Validation spécifique selon le type
-            if (paymentType === 'virement') {
-                if (!iban || iban.length < 15) {
-                    errorDiv.textContent = 'L\'IBAN est obligatoire et doit être valide pour un virement';
-                    errorDiv.style.display = 'block';
-                    if (ibanInput) ibanInput.focus();
-                    return;
+                e.preventDefault();
+                
+                const errorDiv = document.getElementById('paymentError');
+                const successDiv = document.getElementById('paymentSuccess');
+                errorDiv.style.display = 'none';
+                successDiv.style.display = 'none';
+                
+                const formData = new FormData(this);
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn?.textContent || '';
+                
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Enregistrement en cours...';
                 }
-                if (!justificatif) {
-                    errorDiv.textContent = 'Le justificatif est obligatoire pour un virement';
-                    errorDiv.style.display = 'block';
-                    if (justificatifInput) justificatifInput.focus();
-                    return;
-                }
-                // Validation de la taille du fichier (max 10 Mo)
-                if (justificatif.size > 10 * 1024 * 1024) {
-                    errorDiv.textContent = 'Le fichier justificatif est trop volumineux (max 10 Mo)';
-                    errorDiv.style.display = 'block';
-                    return;
-                }
-            } else if (paymentType === 'cheque') {
-                if (!justificatif) {
-                    errorDiv.textContent = 'Le justificatif est obligatoire pour un chèque';
-                    errorDiv.style.display = 'block';
-                    if (justificatifInput) justificatifInput.focus();
-                    return;
-                }
-                // Validation de la taille du fichier (max 10 Mo)
-                if (justificatif.size > 10 * 1024 * 1024) {
-                    errorDiv.textContent = 'Le fichier justificatif est trop volumineux (max 10 Mo)';
-                    errorDiv.style.display = 'block';
-                    return;
-                }
-            }
-            
-            // Désactiver le bouton de soumission pour éviter les doubles soumissions
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalBtnText = submitBtn ? submitBtn.textContent : '';
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Enregistrement en cours...';
-            }
-            
-            // Préparer les données pour l'envoi
-            const formData = new FormData(this);
-            
-            // Envoyer les données au serveur
-            fetch('/API/payment_process.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Erreur réseau: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.ok) {
-                    let successMessage = 'Paiement enregistré avec succès !';
-                    
-                    if (data.receipt_number) {
-                        successMessage += ' Justificatif: ' + data.receipt_number;
-                    }
-                    
-                    successDiv.textContent = successMessage;
-                    successDiv.style.display = 'block';
-                    
-                    // Télécharger automatiquement le justificatif PDF si disponible
-                    if (data.receipt_pdf) {
-                        // Attendre un peu avant de déclencher le téléchargement
+                
+                fetch('/API/payment_process.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ok) {
+                        successDiv.textContent = 'Paiement enregistré avec succès !';
+                        successDiv.style.display = 'block';
                         setTimeout(() => {
-                            window.open(data.receipt_pdf, '_blank');
-                        }, 500);
+                            this.reset();
+                            successDiv.style.display = 'none';
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        errorDiv.textContent = data.error || 'Erreur lors de l\'enregistrement';
+                        errorDiv.style.display = 'block';
                     }
-                    
-                    setTimeout(() => {
-                        this.reset();
-                        successDiv.style.display = 'none';
-                        const pendingAmountEl = document.getElementById('pendingAmount');
-                        const ibanGroup = document.getElementById('ibanGroup');
-                        const justificatifGroup = document.getElementById('justificatifGroup');
-                        if (pendingAmountEl) pendingAmountEl.textContent = '0.00';
-                        if (ibanGroup) ibanGroup.style.display = 'none';
-                        if (justificatifGroup) justificatifGroup.style.display = 'none';
-                        // Réactiver le bouton
-                        if (submitBtn) {
-                            submitBtn.disabled = false;
-                            submitBtn.textContent = originalBtnText;
-                        }
-                        // Recharger la page pour mettre à jour les données
-                        location.reload();
-                    }, 3000);
-                } else {
-                    errorDiv.textContent = data.error || 'Erreur lors de l\'enregistrement du paiement';
-                    errorDiv.style.display = 'block';
-                    // Réactiver le bouton en cas d'erreur
                     if (submitBtn) {
                         submitBtn.disabled = false;
                         submitBtn.textContent = originalBtnText;
                     }
-                }
-            })
-            .catch(error => {
-                console.error('Erreur:', error);
-                errorDiv.textContent = 'Erreur de communication avec le serveur. Veuillez réessayer.';
-                errorDiv.style.display = 'block';
-                // Réactiver le bouton en cas d'erreur
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = originalBtnText;
-                }
-            });
-            });
-        }
-
-        // Gestion de la modal "Voir les détails"
-        const clientsDataJS = <?= json_encode($clientsData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
-        let selectedClientId = null;
-
-        const viewDetailsBtns = document.querySelectorAll('.btn-view-details');
-        if (viewDetailsBtns.length > 0) {
-            viewDetailsBtns.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const clientId = parseInt(this.dataset.clientId);
-                    if (!isNaN(clientId) && clientId > 0) {
-                        selectedClientId = clientId;
-                        showClientDetails(clientId);
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    errorDiv.textContent = 'Erreur de communication avec le serveur';
+                    errorDiv.style.display = 'block';
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalBtnText;
                     }
                 });
             });
         }
-
-        function showClientDetails(clientId) {
-            const client = clientsDataJS.find(c => c.id === clientId);
-            if (!client) {
-                console.error('Client not found:', clientId);
-                return;
-            }
-
-            const modal = document.getElementById('clientDetailsModal');
-            const modalBody = document.getElementById('modalBody');
-            const modalTitle = document.getElementById('modalClientName');
-            
-            if (!modal || !modalBody || !modalTitle) {
-                console.error('Modal elements not found');
-                return;
-            }
-
-            modalTitle.textContent = `Détails - ${client.name}`;
-            modal.setAttribute('aria-hidden', 'false');
-            modal.style.display = 'flex';
-
-            // Générer le contenu détaillé
-            let html = `
-                <div class="client-detail-header">
-                    <div class="detail-info">
-                        <p><strong>Numéro client:</strong> ${client.numero_client}</p>
-                        <p><strong>Statut:</strong> <span class="status-badge ${client.status === 'paid' ? 'status-paid' : 'status-pending'}">${client.status === 'paid' ? '✓ Payé' : '⏳ En attente'}</span></p>
-                        <p><strong>Montant en attente:</strong> <span class="pending">${client.pending_amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span></p>
-                    </div>
-                </div>
-
-                <div class="detail-summary">
-                    <h4>Résumé Annuel</h4>
-                    <div class="summary-grid">
-                        <div class="summary-card">
-                            <span class="summary-card-label">Noir et Blanc</span>
-                            <span class="summary-card-value">${client.total_year.nb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
-                        </div>
-                        <div class="summary-card">
-                            <span class="summary-card-label">Couleur</span>
-                            <span class="summary-card-value">${client.total_year.color.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
-                        </div>
-                        <div class="summary-card total">
-                            <span class="summary-card-label">Total</span>
-                            <span class="summary-card-value">${client.total_year.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="detail-table-section">
-                    <h4>Consommation Mensuelle Détaillée</h4>
-                    <div class="table-container">
-                        <table class="detail-table">
-                            <thead>
-                                <tr>
-                                    <th>Mois</th>
-                                    <th>NB - Pages</th>
-                                    <th>NB - Montant</th>
-                                    <th>Couleur - Pages</th>
-                                    <th>Couleur - Montant</th>
-                                    <th>Total Pages</th>
-                                    <th>Total Montant</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
-
-            client.monthly_consumption.forEach(month => {
-                const monthName = new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-                html += `
-                    <tr>
-                        <td>${monthName}</td>
-                        <td>${month.nb.pages.toLocaleString('fr-FR')}</td>
-                        <td>${month.nb.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                        <td>${month.color.pages.toLocaleString('fr-FR')}</td>
-                        <td>${month.color.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                        <td><strong>${month.total.pages.toLocaleString('fr-FR')}</strong></td>
-                        <td><strong>${month.total.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</strong></td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-
-            // Section Factures
-            html += `
-                <div class="detail-invoices-section">
-                    <h4>Factures</h4>
-                    <div class="invoices-list">
-            `;
-            
-            if (client.invoices && client.invoices.length > 0) {
-                client.invoices.forEach(invoice => {
-                    const invoiceDate = new Date(invoice.invoice_date);
-                    const dueDate = new Date(invoice.due_date);
-                    const periodStart = new Date(invoice.period_start);
-                    const periodEnd = new Date(invoice.period_end);
-                    
-                    let statusClass = 'invoice-status-';
-                    let statusText = '';
-                    if (invoice.status === 'paid') {
-                        statusClass += 'paid';
-                        statusText = '✓ Payée';
-                    } else if (invoice.status === 'overdue') {
-                        statusClass += 'overdue';
-                        statusText = '⚠ En retard';
-                    } else {
-                        statusClass += 'pending';
-                        statusText = '⏳ En attente';
-                    }
-                    
-                    html += `
-                        <div class="invoice-item">
-                            <div class="invoice-header">
-                                <div class="invoice-info">
-                                    <span class="invoice-number"><strong>${invoice.invoice_number}</strong></span>
-                                    <span class="invoice-date">Date: ${invoiceDate.toLocaleDateString('fr-FR')}</span>
-                                    <span class="invoice-period">Période: ${periodStart.toLocaleDateString('fr-FR')} - ${periodEnd.toLocaleDateString('fr-FR')}</span>
-                                </div>
-                                <div class="invoice-actions">
-                                    <span class="invoice-status ${statusClass}">${statusText}</span>
-                                    <button class="btn-download-invoice" data-invoice-id="${invoice.invoice_number}" data-client-id="${client.id}">
-                                        📥 Télécharger
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="invoice-details">
-                                <div class="invoice-detail-row">
-                                    <span>NB: ${invoice.nb_pages.toLocaleString('fr-FR')} pages</span>
-                                    <span class="invoice-amount">${invoice.nb_amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
-                                </div>
-                                <div class="invoice-detail-row">
-                                    <span>Couleur: ${invoice.color_pages.toLocaleString('fr-FR')} pages</span>
-                                    <span class="invoice-amount">${invoice.color_amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
-                                </div>
-                                <div class="invoice-detail-row total">
-                                    <span><strong>Total: ${invoice.total_pages.toLocaleString('fr-FR')} pages</strong></span>
-                                    <span class="invoice-amount"><strong>${invoice.total_amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</strong></span>
-                                </div>
-                                <div class="invoice-due-date">
-                                    <span>Échéance: ${dueDate.toLocaleDateString('fr-FR')}</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-            } else {
-                html += `<p class="no-invoices">Aucune facture disponible</p>`;
-            }
-            
-            html += `
-                    </div>
-                </div>
-            `;
-
-            modalBody.innerHTML = html;
-            // Afficher la section d'export avec filtres
-            document.getElementById('modalExportSection').style.display = 'block';
-            
-            // Attacher les événements de téléchargement
-            const downloadInvoiceBtns = document.querySelectorAll('.btn-download-invoice');
-            if (downloadInvoiceBtns.length > 0) {
-                downloadInvoiceBtns.forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const invoiceNumber = this.dataset.invoiceId;
-                        const clientId = parseInt(this.dataset.clientId);
-                        if (invoiceNumber && !isNaN(clientId) && clientId > 0) {
-                            downloadInvoice(clientId, invoiceNumber);
-                        }
-                    });
-                });
-            }
-        }
         
-        // Fonction pour télécharger une facture en PDF
-        function downloadInvoice(clientId, invoiceNumber) {
-            const client = clientsDataJS.find(c => c.id === clientId);
-            if (!client) {
-                alert('Client introuvable');
-                return;
-            }
-            
-            const invoice = client.invoices.find(inv => inv.invoice_number === invoiceNumber);
-            if (!invoice) {
-                alert('Facture introuvable');
-                return;
-            }
-            
-            // Télécharger le PDF depuis l'API
-            const url = `/API/generate_invoice_pdf.php?client_id=${clientId}&invoice_number=${encodeURIComponent(invoiceNumber)}`;
-            window.open(url, '_blank');
-        }
-
-        // Fermeture de la modal
-        const closeModalEl = document.getElementById('closeModal');
-        const closeModalBtnEl = document.getElementById('closeModalBtn');
-        const clientDetailsModalEl = document.getElementById('clientDetailsModal');
-        
-        if (closeModalEl) closeModalEl.addEventListener('click', closeModal);
-        if (closeModalBtnEl) closeModalBtnEl.addEventListener('click', closeModal);
-        if (clientDetailsModalEl) {
-            clientDetailsModalEl.addEventListener('click', function(e) {
-                if (e.target === this) closeModal();
-            });
-        }
-
-        function closeModal() {
-            const modal = document.getElementById('clientDetailsModal');
-            if (modal) {
-                modal.setAttribute('aria-hidden', 'true');
-                modal.style.display = 'none';
-            }
-            selectedClientId = null;
-            const modalExportSection = document.getElementById('modalExportSection');
-            if (modalExportSection) {
-                modalExportSection.style.display = 'none';
-            }
-            // Réinitialiser les filtres
-            const modalExportPeriod = document.getElementById('modalExportPeriod');
-            const modalMonthFilterGroup = document.getElementById('modalMonthFilterGroup');
-            const modalYearFilterGroup = document.getElementById('modalYearFilterGroup');
-            if (modalExportPeriod) modalExportPeriod.value = 'all_months';
-            if (modalMonthFilterGroup) modalMonthFilterGroup.style.display = 'none';
-            if (modalYearFilterGroup) modalYearFilterGroup.style.display = 'none';
-        }
-
-        // Gestion des filtres d'export (tous les clients)
-        const exportPeriodEl = document.getElementById('exportPeriod');
-        if (exportPeriodEl) {
-            exportPeriodEl.addEventListener('change', function() {
-            const period = this.value;
-            const monthGroup = document.getElementById('monthFilterGroup');
-            const yearGroup = document.getElementById('yearFilterGroup');
-            
-            monthGroup.style.display = (period === 'specific_month') ? 'block' : 'none';
-            yearGroup.style.display = (period === 'specific_year') ? 'block' : 'none';
-            });
-        }
-
-        // Gestion des filtres d'export (client sélectionné dans la modal)
-        const modalExportPeriodEl = document.getElementById('modalExportPeriod');
-        if (modalExportPeriodEl) {
-            modalExportPeriodEl.addEventListener('change', function() {
-            const period = this.value;
-            const monthGroup = document.getElementById('modalMonthFilterGroup');
-            const yearGroup = document.getElementById('modalYearFilterGroup');
-            
-            monthGroup.style.display = (period === 'specific_month') ? 'block' : 'none';
-            yearGroup.style.display = (period === 'specific_year') ? 'block' : 'none';
-            });
-        }
-
-        // Fonction pour filtrer les données selon la période
-        function filterConsumptionData(consumptionArray, period, monthValue, yearValue) {
-            if (period === 'all_months') {
-                return consumptionArray;
-            } else if (period === 'specific_month') {
-                if (!monthValue) return [];
-                const [year, month] = monthValue.split('-');
-                return consumptionArray.filter(m => {
-                    const [mYear, mMonth] = m.month.split('-');
-                    return mYear === year && mMonth === month;
-                });
-            } else if (period === 'specific_year') {
-                if (!yearValue) return [];
-                return consumptionArray.filter(m => {
-                    const [mYear] = m.month.split('-');
-                    return mYear === yearValue;
-                });
-            } else if (period === 'from_first') {
-                // Retourner tous les mois (depuis le premier compteur = tous les mois disponibles)
-                return consumptionArray;
-            }
-            return consumptionArray;
-        }
-
-        // Fonction d'export Excel
-        function exportToExcel(data, filename) {
-            if (data.length === 0) {
-                alert('Aucune donnée à exporter pour les critères sélectionnés.');
-                return;
-            }
-            
-            const wb = XLSX.utils.book_new();
-            
-            // Feuille de données
-            const ws = XLSX.utils.json_to_sheet(data);
-            XLSX.utils.book_append_sheet(wb, ws, 'Consommations');
-            
-            // Télécharger
-            XLSX.writeFile(wb, filename);
-        }
-
-        // Export tous les clients (bouton en haut après le diagramme)
-        const exportAllClientsEl = document.getElementById('exportAllClients');
-        if (exportAllClientsEl) {
-            exportAllClientsEl.addEventListener('click', function() {
-            const period = document.getElementById('exportPeriod').value;
-            const monthValue = document.getElementById('exportMonth').value;
-            const yearValue = document.getElementById('exportYear').value;
-            
-            // Validation
-            if (period === 'specific_month' && !monthValue) {
-                alert('Veuillez sélectionner un mois');
-                return;
-            }
-            if (period === 'specific_year' && !yearValue) {
-                alert('Veuillez sélectionner une année');
-                return;
-            }
-            
-            const exportData = [];
-            
-            // Export tous les clients
-            clientsDataJS.forEach(client => {
-                const filteredMonths = filterConsumptionData(client.monthly_consumption, period, monthValue, yearValue);
-                filteredMonths.forEach(month => {
-                    exportData.push({
-                        'Client': client.name,
-                        'Numéro Client': client.numero_client,
-                        'Mois': new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
-                        'NB - Pages': month.nb.pages,
-                        'NB - Montant (€)': month.nb.amount,
-                        'Couleur - Pages': month.color.pages,
-                        'Couleur - Montant (€)': month.color.amount,
-                        'Total Pages': month.total.pages,
-                        'Total Montant (€)': month.total.amount
-                    });
-                });
-            });
-            
-            // Générer le nom de fichier selon la période
-            let filename = '';
-            if (period === 'specific_month') {
-                const monthName = new Date(monthValue + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-                filename = `Consommations_Tous_Clients_${monthName.replace(/\s+/g, '_')}.xlsx`;
-            } else if (period === 'specific_year') {
-                filename = `Consommations_Tous_Clients_Annee_${yearValue}.xlsx`;
-            } else if (period === 'from_first') {
-                filename = `Consommations_Tous_Clients_Depuis_Premier_Compteur_${new Date().toISOString().split('T')[0]}.xlsx`;
-            } else {
-                filename = `Consommations_Tous_Clients_Tous_Mois_${new Date().toISOString().split('T')[0]}.xlsx`;
-            }
-            
-            exportToExcel(exportData, filename);
-            });
-        }
-
-        // Export client sélectionné depuis la modal
-        const exportThisClientEl = document.getElementById('exportThisClient');
-        if (exportThisClientEl) {
-            exportThisClientEl.addEventListener('click', function() {
-            if (!selectedClientId) {
-                alert('Aucun client sélectionné');
-                return;
-            }
-            
-            const period = document.getElementById('modalExportPeriod').value;
-            const monthValue = document.getElementById('modalExportMonth').value;
-            const yearValue = document.getElementById('modalExportYear').value;
-            
-            // Validation
-            if (period === 'specific_month' && !monthValue) {
-                alert('Veuillez sélectionner un mois');
-                return;
-            }
-            if (period === 'specific_year' && !yearValue) {
-                alert('Veuillez sélectionner une année');
-                return;
-            }
-            
-            const client = clientsDataJS.find(c => c.id === selectedClientId);
-            if (!client) {
-                alert('Client introuvable');
-                return;
-            }
-            
-            const filteredMonths = filterConsumptionData(client.monthly_consumption, period, monthValue, yearValue);
-            const exportData = filteredMonths.map(month => ({
-                'Mois': new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
-                'NB - Pages': month.nb.pages,
-                'NB - Montant (€)': month.nb.amount,
-                'Couleur - Pages': month.color.pages,
-                'Couleur - Montant (€)': month.color.amount,
-                'Total Pages': month.total.pages,
-                'Total Montant (€)': month.total.amount
-            }));
-            
-            // Générer le nom de fichier selon la période
-            const clientName = client.name.replace(/\s+/g, '_');
-            let filename = '';
-            if (period === 'specific_month') {
-                const monthName = new Date(monthValue + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-                filename = `Consommations_${clientName}_${monthName.replace(/\s+/g, '_')}.xlsx`;
-            } else if (period === 'specific_year') {
-                filename = `Consommations_${clientName}_Annee_${yearValue}.xlsx`;
-            } else if (period === 'from_first') {
-                filename = `Consommations_${clientName}_Depuis_Premier_Compteur_${new Date().toISOString().split('T')[0]}.xlsx`;
-            } else {
-                filename = `Consommations_${clientName}_Tous_Mois_${new Date().toISOString().split('T')[0]}.xlsx`;
-            }
-            
-            exportToExcel(exportData, filename);
-            });
-        }
+        // ============================================
+        // INITIALISATION
+        // ============================================
+        updateEstimationsDisplay();
+        initChart('monthly', chartData['monthly'], estimations);
     </script>
 </body>
 </html>
-
