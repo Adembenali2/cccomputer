@@ -7,11 +7,7 @@
  * - invoice_number: Numéro de facture
  */
 
-// Démarrer la session AVANT tout
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
-
+// Initialiser la session AVANT session_config.php
 require_once __DIR__ . '/../includes/session_config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
@@ -36,9 +32,26 @@ try {
     $vendorPath = __DIR__ . '/../vendor/autoload.php';
     if (!file_exists($vendorPath)) {
         error_log('Erreur: vendor/autoload.php introuvable. Assurez-vous que composer install a été exécuté.');
-        jsonResponse(['error' => 'Dépendances non installées. Veuillez exécuter: composer install'], 500);
+        http_response_code(500);
+        die('Erreur: Dépendances non installées. Veuillez contacter l\'administrateur.');
     }
     require_once $vendorPath;
+    
+    // Charger TCPDF explicitement si nécessaire
+    // TCPDF peut nécessiter un chargement explicite selon la version
+    $tcpdfPath = __DIR__ . '/../vendor/tecnickcom/tcpdf/tcpdf.php';
+    if (file_exists($tcpdfPath)) {
+        require_once $tcpdfPath;
+    }
+    
+    // Vérifier que TCPDF est bien chargé
+    if (!class_exists('TCPDF')) {
+        error_log('Erreur: Classe TCPDF introuvable. Vérifiez que TCPDF est installé via composer.');
+        error_log('Chemin vendor: ' . $vendorPath);
+        error_log('Chemin TCPDF: ' . $tcpdfPath);
+        http_response_code(500);
+        die('Erreur: Bibliothèque PDF non disponible. Veuillez contacter l\'administrateur.');
+    }
     
     // Récupérer les données depuis la session ou recréer les données mock
     // Pour l'instant, on utilise les données mock (même logique que paiements.php)
@@ -293,6 +306,13 @@ TEMPLATE;
  * Générer le PDF de la facture
  */
 function generateInvoicePDF($client, $invoice, $templatePath) {
+    // Vérifier que TCPDF est disponible
+    if (!class_exists('TCPDF')) {
+        error_log('TCPDF class not found. Vendor autoload may not be working.');
+        http_response_code(500);
+        die('Erreur: Bibliothèque PDF non disponible. Veuillez contacter l\'administrateur.');
+    }
+    
     // Créer une instance TCPDF
     $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
     

@@ -52,40 +52,65 @@ try {
 // Compter les messages non lus (incluant les messages à tous)
 $unreadCount = 0;
 try {
+    // Vérifier si les colonnes de suppression existent
+    $hasSupprimeColumns = false;
+    try {
+        $checkCols = $pdo->prepare("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = :table 
+            AND COLUMN_NAME IN ('supprime_expediteur', 'supprime_destinataire')
+        ");
+        $checkCols->execute([':table' => 'messagerie']);
+        $hasSupprimeColumns = ((int)$checkCols->fetch(PDO::FETCH_ASSOC)['cnt'] >= 2);
+    } catch (PDOException $e) {
+        error_log('messagerie.php - Erreur vérification colonnes suppression: ' . $e->getMessage());
+    }
+    
     // Messages directs non lus
-    $stmt1 = $pdo->prepare("
+    $sqlDirect = "
         SELECT COUNT(*) 
         FROM messagerie 
         WHERE id_destinataire = :user_id
-          AND lu = 0 
-          AND supprime_destinataire = 0
-    ");
+          AND lu = 0
+    ";
+    if ($hasSupprimeColumns) {
+        $sqlDirect .= " AND supprime_destinataire = 0";
+    }
+    $stmt1 = $pdo->prepare($sqlDirect);
     $stmt1->execute([':user_id' => $currentUserId]);
     $countDirect = (int)$stmt1->fetchColumn();
     
     // Messages "à tous" non lus
     $countBroadcast = 0;
     try {
-        $stmt2 = $pdo->prepare("
+        $sqlBroadcast = "
             SELECT COUNT(*) 
             FROM messagerie m
             LEFT JOIN messagerie_lectures ml ON ml.id_message = m.id AND ml.id_utilisateur = :user_id
             WHERE m.id_destinataire IS NULL
               AND m.id_expediteur != :user_id2
-              AND m.supprime_destinataire = 0
-              AND ml.id IS NULL
-        ");
+        ";
+        if ($hasSupprimeColumns) {
+            $sqlBroadcast .= " AND m.supprime_destinataire = 0";
+        }
+        $sqlBroadcast .= " AND ml.id IS NULL";
+        $stmt2 = $pdo->prepare($sqlBroadcast);
         $stmt2->execute([':user_id' => $currentUserId, ':user_id2' => $currentUserId]);
         $countBroadcast = (int)$stmt2->fetchColumn();
     } catch (PDOException $e) {
-        // Si la table n'existe pas encore, compter tous les messages à tous
-        $stmt2b = $pdo->prepare("
+        // Si la table messagerie_lectures n'existe pas encore, compter tous les messages à tous
+        $sqlBroadcast2 = "
             SELECT COUNT(*) 
             FROM messagerie 
             WHERE id_destinataire IS NULL
               AND id_expediteur != :user_id
-              AND supprime_destinataire = 0
-        ");
+        ";
+        if ($hasSupprimeColumns) {
+            $sqlBroadcast2 .= " AND supprime_destinataire = 0";
+        }
+        $stmt2b = $pdo->prepare($sqlBroadcast2);
         $stmt2b->execute([':user_id' => $currentUserId]);
         $countBroadcast = (int)$stmt2b->fetchColumn();
     }
@@ -155,10 +180,37 @@ try {
     // Vérifier si la colonne id_message_parent existe
     $hasParentColumn = false;
     try {
-        require_once __DIR__ . '/../includes/api_helpers.php';
-        $hasParentColumn = columnExists($pdo, 'messagerie', 'id_message_parent');
+        if (file_exists(__DIR__ . '/../includes/api_helpers.php')) {
+            require_once __DIR__ . '/../includes/api_helpers.php';
+            if (function_exists('columnExists')) {
+                $hasParentColumn = columnExists($pdo, 'messagerie', 'id_message_parent');
+            } else {
+                // Fallback : vérifier directement avec SQL
+                $checkCol = $pdo->prepare("
+                    SELECT COUNT(*) as cnt 
+                    FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = :table 
+                    AND COLUMN_NAME = :column
+                ");
+                $checkCol->execute([':table' => 'messagerie', ':column' => 'id_message_parent']);
+                $hasParentColumn = ((int)$checkCol->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+            }
+        } else {
+            // Fallback : vérifier directement avec SQL
+            $checkCol = $pdo->prepare("
+                SELECT COUNT(*) as cnt 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = :table 
+                AND COLUMN_NAME = :column
+            ");
+            $checkCol->execute([':table' => 'messagerie', ':column' => 'id_message_parent']);
+            $hasParentColumn = ((int)$checkCol->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+        }
     } catch (Throwable $e) {
         error_log('messagerie.php - Erreur vérification colonne id_message_parent: ' . $e->getMessage());
+        $hasParentColumn = false;
     }
     
     // Requête principale : messages correspondant aux critères
@@ -886,65 +938,75 @@ if (lienSearch) {
 }
 
 function clearLien() {
-    idLienInput.value = '';
-    lienSelected.style.display = 'none';
-    selectTypeLien.value = '';
-    lienContainer.style.display = 'none';
+    if (idLienInput) idLienInput.value = '';
+    if (lienSelected) {
+        lienSelected.style.display = 'none';
+        lienSelected.innerHTML = '';
+    }
+    if (selectTypeLien) selectTypeLien.value = '';
+    if (lienContainer) lienContainer.style.display = 'none';
+    if (lienSearch) lienSearch.value = '';
+    if (lienResults) {
+        lienResults.style.display = 'none';
+        lienResults.innerHTML = '';
+    }
 }
 
 // Fermer les résultats au clic extérieur
 document.addEventListener('click', (e) => {
-    if (!lienContainer.contains(e.target)) {
+    if (lienContainer && lienResults && !lienContainer.contains(e.target)) {
         lienResults.style.display = 'none';
     }
 });
 
 // Envoi du message
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const formData = new FormData(form);
-    const data = {
-        csrf_token: formData.get('csrf_token'),
-        id_destinataire: formData.get('id_destinataire') || null,
-        type_lien: formData.get('type_lien') || null,
-        id_lien: formData.get('id_lien') || null,
-        sujet: formData.get('sujet'),
-        message: formData.get('message')
-    };
-    
-    messageStatus.style.display = 'block';
-    messageStatus.textContent = 'Envoi en cours…';
-    messageStatus.className = 'maps-message hint';
-    
-    try {
-        const response = await fetch('/API/messagerie_send.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-            credentials: 'same-origin'
-        });
+if (form && messageStatus) {
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
         
-        const result = await response.json();
+        const formData = new FormData(form);
+        const data = {
+            csrf_token: formData.get('csrf_token'),
+            id_destinataire: formData.get('id_destinataire') || null,
+            type_lien: formData.get('type_lien') || null,
+            id_lien: formData.get('id_lien') || null,
+            sujet: formData.get('sujet'),
+            message: formData.get('message')
+        };
         
-        if (result.ok) {
-            messageStatus.textContent = 'Message envoyé avec succès !';
-            messageStatus.className = 'maps-message success';
-            form.reset();
-            clearLien();
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        } else {
-            messageStatus.textContent = 'Erreur : ' + (result.error || 'Erreur inconnue');
+        messageStatus.style.display = 'block';
+        messageStatus.textContent = 'Envoi en cours…';
+        messageStatus.className = 'maps-message hint';
+        
+        try {
+            const response = await fetch('/API/messagerie_send.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+                credentials: 'same-origin'
+            });
+            
+            const result = await response.json();
+            
+            if (result.ok) {
+                messageStatus.textContent = 'Message envoyé avec succès !';
+                messageStatus.className = 'maps-message success';
+                form.reset();
+                clearLien();
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                messageStatus.textContent = 'Erreur : ' + (result.error || 'Erreur inconnue');
+                messageStatus.className = 'maps-message alert';
+            }
+        } catch (err) {
+            console.error('Erreur envoi:', err);
+            messageStatus.textContent = 'Erreur lors de l\'envoi du message.';
             messageStatus.className = 'maps-message alert';
         }
-    } catch (err) {
-        console.error('Erreur envoi:', err);
-        messageStatus.textContent = 'Erreur lors de l\'envoi du message.';
-        messageStatus.className = 'maps-message alert';
-    }
-});
+    });
+}
 
 // Marquer comme lu
 document.querySelectorAll('.btn-mark-read').forEach(btn => {
@@ -1064,27 +1126,32 @@ function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
     const emojiContainer = document.getElementById('replyEmojiContainer');
     const typeButtons = modal.querySelectorAll('.reply-type-btn');
     
-    typeButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            typeButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentType = btn.getAttribute('data-type');
-            
-            if (currentType === 'text') {
-                textContainer.style.display = 'block';
-                emojiContainer.style.display = 'none';
-            } else {
-                textContainer.style.display = 'none';
-                emojiContainer.style.display = 'block';
-            }
+    if (textContainer && emojiContainer && typeButtons.length > 0) {
+        typeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                typeButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentType = btn.getAttribute('data-type') || 'text';
+                
+                if (currentType === 'text') {
+                    textContainer.style.display = 'block';
+                    emojiContainer.style.display = 'none';
+                } else {
+                    textContainer.style.display = 'none';
+                    emojiContainer.style.display = 'block';
+                }
+            });
         });
-    });
+    }
     
     // Sélection d'emoji rapide
     modal.querySelectorAll('.emoji-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const emoji = btn.getAttribute('data-emoji');
-            document.getElementById('replyEmojiInput').value = emoji;
+            const emojiInput = document.getElementById('replyEmojiInput');
+            if (emojiInput && emoji) {
+                emojiInput.value = emoji;
+            }
         });
     });
     
@@ -1093,14 +1160,23 @@ function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
         modal.remove();
     };
     
-    modal.querySelector('.reply-modal-close').addEventListener('click', closeModal);
-    modal.querySelector('#replyCancelBtn').addEventListener('click', closeModal);
+    const closeBtn = modal.querySelector('.reply-modal-close');
+    const cancelBtn = modal.querySelector('#replyCancelBtn');
+    const sendBtn = document.getElementById('replySendBtn');
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeModal);
+    }
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeModal);
+    }
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeModal();
     });
     
     // Envoyer la réponse
-    document.getElementById('replySendBtn').addEventListener('click', async () => {
+    if (sendBtn) {
+        sendBtn.addEventListener('click', async () => {
         let contenu = '';
         if (currentType === 'text') {
             contenu = document.getElementById('replyTextInput').value.trim();
@@ -1139,14 +1215,17 @@ function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
             console.error('Erreur envoi réponse:', err);
             alert('Erreur lors de l\'envoi de la réponse');
         }
-    });
+        });
+    }
     
     // Focus sur le champ approprié
     setTimeout(() => {
         if (currentType === 'text') {
-            document.getElementById('replyTextInput').focus();
+            const textInput = document.getElementById('replyTextInput');
+            if (textInput) textInput.focus();
         } else {
-            document.getElementById('replyEmojiInput').focus();
+            const emojiInput = document.getElementById('replyEmojiInput');
+            if (emojiInput) emojiInput.focus();
         }
     }, 100);
 }
