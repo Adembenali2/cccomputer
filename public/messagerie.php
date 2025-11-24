@@ -1251,7 +1251,18 @@ function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
             return;
         }
         
+        // Désactiver le bouton pendant l'envoi
+        sendBtn.disabled = true;
+        const originalText = sendBtn.textContent;
+        sendBtn.textContent = 'Envoi en cours...';
+        
         try {
+            console.log('Envoi réponse:', {
+                message_id: messageId,
+                reponse_type: currentType,
+                reponse_contenu: contenu.substring(0, 50) + '...'
+            });
+            
             const response = await fetch('/API/messagerie_reply.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1264,31 +1275,46 @@ function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
                 credentials: 'same-origin'
             });
             
-            if (!response.ok) {
-                const errorText = await response.text();
-                let errorMsg = 'Erreur lors de l\'envoi de la réponse';
-                try {
-                    const errorData = JSON.parse(errorText);
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = errorText || errorMsg;
-                }
-                alert('Erreur: ' + errorMsg);
-                return;
+            console.log('Réponse reçue, status:', response.status);
+            
+            const responseText = await response.text();
+            console.log('Réponse texte:', responseText);
+            
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (parseErr) {
+                console.error('Erreur parsing JSON:', parseErr);
+                console.error('Texte reçu:', responseText);
+                throw new Error('Réponse invalide du serveur: ' + responseText.substring(0, 200));
             }
             
-            const result = await response.json();
+            if (!response.ok) {
+                const errorMsg = result.error || 'Erreur lors de l\'envoi de la réponse';
+                console.error('Erreur API:', errorMsg);
+                alert('Erreur: ' + errorMsg);
+                sendBtn.disabled = false;
+                sendBtn.textContent = originalText;
+                return;
+            }
             
             if (result.ok) {
                 closeModal();
                 // Recharger la page pour afficher la réponse
                 window.location.reload();
             } else {
-                alert('Erreur: ' + (result.error || 'Erreur inconnue'));
+                const errorMsg = result.error || 'Erreur inconnue';
+                console.error('Erreur résultat:', errorMsg);
+                alert('Erreur: ' + errorMsg);
+                sendBtn.disabled = false;
+                sendBtn.textContent = originalText;
             }
         } catch (err) {
             console.error('Erreur envoi réponse:', err);
-            alert('Erreur lors de l\'envoi de la réponse: ' + (err.message || 'Erreur inconnue'));
+            console.error('Stack trace:', err.stack);
+            alert('Erreur lors de l\'envoi de la réponse: ' + (err.message || 'Erreur inconnue') + '\n\nVérifiez la console pour plus de détails.');
+            sendBtn.disabled = false;
+            sendBtn.textContent = originalText;
         }
         });
     }

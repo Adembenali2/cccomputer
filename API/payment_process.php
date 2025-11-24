@@ -207,6 +207,129 @@ if (!empty($updateFields)) {
     $stmt->execute($updateValues);
 }
 
+// Générer le justificatif de paiement PDF
+require_once __DIR__ . '/../includes/email_helper.php';
+
+$receiptPdfPath = null;
+$receiptPdfContent = null;
+
+try {
+    // Préparer les données pour la génération du PDF
+    // Sauvegarder les données POST originales
+    $originalPost = $_POST;
+    $_POST['client_id'] = $client_id;
+    $_POST['amount'] = $amount;
+    $_POST['payment_type'] = $payment_type;
+    $_POST['payment_date'] = $payment_date;
+    $_POST['reference'] = $reference;
+    $_POST['iban'] = $iban;
+    $_POST['notes'] = $notes;
+    
+    // Définir une variable globale pour indiquer qu'on est en mode inclusion
+    $GLOBALS['_GENERATE_RECEIPT_MODE'] = 'string';
+    
+    // Capturer la sortie PDF (le fichier retourne le contenu en mode 'S')
+    $receiptPdfContent = require __DIR__ . '/generate_payment_receipt.php';
+    
+    // Restaurer les données POST originales
+    $_POST = $originalPost;
+    unset($GLOBALS['_GENERATE_RECEIPT_MODE']);
+    
+    // Si le contenu est une chaîne (mode 'S'), sauvegarder le fichier
+    if (is_string($receiptPdfContent) && strlen($receiptPdfContent) > 0) {
+        $receiptDir = ensure_upload_dir($client_id);
+        $receiptFilename = date('Ymd_His') . '_justificatif_paiement_' . $client_id . '.pdf';
+        $receiptPdfPath = $receiptDir . '/' . $receiptFilename;
+        
+        if (file_put_contents($receiptPdfPath, $receiptPdfContent) !== false) {
+            @chmod($receiptPdfPath, 0644);
+            $receiptPdfPath = '/uploads/clients/' . $client_id . '/' . $receiptFilename;
+            
+            // Enregistrer le justificatif dans un champ PDF disponible (si pas déjà fait)
+            if (!$justificatifPath) {
+                // Trouver un autre champ PDF disponible pour le justificatif généré
+                $stmt = $pdo->prepare("SELECT pdf1, pdf2, pdf3, pdf4, pdf5 FROM clients WHERE id = :id LIMIT 1");
+                $stmt->execute([':id' => $client_id]);
+                $clientPdfs = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                $receiptPdfField = null;
+                foreach (['pdf1', 'pdf2', 'pdf3', 'pdf4', 'pdf5'] as $field) {
+                    if (empty($clientPdfs[$field])) {
+                        $receiptPdfField = $field;
+                        break;
+                    }
+                }
+                
+                if (!$receiptPdfField) {
+                    $receiptPdfField = 'pdf5'; // Utiliser le dernier si tous sont remplis
+                }
+                
+                // Mettre à jour le client avec le justificatif généré
+                $stmt = $pdo->prepare("UPDATE clients SET {$receiptPdfField} = :receipt WHERE id = :id");
+                $stmt->execute([':receipt' => $receiptPdfPath, ':id' => $client_id]);
+            }
+        }
+    }
+} catch (Exception $e) {
+    error_log('Erreur génération justificatif PDF dans payment_process: ' . $e->getMessage());
+    // Ne pas bloquer l'enregistrement du paiement si la génération du PDF échoue
+}
+
+// Envoyer l'email de confirmation au client
+$emailSent = false;
+$emailError = null;
+
+if (!empty($client['email']) && filter_var($client['email'], FILTER_VALIDATE_EMAIL)) {
+    try {
+        $paymentData = [
+            'amount' => $amount,
+            'type' => $payment_type,
+            'date' => $payment_date,
+            'reference' => $reference,
+            'iban' => $iban,
+            'notes' => $notes
+        ];
+        
+        $emailBody = generatePaymentConfirmationEmailBody($client, $paymentData);
+        $emailSubject = 'Confirmation de paiement - ' . number_format($amount, 2, ',', ' ') . ' €';
+        
+        $attachments = [];
+        
+        // Ajouter le justificatif PDF en pièce jointe si disponible
+        if ($receiptPdfPath && file_exists($_SERVER['DOCUMENT_ROOT'] . $receiptPdfPath)) {
+            $attachments[] = [
+                'path' => $_SERVER['DOCUMENT_ROOT'] . $receiptPdfPath,
+                'name' => 'Justificatif_Paiement_' . date('Ymd_His') . '.pdf'
+            ];
+        }
+        
+        // Ajouter le justificatif uploadé si disponible
+        if ($justificatifPath && file_exists($_SERVER['DOCUMENT_ROOT'] . $justificatifPath)) {
+            $attachments[] = [
+                'path' => $_SERVER['DOCUMENT_ROOT'] . $justificatifPath,
+                'name' => 'Justificatif_Client_' . basename($justificatifPath)
+            ];
+        }
+        
+        $emailResult = sendEmail(
+            $client['email'],
+            $emailSubject,
+            $emailBody,
+            $attachments
+        );
+        
+        $emailSent = $emailResult['ok'];
+        $emailError = $emailResult['error'];
+        
+        if (!$emailSent) {
+            error_log('Erreur envoi email paiement: ' . $emailError);
+        }
+    } catch (Exception $e) {
+        error_log('Exception envoi email paiement: ' . $e->getMessage());
+        $emailError = $e->getMessage();
+    }
+}
+
 // TODO: Enregistrer le paiement dans une table de paiements
 // Pour l'instant, on simule juste l'enregistrement
 // En production, créer une table 'paiements' avec les colonnes appropriées
@@ -215,6 +338,9 @@ jsonResponse([
     'ok' => true,
     'message' => 'Paiement enregistré avec succès',
     'justificatif' => $justificatifPath,
-    'pdf_field' => $availablePdfField
+    'receipt_pdf' => $receiptPdfPath,
+    'pdf_field' => $availablePdfField,
+    'email_sent' => $emailSent,
+    'email_error' => $emailError
 ]);
 

@@ -815,8 +815,25 @@ if (empty($_SESSION['csrf_token'])) {
             .then(response => response.json())
             .then(data => {
                 if (data.ok) {
-                    successDiv.textContent = 'Paiement enregistré avec succès !';
+                    let successMessage = 'Paiement enregistré avec succès !';
+                    
+                    // Ajouter les informations sur l'email
+                    if (data.email_sent) {
+                        successMessage += ' Un email de confirmation a été envoyé au client.';
+                    } else if (data.email_error) {
+                        successMessage += ' (Note: L\'email n\'a pas pu être envoyé: ' + data.email_error + ')';
+                    }
+                    
+                    successDiv.textContent = successMessage;
                     successDiv.style.display = 'block';
+                    
+                    // Télécharger automatiquement le justificatif PDF si disponible
+                    if (data.receipt_pdf) {
+                        // Attendre un peu avant de déclencher le téléchargement
+                        setTimeout(() => {
+                            window.open(data.receipt_pdf, '_blank');
+                        }, 500);
+                    }
                     
                     setTimeout(() => {
                         this.reset();
@@ -826,7 +843,7 @@ if (empty($_SESSION['csrf_token'])) {
                         document.getElementById('justificatifGroup').style.display = 'none';
                         // Recharger la page pour mettre à jour les données
                         location.reload();
-                    }, 2000);
+                    }, 3000);
                 } else {
                     errorDiv.textContent = data.error || 'Erreur lors de l\'enregistrement du paiement';
                     errorDiv.style.display = 'block';

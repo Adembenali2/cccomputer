@@ -121,6 +121,19 @@ try {
     // Vérifier si la table messagerie existe et si id_message_parent existe
     $hasParentColumn = false;
     try {
+        // Vérifier d'abord si la table messagerie existe
+        $checkTable = $pdo->prepare("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = :table
+        ");
+        $checkTable->execute([':table' => 'messagerie']);
+        if (((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt']) === 0) {
+            jsonResponse(['ok' => false, 'error' => 'La table de messagerie n\'existe pas. Veuillez exécuter la migration SQL.'], 500);
+        }
+        
+        // Vérifier si la colonne id_message_parent existe
         if (function_exists('columnExists')) {
             $hasParentColumn = columnExists($pdo, 'messagerie', 'id_message_parent');
         } else {
@@ -134,6 +147,10 @@ try {
             ");
             $checkCol->execute([':table' => 'messagerie', ':column' => 'id_message_parent']);
             $hasParentColumn = ((int)$checkCol->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+        }
+        
+        if (!$hasParentColumn) {
+            error_log('messagerie_reply.php - La colonne id_message_parent n\'existe pas. La réponse sera créée sans lien parent.');
         }
     } catch (Throwable $e) {
         error_log('messagerie_reply.php - Erreur vérification colonne id_message_parent: ' . $e->getMessage());
@@ -155,8 +172,8 @@ try {
             ':id_destinataire' => $idDestinataire,
             ':sujet' => $sujetReponse,
             ':message' => $messageReponse,
-            ':type_lien' => $parent['type_lien'] ?: null,
-            ':id_lien' => $parent['id_lien'] ?: null,
+            ':type_lien' => !empty($parent['type_lien']) ? $parent['type_lien'] : null,
+            ':id_lien' => !empty($parent['id_lien']) ? (int)$parent['id_lien'] : null,
             ':id_message_parent' => $idMessageParent
         ];
     } else {
@@ -175,19 +192,33 @@ try {
             ':id_destinataire' => $idDestinataire,
             ':sujet' => $sujetReponse,
             ':message' => $messageReponse,
-            ':type_lien' => $parent['type_lien'] ?: null,
-            ':id_lien' => $parent['id_lien'] ?: null
+            ':type_lien' => !empty($parent['type_lien']) ? $parent['type_lien'] : null,
+            ':id_lien' => !empty($parent['id_lien']) ? (int)$parent['id_lien'] : null
         ];
     }
     
     $pdo->beginTransaction();
     
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    
-    $replyId = (int)$pdo->lastInsertId();
-    
-    $pdo->commit();
+    try {
+        $stmt = $pdo->prepare($sql);
+        
+        // Log pour débogage
+        error_log('messagerie_reply.php - SQL: ' . $sql);
+        error_log('messagerie_reply.php - Params: ' . json_encode($params));
+        
+        $stmt->execute($params);
+        
+        $replyId = (int)$pdo->lastInsertId();
+        
+        if ($replyId <= 0) {
+            throw new Exception('Impossible d\'obtenir l\'ID de la réponse insérée');
+        }
+        
+        $pdo->commit();
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        throw $e; // Re-lancer pour être capturé par le catch externe
+    }
     
     // Enregistrer dans l'historique
     try {
@@ -218,13 +249,29 @@ try {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
+    $errorMsg = 'Erreur de base de données: ' . $e->getMessage();
     error_log('messagerie_reply.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('messagerie_reply.php SQL error code: ' . $e->getCode());
+    error_log('messagerie_reply.php SQL: ' . ($sql ?? 'N/A'));
+    error_log('messagerie_reply.php Params: ' . json_encode($params ?? []));
+    // En mode développement, on peut retourner plus de détails
+    if (defined('DEBUG') && DEBUG) {
+        jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
+    } else {
+        jsonResponse(['ok' => false, 'error' => 'Erreur de base de données. Vérifiez les logs pour plus de détails.'], 500);
+    }
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
+    $errorMsg = 'Erreur inattendue: ' . $e->getMessage();
     error_log('messagerie_reply.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
+    error_log('messagerie_reply.php stack trace: ' . $e->getTraceAsString());
+    // En mode développement, on peut retourner plus de détails
+    if (defined('DEBUG') && DEBUG) {
+        jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
+    } else {
+        jsonResponse(['ok' => false, 'error' => 'Erreur inattendue. Vérifiez les logs pour plus de détails.'], 500);
+    }
 }
 

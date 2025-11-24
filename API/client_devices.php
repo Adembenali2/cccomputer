@@ -1,12 +1,26 @@
 <?php
 // /api/client_devices.php - Retourne les derniers relevés des photocopieurs d'un client
 
+// Activer le buffer de sortie pour capturer toute sortie accidentelle
+ob_start();
+
 // Désactiver toute sortie d'erreur HTML
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
+ini_set('html_errors', 0);
 
-// Définir le header JSON en premier
-header('Content-Type: application/json; charset=utf-8');
+// Définir le header JSON en premier (avant toute sortie)
+if (!headers_sent()) {
+    header('Content-Type: application/json; charset=utf-8');
+}
+
+// Fonction helper pour nettoyer le buffer et renvoyer du JSON
+function jsonResponse($data, $statusCode = 200) {
+    ob_clean();
+    http_response_code($statusCode);
+    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK);
+    exit;
+}
 
 // Gestion de la session pour les API (sans redirection HTML)
 try {
@@ -14,31 +28,23 @@ try {
     require_once __DIR__ . '/../includes/db.php';
 } catch (Throwable $e) {
     error_log('client_devices.php require error: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['error' => 'Erreur d\'initialisation']);
-    exit;
+    jsonResponse(['error' => 'Erreur d\'initialisation'], 500);
 }
 
 // Vérifier l'authentification sans redirection HTML
 if (empty($_SESSION['user_id'])) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Non authentifié']);
-    exit;
+    jsonResponse(['error' => 'Non authentifié'], 401);
 }
 
 // Vérifier que la connexion existe
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Connexion base de données manquante']);
-    exit;
+    jsonResponse(['error' => 'Connexion base de données manquante'], 500);
 }
 
 $clientId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($clientId <= 0) {
-    http_response_code(400);
-    echo json_encode(['error' => 'ID client manquant']);
-    exit;
+    jsonResponse(['error' => 'ID client manquant'], 400);
 }
 
 try {
@@ -92,11 +98,6 @@ try {
     
     // Normaliser les données pour éviter les valeurs NULL problématiques et formater les dates
     $devices = array_map(function($device) {
-        // Formatage de la date pour faciliter l'affichage côté client
-        if (!empty($device['last_ts'])) {
-            // Garder la date telle quelle, le JS s'en occupera
-        }
-        
         // S'assurer que les valeurs numériques sont correctement typées
         $numericFields = ['TonerBlack', 'TonerCyan', 'TonerMagenta', 'TonerYellow', 
                           'TotalBW', 'TotalColor', 'TotalPages', 'last_age_hours'];
@@ -109,15 +110,12 @@ try {
         return $device;
     }, $devices);
     
-    echo json_encode($devices ?: [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK);
+    jsonResponse($devices ?: []);
     
 } catch (PDOException $e) {
     error_log('client_devices.php SQL error: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['error' => 'Erreur de base de données: ' . $e->getMessage()]);
+    jsonResponse(['error' => 'Erreur de base de données'], 500);
 } catch (Throwable $e) {
     error_log('client_devices.php error: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['error' => 'Erreur inattendue']);
+    jsonResponse(['error' => 'Erreur inattendue'], 500);
 }
-
