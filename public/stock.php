@@ -1,6 +1,8 @@
 <?php
 // /public/stock.php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/auth_role.php';
+authorize_page('stock', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
 
 try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}

@@ -2,6 +2,8 @@
 // /public/dashboard.php
 
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/auth_role.php';
+authorize_page('dashboard', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
 
 // Les fonctions safeFetchColumn() et safeFetchAll() sont maintenant dans includes/helpers.php

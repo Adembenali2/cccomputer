@@ -9,7 +9,7 @@
 
 // ====== Configuration & Sécurité ======
 require_once __DIR__ . '/../includes/auth_role.php';
-authorize_roles(['Admin', 'Dirigeant']);
+authorize_page('historique', ['Admin', 'Dirigeant']);
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
 

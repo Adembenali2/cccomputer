@@ -3,6 +3,8 @@
 // Agenda affichant les SAV et livraisons prévus par jour pour chaque utilisateur
 
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/auth_role.php';
+authorize_page('agenda', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
 
 // La fonction h() est définie dans includes/helpers.php

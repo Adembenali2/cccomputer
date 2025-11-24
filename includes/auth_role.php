@@ -48,7 +48,11 @@ function requireCommercial() {
  * @return bool True si l'utilisateur a accès, false sinon
  */
 function checkPagePermission(string $page, array $allowed_roles = []): bool {
-    global $pdo, $user_id, $emploi;
+    global $pdo;
+    
+    // Récupérer les informations de l'utilisateur depuis la session
+    $user_id = (int)($_SESSION['user_id'] ?? 0);
+    $emploi = $_SESSION['emploi'] ?? '';
     
     // Si pas de connexion DB ou pas d'utilisateur, refuser
     if (!isset($pdo) || empty($user_id)) {

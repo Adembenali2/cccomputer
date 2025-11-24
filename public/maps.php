@@ -3,7 +3,7 @@
 // Page de planification de trajets clients (version 100% gratuite : OpenStreetMap + OSRM)
 
 require_once __DIR__ . '/../includes/auth_role.php';
-authorize_roles(['Admin', 'Dirigeant']);
+authorize_page('maps', ['Admin', 'Dirigeant']);
 // Temporairement désactivé pour les tests
 // require_once __DIR__ . '/../includes/db.php';
 

@@ -8,7 +8,7 @@
 // SÉCURITÉ D'ABORD
 // ========================================================================
 require_once __DIR__ . '/../includes/auth_role.php';
-authorize_roles(['Admin', 'Dirigeant', 'Technicien', 'Livreur']);
+authorize_page('profil', ['Admin', 'Dirigeant', 'Technicien', 'Livreur']);
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/historique.php';
 require_once __DIR__ . '/../includes/helpers.php';

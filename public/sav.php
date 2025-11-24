@@ -1,6 +1,8 @@
 <?php
 // /public/sav.php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/auth_role.php';
+authorize_page('sav', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/historique.php';
 

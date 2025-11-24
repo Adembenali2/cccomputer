@@ -1,7 +1,7 @@
 <?php
 // /public/client_fiche.php
 require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
-authorize_roles(['Admin', 'Dirigeant']); // Utilise les valeurs exactes de la base de données (ENUM)   
+authorize_page('client_fiche', ['Admin', 'Dirigeant']); // Utilise les valeurs exactes de la base de données (ENUM)   
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/historique.php';
 
