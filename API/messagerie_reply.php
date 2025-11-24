@@ -1,16 +1,23 @@
 <?php
 // API pour répondre à un message (par emoji ou texte)
+
+// Activer le buffer de sortie IMMÉDIATEMENT pour capturer toute sortie accidentelle
 ob_start();
 
+// Désactiver l'affichage des erreurs HTML pour retourner uniquement du JSON
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('html_errors', 0);
+ini_set('log_errors', 1);
 
+// Définir le header JSON en premier (avant toute autre sortie)
 if (!headers_sent()) {
     header('Content-Type: application/json; charset=utf-8');
 }
 
+// Fonction pour envoyer une réponse JSON propre
 function jsonResponse(array $data, int $statusCode = 200): void {
+    // Nettoyer tout buffer de sortie avant d'envoyer le JSON
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
@@ -22,18 +29,72 @@ function jsonResponse(array $data, int $statusCode = 200): void {
     exit;
 }
 
-try {
-    // Démarrer la session AVANT tout
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
+// Gestionnaire d'erreur global pour capturer toutes les erreurs fatales
+set_error_handler(function($severity, $message, $file, $line) {
+    if (error_reporting() === 0) {
+        return false;
     }
+    // Nettoyer toute sortie avant de répondre
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log("messagerie_reply.php Error: $message in $file:$line");
+    jsonResponse(['ok' => false, 'error' => 'Erreur serveur: ' . $message], 500);
+    return true;
+});
+
+// Gestionnaire d'exception pour capturer les exceptions non capturées
+set_exception_handler(function($exception) {
+    // Nettoyer toute sortie avant de répondre
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log('messagerie_reply.php Uncaught exception: ' . $exception->getMessage());
+    error_log('Stack trace: ' . $exception->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $exception->getMessage()], 500);
+});
+
+// Gestionnaire d'erreur fatale
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE])) {
+        // Nettoyer toute sortie avant de répondre
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        error_log('messagerie_reply.php Fatal error: ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line']);
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Erreur fatale: ' . $error['message']], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+});
+
+try {
+    // Démarrer la session AVANT tout (sans générer de sortie)
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        @session_start();
+    }
+    
+    // Inclure les fichiers nécessaires (en vérifiant qu'ils n'ont pas de sortie)
+    $outputBefore = ob_get_contents();
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/db.php';
     require_once __DIR__ . '/../includes/historique.php';
     require_once __DIR__ . '/../includes/api_helpers.php';
+    $outputAfter = ob_get_contents();
+    
+    // Si des includes ont généré de la sortie, la nettoyer
+    if ($outputAfter !== $outputBefore) {
+        ob_clean();
+        error_log('messagerie_reply.php - Sortie détectée dans les includes, nettoyée');
+    }
 } catch (Throwable $e) {
     error_log('messagerie_reply.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+    error_log('Stack trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation: ' . $e->getMessage()], 500);
 }
 
 if (empty($_SESSION['user_id'])) {
@@ -202,9 +263,11 @@ try {
     try {
         $stmt = $pdo->prepare($sql);
         
-        // Log pour débogage
-        error_log('messagerie_reply.php - SQL: ' . $sql);
-        error_log('messagerie_reply.php - Params: ' . json_encode($params));
+        // Log pour débogage (seulement si DEBUG est défini)
+        if (defined('DEBUG') && DEBUG) {
+            error_log('messagerie_reply.php - SQL: ' . $sql);
+            error_log('messagerie_reply.php - Params: ' . json_encode($params));
+        }
         
         $stmt->execute($params);
         
@@ -216,11 +279,13 @@ try {
         
         $pdo->commit();
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         throw $e; // Re-lancer pour être capturé par le catch externe
     }
     
-    // Enregistrer dans l'historique
+    // Enregistrer dans l'historique (sans générer de sortie)
     try {
         $reponseTypeLabel = $reponseType === 'emoji' ? 'emoji' : 'texte';
         $contenuShort = mb_substr($reponseContenu, 0, 50);
@@ -234,9 +299,27 @@ try {
             mb_substr($parent['sujet'], 0, 50),
             $contenuShort
         );
+        
+        // Vérifier qu'il n'y a pas de sortie avant l'appel
+        $outputBefore = ob_get_contents();
         enregistrerAction($pdo, $idExpediteur, 'message_repondu', $details);
+        $outputAfter = ob_get_contents();
+        
+        // Si enregistrerAction a généré de la sortie, la nettoyer
+        if ($outputAfter !== $outputBefore) {
+            ob_clean();
+            error_log('messagerie_reply.php - Sortie détectée dans enregistrerAction, nettoyée');
+        }
     } catch (Throwable $e) {
         error_log('messagerie_reply.php log error: ' . $e->getMessage());
+        // Ne pas bloquer la réponse si l'historique échoue
+    }
+    
+    // S'assurer qu'il n'y a pas de sortie avant d'envoyer le JSON
+    $finalOutput = ob_get_contents();
+    if (!empty($finalOutput)) {
+        ob_clean();
+        error_log('messagerie_reply.php - Sortie détectée avant jsonResponse, nettoyée: ' . substr($finalOutput, 0, 200));
     }
     
     jsonResponse([
