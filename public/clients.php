@@ -12,37 +12,13 @@ if (method_exists($pdo, 'setAttribute')) {
 // ==================================================================
 // Constantes & Helpers
 // ==================================================================
-const PHONE_PATTERN   = '/^[0-9+\-.\s]{6,}$/';
-const POSTAL_PATTERN  = '/^[0-9]{4,10}$/';
-const SIRET_PATTERN   = '/^[0-9]{14}$/';
-
-// La fonction h() est définie dans includes/helpers.php
-function pctOrDash($v): string { if ($v === null || $v === '' || !is_numeric($v)) return '—'; $v = max(0, min(100, (int)$v)); return $v.'%'; }
-function old(string $key, string $default=''): string { return htmlspecialchars($_POST[$key] ?? $default, ENT_QUOTES, 'UTF-8'); }
-function currentUserId(): ?int {
-    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
-    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
-    return null;
-}
-// La fonction validateEmailBool() est définie dans includes/helpers.php
-// Utiliser validateEmailBool() pour validation simple (retourne bool)
-// ou validateEmail() pour validation stricte (retourne string, lance exception)
-function validatePhone(?string $phone): bool {
-    if ($phone === null || $phone === '') return true;
-    return (bool)preg_match(PHONE_PATTERN, $phone);
-}
-function validatePostalCode(string $postal): bool {
-    return (bool)preg_match(POSTAL_PATTERN, $postal);
-}
-function validateSiret(string $siret): bool {
-    return (bool)preg_match(SIRET_PATTERN, $siret);
-}
-// La fonction ensureCsrfToken() est définie dans includes/helpers.php
-function assertValidCsrf(string $token): void {
-    if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
-        throw new RuntimeException("Session expirée. Veuillez recharger la page.");
-    }
-}
+// Toutes les fonctions helper sont maintenant dans includes/helpers.php
+// Les fonctions suivantes sont disponibles :
+// - h(), validateEmail(), validateEmailBool(), validateId(), validateString()
+// - formatDate(), ensureCsrfToken(), verifyCsrfToken(), assertValidCsrf()
+// - safeFetchAll(), safeFetch(), safeFetchColumn()
+// - currentUserId(), validatePhone(), validatePostalCode(), validateSiret()
+// - pctOrDash(), old()
 function rowHasAlert(array $row): bool {
     $macNorm = $row['mac_norm'] ?? '';
     $sn      = $row['SerialNumber'] ?? '';

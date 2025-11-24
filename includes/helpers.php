@@ -155,3 +155,84 @@ if (!function_exists('safeFetchColumn')) {
     }
 }
 
+/**
+ * Récupère l'ID de l'utilisateur actuel depuis la session
+ */
+if (!function_exists('currentUserId')) {
+    function currentUserId(): ?int {
+        if (isset($_SESSION['user']['id'])) {
+            return (int)$_SESSION['user']['id'];
+        }
+        if (isset($_SESSION['user_id'])) {
+            return (int)$_SESSION['user_id'];
+        }
+        return null;
+    }
+}
+
+/**
+ * Vérifie le token CSRF et lance une exception si invalide
+ */
+if (!function_exists('assertValidCsrf')) {
+    function assertValidCsrf(string $token): void {
+        if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+            throw new RuntimeException("Session expirée. Veuillez recharger la page.");
+        }
+    }
+}
+
+/**
+ * Valide un numéro de téléphone (optionnel)
+ */
+if (!function_exists('validatePhone')) {
+    function validatePhone(?string $phone): bool {
+        if ($phone === null || $phone === '') {
+            return true; // Optionnel
+        }
+        $pattern = '/^[0-9+\-.\s]{6,}$/';
+        return (bool)preg_match($pattern, $phone);
+    }
+}
+
+/**
+ * Valide un code postal
+ */
+if (!function_exists('validatePostalCode')) {
+    function validatePostalCode(string $postal): bool {
+        $pattern = '/^[0-9]{4,10}$/';
+        return (bool)preg_match($pattern, $postal);
+    }
+}
+
+/**
+ * Valide un numéro SIRET
+ */
+if (!function_exists('validateSiret')) {
+    function validateSiret(string $siret): bool {
+        $pattern = '/^[0-9]{14}$/';
+        return (bool)preg_match($pattern, $siret);
+    }
+}
+
+/**
+ * Formate un pourcentage ou retourne "—"
+ */
+if (!function_exists('pctOrDash')) {
+    function pctOrDash($v): string {
+        if ($v === null || $v === '' || !is_numeric($v)) {
+            return '—';
+        }
+        $v = max(0, min(100, (int)$v));
+        return $v . '%';
+    }
+}
+
+/**
+ * Récupère une valeur POST avec fallback (pour les formulaires)
+ */
+if (!function_exists('old')) {
+    function old(string $key, string $default = ''): string {
+        return htmlspecialchars($_POST[$key] ?? $default, ENT_QUOTES, 'UTF-8');
+    }
+}
+

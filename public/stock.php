@@ -1092,7 +1092,7 @@ function initAddModal(){
     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
     try {
-      const res = await fetch('../API/stock_add.php', {
+      const res = await fetch('/API/stock_add.php', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ 

@@ -1,44 +1,13 @@
 <?php
 // /api/stock_add.php
+require_once __DIR__ . '/../includes/api_helpers.php';
 
-// Activer le buffer de sortie IMMÉDIATEMENT pour capturer toute sortie accidentelle
-ob_start();
+initApi();
+requireApiAuth();
+$pdo = requirePdoConnection();
+require_once __DIR__ . '/../includes/historique.php';
 
-// Désactiver l'affichage des erreurs HTML pour retourner uniquement du JSON
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('html_errors', 0);
-
-// Définir le header JSON en premier (avant toute autre sortie)
-if (!headers_sent()) {
-    header('Content-Type: application/json; charset=utf-8');
-}
-
-// Fonction pour envoyer une réponse JSON propre
-function jsonResponse(array $data, int $statusCode = 200) {
-    // Nettoyer tout buffer de sortie avant d'envoyer le JSON
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    http_response_code($statusCode);
-    if (!headers_sent()) {
-        header('Content-Type: application/json; charset=utf-8');
-    }
-    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK);
-    exit;
-}
-
-// Gestion de la session pour les API (sans redirection HTML)
-try {
-    require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
-    require_once __DIR__ . '/../includes/historique.php';
-} catch (Throwable $e) {
-    error_log('stock_add.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
-}
-
-// Fonction helper pour enregistrer dans l'historique (comme dans profil.php)
+// Fonction helper pour enregistrer dans l'historique
 function logStockAction(PDO $pdo, string $action, string $details): void {
     try {
         $userId = $_SESSION['user_id'] ?? null;

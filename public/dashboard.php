@@ -4,33 +4,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
-/**
- * Raccourcis d'accès BDD avec journalisation.
- *
- * @param string $context Label pour les logs d'erreurs.
- */
-$safeFetchColumn = static function (PDO $pdo, string $sql, array $params = [], $default = null, string $context = 'query') {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchColumn();
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return $default;
-    }
-};
-
-$safeFetchAll = static function (PDO $pdo, string $sql, array $params = [], string $context = 'query') : array {
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return is_array($rows) ? $rows : [];
-    } catch (PDOException $e) {
-        error_log("Erreur SQL ({$context}) : " . $e->getMessage());
-        return [];
-    }
-};
+// Les fonctions safeFetchColumn() et safeFetchAll() sont maintenant dans includes/helpers.php
 
 /** CSRF minimal **/
 // La fonction ensureCsrfToken() est définie dans includes/helpers.php
@@ -41,7 +15,7 @@ ensureCsrfToken();
 // ==================================================================
 // Historique des actions (requêtes SQL réelles)
 // ==================================================================
-$nHistorique = (string)($safeFetchColumn(
+$nHistorique = (string)(safeFetchColumn(
     $pdo,
     "SELECT COUNT(*) FROM historique",
     [],
@@ -49,7 +23,7 @@ $nHistorique = (string)($safeFetchColumn(
     'historique_count'
 ) ?? 'Erreur');
 
-$historique_par_jour = $safeFetchAll(
+$historique_par_jour = safeFetchAll(
     $pdo,
     "SELECT DATE(date_action) AS date, COUNT(*) AS total_historique
      FROM historique
@@ -67,7 +41,7 @@ $nb_paiements_en_attente = 0; // Table 'paiements' non présente dans le schéma
 
 // Pour SAV, les statuts ENUM sont: 'ouvert','en_cours','resolu','annule'
 // On compte les SAV ouverts et en cours comme "à traiter"
-$nb_sav_a_traiter = (int)($safeFetchColumn(
+$nb_sav_a_traiter = (int)(safeFetchColumn(
     $pdo,
     "SELECT COUNT(*) FROM sav WHERE statut IN (:stat1, :stat2)",
     ['stat1' => 'ouvert', 'stat2' => 'en_cours'],
@@ -77,7 +51,7 @@ $nb_sav_a_traiter = (int)($safeFetchColumn(
 
 // Pour livraisons, les statuts ENUM sont: 'planifiee','en_cours','livree','annulee'
 // On compte les livraisons planifiées et en cours comme "à faire"
-$nb_livraisons_a_faire = (int)($safeFetchColumn(
+$nb_livraisons_a_faire = (int)(safeFetchColumn(
     $pdo,
     "SELECT COUNT(*) FROM livraisons WHERE statut IN (:stat1, :stat2)",
     ['stat1' => 'planifiee', 'stat2' => 'en_cours'],
@@ -106,7 +80,7 @@ if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 300) {
 }
 
 if (empty($clients)) {
-    $clients = $safeFetchAll(
+    $clients = safeFetchAll(
         $pdo,
         "SELECT 
             id,
@@ -309,7 +283,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     <div class="cdv-title">Attribuer une photocopieuse</div>
                     <div class="cdv-sub">Client : <span id="assign-client-name">—</span></div>
                 </div>
-                <form method="post" action="/api/attribuer_photocopieur.php" class="assign-form">
+                    <form method="post" action="/API/clients/attribuer_photocopieur.php" class="assign-form">
                     <input type="hidden" name="id_client" id="assign-id-client" value="">
 
                     <div class="cdv-field">

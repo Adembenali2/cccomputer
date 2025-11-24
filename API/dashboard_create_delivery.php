@@ -1,43 +1,11 @@
 <?php
 // API pour créer une livraison et déduire le stock (pour dashboard)
-ob_start();
+require_once __DIR__ . '/../includes/api_helpers.php';
 
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('html_errors', 0);
-
-if (!headers_sent()) {
-    header('Content-Type: application/json; charset=utf-8');
-}
-
-function jsonResponse(array $data, int $statusCode = 200) {
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    http_response_code($statusCode);
-    if (!headers_sent()) {
-        header('Content-Type: application/json; charset=utf-8');
-    }
-    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-try {
-    require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
-    require_once __DIR__ . '/../includes/historique.php';
-} catch (Throwable $e) {
-    error_log('dashboard_create_delivery.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
-}
-
-if (empty($_SESSION['user_id'])) {
-    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
-}
-
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
-}
+initApi();
+requireApiAuth();
+$pdo = requirePdoConnection();
+require_once __DIR__ . '/../includes/historique.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
@@ -57,11 +25,7 @@ if (!is_array($data)) {
 }
 
 // Vérification CSRF
-$csrfToken = $data['csrf_token'] ?? '';
-$csrfSession = $_SESSION['csrf_token'] ?? '';
-if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrfToken)) {
-    jsonResponse(['ok' => false, 'error' => 'Token CSRF invalide'], 403);
-}
+requireCsrfToken($data['csrf_token'] ?? null);
 
 // Validation des données
 $idClient = isset($data['client_id']) ? (int)$data['client_id'] : 0;
