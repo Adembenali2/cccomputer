@@ -205,7 +205,13 @@ $stockFaible = [
 ];
 $nbStockFaible = count($stockFaible['papier']) + count($stockFaible['toners']) + count($stockFaible['lcd']) + count($stockFaible['pc']);
 
-$datasets = ['copiers'=>$copiers, 'lcd'=>$lcd, 'pc'=>$pc];
+$datasets = [
+  'copiers'=>$copiers, 
+  'lcd'=>$lcd, 
+  'pc'=>$pc,
+  'toners'=>$toners,
+  'papier'=>$papers
+];
 
 $sectionImages = [
   'photocopieurs' => '/assets/img/stock/photocopieurs.jpg',
@@ -296,14 +302,17 @@ $sectionImages = [
         </div>
       </div>
       <div class="table-wrapper">
-        <table class="tbl-stock tbl-compact">
+        <table class="tbl-stock tbl-compact click-rows">
           <colgroup>
             <col class="col-couleur"><col class="col-modele"><col class="col-qty">
           </colgroup>
           <thead><tr><th>Couleur</th><th>Modèle</th><th>Qté</th></tr></thead>
           <tbody>
           <?php foreach ($toners as $t): ?>
-            <tr data-search="<?= h(strtolower($t['marque'].' '.$t['modele'].' '.$t['couleur'])) ?>">
+            <tr 
+              data-type="toners" 
+              data-id="<?= h($t['id']) ?>"
+              data-search="<?= h(strtolower($t['marque'].' '.$t['modele'].' '.$t['couleur'])) ?>">
               <td data-th="Couleur" title="<?= h($t['couleur']) ?>"><?= h($t['couleur']) ?></td>
               <td data-th="Modèle"  title="<?= h($t['modele']) ?>"><?= h($t['modele']) ?></td>
               <td data-th="Qté" class="td-metric <?= (int)$t['qty']===0?'is-zero':'' ?>"><?= (int)$t['qty'] ?></td>
@@ -330,14 +339,17 @@ $sectionImages = [
         </div>
       </div>
       <div class="table-wrapper">
-        <table class="tbl-stock tbl-compact">
+        <table class="tbl-stock tbl-compact click-rows">
           <colgroup>
             <col class="col-qty"><col class="col-modele"><col class="col-poids">
           </colgroup>
           <thead><tr><th>Qté</th><th>Modèle</th><th>Poids</th></tr></thead>
           <tbody>
           <?php foreach ($papers as $p): ?>
-            <tr data-search="<?= h(strtolower(($p['marque']??'').' '.($p['modele']??'').' '.($p['poids']??''))) ?>">
+            <tr 
+              data-type="papier" 
+              data-id="<?= h($p['paper_id'] ?? '') ?>"
+              data-search="<?= h(strtolower(($p['marque']??'').' '.($p['modele']??'').' '.($p['poids']??''))) ?>">
               <td data-th="Qté"     class="td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
               <td data-th="Modèle"  title="<?= h($p['modele'] ?? '—') ?>"><?= h($p['modele'] ?? '—') ?></td>
               <td data-th="Poids"   title="<?= h($p['poids'] ?? '—') ?>"><?= h($p['poids'] ?? '—') ?></td>
@@ -656,7 +668,16 @@ function initDetailModal(){
 
   function renderDetails(type, row){
     grid.innerHTML = '';
-    titleEl.textContent = `${row.modele ?? row.reference ?? 'Détails'} — ${type.toUpperCase()}`;
+    const typeNames = {
+      'copiers': 'PHOTOCOPIEUR',
+      'lcd': 'LCD',
+      'pc': 'PC',
+      'toners': 'TONER',
+      'papier': 'PAPIER'
+    };
+    const displayName = row.modele ?? row.reference ?? row.marque ?? 'Détails';
+    titleEl.textContent = `${displayName} — ${typeNames[type] || type.toUpperCase()}`;
+    
     if (type === 'copiers') {
       addField(grid, 'Marque', row.marque);
       addField(grid, 'Modèle', row.modele);
@@ -691,22 +712,47 @@ function initDetailModal(){
       addField(grid, 'Ports', row.ports);
       addField(grid, 'Prix', row.prix!=null ? new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(row.prix) : '—');
       addField(grid, 'Quantité', row.qty);
+    } else if (type === 'toners') {
+      addField(grid, 'Marque', row.marque);
+      addField(grid, 'Modèle', row.modele);
+      addField(grid, 'Couleur', row.couleur);
+      addField(grid, 'Quantité', row.qty);
+    } else if (type === 'papier') {
+      addField(grid, 'Marque', row.marque);
+      addField(grid, 'Modèle', row.modele);
+      addField(grid, 'Poids', row.poids);
+      addField(grid, 'Quantité', row.qty_stock ?? row.qty ?? 0);
     }
   }
 
+  // Rendre toutes les lignes cliquables (toners, papier, lcd, pc)
   document.querySelectorAll('.click-rows tbody tr[data-type][data-id]').forEach(tr=>{
     tr.style.cursor = 'pointer';
     tr.tabIndex = 0;
-    tr.addEventListener('click', ()=>{
+    tr.setAttribute('role', 'button');
+    tr.setAttribute('aria-label', 'Afficher les détails');
+    
+    tr.addEventListener('click', (e)=>{
+      // Ne pas ouvrir si l'utilisateur est en train de sélectionner du texte
+      if (window.getSelection && String(window.getSelection())) return;
+      
       const type = tr.getAttribute('data-type');
       const id   = tr.getAttribute('data-id');
       const rows = (DATASETS[type]||[]);
       const row  = rows.find(r=>String(r.id)===String(id));
-      if (!row) return;
-      renderDetails(type, row); open();
+      if (!row) {
+        console.warn('Ligne non trouvée dans le dataset:', {type, id});
+        return;
+      }
+      renderDetails(type, row); 
+      open();
     });
+    
     tr.addEventListener('keydown', (e)=>{
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.click(); }
+      if (e.key === 'Enter' || e.key === ' ') { 
+        e.preventDefault(); 
+        tr.click(); 
+      }
     });
   });
 })();

@@ -508,22 +508,25 @@ if (empty($_SESSION['csrf_token'])) {
         
         function initChart(period = 'monthly') {
             const data = chartData[period];
-            let labels, consumptionData, amountData;
+            let labels, nbPagesData, colorPagesData, amountData;
             
             if (period === 'daily') {
                 labels = data.map(d => new Date(d.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }));
-                consumptionData = data.map(d => d.consumption);
+                nbPagesData = data.map(d => d.nb_pages);
+                colorPagesData = data.map(d => d.color_pages);
                 amountData = data.map(d => d.amount);
             } else if (period === 'monthly') {
                 labels = data.map(d => {
                     const date = new Date(d.month + '-01');
                     return date.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
                 });
-                consumptionData = data.map(d => d.consumption);
+                nbPagesData = data.map(d => d.nb_pages);
+                colorPagesData = data.map(d => d.color_pages);
                 amountData = data.map(d => d.amount);
             } else {
                 labels = data.map(d => d.year);
-                consumptionData = data.map(d => d.consumption);
+                nbPagesData = data.map(d => d.nb_pages);
+                colorPagesData = data.map(d => d.color_pages);
                 amountData = data.map(d => d.amount);
             }
             
@@ -537,10 +540,18 @@ if (empty($_SESSION['csrf_token'])) {
                     labels: labels,
                     datasets: [
                         {
-                            label: 'Consommation (pages)',
-                            data: consumptionData,
+                            label: 'Noir et Blanc (pages)',
+                            data: nbPagesData,
                             borderColor: 'rgb(59, 130, 246)',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Couleur (pages)',
+                            data: colorPagesData,
+                            borderColor: 'rgb(236, 72, 153)',
+                            backgroundColor: 'rgba(236, 72, 153, 0.1)',
                             yAxisID: 'y',
                             tension: 0.4
                         },
@@ -569,7 +580,9 @@ if (empty($_SESSION['csrf_token'])) {
                             callbacks: {
                                 label: function(context) {
                                     if (context.datasetIndex === 0) {
-                                        return 'Consommation: ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                                        return 'NB: ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                                    } else if (context.datasetIndex === 1) {
+                                        return 'Couleur: ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
                                     } else {
                                         return 'Montant: ' + context.parsed.y.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
                                     }

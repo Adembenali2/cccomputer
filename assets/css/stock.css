@@ -419,10 +419,28 @@ html, body { max-width: 100%; overflow-x: hidden; }
   padding-right: 1rem;
 }
 
-/* Correspondance pour les cellules */
+/* Correspondance pour les cellules - alignement parfait */
 .tbl-stock tbody td:first-child.td-metric,
 .tbl-stock tbody td:last-child.td-metric {
   text-align: right;
+  padding-right: 1rem;
+}
+
+/* Alignement uniforme pour toutes les colonnes */
+.tbl-stock thead th,
+.tbl-stock tbody td {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+/* Colonnes numériques alignées à droite avec padding cohérent */
+.tbl-stock thead th:last-child,
+.tbl-stock tbody td.td-metric {
+  padding-right: 1rem;
+}
+
+.tbl-stock thead th:first-child:has-text("Qté"),
+.tbl-stock thead th:first-child {
   padding-right: 1rem;
 }
 
