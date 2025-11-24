@@ -469,6 +469,45 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.export-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-group label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.filter-group select,
+.filter-group input[type="month"] {
+    padding: 0.625rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-family: inherit;
+    background: white;
+}
+
+.filter-group select:focus,
+.filter-group input[type="month"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .export-buttons {
     display: flex;
     gap: 1rem;
@@ -763,6 +802,10 @@
     
     .export-buttons button {
         width: 100%;
+    }
+    
+    .export-filters {
+        grid-template-columns: 1fr;
     }
 }
 
