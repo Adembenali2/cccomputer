@@ -578,6 +578,23 @@ $totalMessages = count($messages);
                         
                         $dateEnvoi = $msg['date_envoi'] ?? '';
                         $dateFormatted = $dateEnvoi ? date('d/m/Y à H:i', strtotime($dateEnvoi)) : '';
+                        
+                        // Pour l'expéditeur : déterminer si le message a été lu
+                        $isReadByRecipient = false;
+                        $dateLecture = null;
+                        $dateLectureFormatted = '';
+                        if ($isFromMe && $msg['id_destinataire'] !== null) {
+                            // Message direct envoyé : vérifier si lu par le destinataire
+                            $isReadByRecipient = !empty($msg['lu']) && (int)$msg['lu'] === 1;
+                            if ($isReadByRecipient && !empty($msg['date_lecture'])) {
+                                $dateLecture = $msg['date_lecture'];
+                                $dateLectureFormatted = date('d/m/Y à H:i', strtotime($dateLecture));
+                            }
+                        } elseif ($isFromMe && $msg['id_destinataire'] === null) {
+                            // Message "à tous" envoyé : on ne peut pas savoir qui l'a lu individuellement
+                            // Mais on peut au moins vérifier si quelqu'un l'a lu
+                            $isReadByRecipient = false; // Pour les messages à tous, on ne montre pas de statut individuel
+                        }
                         ?>
                         <div class="message-item <?= $isUnread ? 'unread' : '' ?>" data-message-id="<?= (int)$msg['id'] ?>">
                             <div class="message-header">
@@ -587,9 +604,25 @@ $totalMessages = count($messages);
                                     <?php if ($isUnread): ?>
                                         <span class="message-badge-unread">Nouveau</span>
                                     <?php endif; ?>
+                                    <?php if ($isFromMe && $msg['id_destinataire'] !== null): ?>
+                                        <?php if ($isReadByRecipient): ?>
+                                            <span class="message-badge-read" title="Lu le <?= h($dateLectureFormatted) ?>">
+                                                ✓ Lu
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="message-badge-unread-sender" title="En attente de lecture">
+                                                ⏳ Non lu
+                                            </span>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="message-meta">
                                     <span class="message-date"><?= h($dateFormatted) ?></span>
+                                    <?php if ($isReadByRecipient && $dateLectureFormatted): ?>
+                                        <span class="message-read-date" title="Date de lecture">
+                                            Lu le <?= h($dateLectureFormatted) ?>
+                                        </span>
+                                    <?php endif; ?>
                                     <?php 
                                     // Afficher le bouton "Marquer comme lu" si :
                                     // - Le message est pour moi (destinataire direct ou message à tous)
@@ -1021,6 +1054,7 @@ if (form && messageStatus) {
 document.querySelectorAll('.btn-mark-read').forEach(btn => {
     btn.addEventListener('click', async () => {
         const messageId = btn.getAttribute('data-id');
+        const messageItem = btn.closest('.message-item');
         
         try {
             const response = await fetch('/API/messagerie_mark_read.php', {
@@ -1035,8 +1069,18 @@ document.querySelectorAll('.btn-mark-read').forEach(btn => {
             
             const result = await response.json();
             if (result.ok) {
-                btn.closest('.message-item').classList.remove('unread');
+                // Retirer la classe unread
+                messageItem.classList.remove('unread');
+                
+                // Retirer le badge "Nouveau" s'il existe
+                const unreadBadge = messageItem.querySelector('.message-badge-unread');
+                if (unreadBadge) {
+                    unreadBadge.remove();
+                }
+                
+                // Retirer le bouton "Marquer comme lu"
                 btn.remove();
+                
                 // Mettre à jour le compteur dans le header si présent
                 const badge = document.querySelector('.messagerie-badge');
                 if (badge) {
@@ -1048,6 +1092,15 @@ document.querySelectorAll('.btn-mark-read').forEach(btn => {
                         }
                     }
                 }
+                
+                // Si c'est un message envoyé par quelqu'un d'autre, mettre à jour l'indicateur pour l'expéditeur
+                // (cela nécessiterait une mise à jour en temps réel, mais pour l'instant on recharge la page)
+                // On pourrait aussi faire un polling ou utiliser WebSockets, mais pour l'instant on se contente d'un rechargement
+                // après un court délai pour permettre à l'expéditeur de voir le changement
+                setTimeout(() => {
+                    // Optionnel : recharger la page pour mettre à jour tous les indicateurs
+                    // window.location.reload();
+                }, 2000);
             }
         } catch (err) {
             console.error('Erreur marquer lu:', err);

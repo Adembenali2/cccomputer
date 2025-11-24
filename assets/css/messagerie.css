@@ -253,6 +253,45 @@
     animation: bounceIn 0.5s ease-out;
 }
 
+.message-badge-read {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    color: #fff;
+    border-radius: 999px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+    animation: bounceIn 0.5s ease-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.message-badge-unread-sender {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    color: #fff;
+    border-radius: 999px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+    animation: bounceIn 0.5s ease-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.message-read-date {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    white-space: nowrap;
+}
+
 @keyframes bounceIn {
     0% {
         transform: scale(0);
