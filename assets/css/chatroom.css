@@ -537,3 +537,86 @@
         background-color: transparent;
     }
 }
+
+/* ====== Images dans les messages ====== */
+.message-image {
+    max-width: 100%;
+    max-height: 400px;
+    border-radius: var(--radius-md);
+    margin-top: 0.5rem;
+    cursor: pointer;
+    object-fit: contain;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease;
+}
+
+.message-image:hover {
+    transform: scale(1.02);
+}
+
+.message-me .message-image {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.message-other .message-image {
+    border: 2px solid var(--border-color);
+}
+
+/* Aperçu d'image avant envoi */
+.image-preview-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.image-preview {
+    max-width: 100px;
+    max-height: 100px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    border: 1px solid var(--border-color);
+}
+
+.image-preview-remove {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.image-preview-remove:hover {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+}
+
+.image-upload-btn {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-right: 0.5rem;
+    flex-shrink: 0;
+}
+
+.image-upload-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent-primary);
+    transform: scale(1.05);
+}

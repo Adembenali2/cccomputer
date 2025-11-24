@@ -57,10 +57,9 @@ try {
                 m.id,
                 m.id_user,
                 m.message,
+                m.image_path,
                 m.date_envoi,
                 m.mentions,
-                m.type_lien,
-                m.id_lien,
                 u.nom,
                 u.prenom,
                 u.Emploi
@@ -79,10 +78,9 @@ try {
                 m.id,
                 m.id_user,
                 m.message,
+                m.image_path,
                 m.date_envoi,
                 m.mentions,
-                m.type_lien,
-                m.id_lien,
                 u.nom,
                 u.prenom,
                 u.Emploi
@@ -112,60 +110,17 @@ try {
             $mentionsArray = json_decode($msg['mentions'], true) ?: [];
         }
 
-        // Récupérer les infos du lien si présent
-        $lienInfo = null;
-        if ($msg['type_lien'] && $msg['id_lien']) {
-            try {
-                if ($msg['type_lien'] === 'client') {
-                    $lienStmt = $pdo->prepare("SELECT id, raison_sociale FROM clients WHERE id = :id LIMIT 1");
-                    $lienStmt->execute([':id' => $msg['id_lien']]);
-                    $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
-                    if ($lienData) {
-                        $lienInfo = [
-                            'type' => 'client',
-                            'id' => (int)$lienData['id'],
-                            'label' => $lienData['raison_sociale']
-                        ];
-                    }
-                } elseif ($msg['type_lien'] === 'livraison') {
-                    $lienStmt = $pdo->prepare("SELECT id, reference FROM livraisons WHERE id = :id LIMIT 1");
-                    $lienStmt->execute([':id' => $msg['id_lien']]);
-                    $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
-                    if ($lienData) {
-                        $lienInfo = [
-                            'type' => 'livraison',
-                            'id' => (int)$lienData['id'],
-                            'label' => $lienData['reference']
-                        ];
-                    }
-                } elseif ($msg['type_lien'] === 'sav') {
-                    $lienStmt = $pdo->prepare("SELECT id, reference FROM sav WHERE id = :id LIMIT 1");
-                    $lienStmt->execute([':id' => $msg['id_lien']]);
-                    $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
-                    if ($lienData) {
-                        $lienInfo = [
-                            'type' => 'sav',
-                            'id' => (int)$lienData['id'],
-                            'label' => $lienData['reference']
-                        ];
-                    }
-                }
-            } catch (PDOException $e) {
-                error_log('chatroom_get.php - Erreur récupération lien: ' . $e->getMessage());
-            }
-        }
-
         $formattedMessages[] = [
             'id' => (int)$msg['id'],
             'id_user' => (int)$msg['id_user'],
             'message' => $msg['message'],
+            'image_path' => $msg['image_path'],
             'date_envoi' => $msg['date_envoi'],
             'user_nom' => $msg['nom'],
             'user_prenom' => $msg['prenom'],
             'user_emploi' => $msg['Emploi'],
             'is_me' => (int)$msg['id_user'] === $currentUserId,
-            'mentions' => $mentionsArray,
-            'lien' => $lienInfo
+            'mentions' => $mentionsArray
         ];
     }
 

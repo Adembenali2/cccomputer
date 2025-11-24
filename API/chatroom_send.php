@@ -41,11 +41,14 @@ try {
         exit;
     }
 
-    // Valider le message
+    // Valider le message (peut être vide si une image est envoyée)
     $message = trim($data['message'] ?? '');
-    if (empty($message)) {
+    $imagePath = $data['image_path'] ?? null;
+
+    // Le message ou l'image doit être présent
+    if (empty($message) && empty($imagePath)) {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'Le message ne peut pas être vide']);
+        echo json_encode(['ok' => false, 'error' => 'Le message ou une image doit être fourni']);
         exit;
     }
 
@@ -60,18 +63,6 @@ try {
     $mentions = [];
     if (!empty($data['mentions']) && is_array($data['mentions'])) {
         $mentions = array_filter(array_map('intval', $data['mentions']));
-    }
-
-    // Récupérer le lien (client/SAV/livraison)
-    $typeLien = null;
-    $idLien = null;
-    if (!empty($data['type_lien']) && in_array($data['type_lien'], ['client', 'livraison', 'sav'], true)) {
-        $typeLien = $data['type_lien'];
-        $idLien = isset($data['id_lien']) ? (int)$data['id_lien'] : null;
-        if ($idLien <= 0) {
-            $idLien = null;
-            $typeLien = null;
-        }
     }
 
     // Vérifier que la table existe
@@ -94,16 +85,15 @@ try {
 
     // Insérer le message
     $stmt = $pdo->prepare("
-        INSERT INTO chatroom_messages (id_user, message, date_envoi, mentions, type_lien, id_lien)
-        VALUES (:id_user, :message, NOW(), :mentions, :type_lien, :id_lien)
+        INSERT INTO chatroom_messages (id_user, message, image_path, date_envoi, mentions)
+        VALUES (:id_user, :message, :image_path, NOW(), :mentions)
     ");
 
     $stmt->execute([
         ':id_user' => $userId,
         ':message' => $message,
-        ':mentions' => $mentionsJson,
-        ':type_lien' => $typeLien,
-        ':id_lien' => $idLien
+        ':image_path' => $imagePath,
+        ':mentions' => $mentionsJson
     ]);
 
     $messageId = (int)$pdo->lastInsertId();
@@ -177,10 +167,9 @@ try {
             m.id,
             m.id_user,
             m.message,
+            m.image_path,
             m.date_envoi,
             m.mentions,
-            m.type_lien,
-            m.id_lien,
             u.nom,
             u.prenom,
             u.Emploi
@@ -198,49 +187,6 @@ try {
         exit;
     }
 
-    // Récupérer les infos du lien si présent
-    $lienInfo = null;
-    if ($messageData['type_lien'] && $messageData['id_lien']) {
-        try {
-            if ($messageData['type_lien'] === 'client') {
-                $lienStmt = $pdo->prepare("SELECT id, raison_sociale FROM clients WHERE id = :id LIMIT 1");
-                $lienStmt->execute([':id' => $messageData['id_lien']]);
-                $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
-                if ($lienData) {
-                    $lienInfo = [
-                        'type' => 'client',
-                        'id' => (int)$lienData['id'],
-                        'label' => $lienData['raison_sociale']
-                    ];
-                }
-            } elseif ($messageData['type_lien'] === 'livraison') {
-                $lienStmt = $pdo->prepare("SELECT id, reference FROM livraisons WHERE id = :id LIMIT 1");
-                $lienStmt->execute([':id' => $messageData['id_lien']]);
-                $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
-                if ($lienData) {
-                    $lienInfo = [
-                        'type' => 'livraison',
-                        'id' => (int)$lienData['id'],
-                        'label' => $lienData['reference']
-                    ];
-                }
-            } elseif ($messageData['type_lien'] === 'sav') {
-                $lienStmt = $pdo->prepare("SELECT id, reference FROM sav WHERE id = :id LIMIT 1");
-                $lienStmt->execute([':id' => $messageData['id_lien']]);
-                $lienData = $lienStmt->fetch(PDO::FETCH_ASSOC);
-                if ($lienData) {
-                    $lienInfo = [
-                        'type' => 'sav',
-                        'id' => (int)$lienData['id'],
-                        'label' => $lienData['reference']
-                    ];
-                }
-            }
-        } catch (PDOException $e) {
-            error_log('chatroom_send.php - Erreur récupération lien: ' . $e->getMessage());
-        }
-    }
-
     // Parser les mentions
     $mentionsArray = [];
     if (!empty($messageData['mentions'])) {
@@ -254,12 +200,12 @@ try {
             'id' => (int)$messageData['id'],
             'id_user' => (int)$messageData['id_user'],
             'message' => $messageData['message'],
+            'image_path' => $messageData['image_path'],
             'date_envoi' => $messageData['date_envoi'],
             'user_nom' => $messageData['nom'],
             'user_prenom' => $messageData['prenom'],
             'user_emploi' => $messageData['Emploi'],
-            'mentions' => $mentionsArray,
-            'lien' => $lienInfo
+            'mentions' => $mentionsArray
         ]
     ]);
 

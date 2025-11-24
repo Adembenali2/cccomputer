@@ -1,7 +1,8 @@
 -- Migration : Création de la table chatroom_messages pour la chatroom globale
 -- Date : 2024
 -- Description : Table pour stocker les messages de la chatroom globale (type groupe WhatsApp/Messenger)
--- Avec support des mentions (@username) et liens vers clients/SAVs/livraisons
+-- Avec support des mentions (@username) et images
+-- Les messages sont automatiquement supprimés après 24h
 
 DROP TABLE IF EXISTS `chatroom_messages`;
 
@@ -9,14 +10,12 @@ CREATE TABLE `chatroom_messages` (
   `id` int NOT NULL AUTO_INCREMENT,
   `id_user` int NOT NULL COMMENT 'ID de l''utilisateur qui a envoyé le message',
   `message` text COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Contenu du message',
+  `image_path` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Chemin relatif vers l''image (si présente)',
   `date_envoi` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date et heure d''envoi du message',
   `mentions` text COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'JSON array des IDs utilisateurs mentionnés (@username)',
-  `type_lien` enum('client','livraison','sav') DEFAULT NULL COMMENT 'Type de lien associé',
-  `id_lien` int DEFAULT NULL COMMENT 'ID du client/livraison/SAV lié',
   PRIMARY KEY (`id`),
   KEY `idx_id_user` (`id_user`),
   KEY `idx_date_envoi` (`date_envoi`),
-  KEY `idx_type_lien` (`type_lien`, `id_lien`),
   CONSTRAINT `fk_chatroom_messages_user` FOREIGN KEY (`id_user`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

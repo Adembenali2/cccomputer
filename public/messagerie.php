@@ -1,7 +1,8 @@
 <?php
 // /public/messagerie.php
-// Chatroom Globale - Interface moderne avec mentions et liens
+// Chatroom Globale - Interface moderne avec mentions et photos
 // Tous les utilisateurs connectés peuvent discuter ensemble en temps réel
+// Les messages sont automatiquement supprimés après 24h
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
@@ -37,6 +38,60 @@ try {
     
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/chatroom.css">
+    <style>
+        .image-preview-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            margin-bottom: 0.5rem;
+        }
+        .image-preview {
+            max-width: 100px;
+            max-height: 100px;
+            border-radius: var(--radius-sm);
+            object-fit: cover;
+        }
+        .image-preview-remove {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .message-image {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: var(--radius-md);
+            margin-top: 0.5rem;
+            cursor: pointer;
+            object-fit: contain;
+        }
+        .image-upload-btn {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: 0.5rem;
+        }
+        .image-upload-btn:hover {
+            background: var(--bg-primary);
+            border-color: var(--accent-primary);
+        }
+        #imageInput {
+            display: none;
+        }
+    </style>
 </head>
 <body class="page-maps page-chatroom">
 
@@ -46,7 +101,8 @@ try {
     <header class="page-header">
         <h1 class="page-title">💬 Chatroom Globale</h1>
         <p class="page-sub">
-            Discutez en temps réel avec tous vos collègues connectés. Mentionnez des utilisateurs avec @nom ou liez des clients/SAVs/livraisons.
+            Discutez en temps réel avec tous vos collègues connectés. Mentionnez des utilisateurs avec @nom ou envoyez des photos.
+            <br><small style="color: var(--text-secondary);">Les messages sont automatiquement supprimés après 24h.</small>
         </p>
     </header>
 
@@ -76,44 +132,29 @@ try {
             </div>
         </div>
 
-        <!-- Sélecteur de liens (clients/SAVs/livraisons) -->
-        <div class="chatroom-links-selector" id="linksSelector" style="display:none;">
-            <div class="section-title">Lier à (optionnel)</div>
-            <select id="linkTypeSelect" class="chatroom-link-type-select">
-                <option value="">— Aucun lien —</option>
-                <option value="client">👤 Client</option>
-                <option value="livraison">📦 Livraison</option>
-                <option value="sav">🔧 SAV</option>
-            </select>
-            <div class="chatroom-link-search-container">
-                <input type="text" id="linkSearchInput" class="chatroom-link-search" placeholder="Rechercher..." autocomplete="off">
-                <div id="linkSearchResults" class="chatroom-link-results"></div>
-            </div>
-            <div id="linkSelected" class="chatroom-link-selected" style="display:none;">
-                <span id="linkSelectedLabel"></span>
-                <button type="button" onclick="clearLink()">✕</button>
-            </div>
-        </div>
-
         <!-- Barre de saisie (fixe en bas) -->
         <div class="chatroom-input-container">
+            <div id="imagePreviewContainer" class="image-preview-container" style="display:none;">
+                <img id="imagePreview" class="image-preview" src="" alt="Aperçu">
+                <button type="button" id="removeImageBtn" class="image-preview-remove">✕ Supprimer</button>
+            </div>
             <div class="chatroom-input-wrapper">
                 <textarea 
                     id="messageInput" 
                     class="chatroom-input" 
-                    placeholder="Tapez votre message... (Utilisez @ pour mentionner, ou cliquez sur le bouton pour lier un client/SAV/livraison)"
+                    placeholder="Tapez votre message... (Utilisez @ pour mentionner)"
                     rows="1"
                     maxlength="5000"></textarea>
                 <div id="mentionSuggestions" class="chatroom-mention-suggestions"></div>
             </div>
+            <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp">
             <button 
                 type="button" 
-                id="linkToggleBtn" 
-                class="chatroom-send-btn" 
-                style="background: var(--bg-tertiary); color: var(--text-primary); margin-right: 0.5rem;"
-                title="Lier un client/SAV/livraison"
-                aria-label="Lier">
-                🔗
+                id="imageUploadBtn" 
+                class="image-upload-btn" 
+                title="Envoyer une photo"
+                aria-label="Envoyer une photo">
+                📷
             </button>
             <button 
                 type="button" 
@@ -148,14 +189,12 @@ const messagesContainer = document.getElementById('chatroomMessages');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const loadingIndicator = document.getElementById('loadingIndicator');
-const linksSelector = document.getElementById('linksSelector');
-const linkTypeSelect = document.getElementById('linkTypeSelect');
-const linkSearchInput = document.getElementById('linkSearchInput');
-const linkSearchResults = document.getElementById('linkSearchResults');
-const linkSelected = document.getElementById('linkSelected');
-const linkSelectedLabel = document.getElementById('linkSelectedLabel');
-const linkToggleBtn = document.getElementById('linkToggleBtn');
 const mentionSuggestions = document.getElementById('mentionSuggestions');
+const imageInput = document.getElementById('imageInput');
+const imageUploadBtn = document.getElementById('imageUploadBtn');
+const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+const imagePreview = document.getElementById('imagePreview');
+const removeImageBtn = document.getElementById('removeImageBtn');
 
 // ============================================
 // Variables d'état
@@ -165,12 +204,11 @@ let isLoading = false;
 let isSending = false;
 let autoScrollEnabled = true;
 let refreshIntervalId = null;
-let selectedLink = null; // {type: 'client'|'livraison'|'sav', id: number, label: string}
 let mentionSearchTimeout = null;
-let mentionSearchQuery = '';
 let mentionSearchIndex = -1;
 let mentionSuggestionsList = [];
 let allUsers = []; // Cache des utilisateurs pour les mentions
+let selectedImageFile = null;
 
 // ============================================
 // Fonctions utilitaires
@@ -253,7 +291,6 @@ function insertMention(user) {
     const textBefore = text.substring(0, cursorPos);
     const textAfter = text.substring(cursorPos);
     
-    // Trouver la position du @
     const atIndex = textBefore.lastIndexOf('@');
     if (atIndex === -1) return;
     
@@ -266,7 +303,6 @@ function insertMention(user) {
     adjustTextareaHeight();
 }
 
-// Détecter les mentions dans le texte
 function detectMentions(text) {
     const mentionRegex = /@([^\s@]+)/g;
     const mentions = [];
@@ -277,11 +313,9 @@ function detectMentions(text) {
     return mentions;
 }
 
-// Extraire les IDs des utilisateurs mentionnés
 async function extractMentionIds(mentions) {
     if (mentions.length === 0) return [];
     
-    // Charger tous les utilisateurs si nécessaire
     if (allUsers.length === 0) {
         try {
             const response = await fetch('/API/chatroom_search_users.php?q=&limit=1000', { credentials: 'same-origin' });
@@ -306,11 +340,9 @@ async function extractMentionIds(mentions) {
     return mentionIds;
 }
 
-// Formater le message avec mentions et liens
-function formatMessageContent(message, mentions = [], lien = null) {
+function formatMessageContent(message, mentions = []) {
     let content = escapeHtml(message);
     
-    // Remplacer les mentions par des spans stylisés
     if (mentions.length > 0) {
         mentions.forEach(mentionName => {
             const regex = new RegExp(`@${escapeHtml(mentionName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi');
@@ -322,92 +354,46 @@ function formatMessageContent(message, mentions = [], lien = null) {
 }
 
 // ============================================
-// Gestion des liens (clients/SAVs/livraisons)
+// Gestion des images
 // ============================================
-linkToggleBtn.addEventListener('click', () => {
-    linksSelector.style.display = linksSelector.style.display === 'none' ? 'block' : 'none';
+imageUploadBtn.addEventListener('click', () => {
+    imageInput.click();
 });
 
-linkTypeSelect.addEventListener('change', () => {
-    const type = linkTypeSelect.value;
-    if (type) {
-        linkSearchInput.placeholder = type === 'client' ? 'Rechercher un client...' 
-                                    : type === 'livraison' ? 'Rechercher une livraison...'
-                                    : 'Rechercher un SAV...';
-        linkSearchInput.style.display = 'block';
-    } else {
-        linkSearchInput.style.display = 'none';
-        linkSearchResults.classList.remove('show');
-        clearLink();
-    }
-});
-
-let linkSearchTimeout = null;
-linkSearchInput.addEventListener('input', () => {
-    const query = linkSearchInput.value.trim();
-    const type = linkTypeSelect.value;
+imageInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
     
-    clearTimeout(linkSearchTimeout);
-    
-    if (!type || !query || query.length < 1) {
-        linkSearchResults.classList.remove('show');
+    // Vérifier le type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        alert('Type de fichier non autorisé. Formats acceptés: JPEG, PNG, GIF, WebP');
         return;
     }
     
-    linkSearchTimeout = setTimeout(async () => {
-        try {
-            let url = '';
-            if (type === 'client') {
-                url = `/API/maps_search_clients_test.php?q=${encodeURIComponent(query)}&limit=15`;
-            } else if (type === 'livraison') {
-                url = `/API/messagerie_search_livraisons.php?q=${encodeURIComponent(query)}&limit=15`;
-            } else if (type === 'sav') {
-                url = `/API/messagerie_search_sav.php?q=${encodeURIComponent(query)}&limit=15`;
-            }
-            
-            const response = await fetch(url, { credentials: 'same-origin' });
-            const data = await response.json();
-            
-            linkSearchResults.innerHTML = '';
-            
-            if (data.ok) {
-                const results = type === 'client' ? (data.clients || []) : (data.results || []);
-                if (results.length === 0) {
-                    linkSearchResults.innerHTML = '<div class="chatroom-link-result-item">Aucun résultat</div>';
-                } else {
-                    results.forEach(item => {
-                        const div = document.createElement('div');
-                        div.className = 'chatroom-link-result-item';
-                        if (type === 'client') {
-                            div.innerHTML = `<strong>${escapeHtml(item.name)}</strong>${item.dirigeant_complet ? '<br><small>' + escapeHtml(item.dirigeant_complet) + '</small>' : ''}`;
-                        } else {
-                            div.innerHTML = `<strong>${escapeHtml(item.label || item.reference || '')}</strong>`;
-                        }
-                        div.addEventListener('click', () => {
-                            selectedLink = { type, id: item.id, label: type === 'client' ? item.name : (item.label || item.reference || '') };
-                            linkSelectedLabel.textContent = selectedLink.label;
-                            linkSelected.style.display = 'flex';
-                            linkSearchInput.value = '';
-                            linkSearchResults.classList.remove('show');
-                        });
-                        linkSearchResults.appendChild(div);
-                    });
-                }
-                linkSearchResults.classList.add('show');
-            }
-        } catch (error) {
-            console.error('Erreur recherche lien:', error);
-        }
-    }, 300);
+    // Vérifier la taille (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Fichier trop volumineux (max 5MB)');
+        return;
+    }
+    
+    selectedImageFile = file;
+    
+    // Afficher l'aperçu
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        imagePreview.src = e.target.result;
+        imagePreviewContainer.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
 });
 
-function clearLink() {
-    selectedLink = null;
-    linkTypeSelect.value = '';
-    linkSearchInput.value = '';
-    linkSelected.style.display = 'none';
-    linkSearchResults.classList.remove('show');
-}
+removeImageBtn.addEventListener('click', () => {
+    selectedImageFile = null;
+    imageInput.value = '';
+    imagePreviewContainer.style.display = 'none';
+    imagePreview.src = '';
+});
 
 // ============================================
 // Affichage des messages
@@ -418,30 +404,21 @@ function renderMessage(message) {
     const authorName = isMe ? 'Moi' : escapeHtml((message.user_prenom || '') + ' ' + (message.user_nom || ''));
     const userInfo = isMe ? '' : `<span class="message-author">${authorName}</span>`;
     
-    // Formater le contenu avec mentions
-    let messageContent = formatMessageContent(message.message, message.mentions || []);
+    let messageContent = '';
+    if (message.message) {
+        messageContent = `<p class="message-content">${formatMessageContent(message.message, message.mentions || [])}</p>`;
+    }
     
-    // Ajouter le lien si présent
-    let lienHtml = '';
-    if (message.lien) {
-        const lienIcons = { client: '👤', livraison: '📦', sav: '🔧' };
-        const lienUrls = {
-            client: `/public/client_fiche.php?id=${message.lien.id}`,
-            livraison: `/public/livraison.php?ref=${encodeURIComponent(message.lien.label)}`,
-            sav: `/public/sav.php?ref=${encodeURIComponent(message.lien.label)}`
-        };
-        lienHtml = `<div style="margin-top: 0.5rem; font-size: 0.85rem;">
-            <a href="${lienUrls[message.lien.type]}" target="_blank" class="message-link">
-                ${lienIcons[message.lien.type]} ${escapeHtml(message.lien.label)}
-            </a>
-        </div>`;
+    let imageHtml = '';
+    if (message.image_path) {
+        imageHtml = `<img src="${escapeHtml(message.image_path)}" alt="Image" class="message-image" onclick="window.open('${escapeHtml(message.image_path)}', '_blank')">`;
     }
     
     const messageHtml = `
         <div class="chatroom-message ${messageClass}" data-message-id="${message.id}">
             <div class="message-bubble">
-                <p class="message-content">${messageContent}</p>
-                ${lienHtml}
+                ${messageContent}
+                ${imageHtml}
             </div>
             <div class="message-info">
                 ${userInfo}
@@ -525,36 +502,72 @@ async function loadMessages(append = false) {
 // ============================================
 async function sendMessage() {
     const messageText = messageInput.value.trim();
-    if (!messageText || messageText.length === 0) return;
+    
+    // Le message ou l'image doit être présent
+    if (!messageText && !selectedImageFile) {
+        return;
+    }
+    
     if (messageText.length > CONFIG.maxMessageLength) {
         alert(`Le message est trop long (max ${CONFIG.maxMessageLength} caractères)`);
         return;
     }
+    
     if (isSending) return;
     
     isSending = true;
     sendButton.disabled = true;
     const originalMessage = messageText;
+    const originalImageFile = selectedImageFile;
     
     // Extraire les mentions
     const mentionNames = detectMentions(messageText);
     const mentionIds = await extractMentionIds(mentionNames);
     
+    // Réinitialiser l'interface
     messageInput.value = '';
     adjustTextareaHeight();
-    clearLink();
-    linksSelector.style.display = 'none';
+    selectedImageFile = null;
+    imageInput.value = '';
+    imagePreviewContainer.style.display = 'none';
+    imagePreview.src = '';
     
     try {
+        let imagePath = null;
+        
+        // Upload de l'image si présente
+        if (originalImageFile) {
+            const formData = new FormData();
+            formData.append('image', originalImageFile);
+            
+            const uploadResponse = await fetch('/API/chatroom_upload_image.php', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+            
+            if (!uploadResponse.ok) {
+                const errorData = await uploadResponse.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Erreur lors de l\'upload de l\'image');
+            }
+            
+            const uploadData = await uploadResponse.json();
+            if (uploadData.ok && uploadData.image_path) {
+                imagePath = uploadData.image_path;
+            } else {
+                throw new Error('Erreur lors de l\'upload de l\'image');
+            }
+        }
+        
+        // Envoyer le message
         const response = await fetch('/API/chatroom_send.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
                 csrf_token: CONFIG.csrfToken,
-                message: originalMessage,
+                message: originalMessage || '',
                 mentions: mentionIds,
-                type_lien: selectedLink ? selectedLink.type : null,
-                id_lien: selectedLink ? selectedLink.id : null
+                image_path: imagePath
             }),
             credentials: 'same-origin'
         });
@@ -576,6 +589,15 @@ async function sendMessage() {
         alert('Erreur lors de l\'envoi du message: ' + error.message);
         messageInput.value = originalMessage;
         adjustTextareaHeight();
+        if (originalImageFile) {
+            selectedImageFile = originalImageFile;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreviewContainer.style.display = 'flex';
+            };
+            reader.readAsDataURL(originalImageFile);
+        }
     } finally {
         isSending = false;
         sendButton.disabled = false;
@@ -645,9 +667,6 @@ messageInput.addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
     if (!messageInput.contains(e.target) && !mentionSuggestions.contains(e.target)) {
         mentionSuggestions.classList.remove('show');
-    }
-    if (!linksSelector.contains(e.target) && e.target !== linkToggleBtn) {
-        linkSearchResults.classList.remove('show');
     }
 });
 
