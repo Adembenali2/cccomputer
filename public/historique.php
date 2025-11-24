@@ -301,7 +301,8 @@ function formatAction(?string $action): string {
 static $detailsCache = [
     'clients' => [],
     'sav' => [],
-    'livraisons' => []
+    'livraisons' => [],
+    'utilisateurs' => []
 ];
 
 // ====== Helper pour formater les détails en remplaçant les IDs par les noms/références ======
@@ -395,6 +396,83 @@ function formatDetails(PDO $pdo, ?string $details): string {
                         'Livraison ' . $detailsCache['livraisons'][$livId],
                         $formatted
                     );
+                }
+            }
+        }
+    }
+    
+    // Remplacer les références d'utilisateurs (utilisateur #X, Utilisateur #X, Statut utilisateur #X, etc.)
+    // Pattern pour "utilisateur #X", "Utilisateur #X", "Statut utilisateur #X" (insensible à la casse)
+    if (preg_match_all('/(?:Statut\s+)?[Uu]tilisateur\s+#(\d+)/i', $formatted, $matches)) {
+        $userIds = array_unique(array_map('intval', $matches[1]));
+        $userIds = array_filter($userIds, function($id) { return $id > 0; });
+        
+        if (!empty($userIds)) {
+            $missingIds = array_diff($userIds, array_keys($detailsCache['utilisateurs']));
+            if (!empty($missingIds)) {
+                $placeholders = implode(',', array_fill(0, count($missingIds), '?'));
+                $stmt = $pdo->prepare("SELECT id, nom, prenom FROM utilisateurs WHERE id IN ($placeholders)");
+                $stmt->execute($missingIds);
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $fullname = trim(($row['prenom'] ?? '') . ' ' . ($row['nom'] ?? ''));
+                    $detailsCache['utilisateurs'][(int)$row['id']] = $fullname !== '' ? $fullname : 'Utilisateur #' . $row['id'];
+                }
+            }
+            
+            foreach ($userIds as $userId) {
+                if (isset($detailsCache['utilisateurs'][$userId])) {
+                    // Remplacer "Statut utilisateur #X" par "Statut utilisateur Nom Prénom"
+                    $formatted = preg_replace(
+                        '/Statut\s+[Uu]tilisateur\s+#' . $userId . '/i',
+                        'Statut utilisateur ' . $detailsCache['utilisateurs'][$userId],
+                        $formatted
+                    );
+                    // Remplacer "utilisateur #X" ou "Utilisateur #X" (insensible à la casse)
+                    $formatted = preg_replace(
+                        '/[Uu]tilisateur\s+#' . $userId . '/i',
+                        'Utilisateur ' . $detailsCache['utilisateurs'][$userId],
+                        $formatted
+                    );
+                }
+            }
+        }
+    }
+    
+    // Remplacer aussi les patterns "#X" isolés qui apparaissent dans un contexte d'utilisateur
+    // (mais pas SAV #X ou Livraison #X qui sont déjà traités)
+    if (preg_match_all('/(?<!SAV\s)(?<!Livraison\s)(?<!Livraison\s)(?<!SAV\s)#(\d+)/i', $formatted, $matches)) {
+        $userIds = array_unique(array_map('intval', $matches[1]));
+        $userIds = array_filter($userIds, function($id) { 
+            return $id > 0 && 
+                   !isset($detailsCache['sav'][$id]) && 
+                   !isset($detailsCache['livraisons'][$id]);
+        });
+        
+        if (!empty($userIds)) {
+            $missingIds = array_diff($userIds, array_keys($detailsCache['utilisateurs']));
+            if (!empty($missingIds)) {
+                $placeholders = implode(',', array_fill(0, count($missingIds), '?'));
+                $stmt = $pdo->prepare("SELECT id, nom, prenom FROM utilisateurs WHERE id IN ($placeholders)");
+                $stmt->execute($missingIds);
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $fullname = trim(($row['prenom'] ?? '') . ' ' . ($row['nom'] ?? ''));
+                    $detailsCache['utilisateurs'][(int)$row['id']] = $fullname !== '' ? $fullname : 'Utilisateur #' . $row['id'];
+                }
+            }
+            
+            foreach ($userIds as $userId) {
+                if (isset($detailsCache['utilisateurs'][$userId])) {
+                    // Remplacer seulement si c'est dans un contexte qui suggère un utilisateur
+                    // (précédé de "Statut", "utilisateur", etc. ou si le mot "utilisateur" est dans le texte)
+                    if (stripos($formatted, 'utilisateur') !== false || 
+                        preg_match('/Statut\s+#?' . $userId . '/i', $formatted) ||
+                        preg_match('/[Uu]tilisateur.*#' . $userId . '/i', $formatted)) {
+                        $formatted = preg_replace(
+                            '/(?<!SAV\s)(?<!Livraison\s)#' . $userId . '(?!\w)/i',
+                            $detailsCache['utilisateurs'][$userId],
+                            $formatted
+                        );
+                    }
                 }
             }
         }
