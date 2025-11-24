@@ -383,38 +383,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // PRÉPARATION DE L'AFFICHAGE (Requêtes GET)
 // ========================================================================
 
-// Paramètres de recherche
+// Paramètres de recherche - barre de recherche unique
 $search = sanitizeSearch($_GET['q'] ?? '');
-$status = $_GET['statut'] ?? '';
-$role = $_GET['role'] ?? '';
 
-// Construction de la requête SQL optimisée
+// Construction de la requête SQL optimisée avec détection automatique
 $params = [];
 $where = [];
 
 if ($search !== '') {
-    $tokens = preg_split('/\s+/', $search);
-    $tokenIndex = 0;
-    $searchConditions = [];
-    foreach ($tokens as $token) {
-        if ($token === '') continue;
-        $key = ':q' . $tokenIndex++;
-        $searchConditions[] = "(Email LIKE {$key} OR nom LIKE {$key} OR prenom LIKE {$key} OR telephone LIKE {$key})";
-        $params[$key] = "%{$token}%";
+    $searchLower = mb_strtolower(trim($search));
+    
+    // Détecter si c'est un statut (actif/inactif)
+    $detectedStatus = null;
+    if ($searchLower === 'actif' || $searchLower === 'inactif') {
+        $detectedStatus = $searchLower;
+        $where[] = "statut = :statut";
+        $params[':statut'] = $detectedStatus;
     }
-    if (!empty($searchConditions)) {
-        $where[] = '(' . implode(' AND ', $searchConditions) . ')';
+    // Détecter si c'est un rôle
+    elseif (in_array($search, $ROLES, true)) {
+        $where[] = "Emploi = :role";
+        $params[':role'] = $search;
     }
-}
-
-if ($status !== '' && in_array($status, ['actif', 'inactif'], true)) {
-    $where[] = "statut = :statut";
-    $params[':statut'] = $status;
-}
-
-if ($role !== '' && in_array($role, $ROLES, true)) {
-    $where[] = "Emploi = :role";
-    $params[':role'] = $role;
+    // Sinon, recherche dans nom, prénom, email, téléphone
+    else {
+        $tokens = preg_split('/\s+/', $search);
+        $tokenIndex = 0;
+        $searchConditions = [];
+        foreach ($tokens as $token) {
+            if ($token === '') continue;
+            $key = ':q' . $tokenIndex++;
+            $searchConditions[] = "(Email LIKE {$key} OR nom LIKE {$key} OR prenom LIKE {$key} OR telephone LIKE {$key})";
+            $params[$key] = "%{$token}%";
+        }
+        if (!empty($searchConditions)) {
+            $where[] = '(' . implode(' AND ', $searchConditions) . ')';
+        }
+    }
 }
 
 $sql = "SELECT id, Email, nom, prenom, telephone, Emploi, statut, date_debut, date_creation, date_modification
@@ -482,7 +487,7 @@ $onlineUsersList = safeFetchAll($pdo, "
 
 $onlineUsers = count($onlineUsersList);
 
-$filtersActive = ($search !== '' || ($status !== '' && in_array($status, ['actif', 'inactif'], true)) || ($role !== '' && in_array($role, $ROLES, true)));
+$filtersActive = ($search !== '');
 
 // Fonction utilitaire pour décoder msg JSON
 function decode_msg($row) {
@@ -924,17 +929,9 @@ function decode_msg($row) {
 
     <?php if ($filtersActive): ?>
         <div class="active-filters" role="status" aria-live="polite">
-            <span class="badge">Filtres actifs</span>
-            <?php if ($search !== ''): ?>
-                <span class="pill">Recherche : <?= h($search) ?></span>
-            <?php endif; ?>
-            <?php if ($role !== ''): ?>
-                <span class="pill">Rôle : <?= h($role) ?></span>
-            <?php endif; ?>
-            <?php if ($status !== ''): ?>
-                <span class="pill">Statut : <?= h($status) ?></span>
-            <?php endif; ?>
-            <a class="pill pill-clear" href="/public/profil.php" aria-label="Réinitialiser les filtres">Réinitialiser</a>
+            <span class="badge">Filtre actif</span>
+            <span class="pill">Recherche : <?= h($search) ?></span>
+            <a class="pill pill-clear" href="/public/profil.php" aria-label="Réinitialiser le filtre">Réinitialiser</a>
         </div>
     <?php endif; ?>
 
@@ -949,28 +946,21 @@ function decode_msg($row) {
             <div class="filter-field grow">
                 <label for="q" class="sr-only">Rechercher</label>
                 <input class="filter-input" type="search" id="q" name="q" value="<?= h($search) ?>" 
-                       placeholder="Rechercher (email, nom, téléphone…)" aria-label="Rechercher un utilisateur" />
+                       placeholder="Rechercher par nom, email, téléphone, statut (actif/inactif) ou rôle…" 
+                       aria-label="Rechercher un utilisateur" 
+                       autocomplete="off" />
+                <?php if ($search !== ''): ?>
+                    <button type="button" class="input-clear" aria-label="Effacer la recherche" onclick="document.getElementById('q').value=''; this.form.submit();">
+                        <span aria-hidden="true">✕</span>
+                    </button>
+                <?php endif; ?>
             </div>
             <div class="filter-field">
-                <label for="role" class="sr-only">Filtrer par rôle</label>
-                <select class="filter-select" id="role" name="role" aria-label="Rôle">
-                    <option value="">Rôle : Tous</option>
-                    <?php foreach ($ROLES as $r): ?>
-                        <option value="<?= h($r) ?>" <?= $role === $r ? 'selected' : '' ?>><?= h($r) ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <button class="filter-submit" type="submit">Rechercher</button>
             </div>
-            <div class="filter-field">
-                <label for="statut" class="sr-only">Filtrer par statut</label>
-                <select class="filter-select" id="statut" name="statut" aria-label="Statut">
-                    <option value="">Statut : Tous</option>
-                    <option value="actif" <?= $status === 'actif' ? 'selected' : '' ?>>Actif</option>
-                    <option value="inactif" <?= $status === 'inactif' ? 'selected' : '' ?>>Inactif</option>
-                </select>
-            </div>
-            <div class="filter-field">
-                <button class="filter-submit" type="submit">Filtrer</button>
-            </div>
+        </div>
+        <div class="filter-hint">
+            <small>Astuce : Tapez "actif" ou "inactif" pour filtrer par statut, ou un nom de rôle pour filtrer par rôle.</small>
         </div>
     </form>
 
@@ -1213,6 +1203,34 @@ function decode_msg($row) {
             drop.classList.remove('open');
             btn.setAttribute('aria-expanded', 'false');
             btn.focus();
+        }
+    });
+})();
+
+/* Recherche avec debounce */
+(function() {
+    const searchInput = document.getElementById('q');
+    const searchForm = searchInput?.closest('form');
+    
+    if (!searchInput || !searchForm) return;
+    
+    let debounceTimer;
+    const DEBOUNCE_DELAY = 500; // 500ms
+    
+    // Soumission automatique après saisie (debounce)
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+            searchForm.submit();
+        }, DEBOUNCE_DELAY);
+    });
+    
+    // Soumission immédiate avec Enter
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            clearTimeout(debounceTimer);
+            searchForm.submit();
         }
     });
 })();

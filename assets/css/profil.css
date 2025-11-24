@@ -165,9 +165,53 @@
 }
 
 /* === Barre de filtres compacte === */
-.filter-bar { display:flex; gap:.5rem; align-items:center; background: var(--bg-primary); padding:.5rem; border:1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
-.filter-field { display:flex; align-items:center; }
-.filter-field.grow { flex:1 1 auto; }
+.filter-bar { 
+  display: flex; 
+  gap: 0.5rem; 
+  align-items: center; 
+  background: var(--bg-primary); 
+  padding: 0.75rem; 
+  border: 1px solid var(--border-color); 
+  border-radius: var(--radius-lg); 
+  box-shadow: var(--shadow-sm); 
+}
+.filter-field { 
+  display: flex; 
+  align-items: center; 
+  position: relative;
+}
+.filter-field.grow { 
+  flex: 1 1 auto; 
+}
+.input-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  z-index: 10;
+}
+.input-clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+.filter-hint {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+.filter-hint small {
+  color: var(--text-muted);
+}
 .filter-input {
   width: 100%;
   border: 1px solid var(--border-color);
@@ -175,6 +219,7 @@
   color: var(--text-primary);
   border-radius: var(--radius-md);
   padding: 0.6rem 0.75rem;
+  padding-right: 2.5rem;
   font-size: 0.95rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
