@@ -507,6 +507,26 @@
     color: #1e293b;
 }
 
+.btn-download-receipt {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: var(--accent-primary);
+    color: white;
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    transition: background-color 0.2s ease;
+}
+
+.btn-download-receipt:hover {
+    background: var(--accent-secondary);
+}
+
+.no-receipt {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* Section Export */
 .export-section {
     background: var(--bg-primary);

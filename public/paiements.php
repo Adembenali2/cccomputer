@@ -169,29 +169,69 @@ for ($y = 4; $y >= 0; $y--) {
     ];
 }
 
-// Historique des paiements factices
+// Récupérer l'historique des paiements depuis la base de données
 $paymentHistory = [];
-$paymentTypes = ['Virement', 'Chèque', 'Carte bancaire', 'Espèces'];
-$statuses = ['completed', 'pending', 'failed'];
-
-for ($i = 0; $i < 20; $i++) {
-    $client = $clientsData[rand(0, count($clientsData) - 1)];
-    $paymentHistory[] = [
-        'id' => $i + 1,
-        'client_id' => $client['id'],
-        'client_name' => $client['name'],
-        'amount' => round(rand(100, 2000), 2),
-        'date' => date('Y-m-d', strtotime('-' . rand(0, 90) . ' days')),
-        'type' => $paymentTypes[rand(0, count($paymentTypes) - 1)],
-        'status' => $statuses[rand(0, count($statuses) - 1)],
-        'reference' => 'PAY-' . date('Y') . '-' . str_pad($i + 1, 5, '0', STR_PAD_LEFT)
-    ];
+try {
+    // Vérifier si la table existe
+    $checkTable = $pdo->prepare("
+        SELECT COUNT(*) as cnt 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'paiements'
+    ");
+    $checkTable->execute();
+    $tableExists = ((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt']) > 0;
+    
+    if ($tableExists) {
+        $stmt = $pdo->prepare("
+            SELECT 
+                p.id,
+                p.client_id,
+                c.raison_sociale as client_name,
+                c.numero_client,
+                p.montant as amount,
+                p.type_paiement as type,
+                p.date_paiement as date,
+                p.reference,
+                p.justificatif_upload,
+                p.justificatif_pdf,
+                p.numero_justificatif,
+                'completed' as status
+            FROM paiements p
+            INNER JOIN clients c ON p.client_id = c.id
+            ORDER BY p.date_paiement DESC, p.date_creation DESC
+            LIMIT 100
+        ");
+        $stmt->execute();
+        $dbPayments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        foreach ($dbPayments as $payment) {
+            $typeLabels = [
+                'especes' => 'Espèces',
+                'cheque' => 'Chèque',
+                'virement' => 'Virement'
+            ];
+            
+            $paymentHistory[] = [
+                'id' => (int)$payment['id'],
+                'client_id' => (int)$payment['client_id'],
+                'client_name' => $payment['client_name'],
+                'amount' => (float)$payment['amount'],
+                'date' => $payment['date'],
+                'type' => $typeLabels[$payment['type']] ?? ucfirst($payment['type']),
+                'status' => 'completed',
+                'reference' => $payment['reference'] ?: 'PAY-' . date('Y') . '-' . str_pad($payment['id'], 5, '0', STR_PAD_LEFT),
+                'justificatif_upload' => $payment['justificatif_upload'],
+                'justificatif_pdf' => $payment['justificatif_pdf'],
+                'numero_justificatif' => $payment['numero_justificatif']
+            ];
+        }
+    }
+} catch (PDOException $e) {
+    error_log('paiements.php - Erreur récupération historique: ' . $e->getMessage());
+    // En cas d'erreur, utiliser un tableau vide
+    $paymentHistory = [];
 }
-
-// Trier par date décroissante
-usort($paymentHistory, function($a, $b) {
-    return strtotime($b['date']) - strtotime($a['date']);
-});
 
 $CSRF = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 if (empty($_SESSION['csrf_token'])) {
@@ -466,6 +506,7 @@ if (empty($_SESSION['csrf_token'])) {
                             <th>Montant</th>
                             <th>Type</th>
                             <th>Référence</th>
+                            <th>Justificatif</th>
                             <th>Statut</th>
                         </tr>
                     </thead>
@@ -478,6 +519,25 @@ if (empty($_SESSION['csrf_token'])) {
                                 <td class="amount-cell"><?= number_format($payment['amount'], 2, ',', ' ') ?> €</td>
                                 <td><?= h($payment['type']) ?></td>
                                 <td><?= h($payment['reference']) ?></td>
+                                <td>
+                                    <?php if (!empty($payment['justificatif_pdf'])): ?>
+                                        <a href="<?= h($payment['justificatif_pdf']) ?>" 
+                                           target="_blank" 
+                                           class="btn-download-receipt"
+                                           title="Télécharger le justificatif PDF">
+                                            📄 PDF
+                                        </a>
+                                    <?php elseif (!empty($payment['justificatif_upload'])): ?>
+                                        <a href="<?= h($payment['justificatif_upload']) ?>" 
+                                           target="_blank"
+                                           class="btn-download-receipt"
+                                           title="Voir le justificatif">
+                                            📎 Fichier
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="no-receipt">—</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <span class="status-badge status-<?= $payment['status'] ?>">
                                         <?php
@@ -817,11 +877,8 @@ if (empty($_SESSION['csrf_token'])) {
                 if (data.ok) {
                     let successMessage = 'Paiement enregistré avec succès !';
                     
-                    // Ajouter les informations sur l'email
-                    if (data.email_sent) {
-                        successMessage += ' Un email de confirmation a été envoyé au client.';
-                    } else if (data.email_error) {
-                        successMessage += ' (Note: L\'email n\'a pas pu être envoyé: ' + data.email_error + ')';
+                    if (data.receipt_number) {
+                        successMessage += ' Justificatif: ' + data.receipt_number;
                     }
                     
                     successDiv.textContent = successMessage;
