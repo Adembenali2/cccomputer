@@ -728,7 +728,9 @@ async function loadFirstItems() {
             return;
         }
         
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            credentials: 'same-origin'
+        });
         const data = await response.json();
         
         if (data.ok) {
@@ -811,7 +813,9 @@ if (lienSearch) {
                 }
                 
                 console.log('Fetching URL:', url);
-                const response = await fetch(url);
+                const response = await fetch(url, {
+                    credentials: 'same-origin'
+                });
                 console.log('Response status:', response.status);
                 
                 if (!response.ok) {
@@ -893,7 +897,8 @@ form.addEventListener('submit', async (e) => {
         const response = await fetch('/API/messagerie_send.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            credentials: 'same-origin'
         });
         
         const result = await response.json();
@@ -929,7 +934,8 @@ document.querySelectorAll('.btn-mark-read').forEach(btn => {
                 body: JSON.stringify({
                     csrf_token: csrfToken,
                     message_id: messageId
-                })
+                }),
+                credentials: 'same-origin'
             });
             
             const result = await response.json();
@@ -1092,7 +1098,8 @@ function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
                     message_id: messageId,
                     reponse_type: currentType,
                     reponse_contenu: contenu
-                })
+                }),
+                credentials: 'same-origin'
             });
             
             const result = await response.json();
@@ -1167,7 +1174,8 @@ document.addEventListener('click', (e) => {
                     body: JSON.stringify({
                         csrf_token: csrfToken,
                         message_id: parseInt(messageId, 10)
-                    })
+                    }),
+                    credentials: 'same-origin'
                 });
                 
                 console.log('Réponse reçue, status:', response.status);

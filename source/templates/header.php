@@ -223,7 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const response = await fetch('/API/messagerie_get_unread_count.php', {
           signal: controller.signal,
-          cache: 'no-cache'
+          cache: 'no-cache',
+          credentials: 'same-origin'
         });
         
         clearTimeout(timeoutId);

@@ -205,12 +205,25 @@ $stockFaible = [
 ];
 $nbStockFaible = count($stockFaible['papier']) + count($stockFaible['toners']) + count($stockFaible['lcd']) + count($stockFaible['pc']);
 
+// Normaliser les données papier pour le dataset (ajouter 'id' et 'qty')
+$papersNormalized = [];
+foreach ($papers as $p) {
+    $papersNormalized[] = [
+        'id'      => (int)($p['paper_id'] ?? 0),
+        'marque'  => $p['marque'] ?? '',
+        'modele'  => $p['modele'] ?? '',
+        'poids'   => $p['poids'] ?? '',
+        'qty'     => (int)($p['qty_stock'] ?? 0),
+        'qty_stock' => (int)($p['qty_stock'] ?? 0),
+    ];
+}
+
 $datasets = [
   'copiers'=>$copiers, 
   'lcd'=>$lcd, 
   'pc'=>$pc,
   'toners'=>$toners,
-  'papier'=>$papers
+  'papier'=>$papersNormalized
 ];
 
 $sectionImages = [

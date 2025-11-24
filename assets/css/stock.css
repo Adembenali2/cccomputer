@@ -439,8 +439,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
   padding-right: 1rem;
 }
 
-.tbl-stock thead th:first-child:has-text("Qté"),
-.tbl-stock thead th:first-child {
+/* Pour le tableau Papier où Qté est en première colonne */
+.tbl-stock[data-section="papier"] thead th:first-child,
+.tbl-stock tbody td:first-child.td-metric {
   padding-right: 1rem;
 }
 
@@ -453,20 +454,29 @@ html, body { max-width: 100%; overflow-x: hidden; }
   text-overflow: ellipsis;
   transition: all 0.2s ease;
   line-height: 1.4;
-  height: auto;
 }
 
 .tbl-stock tbody tr {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  height: auto;
-  min-height: 48px;
 }
 
-/* Assurer que toutes les cellules d'une ligne ont la même hauteur */
+/* Assurer que toutes les cellules d'une ligne ont la même hauteur et sont alignées */
 .tbl-stock tbody tr td {
-  height: 100%;
   vertical-align: middle;
+  height: auto;
+}
+
+/* Alignement parfait : les en-têtes et cellules doivent avoir le même padding */
+.tbl-stock thead th,
+.tbl-stock tbody td {
+  box-sizing: border-box;
+}
+
+/* Pour les badges d'état, centrer le contenu */
+.tbl-stock tbody td .state {
+  margin: 0 auto;
+  display: inline-flex;
 }
 
 .tbl-stock tbody tr::before {
@@ -502,6 +512,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .tbl-stock tbody td[data-th="Qté"],
 .tbl-stock tbody td[data-th="Poids"] {
   text-align: right;
+  vertical-align: middle;
+}
+
+/* Alignement des colonnes d'état (centré) - pour LCD et PC */
+.tbl-stock tbody td[data-th="État"] {
+  text-align: center;
   vertical-align: middle;
 }
 
