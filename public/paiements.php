@@ -511,7 +511,7 @@ if (empty($_SESSION['csrf_token'])) {
                         <?php foreach ($paymentHistory as $payment): ?>
                             <tr data-client-id="<?= $payment['client_id'] ?>" 
                                 data-status="<?= $payment['status'] ?>">
-                                <td><?= h(date('d/m/Y', strtotime($payment['date']))) ?></td>
+                                <td><?= !empty($payment['date']) ? h(date('d/m/Y', strtotime($payment['date']))) : '—' ?></td>
                                 <td><?= h($payment['client_name']) ?></td>
                                 <td class="amount-cell"><?= number_format($payment['amount'], 2, ',', ' ') ?> €</td>
                                 <td><?= h($payment['type']) ?></td>
@@ -733,13 +733,17 @@ if (empty($_SESSION['csrf_token'])) {
         }
         
         // Gestion des boutons de période
-        document.querySelectorAll('.chart-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                initChart(this.dataset.period);
+        const chartBtns = document.querySelectorAll('.chart-btn');
+        if (chartBtns.length > 0) {
+            chartBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    chartBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    const period = this.dataset.period || 'monthly';
+                    initChart(period);
+                });
             });
-        });
+        }
         
         // Initialiser avec les données mensuelles
         if (ctx) {
@@ -838,11 +842,29 @@ if (empty($_SESSION['csrf_token'])) {
             successDiv.style.display = 'none';
             
             // Validation
-            const amount = parseFloat(document.getElementById('paymentAmount').value);
-            const pending = parseFloat(document.getElementById('pendingAmount').textContent.replace(/\s/g, '').replace(',', '.'));
-            const paymentType = document.getElementById('paymentType').value;
-            const iban = document.getElementById('paymentIban').value.trim();
-            const justificatif = document.getElementById('paymentJustificatif').files[0];
+            const amountInput = document.getElementById('paymentAmount');
+            const pendingAmountEl = document.getElementById('pendingAmount');
+            const paymentTypeEl = document.getElementById('paymentType');
+            const ibanInput = document.getElementById('paymentIban');
+            const justificatifInput = document.getElementById('paymentJustificatif');
+            
+            if (!amountInput || !pendingAmountEl || !paymentTypeEl) {
+                errorDiv.textContent = 'Erreur: éléments du formulaire introuvables';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            const amount = parseFloat(amountInput.value);
+            const pending = parseFloat(pendingAmountEl.textContent.replace(/\s/g, '').replace(',', '.'));
+            const paymentType = paymentTypeEl.value;
+            const iban = ibanInput ? ibanInput.value.trim() : '';
+            const justificatif = justificatifInput ? justificatifInput.files[0] : null;
+            
+            if (isNaN(amount) || amount <= 0) {
+                errorDiv.textContent = 'Veuillez saisir un montant valide';
+                errorDiv.style.display = 'block';
+                return;
+            }
             
             if (amount > pending) {
                 errorDiv.textContent = 'Le montant ne peut pas dépasser le montant dû (' + pending.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) + ')';
@@ -852,13 +874,21 @@ if (empty($_SESSION['csrf_token'])) {
             
             // Validation spécifique selon le type
             if (paymentType === 'virement') {
-                if (!iban) {
-                    errorDiv.textContent = 'L\'IBAN est obligatoire pour un virement';
+                if (!iban || iban.length < 15) {
+                    errorDiv.textContent = 'L\'IBAN est obligatoire et doit être valide pour un virement';
                     errorDiv.style.display = 'block';
+                    if (ibanInput) ibanInput.focus();
                     return;
                 }
                 if (!justificatif) {
                     errorDiv.textContent = 'Le justificatif est obligatoire pour un virement';
+                    errorDiv.style.display = 'block';
+                    if (justificatifInput) justificatifInput.focus();
+                    return;
+                }
+                // Validation de la taille du fichier (max 10 Mo)
+                if (justificatif.size > 10 * 1024 * 1024) {
+                    errorDiv.textContent = 'Le fichier justificatif est trop volumineux (max 10 Mo)';
                     errorDiv.style.display = 'block';
                     return;
                 }
@@ -866,8 +896,23 @@ if (empty($_SESSION['csrf_token'])) {
                 if (!justificatif) {
                     errorDiv.textContent = 'Le justificatif est obligatoire pour un chèque';
                     errorDiv.style.display = 'block';
+                    if (justificatifInput) justificatifInput.focus();
                     return;
                 }
+                // Validation de la taille du fichier (max 10 Mo)
+                if (justificatif.size > 10 * 1024 * 1024) {
+                    errorDiv.textContent = 'Le fichier justificatif est trop volumineux (max 10 Mo)';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+            }
+            
+            // Désactiver le bouton de soumission pour éviter les doubles soumissions
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn ? submitBtn.textContent : '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Enregistrement en cours...';
             }
             
             // Préparer les données pour l'envoi
@@ -878,7 +923,12 @@ if (empty($_SESSION['csrf_token'])) {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erreur réseau: ' + response.status);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.ok) {
                     let successMessage = 'Paiement enregistré avec succès !';
@@ -901,21 +951,39 @@ if (empty($_SESSION['csrf_token'])) {
                     setTimeout(() => {
                         this.reset();
                         successDiv.style.display = 'none';
-                        document.getElementById('pendingAmount').textContent = '0.00';
-                        document.getElementById('ibanGroup').style.display = 'none';
-                        document.getElementById('justificatifGroup').style.display = 'none';
+                        const pendingAmountEl = document.getElementById('pendingAmount');
+                        const ibanGroup = document.getElementById('ibanGroup');
+                        const justificatifGroup = document.getElementById('justificatifGroup');
+                        if (pendingAmountEl) pendingAmountEl.textContent = '0.00';
+                        if (ibanGroup) ibanGroup.style.display = 'none';
+                        if (justificatifGroup) justificatifGroup.style.display = 'none';
+                        // Réactiver le bouton
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = originalBtnText;
+                        }
                         // Recharger la page pour mettre à jour les données
                         location.reload();
                     }, 3000);
                 } else {
                     errorDiv.textContent = data.error || 'Erreur lors de l\'enregistrement du paiement';
                     errorDiv.style.display = 'block';
+                    // Réactiver le bouton en cas d'erreur
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalBtnText;
+                    }
                 }
             })
             .catch(error => {
                 console.error('Erreur:', error);
-                errorDiv.textContent = 'Erreur de communication avec le serveur';
+                errorDiv.textContent = 'Erreur de communication avec le serveur. Veuillez réessayer.';
                 errorDiv.style.display = 'block';
+                // Réactiver le bouton en cas d'erreur
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalBtnText;
+                }
             });
             });
         }
@@ -924,21 +992,34 @@ if (empty($_SESSION['csrf_token'])) {
         const clientsDataJS = <?= json_encode($clientsData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
         let selectedClientId = null;
 
-        document.querySelectorAll('.btn-view-details').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const clientId = parseInt(this.dataset.clientId);
-                selectedClientId = clientId;
-                showClientDetails(clientId);
+        const viewDetailsBtns = document.querySelectorAll('.btn-view-details');
+        if (viewDetailsBtns.length > 0) {
+            viewDetailsBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const clientId = parseInt(this.dataset.clientId);
+                    if (!isNaN(clientId) && clientId > 0) {
+                        selectedClientId = clientId;
+                        showClientDetails(clientId);
+                    }
+                });
             });
-        });
+        }
 
         function showClientDetails(clientId) {
             const client = clientsDataJS.find(c => c.id === clientId);
-            if (!client) return;
+            if (!client) {
+                console.error('Client not found:', clientId);
+                return;
+            }
 
             const modal = document.getElementById('clientDetailsModal');
             const modalBody = document.getElementById('modalBody');
             const modalTitle = document.getElementById('modalClientName');
+            
+            if (!modal || !modalBody || !modalTitle) {
+                console.error('Modal elements not found');
+                return;
+            }
 
             modalTitle.textContent = `Détails - ${client.name}`;
             modal.setAttribute('aria-hidden', 'false');
@@ -1088,13 +1169,18 @@ if (empty($_SESSION['csrf_token'])) {
             document.getElementById('modalExportSection').style.display = 'block';
             
             // Attacher les événements de téléchargement
-            document.querySelectorAll('.btn-download-invoice').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const invoiceNumber = this.dataset.invoiceId;
-                    const clientId = parseInt(this.dataset.clientId);
-                    downloadInvoice(clientId, invoiceNumber);
+            const downloadInvoiceBtns = document.querySelectorAll('.btn-download-invoice');
+            if (downloadInvoiceBtns.length > 0) {
+                downloadInvoiceBtns.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const invoiceNumber = this.dataset.invoiceId;
+                        const clientId = parseInt(this.dataset.clientId);
+                        if (invoiceNumber && !isNaN(clientId) && clientId > 0) {
+                            downloadInvoice(clientId, invoiceNumber);
+                        }
+                    });
                 });
-            });
+            }
         }
         
         // Fonction pour télécharger une facture en PDF
@@ -1117,43 +1203,63 @@ if (empty($_SESSION['csrf_token'])) {
         }
 
         // Fermeture de la modal
-        document.getElementById('closeModal').addEventListener('click', closeModal);
-        document.getElementById('closeModalBtn').addEventListener('click', closeModal);
-        document.getElementById('clientDetailsModal').addEventListener('click', function(e) {
-            if (e.target === this) closeModal();
-        });
+        const closeModalEl = document.getElementById('closeModal');
+        const closeModalBtnEl = document.getElementById('closeModalBtn');
+        const clientDetailsModalEl = document.getElementById('clientDetailsModal');
+        
+        if (closeModalEl) closeModalEl.addEventListener('click', closeModal);
+        if (closeModalBtnEl) closeModalBtnEl.addEventListener('click', closeModal);
+        if (clientDetailsModalEl) {
+            clientDetailsModalEl.addEventListener('click', function(e) {
+                if (e.target === this) closeModal();
+            });
+        }
 
         function closeModal() {
             const modal = document.getElementById('clientDetailsModal');
-            modal.setAttribute('aria-hidden', 'true');
-            modal.style.display = 'none';
+            if (modal) {
+                modal.setAttribute('aria-hidden', 'true');
+                modal.style.display = 'none';
+            }
             selectedClientId = null;
-            document.getElementById('modalExportSection').style.display = 'none';
+            const modalExportSection = document.getElementById('modalExportSection');
+            if (modalExportSection) {
+                modalExportSection.style.display = 'none';
+            }
             // Réinitialiser les filtres
-            document.getElementById('modalExportPeriod').value = 'all_months';
-            document.getElementById('modalMonthFilterGroup').style.display = 'none';
-            document.getElementById('modalYearFilterGroup').style.display = 'none';
+            const modalExportPeriod = document.getElementById('modalExportPeriod');
+            const modalMonthFilterGroup = document.getElementById('modalMonthFilterGroup');
+            const modalYearFilterGroup = document.getElementById('modalYearFilterGroup');
+            if (modalExportPeriod) modalExportPeriod.value = 'all_months';
+            if (modalMonthFilterGroup) modalMonthFilterGroup.style.display = 'none';
+            if (modalYearFilterGroup) modalYearFilterGroup.style.display = 'none';
         }
 
         // Gestion des filtres d'export (tous les clients)
-        document.getElementById('exportPeriod').addEventListener('change', function() {
+        const exportPeriodEl = document.getElementById('exportPeriod');
+        if (exportPeriodEl) {
+            exportPeriodEl.addEventListener('change', function() {
             const period = this.value;
             const monthGroup = document.getElementById('monthFilterGroup');
             const yearGroup = document.getElementById('yearFilterGroup');
             
             monthGroup.style.display = (period === 'specific_month') ? 'block' : 'none';
             yearGroup.style.display = (period === 'specific_year') ? 'block' : 'none';
-        });
+            });
+        }
 
         // Gestion des filtres d'export (client sélectionné dans la modal)
-        document.getElementById('modalExportPeriod').addEventListener('change', function() {
+        const modalExportPeriodEl = document.getElementById('modalExportPeriod');
+        if (modalExportPeriodEl) {
+            modalExportPeriodEl.addEventListener('change', function() {
             const period = this.value;
             const monthGroup = document.getElementById('modalMonthFilterGroup');
             const yearGroup = document.getElementById('modalYearFilterGroup');
             
             monthGroup.style.display = (period === 'specific_month') ? 'block' : 'none';
             yearGroup.style.display = (period === 'specific_year') ? 'block' : 'none';
-        });
+            });
+        }
 
         // Fonction pour filtrer les données selon la période
         function filterConsumptionData(consumptionArray, period, monthValue, yearValue) {
@@ -1197,7 +1303,9 @@ if (empty($_SESSION['csrf_token'])) {
         }
 
         // Export tous les clients (bouton en haut après le diagramme)
-        document.getElementById('exportAllClients').addEventListener('click', function() {
+        const exportAllClientsEl = document.getElementById('exportAllClients');
+        if (exportAllClientsEl) {
+            exportAllClientsEl.addEventListener('click', function() {
             const period = document.getElementById('exportPeriod').value;
             const monthValue = document.getElementById('exportMonth').value;
             const yearValue = document.getElementById('exportYear').value;
@@ -1246,10 +1354,13 @@ if (empty($_SESSION['csrf_token'])) {
             }
             
             exportToExcel(exportData, filename);
-        });
+            });
+        }
 
         // Export client sélectionné depuis la modal
-        document.getElementById('exportThisClient').addEventListener('click', function() {
+        const exportThisClientEl = document.getElementById('exportThisClient');
+        if (exportThisClientEl) {
+            exportThisClientEl.addEventListener('click', function() {
             if (!selectedClientId) {
                 alert('Aucun client sélectionné');
                 return;
@@ -1301,7 +1412,8 @@ if (empty($_SESSION['csrf_token'])) {
             }
             
             exportToExcel(exportData, filename);
-        });
+            });
+        }
     </script>
 </body>
 </html>

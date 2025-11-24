@@ -10,21 +10,12 @@ if (!headers_sent()) {
     header('Content-Type: application/json; charset=utf-8');
 }
 
-function jsonResponse(array $data, int $statusCode = 200): void {
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    http_response_code($statusCode);
-    if (!headers_sent()) {
-        header('Content-Type: application/json; charset=utf-8');
-    }
-    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
-    exit;
-}
+// La fonction jsonResponse() est définie dans includes/api_helpers.php
 
 try {
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/api_helpers.php';
 } catch (Throwable $e) {
     error_log('messagerie_get_first_clients.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);

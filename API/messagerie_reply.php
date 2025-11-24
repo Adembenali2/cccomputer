@@ -15,19 +15,7 @@ if (!headers_sent()) {
     header('Content-Type: application/json; charset=utf-8');
 }
 
-// Fonction pour envoyer une réponse JSON propre
-function jsonResponse(array $data, int $statusCode = 200): void {
-    // Nettoyer tout buffer de sortie avant d'envoyer le JSON
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    http_response_code($statusCode);
-    if (!headers_sent()) {
-        header('Content-Type: application/json; charset=utf-8');
-    }
-    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
-    exit;
-}
+// La fonction jsonResponse() est définie dans includes/api_helpers.php
 
 // Gestionnaire d'erreur global pour capturer toutes les erreurs fatales
 set_error_handler(function($severity, $message, $file, $line) {

@@ -10,17 +10,7 @@ if (!headers_sent()) {
     header('Content-Type: application/json; charset=utf-8');
 }
 
-function jsonResponse(array $data, int $statusCode = 200): void {
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    http_response_code($statusCode);
-    if (!headers_sent()) {
-        header('Content-Type: application/json; charset=utf-8');
-    }
-    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
-    exit;
-}
+// La fonction jsonResponse() est définie dans includes/api_helpers.php
 
 try {
     // Inclure session_config.php EN PREMIER (il démarre la session si nécessaire)
