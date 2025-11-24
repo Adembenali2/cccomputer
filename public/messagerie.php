@@ -1023,6 +1023,35 @@ if (form && messageStatus) {
                 credentials: 'same-origin'
             });
             
+            // Vérifier si la réponse est OK
+            if (!response.ok) {
+                // Si la réponse n'est pas OK, essayer de lire le JSON d'erreur
+                let errorMessage = 'Erreur serveur (' + response.status + ')';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                } catch (e) {
+                    // Si ce n'est pas du JSON, lire le texte
+                    const text = await response.text();
+                    if (text) {
+                        errorMessage = 'Erreur serveur : ' + text.substring(0, 100);
+                    }
+                }
+                messageStatus.textContent = 'Erreur : ' + errorMessage;
+                messageStatus.className = 'maps-message alert';
+                return;
+            }
+            
+            // Vérifier le Content-Type avant de parser le JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('Réponse non-JSON reçue:', text.substring(0, 200));
+                messageStatus.textContent = 'Erreur : Réponse invalide du serveur';
+                messageStatus.className = 'maps-message alert';
+                return;
+            }
+            
             const result = await response.json();
             
             if (result.ok) {
@@ -1039,7 +1068,13 @@ if (form && messageStatus) {
             }
         } catch (err) {
             console.error('Erreur envoi:', err);
-            messageStatus.textContent = 'Erreur lors de l\'envoi du message.';
+            let errorMsg = 'Erreur lors de l\'envoi du message.';
+            if (err instanceof SyntaxError && err.message.includes('JSON')) {
+                errorMsg = 'Erreur : Le serveur a retourné une réponse invalide. Veuillez réessayer.';
+            } else if (err.message) {
+                errorMsg = 'Erreur : ' + err.message;
+            }
+            messageStatus.textContent = errorMsg;
             messageStatus.className = 'maps-message alert';
         }
     });

@@ -11,6 +11,7 @@ if (!headers_sent()) {
 }
 
 // La fonction jsonResponse() est définie dans includes/api_helpers.php
+require_once __DIR__ . '/../includes/api_helpers.php';
 
 try {
     // Inclure session_config.php EN PREMIER (il démarre la session si nécessaire)
@@ -137,7 +138,7 @@ try {
         ':sujet' => $sujet,
         ':message' => $message,
         ':type_lien' => $typeLien ?: null,
-        ':id_lien' => $idLien
+        ':id_lien' => $idLien ?: null
     ]);
     
     $messageId = (int)$pdo->lastInsertId();
