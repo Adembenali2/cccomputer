@@ -577,6 +577,58 @@ $onlineUsers = count($onlineUsersList);
 
 $filtersActive = ($search !== '');
 
+// ========================================================================
+// GESTION DES PERMISSIONS (ACL)
+// ========================================================================
+// Liste des pages disponibles pour les permissions
+$availablePages = [
+    'dashboard' => 'Dashboard',
+    'agenda' => 'Agenda',
+    'clients' => 'Clients',
+    'client_fiche' => 'Fiche Client',
+    'historique' => 'Historique',
+    'profil' => 'Gestion Utilisateurs',
+    'maps' => 'Cartes & Planification',
+    'messagerie' => 'Messagerie',
+    'sav' => 'SAV',
+    'livraison' => 'Livraisons',
+    'stock' => 'Stock',
+    'photocopieurs_details' => 'Détails Photocopieurs'
+];
+
+// Utilisateur cible pour les permissions (utilise l'utilisateur en édition si présent, sinon sélectionné)
+$permUserId = 0;
+if (isset($_GET['perm_user']) && $_GET['perm_user'] !== '') {
+    try {
+        $permUserId = validateId($_GET['perm_user'], 'ID utilisateur');
+    } catch (InvalidArgumentException $e) {
+        $permUserId = 0;
+    }
+}
+$permissionTargetUserId = $editId > 0 ? $editId : $permUserId;
+
+// Récupérer les permissions de l'utilisateur cible
+$userPermissions = [];
+if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
+    $permissionsData = safeFetchAll($pdo, 
+        "SELECT page, allowed FROM user_permissions WHERE user_id = ?", 
+        [$permissionTargetUserId], 
+        'user_permissions_fetch'
+    );
+    
+    foreach ($permissionsData as $perm) {
+        $userPermissions[$perm['page']] = (int)$perm['allowed'] === 1;
+    }
+    
+    // Si aucune permission n'existe, toutes les pages sont autorisées par défaut (fallback sur les rôles)
+    // On initialise avec true pour toutes les pages
+    foreach ($availablePages as $pageKey => $pageName) {
+        if (!isset($userPermissions[$pageKey])) {
+            $userPermissions[$pageKey] = true; // Par défaut autorisé (fallback sur rôles)
+        }
+    }
+}
+
 // Fonction utilitaire pour décoder msg JSON
 function decode_msg($row) {
     if (!isset($row['msg'])) return null;
