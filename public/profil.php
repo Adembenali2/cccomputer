@@ -1002,8 +1002,10 @@ function decode_msg($row) {
                 <label for="edit-date_debut">Date de début <span aria-label="requis">*</span>
                     <input type="date" id="edit-date_debut" name="date_debut" value="<?= h($editing['date_debut']) ?>" required aria-required="true">
                 </label>
-                <button class="fiche-action-btn" type="submit">Enregistrer</button>
-                <a class="link-reset" href="/public/profil.php">Fermer</a>
+                <div class="form-actions">
+                    <button class="fiche-action-btn" type="submit">Enregistrer</button>
+                    <a class="fiche-action-btn btn-close" href="/public/profil.php">Fermer</a>
+                </div>
             </form>
 
             <hr class="sep">
@@ -1016,7 +1018,7 @@ function decode_msg($row) {
                 <label for="reset-password">Nouveau mot de passe (min. 8) <span aria-label="requis">*</span>
                     <input type="password" id="reset-password" name="new_password" minlength="8" required aria-required="true">
                 </label>
-                <button class="btn-danger" type="submit">Réinitialiser</button>
+                <button class="btn-danger btn-compact" type="submit">Réinitialiser</button>
             </form>
         </section>
     <?php endif; ?>

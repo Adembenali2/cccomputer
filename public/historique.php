@@ -31,9 +31,10 @@ function sanitizeUserSearch(string $input): string {
     $cleaned = preg_replace('/\s+/', ' ', $cleaned);
     // Limiter la longueur
     $cleaned = mb_substr($cleaned, 0, USER_SEARCH_MAX_CHARS);
-    // Nettoyer : conserver uniquement les lettres (y compris accents), chiffres, espaces, tirets et apostrophes
+    // Nettoyer : supprimer uniquement les caractères vraiment dangereux
+    // Conserver les lettres (y compris accents), chiffres, espaces, tirets, apostrophes, points
     // \p{L} inclut toutes les lettres Unicode (y compris les accents)
-    $cleaned = preg_replace('/[^\p{L}\p{N}\s\-\']/u', '', $cleaned);
+    $cleaned = preg_replace('/[^\p{L}\p{N}\s\-\'\.]/u', '', $cleaned);
     return $cleaned;
 }
 
@@ -76,6 +77,11 @@ $searchUser = sanitizeUserSearch(is_string($rawUser) ? $rawUser : '');
 $dateFilter = parseDateFilter(is_string($rawDate) ? $rawDate : '');
 $searchDate = $dateFilter ? $dateFilter['display'] : '';
 
+// Debug temporaire : vérifier que la recherche n'est pas vide après sanitization
+if ($rawUser !== '' && $searchUser === '') {
+    error_log('Historique: recherche utilisateur vidée par sanitization. Input: ' . $rawUser);
+}
+
 // ====== Construction de la requête SQL sécurisée ======
 $params = [];
 $whereConditions = [];
@@ -87,11 +93,13 @@ if ($searchUser !== '') {
     $tokenIndex = 0;
     
     foreach ($tokens as $token) {
+        $token = trim($token);
         if ($token === '') {
             continue;
         }
+        // Créer un placeholder unique pour chaque token
         $paramKey = ':search_user_' . $tokenIndex++;
-        // Utilisation de la concaténation au lieu de l'interpolation pour éviter les problèmes
+        // Construire la condition avec concaténation explicite pour éviter les problèmes d'interpolation
         $userConditions[] = "(u.nom LIKE " . $paramKey . " OR u.prenom LIKE " . $paramKey . ")";
         $params[$paramKey] = '%' . $token . '%';
     }
@@ -135,18 +143,30 @@ $historique = [];
 $dbError = null;
 
 try {
-    $stmt = $pdo->prepare($sql);
-    
-    // Bind des paramètres avec types appropriés
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value, PDO::PARAM_STR);
+    // Vérification de la requête SQL avant exécution (debug)
+    if (empty($params)) {
+        // Pas de paramètres, exécution directe
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute();
+    } else {
+        $stmt = $pdo->prepare($sql);
+        
+        // Bind des paramètres un par un pour plus de contrôle
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value, PDO::PARAM_STR);
+        }
+        
+        $stmt->execute();
     }
     
-    $stmt->execute();
     $historique = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 } catch (PDOException $e) {
     $dbError = 'Impossible de charger l\'historique pour le moment.';
-    error_log('Erreur SQL (historique): ' . $e->getMessage() . ' | SQL: ' . $sql . ' | Params: ' . json_encode($params));
+    // Log détaillé pour le débogage
+    error_log('Erreur SQL (historique): ' . $e->getMessage());
+    error_log('SQL: ' . $sql);
+    error_log('Params: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
+    error_log('SearchUser: ' . $searchUser);
     $historique = [];
 }
 
