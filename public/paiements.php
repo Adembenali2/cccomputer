@@ -22,19 +22,44 @@ $clientNames = [
 
 for ($i = 1; $i <= 10; $i++) {
     $monthlyConsumption = [];
-    $totalYear = 0;
+    $totalYearNB = 0;
+    $totalYearColor = 0;
+    $totalYearAmount = 0;
     
     // Générer consommation mensuelle pour les 12 derniers mois
     for ($m = 11; $m >= 0; $m--) {
         $month = date('Y-m', strtotime("-$m months"));
-        $consumption = rand(500, 5000); // Consommation en pages
-        $amount = $consumption * 0.05; // 0.05€ par page
+        
+        // Consommation Noir et Blanc (généralement plus élevée)
+        $consumptionNB = rand(1000, 8000);
+        $amountNB = $consumptionNB * 0.03; // 0.03€ par page NB
+        
+        // Consommation Couleur (généralement plus faible mais plus chère)
+        $consumptionColor = rand(100, 2000);
+        $amountColor = $consumptionColor * 0.15; // 0.15€ par page couleur
+        
+        $totalMonth = $consumptionNB + $consumptionColor;
+        $totalAmount = $amountNB + $amountColor;
+        
         $monthlyConsumption[] = [
             'month' => $month,
-            'consumption' => $consumption,
-            'amount' => round($amount, 2)
+            'nb' => [
+                'pages' => $consumptionNB,
+                'amount' => round($amountNB, 2)
+            ],
+            'color' => [
+                'pages' => $consumptionColor,
+                'amount' => round($amountColor, 2)
+            ],
+            'total' => [
+                'pages' => $totalMonth,
+                'amount' => round($totalAmount, 2)
+            ]
         ];
-        $totalYear += $amount;
+        
+        $totalYearNB += $amountNB;
+        $totalYearColor += $amountColor;
+        $totalYearAmount += $totalAmount;
     }
     
     $clientsData[] = [
@@ -42,7 +67,11 @@ for ($i = 1; $i <= 10; $i++) {
         'name' => $clientNames[$i - 1] ?? "Client $i",
         'numero_client' => 'C' . str_pad($i, 5, '0', STR_PAD_LEFT),
         'monthly_consumption' => $monthlyConsumption,
-        'total_year' => round($totalYear, 2),
+        'total_year' => [
+            'nb' => round($totalYearNB, 2),
+            'color' => round($totalYearColor, 2),
+            'total' => round($totalYearAmount, 2)
+        ],
         'pending_amount' => round(rand(100, 2000), 2),
         'status' => rand(0, 1) ? 'paid' : 'pending'
     ];
@@ -173,11 +202,22 @@ if (empty($_SESSION['csrf_token'])) {
                         <div class="client-stats">
                             <div class="stat-item">
                                 <span class="stat-label">Total annuel</span>
-                                <span class="stat-value"><?= number_format($client['total_year'], 2, ',', ' ') ?> €</span>
+                                <span class="stat-value"><?= number_format($client['total_year']['total'], 2, ',', ' ') ?> €</span>
                             </div>
                             <div class="stat-item">
                                 <span class="stat-label">En attente</span>
                                 <span class="stat-value pending"><?= number_format($client['pending_amount'], 2, ',', ' ') ?> €</span>
+                            </div>
+                        </div>
+
+                        <div class="consumption-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">NB</span>
+                                <span class="summary-value"><?= number_format($client['total_year']['nb'], 2, ',', ' ') ?> €</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Couleur</span>
+                                <span class="summary-value"><?= number_format($client['total_year']['color'], 2, ',', ' ') ?> €</span>
                             </div>
                         </div>
 
@@ -193,8 +233,11 @@ if (empty($_SESSION['csrf_token'])) {
                                     <div class="breakdown-item">
                                         <span class="month-name"><?= h(date('M Y', strtotime($month['month'] . '-01'))) ?></span>
                                         <span class="month-stats">
-                                            <span class="month-pages"><?= number_format($month['consumption'], 0, ',', ' ') ?> pages</span>
-                                            <span class="month-amount"><?= number_format($month['amount'], 2, ',', ' ') ?> €</span>
+                                            <span class="month-pages">
+                                                <?= number_format($month['total']['pages'], 0, ',', ' ') ?> pages
+                                                <small>(<?= number_format($month['nb']['pages'], 0, ',', ' ') ?> NB / <?= number_format($month['color']['pages'], 0, ',', ' ') ?> C)</small>
+                                            </span>
+                                            <span class="month-amount"><?= number_format($month['total']['amount'], 2, ',', ' ') ?> €</span>
                                         </span>
                                     </div>
                                 <?php endforeach; ?>
@@ -206,6 +249,36 @@ if (empty($_SESSION['csrf_token'])) {
                         </button>
                     </div>
                 <?php endforeach; ?>
+            </div>
+        </div>
+
+        <!-- Boutons d'export -->
+        <div class="export-section">
+            <div class="section-header">
+                <h3>Export des Consommations</h3>
+            </div>
+            <div class="export-buttons">
+                <button class="btn-export" id="exportAllClients">
+                    📊 Exporter tous les clients (Excel)
+                </button>
+                <button class="btn-export-secondary" id="exportSelectedClient" style="display: none;">
+                    📄 Exporter le client sélectionné (Excel)
+                </button>
+            </div>
+        </div>
+
+        <!-- Boutons d'export -->
+        <div class="export-section">
+            <div class="section-header">
+                <h3>Export des Consommations</h3>
+            </div>
+            <div class="export-buttons">
+                <button class="btn-export" id="exportAllClients">
+                    📊 Exporter tous les clients (Excel)
+                </button>
+                <button class="btn-export-secondary" id="exportSelectedClient" style="display: none;">
+                    📄 Exporter le client sélectionné (Excel)
+                </button>
             </div>
         </div>
 
@@ -341,6 +414,24 @@ if (empty($_SESSION['csrf_token'])) {
         </div>
     </div>
 
+    <!-- Modal Détails Client -->
+    <div class="modal-overlay" id="clientDetailsModal" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalClientName">Détails du Client</h3>
+                <button class="modal-close" id="closeModal" aria-label="Fermer">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Contenu chargé dynamiquement -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="exportThisClient">📊 Exporter en Excel</button>
+                <button class="btn-secondary" id="closeModalBtn">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
         // Données pour le diagramme
         const chartData = <?= json_encode($chartData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
@@ -532,6 +623,181 @@ if (empty($_SESSION['csrf_token'])) {
                 successDiv.style.display = 'none';
                 document.getElementById('pendingAmount').textContent = '0.00';
             }, 3000);
+        });
+
+        // Gestion de la modal "Voir les détails"
+        const clientsDataJS = <?= json_encode($clientsData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+        let selectedClientId = null;
+
+        document.querySelectorAll('.btn-view-details').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const clientId = parseInt(this.dataset.clientId);
+                selectedClientId = clientId;
+                showClientDetails(clientId);
+            });
+        });
+
+        function showClientDetails(clientId) {
+            const client = clientsDataJS.find(c => c.id === clientId);
+            if (!client) return;
+
+            const modal = document.getElementById('clientDetailsModal');
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalClientName');
+
+            modalTitle.textContent = `Détails - ${client.name}`;
+            modal.setAttribute('aria-hidden', 'false');
+            modal.style.display = 'flex';
+
+            // Générer le contenu détaillé
+            let html = `
+                <div class="client-detail-header">
+                    <div class="detail-info">
+                        <p><strong>Numéro client:</strong> ${client.numero_client}</p>
+                        <p><strong>Statut:</strong> <span class="status-badge ${client.status === 'paid' ? 'status-paid' : 'status-pending'}">${client.status === 'paid' ? '✓ Payé' : '⏳ En attente'}</span></p>
+                        <p><strong>Montant en attente:</strong> <span class="pending">${client.pending_amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span></p>
+                    </div>
+                </div>
+
+                <div class="detail-summary">
+                    <h4>Résumé Annuel</h4>
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <span class="summary-card-label">Noir et Blanc</span>
+                            <span class="summary-card-value">${client.total_year.nb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
+                        </div>
+                        <div class="summary-card">
+                            <span class="summary-card-label">Couleur</span>
+                            <span class="summary-card-value">${client.total_year.color.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
+                        </div>
+                        <div class="summary-card total">
+                            <span class="summary-card-label">Total</span>
+                            <span class="summary-card-value">${client.total_year.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-table-section">
+                    <h4>Consommation Mensuelle Détaillée</h4>
+                    <div class="table-container">
+                        <table class="detail-table">
+                            <thead>
+                                <tr>
+                                    <th>Mois</th>
+                                    <th>NB - Pages</th>
+                                    <th>NB - Montant</th>
+                                    <th>Couleur - Pages</th>
+                                    <th>Couleur - Montant</th>
+                                    <th>Total Pages</th>
+                                    <th>Total Montant</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+
+            client.monthly_consumption.forEach(month => {
+                const monthName = new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                html += `
+                    <tr>
+                        <td>${monthName}</td>
+                        <td>${month.nb.pages.toLocaleString('fr-FR')}</td>
+                        <td>${month.nb.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                        <td>${month.color.pages.toLocaleString('fr-FR')}</td>
+                        <td>${month.color.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                        <td><strong>${month.total.pages.toLocaleString('fr-FR')}</strong></td>
+                        <td><strong>${month.total.amount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</strong></td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            modalBody.innerHTML = html;
+            document.getElementById('exportSelectedClient').style.display = 'inline-block';
+        }
+
+        // Fermeture de la modal
+        document.getElementById('closeModal').addEventListener('click', closeModal);
+        document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+        document.getElementById('clientDetailsModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        function closeModal() {
+            const modal = document.getElementById('clientDetailsModal');
+            modal.setAttribute('aria-hidden', 'true');
+            modal.style.display = 'none';
+            selectedClientId = null;
+            document.getElementById('exportSelectedClient').style.display = 'none';
+        }
+
+        // Fonction d'export Excel
+        function exportToExcel(data, filename) {
+            const wb = XLSX.utils.book_new();
+            
+            // Feuille de données
+            const ws = XLSX.utils.json_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, 'Consommations');
+            
+            // Télécharger
+            XLSX.writeFile(wb, filename);
+        }
+
+        // Export tous les clients
+        document.getElementById('exportAllClients').addEventListener('click', function() {
+            const exportData = [];
+            
+            clientsDataJS.forEach(client => {
+                client.monthly_consumption.forEach(month => {
+                    exportData.push({
+                        'Client': client.name,
+                        'Numéro Client': client.numero_client,
+                        'Mois': new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+                        'NB - Pages': month.nb.pages,
+                        'NB - Montant (€)': month.nb.amount,
+                        'Couleur - Pages': month.color.pages,
+                        'Couleur - Montant (€)': month.color.amount,
+                        'Total Pages': month.total.pages,
+                        'Total Montant (€)': month.total.amount
+                    });
+                });
+            });
+            
+            const filename = `Consommations_Tous_Clients_${new Date().toISOString().split('T')[0]}.xlsx`;
+            exportToExcel(exportData, filename);
+        });
+
+        // Export client sélectionné
+        document.getElementById('exportSelectedClient').addEventListener('click', function() {
+            if (!selectedClientId) return;
+            
+            const client = clientsDataJS.find(c => c.id === selectedClientId);
+            if (!client) return;
+            
+            const exportData = client.monthly_consumption.map(month => ({
+                'Mois': new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+                'NB - Pages': month.nb.pages,
+                'NB - Montant (€)': month.nb.amount,
+                'Couleur - Pages': month.color.pages,
+                'Couleur - Montant (€)': month.color.amount,
+                'Total Pages': month.total.pages,
+                'Total Montant (€)': month.total.amount
+            }));
+            
+            const filename = `Consommations_${client.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            exportToExcel(exportData, filename);
+        });
+
+        // Export depuis la modal
+        document.getElementById('exportThisClient').addEventListener('click', function() {
+            if (selectedClientId) {
+                document.getElementById('exportSelectedClient').click();
+            }
         });
     </script>
 </body>
