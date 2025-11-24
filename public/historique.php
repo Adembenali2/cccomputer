@@ -518,6 +518,9 @@ function formatAction(?string $action): string {
         return;
     }
     
+    // Récupérer le délai de debounce depuis l'attribut data (conforme CSP)
+    const debounceDelay = parseInt(form.getAttribute('data-debounce-delay'), 10) || 400;
+    
     // Soumission immédiate quand la date change
     dateInput.addEventListener('change', function() {
         form.submit();
@@ -529,7 +532,7 @@ function formatAction(?string $action): string {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(function() {
             form.submit();
-        }, <?= DEBOUNCE_DELAY_MS ?>);
+        }, debounceDelay);
     });
     
     // Enter dans le champ user => submit direct
