@@ -69,17 +69,30 @@ function parseDateFilter(string $dateInput): ?array {
     ];
 }
 
+// ====== INSTRUMENTATION DE DÉBOGAGE ======
+error_log('=== DÉBUT DÉBOGAGE HISTORIQUE ===');
+error_log('$_GET complet: ' . json_encode($_GET, JSON_UNESCAPED_UNICODE));
+
 // Récupération et validation des paramètres
 $rawUser = $_GET['user_search'] ?? '';
 $rawDate = $_GET['date_search'] ?? '';
+
+error_log('Point 1 - rawUser (après $_GET): ' . var_export($rawUser, true));
+error_log('Point 1 - rawDate (après $_GET): ' . var_export($rawDate, true));
+error_log('Point 1 - Type rawUser: ' . gettype($rawUser));
+error_log('Point 1 - Type rawDate: ' . gettype($rawDate));
 
 $searchUser = sanitizeUserSearch(is_string($rawUser) ? $rawUser : '');
 $dateFilter = parseDateFilter(is_string($rawDate) ? $rawDate : '');
 $searchDate = $dateFilter ? $dateFilter['display'] : '';
 
+error_log('Point 2 - searchUser (après sanitizeUserSearch): ' . var_export($searchUser, true));
+error_log('Point 2 - searchUser length: ' . strlen($searchUser));
+error_log('Point 2 - searchUser empty?: ' . ($searchUser === '' ? 'OUI' : 'NON'));
+
 // Debug temporaire : vérifier que la recherche n'est pas vide après sanitization
 if ($rawUser !== '' && $searchUser === '') {
-    error_log('Historique: recherche utilisateur vidée par sanitization. Input: ' . $rawUser);
+    error_log('⚠️ ALERTE: recherche utilisateur vidée par sanitization. Input: ' . $rawUser);
 }
 
 // ====== Construction de la requête SQL sécurisée ======
@@ -87,26 +100,55 @@ $params = [];
 $whereConditions = [];
 
 // Filtre par utilisateur (recherche multi-mots)
+error_log('Point 3 - Vérification searchUser !== "": ' . ($searchUser !== '' ? 'OUI' : 'NON'));
+
 if ($searchUser !== '') {
+    error_log('Point 4 - Entrée dans le bloc if searchUser');
     $tokens = preg_split('/\s+/', $searchUser);
+    error_log('Point 4 - Tokens après preg_split: ' . json_encode($tokens, JSON_UNESCAPED_UNICODE));
+    error_log('Point 4 - Nombre de tokens: ' . count($tokens));
+    
     $userConditions = [];
     $tokenIndex = 0;
     
     foreach ($tokens as $token) {
         $token = trim($token);
+        error_log('Point 5 - Token brut: ' . var_export($token, true));
+        error_log('Point 5 - Token après trim: ' . var_export($token, true));
+        error_log('Point 5 - Token vide?: ' . ($token === '' ? 'OUI' : 'NON'));
+        
         if ($token === '') {
+            error_log('Point 5 - Token vide, on continue');
             continue;
         }
         // Créer un placeholder unique pour chaque token
         $paramKey = ':search_user_' . $tokenIndex++;
+        $paramValue = '%' . $token . '%';
+        
+        error_log('Point 6 - paramKey: ' . $paramKey);
+        error_log('Point 6 - paramValue: ' . $paramValue);
+        
         // Construire la condition avec concaténation explicite pour éviter les problèmes d'interpolation
-        $userConditions[] = "(u.nom LIKE " . $paramKey . " OR u.prenom LIKE " . $paramKey . ")";
-        $params[$paramKey] = '%' . $token . '%';
+        $condition = "(u.nom LIKE " . $paramKey . " OR u.prenom LIKE " . $paramKey . ")";
+        $userConditions[] = $condition;
+        $params[$paramKey] = $paramValue;
+        
+        error_log('Point 6 - Condition créée: ' . $condition);
+        error_log('Point 6 - Param ajouté: ' . $paramKey . ' => ' . $paramValue);
     }
     
+    error_log('Point 7 - Nombre de userConditions: ' . count($userConditions));
+    error_log('Point 7 - userConditions: ' . json_encode($userConditions, JSON_UNESCAPED_UNICODE));
+    
     if (!empty($userConditions)) {
-        $whereConditions[] = '(' . implode(' AND ', $userConditions) . ')';
+        $combinedCondition = '(' . implode(' AND ', $userConditions) . ')';
+        $whereConditions[] = $combinedCondition;
+        error_log('Point 7 - Condition combinée ajoutée: ' . $combinedCondition);
+    } else {
+        error_log('⚠️ Point 7 - userConditions est vide !');
     }
+} else {
+    error_log('Point 4 - searchUser est vide, on ne rentre pas dans le bloc if');
 }
 
 // Filtre par date
@@ -130,45 +172,78 @@ $sql = "
     LEFT JOIN utilisateurs u ON h.user_id = u.id
 ";
 
+error_log('Point 8 - SQL de base: ' . $sql);
+error_log('Point 8 - whereConditions: ' . json_encode($whereConditions, JSON_UNESCAPED_UNICODE));
+error_log('Point 8 - Nombre de whereConditions: ' . count($whereConditions));
+
 if (!empty($whereConditions)) {
-    $sql .= ' WHERE ' . implode(' AND ', $whereConditions);
+    $whereClause = ' WHERE ' . implode(' AND ', $whereConditions);
+    $sql .= $whereClause;
+    error_log('Point 8 - WHERE clause ajoutée: ' . $whereClause);
+} else {
+    error_log('Point 8 - Aucune condition WHERE');
 }
 
 // LIMIT doit être un entier, pas un paramètre nommé (compatibilité PDO)
 $limit = (int)HISTORIQUE_PAGE_LIMIT;
 $sql .= ' ORDER BY h.date_action DESC LIMIT ' . $limit;
 
+error_log('Point 9 - SQL FINAL: ' . $sql);
+error_log('Point 9 - Params FINAUX: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
+error_log('Point 9 - Nombre de params: ' . count($params));
+
 // ====== Exécution de la requête ======
 $historique = [];
 $dbError = null;
 
 try {
+    error_log('Point 10 - Début try/catch');
+    error_log('Point 10 - Params empty?: ' . (empty($params) ? 'OUI' : 'NON'));
+    
     // Vérification de la requête SQL avant exécution (debug)
     if (empty($params)) {
+        error_log('Point 11 - Exécution sans paramètres');
         // Pas de paramètres, exécution directe
         $stmt = $pdo->prepare($sql);
         $stmt->execute();
+        error_log('Point 11 - Requête exécutée sans paramètres');
     } else {
+        error_log('Point 12 - Exécution avec paramètres');
         $stmt = $pdo->prepare($sql);
+        error_log('Point 12 - Requête préparée');
         
         // Bind des paramètres un par un pour plus de contrôle
         foreach ($params as $key => $value) {
+            error_log('Point 13 - Binding: ' . $key . ' => ' . var_export($value, true));
             $stmt->bindValue($key, $value, PDO::PARAM_STR);
+            error_log('Point 13 - Bind réussi pour: ' . $key);
         }
         
+        error_log('Point 14 - Tous les paramètres bindés, exécution...');
         $stmt->execute();
+        error_log('Point 14 - Requête exécutée avec succès');
     }
     
     $historique = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    error_log('Point 15 - Résultats récupérés: ' . count($historique) . ' lignes');
+    
+    if (count($historique) > 0) {
+        error_log('Point 15 - Premier résultat: ' . json_encode($historique[0], JSON_UNESCAPED_UNICODE));
+    }
+    
 } catch (PDOException $e) {
     $dbError = 'Impossible de charger l\'historique pour le moment.';
     // Log détaillé pour le débogage
-    error_log('Erreur SQL (historique): ' . $e->getMessage());
-    error_log('SQL: ' . $sql);
-    error_log('Params: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
-    error_log('SearchUser: ' . $searchUser);
+    error_log('❌ ERREUR SQL (historique): ' . $e->getMessage());
+    error_log('❌ Code erreur: ' . $e->getCode());
+    error_log('❌ SQL: ' . $sql);
+    error_log('❌ Params: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
+    error_log('❌ SearchUser: ' . $searchUser);
+    error_log('❌ Stack trace: ' . $e->getTraceAsString());
     $historique = [];
 }
+
+error_log('=== FIN DÉBOGAGE HISTORIQUE ===');
 
 // ====== Calcul des statistiques ======
 $historiqueCount = count($historique);
