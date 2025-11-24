@@ -31,7 +31,8 @@ function sanitizeUserSearch(string $input): string {
     $cleaned = preg_replace('/\s+/', ' ', $cleaned);
     // Limiter la longueur
     $cleaned = mb_substr($cleaned, 0, USER_SEARCH_MAX_CHARS);
-    // Supprimer les caractères potentiellement dangereux (conservation des lettres, chiffres, espaces, tirets, apostrophes)
+    // Nettoyer : conserver uniquement les lettres (y compris accents), chiffres, espaces, tirets et apostrophes
+    // \p{L} inclut toutes les lettres Unicode (y compris les accents)
     $cleaned = preg_replace('/[^\p{L}\p{N}\s\-\']/u', '', $cleaned);
     return $cleaned;
 }
@@ -90,7 +91,8 @@ if ($searchUser !== '') {
             continue;
         }
         $paramKey = ':search_user_' . $tokenIndex++;
-        $userConditions[] = "(u.nom LIKE {$paramKey} OR u.prenom LIKE {$paramKey})";
+        // Utilisation de la concaténation au lieu de l'interpolation pour éviter les problèmes
+        $userConditions[] = "(u.nom LIKE " . $paramKey . " OR u.prenom LIKE " . $paramKey . ")";
         $params[$paramKey] = '%' . $token . '%';
     }
     
@@ -144,7 +146,7 @@ try {
     $historique = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 } catch (PDOException $e) {
     $dbError = 'Impossible de charger l\'historique pour le moment.';
-    error_log('Erreur SQL (historique): ' . $e->getMessage());
+    error_log('Erreur SQL (historique): ' . $e->getMessage() . ' | SQL: ' . $sql . ' | Params: ' . json_encode($params));
     $historique = [];
 }
 
