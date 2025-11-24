@@ -392,24 +392,63 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-secondary);
   font-weight: 700;
   font-size: .9rem;
-  padding: .5rem .6rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 0.75rem 0.75rem;
+  border-bottom: 2px solid var(--border-color);
   text-align: left;
   position: sticky; top: 0; z-index: 1;
+  vertical-align: middle;
+  line-height: 1.4;
 }
+
+/* Alignement spécifique pour les en-têtes de colonnes numériques */
+/* Qté en dernière colonne (Couleur, Modèle, Qté) ou (État, Modèle, Qté) */
+.tbl-stock thead th:last-child {
+  text-align: right;
+  padding-right: 1rem;
+}
+
+/* Qté en 3ème colonne (État, Modèle, Qté) */
+.tbl-stock thead tr th:nth-child(3) {
+  text-align: right;
+  padding-right: 1rem;
+}
+
+/* Qté en 1ère colonne (Qté, Modèle, Poids) - tableau Papier */
+.tbl-stock thead tr th:first-child {
+  text-align: right;
+  padding-right: 1rem;
+}
+
+/* Correspondance pour les cellules */
+.tbl-stock tbody td:first-child.td-metric,
+.tbl-stock tbody td:last-child.td-metric {
+  text-align: right;
+  padding-right: 1rem;
+}
+
 .tbl-stock tbody td {
-  padding: 0.65rem 0.75rem;
+  padding: 0.75rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
-  vertical-align: top;
+  vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   transition: all 0.2s ease;
+  line-height: 1.4;
+  height: auto;
 }
 
 .tbl-stock tbody tr {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  height: auto;
+  min-height: 48px;
+}
+
+/* Assurer que toutes les cellules d'une ligne ont la même hauteur */
+.tbl-stock tbody tr td {
+  height: 100%;
+  vertical-align: middle;
 }
 
 .tbl-stock tbody tr::before {
@@ -439,10 +478,21 @@ html, body { max-width: 100%; overflow-x: hidden; }
   transform: translateX(1px);
 }
 
+/* Alignement spécifique pour les colonnes numériques */
+.tbl-stock thead th:last-child,
+.tbl-stock tbody td.td-metric,
+.tbl-stock tbody td[data-th="Qté"],
+.tbl-stock tbody td[data-th="Poids"] {
+  text-align: right;
+  vertical-align: middle;
+}
+
 .td-metric { 
   font-weight: 700; 
   text-align: right;
   font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+  padding-right: 1rem;
 }
 
 .td-metric.is-zero { 
@@ -459,16 +509,43 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 /* Alignements cohérents th/td par colonne */
-th.th-left,  td.td-left  { text-align: left; }
-th.th-right, td.td-right { text-align: right; }
-th.th-center,td.td-center{ text-align: center; }
+th.th-left,  td.td-left  { 
+  text-align: left; 
+  vertical-align: middle;
+}
+th.th-right, td.td-right { 
+  text-align: right; 
+  vertical-align: middle;
+}
+th.th-center,td.td-center{ 
+  text-align: center; 
+  vertical-align: middle;
+}
 
-th.th-qty,   td.td-qty   { text-align: right; }   /* Qté */
-th.th-poids, td.td-poids { text-align: right; }   /* Poids (peut passer à left si souhaité) */
-th.th-modele,td.td-modele{ text-align: left; }    /* Modèle */
-th.th-sn,    td.td-sn    { text-align: left; }    /* N° Série */
-th.th-statut,td.td-statut{ text-align: center; }  /* Statut */
-th.th-etat,  td.td-etat  { text-align: center; }  /* État */
+th.th-qty,   td.td-qty   { 
+  text-align: right; 
+  vertical-align: middle;
+}   /* Qté */
+th.th-poids, td.td-poids { 
+  text-align: right; 
+  vertical-align: middle;
+}   /* Poids */
+th.th-modele,td.td-modele{ 
+  text-align: left; 
+  vertical-align: middle;
+}    /* Modèle */
+th.th-sn,    td.td-sn    { 
+  text-align: left; 
+  vertical-align: middle;
+}    /* N° Série */
+th.th-statut,td.td-statut{ 
+  text-align: center; 
+  vertical-align: middle;
+}  /* Statut */
+th.th-etat,  td.td-etat  { 
+  text-align: center; 
+  vertical-align: middle;
+}  /* État */
 
 /* Compact (densité) */
 .tbl-compact thead th, .tbl-compact tbody td { font-size: .95rem; }
