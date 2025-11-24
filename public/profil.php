@@ -451,24 +451,29 @@ $stats = safeFetch($pdo, "
     SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN statut = 'actif' THEN 1 ELSE 0 END) as actifs,
-        MAX(date_creation) as latest_creation
+        SUM(CASE WHEN statut = 'inactif' THEN 1 ELSE 0 END) as inactifs
     FROM utilisateurs
     WHERE id IN (SELECT id FROM utilisateurs ORDER BY nom ASC, prenom ASC LIMIT ?)
 ", [USERS_LIMIT], 'stats_users');
 
 $totalUsers = (int)($stats['total'] ?? count($users));
 $activeUsers = (int)($stats['actifs'] ?? 0);
-$inactiveUsers = max($totalUsers - $activeUsers, 0);
-$latestCreation = $stats['latest_creation'] ?? null;
+$inactiveUsers = (int)($stats['inactifs'] ?? 0);
 
-// Répartition par rôle (optimisé)
-$roleBreakdown = [];
-foreach ($users as $user) {
-    $roleName = $user['Emploi'] ?? '—';
-    $roleBreakdown[$roleName] = ($roleBreakdown[$roleName] ?? 0) + 1;
-}
-arsort($roleBreakdown);
-$topRoles = array_slice($roleBreakdown, 0, 3, true);
+// Récupérer les informations de l'utilisateur connecté
+$currentUserInfo = safeFetch($pdo, 
+    "SELECT nom, prenom, Email, Emploi FROM utilisateurs WHERE id = ?", 
+    [$currentUser['id']], 
+    'current_user_info'
+);
+
+// Utilisateurs en ligne (activité récente dans les 10 dernières minutes)
+$onlineUsers = safeFetchColumn($pdo, "
+    SELECT COUNT(DISTINCT h.user_id)
+    FROM historique h
+    WHERE h.date_action >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+    AND h.user_id IS NOT NULL
+", [], 0, 'online_users_count');
 
 $filtersActive = ($search !== '' || ($status !== '' && in_array($status, ['actif', 'inactif'], true)) || ($role !== '' && in_array($role, $ROLES, true)));
 
@@ -745,7 +750,7 @@ function decode_msg($row) {
 
     <section class="profil-meta">
         <div class="meta-card">
-            <span class="meta-label">Utilisateurs</span>
+            <span class="meta-label">Total utilisateurs</span>
             <strong class="meta-value"><?= h((string)$totalUsers) ?></strong>
             <?php if ($totalUsers >= USERS_LIMIT): ?>
                 <span class="meta-chip" title="Limite d'affichage atteinte">+<?= USERS_LIMIT ?> affichés</span>
@@ -754,26 +759,28 @@ function decode_msg($row) {
         <div class="meta-card">
             <span class="meta-label">Actifs</span>
             <strong class="meta-value success"><?= h((string)$activeUsers) ?></strong>
-            <span class="meta-sub">Inactifs : <?= h((string)$inactiveUsers) ?></span>
         </div>
         <div class="meta-card">
-            <span class="meta-label">Dernière création</span>
-            <strong class="meta-value"><?= h(formatDate($latestCreation)) ?></strong>
+            <span class="meta-label">Inactifs</span>
+            <strong class="meta-value" style="color: #dc2626;"><?= h((string)$inactiveUsers) ?></strong>
         </div>
-        <div class="meta-card meta-roles">
-            <span class="meta-label">Top rôles</span>
-            <div class="meta-pills">
-                <?php if (!empty($topRoles)): ?>
-                    <?php foreach ($topRoles as $roleName => $count): ?>
-                        <span class="pill role-pill">
-                            <?= h($roleName) ?>
-                            <span class="pill-count"><?= h((string)$count) ?></span>
-                        </span>
-                    <?php endforeach; ?>
+        <div class="meta-card">
+            <span class="meta-label">Personne connectée</span>
+            <strong class="meta-value" style="font-size: 1.1rem;">
+                <?php if ($currentUserInfo): ?>
+                    <?= h($currentUserInfo['prenom'] . ' ' . $currentUserInfo['nom']) ?>
                 <?php else: ?>
-                    <span class="meta-sub">Aucun rôle disponible</span>
+                    —
                 <?php endif; ?>
-            </div>
+            </strong>
+            <?php if ($currentUserInfo): ?>
+                <span class="meta-sub"><?= h($currentUserInfo['Email']) ?></span>
+            <?php endif; ?>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">En ligne</span>
+            <strong class="meta-value" style="color: #16a34a;"><?= h((string)$onlineUsers) ?></strong>
+            <span class="meta-sub">Dernières 10 min</span>
         </div>
     </section>
 
@@ -882,7 +889,6 @@ function decode_msg($row) {
                 <table class="users-table" role="table" aria-label="Liste des utilisateurs">
                     <thead>
                         <tr>
-                            <th scope="col">#</th>
                             <th scope="col">Nom</th>
                             <th scope="col">Email</th>
                             <th scope="col">Téléphone</th>
@@ -895,13 +901,12 @@ function decode_msg($row) {
                     <tbody>
                     <?php if (empty($users)): ?>
                         <tr>
-                            <td colspan="8" class="aucun" role="cell">Aucun utilisateur trouvé.</td>
+                            <td colspan="7" class="aucun" role="cell">Aucun utilisateur trouvé.</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($users as $u): ?>
                             <tr class="<?= ($editId > 0 && $editId === (int)$u['id']) ? 'is-editing' : '' ?>" 
                                 role="row">
-                                <td data-label="#" role="cell"><?= (int)$u['id'] ?></td>
                                 <td data-label="Nom" role="cell"><?= h($u['nom'] . ' ' . $u['prenom']) ?></td>
                                 <td data-label="Email" role="cell"><?= h($u['Email']) ?></td>
                                 <td data-label="Téléphone" role="cell"><?= h($u['telephone'] ?? '') ?></td>
