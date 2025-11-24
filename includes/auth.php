@@ -2,6 +2,7 @@
 // includes/auth.php
 require_once __DIR__ . '/session_config.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers.php';
 
 // La session est démarrée par session_config.php
 
