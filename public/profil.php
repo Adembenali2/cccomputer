@@ -222,7 +222,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             
             $newId = (int)$pdo->lastInsertId();
-            logProfilAction($pdo, $currentUser['id'], 'utilisateur_cree', "Utilisateur #{$newId} créé ({$data['Email']}, rôle {$data['Emploi']})");
+            
+            // Récupérer les infos de l'utilisateur créateur pour le log
+            $creatorInfo = safeFetch($pdo, "SELECT nom, prenom, Email FROM utilisateurs WHERE id = ?", [$currentUser['id']], 'creator_info');
+            $creatorName = $creatorInfo ? ($creatorInfo['prenom'] . ' ' . $creatorInfo['nom']) : "Utilisateur #{$currentUser['id']}";
+            
+            logProfilAction($pdo, $currentUser['id'], 'utilisateur_cree', 
+                "Création utilisateur #{$newId}: {$data['prenom']} {$data['nom']} ({$data['Email']}), rôle: {$data['Emploi']}, statut: {$data['statut']} | Créé par: {$creatorName}");
             
             // Invalider le cache des rôles si nouveau rôle
             @unlink(__DIR__ . '/../cache/roles_enum.json');
@@ -322,8 +328,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
+            // Récupérer les infos de l'utilisateur modifié et du modificateur
+            $targetUserInfo = safeFetch($pdo, "SELECT nom, prenom, Email FROM utilisateurs WHERE id = ?", [$id], 'target_user_info');
+            $targetName = $targetUserInfo ? ($targetUserInfo['prenom'] . ' ' . $targetUserInfo['nom']) : "Utilisateur #{$id}";
+            $targetEmail = $targetUserInfo['Email'] ?? 'N/A';
+            
+            $modifierInfo = safeFetch($pdo, "SELECT nom, prenom FROM utilisateurs WHERE id = ?", [$currentUser['id']], 'modifier_info');
+            $modifierName = $modifierInfo ? ($modifierInfo['prenom'] . ' ' . $modifierInfo['nom']) : "Utilisateur #{$currentUser['id']}";
+            
             $detail = $changes ? implode(', ', $changes) : 'Aucun changement détecté';
-            logProfilAction($pdo, $currentUser['id'], 'utilisateur_modifie', "Utilisateur #{$id} mis à jour. {$detail}");
+            logProfilAction($pdo, $currentUser['id'], 'utilisateur_modifie', 
+                "Modification utilisateur #{$id}: {$targetName} ({$targetEmail}) | Modifié par: {$modifierName} | Changements: {$detail}");
 
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur mis à jour."];
         }
@@ -340,10 +355,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             $newStatus = (($_POST['to'] ?? 'actif') === 'inactif') ? 'inactif' : 'actif';
+            
+            // Récupérer l'ancien statut et les infos utilisateur
+            $userInfo = safeFetch($pdo, "SELECT nom, prenom, Email, statut FROM utilisateurs WHERE id = ?", [$id], 'user_status_info');
+            $oldStatus = $userInfo['statut'] ?? 'inconnu';
+            $userName = $userInfo ? ($userInfo['prenom'] . ' ' . $userInfo['nom']) : "Utilisateur #{$id}";
+            $userEmail = $userInfo['Email'] ?? 'N/A';
+            
             $stmt = $pdo->prepare("UPDATE utilisateurs SET statut = ? WHERE id = ?");
             $stmt->execute([$newStatus, $id]);
             
-            logProfilAction($pdo, $currentUser['id'], 'utilisateur_statut', "Statut utilisateur #{$id} changé en {$newStatus}");
+            $modifierInfo = safeFetch($pdo, "SELECT nom, prenom FROM utilisateurs WHERE id = ?", [$currentUser['id']], 'modifier_status_info');
+            $modifierName = $modifierInfo ? ($modifierInfo['prenom'] . ' ' . $modifierInfo['nom']) : "Utilisateur #{$currentUser['id']}";
+            
+            logProfilAction($pdo, $currentUser['id'], 'utilisateur_statut', 
+                "Changement statut utilisateur #{$id}: {$userName} ({$userEmail}) | {$oldStatus} → {$newStatus} | Modifié par: {$modifierName}");
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut modifié en {$newStatus}."];
         }
         // ===== RÉINITIALISATION MOT DE PASSE =====
@@ -359,11 +385,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Mot de passe trop court (min. 8 caractères).');
             }
             
+            // Récupérer les infos de l'utilisateur cible
+            $targetUserInfo = safeFetch($pdo, "SELECT nom, prenom, Email FROM utilisateurs WHERE id = ?", [$id], 'target_pwd_reset_info');
+            $targetName = $targetUserInfo ? ($targetUserInfo['prenom'] . ' ' . $targetUserInfo['nom']) : "Utilisateur #{$id}";
+            $targetEmail = $targetUserInfo['Email'] ?? 'N/A';
+            
             $hash = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => 12]);
             $stmt = $pdo->prepare("UPDATE utilisateurs SET password = ? WHERE id = ?");
             $stmt->execute([$hash, $id]);
 
-            logProfilAction($pdo, $currentUser['id'], 'utilisateur_pwd_reset', "Mot de passe utilisateur #{$id} réinitialisé");
+            $resetterInfo = safeFetch($pdo, "SELECT nom, prenom FROM utilisateurs WHERE id = ?", [$currentUser['id']], 'resetter_info');
+            $resetterName = $resetterInfo ? ($resetterInfo['prenom'] . ' ' . $resetterInfo['nom']) : "Utilisateur #{$currentUser['id']}";
+            
+            logProfilAction($pdo, $currentUser['id'], 'utilisateur_pwd_reset', 
+                "Réinitialisation mot de passe utilisateur #{$id}: {$targetName} ({$targetEmail}) | Réinitialisé par: {$resetterName}");
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Mot de passe réinitialisé."];
         }
         // ===== SAUVEGARDE DES PERMISSIONS =====
@@ -424,8 +459,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $changes[] = "{$pageName}: " . ($allowed ? 'autorisé' : 'interdit');
                 }
                 
+                // Récupérer les infos du modificateur
+                $modifierInfo = safeFetch($pdo, "SELECT nom, prenom FROM utilisateurs WHERE id = ?", [$currentUser['id']], 'modifier_perms_info');
+                $modifierName = $modifierInfo ? ($modifierInfo['prenom'] . ' ' . $modifierInfo['nom']) : "Utilisateur #{$currentUser['id']}";
+                
                 logProfilAction($pdo, $currentUser['id'], 'permissions_modifiees', 
-                    "Permissions utilisateur #{$targetUserId} ({$targetUser['nom']} {$targetUser['prenom']}) modifiées. " . implode(', ', $changes));
+                    "Modification permissions utilisateur #{$targetUserId}: {$targetUser['prenom']} {$targetUser['nom']} | Modifié par: {$modifierName} | " . implode(', ', $changes));
                 
                 $_SESSION['flash'] = ['type' => 'success', 'msg' => "Permissions mises à jour avec succès."];
     } catch (Throwable $e) {
