@@ -644,6 +644,30 @@
     flex: 1;
 }
 
+.modal-export-section {
+    padding: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.modal-export-header {
+    margin-bottom: 1rem;
+}
+
+.modal-export-header h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+.modal-export-section .export-filters {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 0;
+}
+
 .modal-footer {
     display: flex;
     justify-content: flex-end;

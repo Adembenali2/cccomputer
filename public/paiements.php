@@ -77,7 +77,7 @@ for ($i = 1; $i <= 10; $i++) {
     ];
 }
 
-// Générer données pour le diagramme (consommation globale)
+// Générer données pour le diagramme (consommation globale avec distinction NB/Couleur)
 $chartData = [
     'daily' => [],
     'monthly' => [],
@@ -87,30 +87,48 @@ $chartData = [
 // Données quotidiennes (30 derniers jours)
 for ($d = 29; $d >= 0; $d--) {
     $date = date('Y-m-d', strtotime("-$d days"));
+    $nbPages = rand(50000, 200000);
+    $colorPages = rand(5000, 30000);
+    $nbAmount = $nbPages * 0.03;
+    $colorAmount = $colorPages * 0.15;
     $chartData['daily'][] = [
         'date' => $date,
-        'consumption' => rand(10000, 50000),
-        'amount' => round(rand(10000, 50000) * 0.05, 2)
+        'nb_pages' => $nbPages,
+        'color_pages' => $colorPages,
+        'total_pages' => $nbPages + $colorPages,
+        'amount' => round($nbAmount + $colorAmount, 2)
     ];
 }
 
 // Données mensuelles (12 derniers mois)
 for ($m = 11; $m >= 0; $m--) {
     $month = date('Y-m', strtotime("-$m months"));
+    $nbPages = rand(200000, 800000);
+    $colorPages = rand(20000, 150000);
+    $nbAmount = $nbPages * 0.03;
+    $colorAmount = $colorPages * 0.15;
     $chartData['monthly'][] = [
         'month' => $month,
-        'consumption' => rand(200000, 800000),
-        'amount' => round(rand(200000, 800000) * 0.05, 2)
+        'nb_pages' => $nbPages,
+        'color_pages' => $colorPages,
+        'total_pages' => $nbPages + $colorPages,
+        'amount' => round($nbAmount + $colorAmount, 2)
     ];
 }
 
 // Données annuelles (5 dernières années)
 for ($y = 4; $y >= 0; $y--) {
     $year = date('Y', strtotime("-$y years"));
+    $nbPages = rand(2000000, 8000000);
+    $colorPages = rand(200000, 1500000);
+    $nbAmount = $nbPages * 0.03;
+    $colorAmount = $colorPages * 0.15;
     $chartData['yearly'][] = [
         'year' => $year,
-        'consumption' => rand(2000000, 8000000),
-        'amount' => round(rand(2000000, 8000000) * 0.05, 2)
+        'nb_pages' => $nbPages,
+        'color_pages' => $colorPages,
+        'total_pages' => $nbPages + $colorPages,
+        'amount' => round($nbAmount + $colorAmount, 2)
     ];
 }
 
@@ -174,6 +192,48 @@ if (empty($_SESSION['csrf_token'])) {
             </div>
             <div class="chart-container">
                 <canvas id="consumptionChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Section Export Tous les Clients (après le diagramme) -->
+        <div class="export-section">
+            <div class="section-header">
+                <h3>Export des Consommations - Tous les Clients</h3>
+            </div>
+            
+            <div class="export-filters">
+                <div class="filter-group">
+                    <label for="exportPeriod">Période *</label>
+                    <select id="exportPeriod" required>
+                        <option value="all_months">Tous les mois disponibles</option>
+                        <option value="specific_month">Mois spécifique</option>
+                        <option value="specific_year">Toute une année</option>
+                        <option value="from_first">Depuis le premier compteur reçu</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group" id="monthFilterGroup" style="display: none;">
+                    <label for="exportMonth">Mois</label>
+                    <input type="month" id="exportMonth" />
+                </div>
+                
+                <div class="filter-group" id="yearFilterGroup" style="display: none;">
+                    <label for="exportYear">Année</label>
+                    <select id="exportYear">
+                        <?php
+                        $currentYear = (int)date('Y');
+                        for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
+                            echo "<option value=\"$y\">$y</option>";
+                        }
+                        ?>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="export-buttons">
+                <button class="btn-export" id="exportAllClients">
+                    📊 Exporter tous les clients en Excel
+                </button>
             </div>
         </div>
 
@@ -249,59 +309,6 @@ if (empty($_SESSION['csrf_token'])) {
                         </button>
                     </div>
                 <?php endforeach; ?>
-            </div>
-        </div>
-
-        <!-- Section Export avec filtres -->
-        <div class="export-section">
-            <div class="section-header">
-                <h3>Export des Consommations</h3>
-            </div>
-            
-            <div class="export-filters">
-                <div class="filter-group">
-                    <label for="exportScope">Portée de l'export *</label>
-                    <select id="exportScope" required>
-                        <option value="all">Tous les clients</option>
-                        <option value="selected">Client sélectionné</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group">
-                    <label for="exportPeriod">Période *</label>
-                    <select id="exportPeriod" required>
-                        <option value="all_months">Tous les mois disponibles</option>
-                        <option value="specific_month">Mois spécifique</option>
-                        <option value="specific_year">Toute une année</option>
-                        <option value="from_first">Depuis le premier compteur reçu</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group" id="monthFilterGroup" style="display: none;">
-                    <label for="exportMonth">Mois</label>
-                    <input type="month" id="exportMonth" />
-                </div>
-                
-                <div class="filter-group" id="yearFilterGroup" style="display: none;">
-                    <label for="exportYear">Année</label>
-                    <select id="exportYear">
-                        <?php
-                        $currentYear = (int)date('Y');
-                        for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
-                            echo "<option value=\"$y\">$y</option>";
-                        }
-                        ?>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="export-buttons">
-                <button class="btn-export" id="exportData">
-                    📊 Exporter en Excel
-                </button>
-                <button class="btn-export-secondary" id="exportSelectedClient" style="display: none;">
-                    📄 Exporter le client sélectionné (Excel)
-                </button>
             </div>
         </div>
 
@@ -447,8 +454,44 @@ if (empty($_SESSION['csrf_token'])) {
             <div class="modal-body" id="modalBody">
                 <!-- Contenu chargé dynamiquement -->
             </div>
+            
+            <!-- Filtres d'export pour le client sélectionné -->
+            <div class="modal-export-section" id="modalExportSection" style="display: none;">
+                <div class="modal-export-header">
+                    <h4>Exporter les consommations de ce client</h4>
+                </div>
+                <div class="export-filters">
+                    <div class="filter-group">
+                        <label for="modalExportPeriod">Période *</label>
+                        <select id="modalExportPeriod" required>
+                            <option value="all_months">Tous les mois disponibles</option>
+                            <option value="specific_month">Mois spécifique</option>
+                            <option value="specific_year">Toute une année</option>
+                            <option value="from_first">Depuis le premier compteur reçu</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group" id="modalMonthFilterGroup" style="display: none;">
+                        <label for="modalExportMonth">Mois</label>
+                        <input type="month" id="modalExportMonth" />
+                    </div>
+                    
+                    <div class="filter-group" id="modalYearFilterGroup" style="display: none;">
+                        <label for="modalExportYear">Année</label>
+                        <select id="modalExportYear">
+                            <?php
+                            $currentYear = (int)date('Y');
+                            for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
+                                echo "<option value=\"$y\">$y</option>";
+                            }
+                            ?>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
             <div class="modal-footer">
-                <button class="btn-secondary" id="exportThisClient">📊 Exporter en Excel</button>
+                <button class="btn-export" id="exportThisClient">📊 Exporter en Excel</button>
                 <button class="btn-secondary" id="closeModalBtn">Fermer</button>
             </div>
         </div>
@@ -741,7 +784,8 @@ if (empty($_SESSION['csrf_token'])) {
             `;
 
             modalBody.innerHTML = html;
-            document.getElementById('exportSelectedClient').style.display = 'inline-block';
+            // Afficher la section d'export avec filtres
+            document.getElementById('modalExportSection').style.display = 'block';
         }
 
         // Fermeture de la modal
@@ -756,10 +800,14 @@ if (empty($_SESSION['csrf_token'])) {
             modal.setAttribute('aria-hidden', 'true');
             modal.style.display = 'none';
             selectedClientId = null;
-            document.getElementById('exportSelectedClient').style.display = 'none';
+            document.getElementById('modalExportSection').style.display = 'none';
+            // Réinitialiser les filtres
+            document.getElementById('modalExportPeriod').value = 'all_months';
+            document.getElementById('modalMonthFilterGroup').style.display = 'none';
+            document.getElementById('modalYearFilterGroup').style.display = 'none';
         }
 
-        // Gestion des filtres d'export
+        // Gestion des filtres d'export (tous les clients)
         document.getElementById('exportPeriod').addEventListener('change', function() {
             const period = this.value;
             const monthGroup = document.getElementById('monthFilterGroup');
@@ -769,16 +817,14 @@ if (empty($_SESSION['csrf_token'])) {
             yearGroup.style.display = (period === 'specific_year') ? 'block' : 'none';
         });
 
-        document.getElementById('exportScope').addEventListener('change', function() {
-            const scope = this.value;
-            const selectedBtn = document.getElementById('exportSelectedClient');
-            if (scope === 'selected') {
-                if (!selectedClientId) {
-                    alert('Veuillez d\'abord sélectionner un client en cliquant sur "Voir les détails"');
-                    this.value = 'all';
-                    return;
-                }
-            }
+        // Gestion des filtres d'export (client sélectionné dans la modal)
+        document.getElementById('modalExportPeriod').addEventListener('change', function() {
+            const period = this.value;
+            const monthGroup = document.getElementById('modalMonthFilterGroup');
+            const yearGroup = document.getElementById('modalYearFilterGroup');
+            
+            monthGroup.style.display = (period === 'specific_month') ? 'block' : 'none';
+            yearGroup.style.display = (period === 'specific_year') ? 'block' : 'none';
         });
 
         // Fonction pour filtrer les données selon la période
@@ -822,9 +868,8 @@ if (empty($_SESSION['csrf_token'])) {
             XLSX.writeFile(wb, filename);
         }
 
-        // Export principal avec filtres
-        document.getElementById('exportData').addEventListener('click', function() {
-            const scope = document.getElementById('exportScope').value;
+        // Export tous les clients (bouton en haut après le diagramme)
+        document.getElementById('exportAllClients').addEventListener('click', function() {
             const period = document.getElementById('exportPeriod').value;
             const monthValue = document.getElementById('exportMonth').value;
             const yearValue = document.getElementById('exportYear').value;
@@ -838,91 +883,69 @@ if (empty($_SESSION['csrf_token'])) {
                 alert('Veuillez sélectionner une année');
                 return;
             }
-            if (scope === 'selected' && !selectedClientId) {
-                alert('Veuillez d\'abord sélectionner un client en cliquant sur "Voir les détails"');
-                return;
-            }
             
-            let exportData = [];
-            let filename = '';
+            const exportData = [];
             
-            if (scope === 'all') {
-                // Export tous les clients
-                clientsDataJS.forEach(client => {
-                    const filteredMonths = filterConsumptionData(client.monthly_consumption, period, monthValue, yearValue);
-                    filteredMonths.forEach(month => {
-                        exportData.push({
-                            'Client': client.name,
-                            'Numéro Client': client.numero_client,
-                            'Mois': new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
-                            'NB - Pages': month.nb.pages,
-                            'NB - Montant (€)': month.nb.amount,
-                            'Couleur - Pages': month.color.pages,
-                            'Couleur - Montant (€)': month.color.amount,
-                            'Total Pages': month.total.pages,
-                            'Total Montant (€)': month.total.amount
-                        });
+            // Export tous les clients
+            clientsDataJS.forEach(client => {
+                const filteredMonths = filterConsumptionData(client.monthly_consumption, period, monthValue, yearValue);
+                filteredMonths.forEach(month => {
+                    exportData.push({
+                        'Client': client.name,
+                        'Numéro Client': client.numero_client,
+                        'Mois': new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+                        'NB - Pages': month.nb.pages,
+                        'NB - Montant (€)': month.nb.amount,
+                        'Couleur - Pages': month.color.pages,
+                        'Couleur - Montant (€)': month.color.amount,
+                        'Total Pages': month.total.pages,
+                        'Total Montant (€)': month.total.amount
                     });
                 });
-                
-                // Générer le nom de fichier selon la période
-                if (period === 'specific_month') {
-                    const monthName = new Date(monthValue + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-                    filename = `Consommations_Tous_Clients_${monthName.replace(/\s+/g, '_')}.xlsx`;
-                } else if (period === 'specific_year') {
-                    filename = `Consommations_Tous_Clients_Annee_${yearValue}.xlsx`;
-                } else if (period === 'from_first') {
-                    filename = `Consommations_Tous_Clients_Depuis_Premier_Compteur_${new Date().toISOString().split('T')[0]}.xlsx`;
-                } else {
-                    filename = `Consommations_Tous_Clients_Tous_Mois_${new Date().toISOString().split('T')[0]}.xlsx`;
-                }
+            });
+            
+            // Générer le nom de fichier selon la période
+            let filename = '';
+            if (period === 'specific_month') {
+                const monthName = new Date(monthValue + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                filename = `Consommations_Tous_Clients_${monthName.replace(/\s+/g, '_')}.xlsx`;
+            } else if (period === 'specific_year') {
+                filename = `Consommations_Tous_Clients_Annee_${yearValue}.xlsx`;
+            } else if (period === 'from_first') {
+                filename = `Consommations_Tous_Clients_Depuis_Premier_Compteur_${new Date().toISOString().split('T')[0]}.xlsx`;
             } else {
-                // Export client sélectionné
-                const client = clientsDataJS.find(c => c.id === selectedClientId);
-                if (!client) {
-                    alert('Client introuvable');
-                    return;
-                }
-                
-                const filteredMonths = filterConsumptionData(client.monthly_consumption, period, monthValue, yearValue);
-                exportData = filteredMonths.map(month => ({
-                    'Mois': new Date(month.month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
-                    'NB - Pages': month.nb.pages,
-                    'NB - Montant (€)': month.nb.amount,
-                    'Couleur - Pages': month.color.pages,
-                    'Couleur - Montant (€)': month.color.amount,
-                    'Total Pages': month.total.pages,
-                    'Total Montant (€)': month.total.amount
-                }));
-                
-                // Générer le nom de fichier selon la période
-                const clientName = client.name.replace(/\s+/g, '_');
-                if (period === 'specific_month') {
-                    const monthName = new Date(monthValue + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-                    filename = `Consommations_${clientName}_${monthName.replace(/\s+/g, '_')}.xlsx`;
-                } else if (period === 'specific_year') {
-                    filename = `Consommations_${clientName}_Annee_${yearValue}.xlsx`;
-                } else if (period === 'from_first') {
-                    filename = `Consommations_${clientName}_Depuis_Premier_Compteur_${new Date().toISOString().split('T')[0]}.xlsx`;
-                } else {
-                    filename = `Consommations_${clientName}_Tous_Mois_${new Date().toISOString().split('T')[0]}.xlsx`;
-                }
+                filename = `Consommations_Tous_Clients_Tous_Mois_${new Date().toISOString().split('T')[0]}.xlsx`;
             }
             
             exportToExcel(exportData, filename);
         });
 
-        // Export client sélectionné (ancien bouton - gardé pour compatibilité)
-        document.getElementById('exportSelectedClient').addEventListener('click', function() {
-            if (!selectedClientId) return;
+        // Export client sélectionné depuis la modal
+        document.getElementById('exportThisClient').addEventListener('click', function() {
+            if (!selectedClientId) {
+                alert('Aucun client sélectionné');
+                return;
+            }
             
-            // Utiliser les filtres actuels
-            const period = document.getElementById('exportPeriod').value;
-            const monthValue = document.getElementById('exportMonth').value;
-            const yearValue = document.getElementById('exportYear').value;
+            const period = document.getElementById('modalExportPeriod').value;
+            const monthValue = document.getElementById('modalExportMonth').value;
+            const yearValue = document.getElementById('modalExportYear').value;
+            
+            // Validation
+            if (period === 'specific_month' && !monthValue) {
+                alert('Veuillez sélectionner un mois');
+                return;
+            }
+            if (period === 'specific_year' && !yearValue) {
+                alert('Veuillez sélectionner une année');
+                return;
+            }
             
             const client = clientsDataJS.find(c => c.id === selectedClientId);
-            if (!client) return;
+            if (!client) {
+                alert('Client introuvable');
+                return;
+            }
             
             const filteredMonths = filterConsumptionData(client.monthly_consumption, period, monthValue, yearValue);
             const exportData = filteredMonths.map(month => ({
@@ -935,27 +958,21 @@ if (empty($_SESSION['csrf_token'])) {
                 'Total Montant (€)': month.total.amount
             }));
             
+            // Générer le nom de fichier selon la période
             const clientName = client.name.replace(/\s+/g, '_');
             let filename = '';
-            if (period === 'specific_month' && monthValue) {
+            if (period === 'specific_month') {
                 const monthName = new Date(monthValue + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
                 filename = `Consommations_${clientName}_${monthName.replace(/\s+/g, '_')}.xlsx`;
-            } else if (period === 'specific_year' && yearValue) {
+            } else if (period === 'specific_year') {
                 filename = `Consommations_${clientName}_Annee_${yearValue}.xlsx`;
+            } else if (period === 'from_first') {
+                filename = `Consommations_${clientName}_Depuis_Premier_Compteur_${new Date().toISOString().split('T')[0]}.xlsx`;
             } else {
-                filename = `Consommations_${clientName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                filename = `Consommations_${clientName}_Tous_Mois_${new Date().toISOString().split('T')[0]}.xlsx`;
             }
             
             exportToExcel(exportData, filename);
-        });
-
-        // Export depuis la modal
-        document.getElementById('exportThisClient').addEventListener('click', function() {
-            if (selectedClientId) {
-                // Mettre à jour le scope et déclencher l'export
-                document.getElementById('exportScope').value = 'selected';
-                document.getElementById('exportData').click();
-            }
         });
     </script>
 </body>
