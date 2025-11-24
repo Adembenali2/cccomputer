@@ -7,16 +7,19 @@
  * - invoice_number: Numéro de facture
  */
 
+// Démarrer la session AVANT tout
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../includes/session_config.php';
 require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 
 // Vérifier l'authentification
-checkAuth();
-
-// Vérifier CSRF (optionnel pour GET, mais recommandé)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    checkCSRF();
+if (empty($_SESSION['user_id'])) {
+    http_response_code(401);
+    die('Non authentifié. Veuillez vous connecter.');
 }
 
 // Récupérer les paramètres
