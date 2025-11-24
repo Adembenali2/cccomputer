@@ -1,7 +1,7 @@
 <?php
 /**
  * /public/historique.php
- * Page d'historique des actions - Version refactorisée
+ * Page d'historique des actions - Version refactorisée et optimisée
  * 
  * Affiche l'historique des actions utilisateurs avec filtres par utilisateur et date.
  * Accès réservé aux rôles Admin et Dirigeant.
@@ -17,6 +17,7 @@ require_once __DIR__ . '/../includes/helpers.php';
 const HISTORIQUE_PAGE_LIMIT = 200;
 const USER_SEARCH_MAX_CHARS = 80;
 const DEBOUNCE_DELAY_MS = 400;
+const DEBUG_MODE = false; // Mettre à true pour activer les logs de débogage
 
 // ====== Validation et nettoyage des paramètres GET ======
 /**
@@ -33,7 +34,6 @@ function sanitizeUserSearch(string $input): string {
     $cleaned = mb_substr($cleaned, 0, USER_SEARCH_MAX_CHARS);
     // Nettoyer : supprimer uniquement les caractères vraiment dangereux
     // Conserver les lettres (y compris accents), chiffres, espaces, tirets, apostrophes, points
-    // \p{L} inclut toutes les lettres Unicode (y compris les accents)
     $cleaned = preg_replace('/[^\p{L}\p{N}\s\-\'\.]/u', '', $cleaned);
     return $cleaned;
 }
@@ -69,56 +69,32 @@ function parseDateFilter(string $dateInput): ?array {
     ];
 }
 
-// ====== INSTRUMENTATION DE DÉBOGAGE ======
-error_log('=== DÉBUT DÉBOGAGE HISTORIQUE ===');
-error_log('$_GET complet: ' . json_encode($_GET, JSON_UNESCAPED_UNICODE));
-
-// Récupération et validation des paramètres
+// ====== Récupération et validation des paramètres ======
 $rawUser = $_GET['user_search'] ?? '';
 $rawDate = $_GET['date_search'] ?? '';
 
-error_log('Point 1 - rawUser (après $_GET): ' . var_export($rawUser, true));
-error_log('Point 1 - rawDate (après $_GET): ' . var_export($rawDate, true));
-error_log('Point 1 - Type rawUser: ' . gettype($rawUser));
-error_log('Point 1 - Type rawDate: ' . gettype($rawDate));
+if (DEBUG_MODE) {
+    error_log('=== DÉBOGAGE HISTORIQUE ===');
+    error_log('$_GET: ' . json_encode($_GET, JSON_UNESCAPED_UNICODE));
+}
 
 $searchUser = sanitizeUserSearch(is_string($rawUser) ? $rawUser : '');
 $dateFilter = parseDateFilter(is_string($rawDate) ? $rawDate : '');
 $searchDate = $dateFilter ? $dateFilter['display'] : '';
-
-error_log('Point 2 - searchUser (après sanitizeUserSearch): ' . var_export($searchUser, true));
-error_log('Point 2 - searchUser length: ' . strlen($searchUser));
-error_log('Point 2 - searchUser empty?: ' . ($searchUser === '' ? 'OUI' : 'NON'));
-
-// Debug temporaire : vérifier que la recherche n'est pas vide après sanitization
-if ($rawUser !== '' && $searchUser === '') {
-    error_log('⚠️ ALERTE: recherche utilisateur vidée par sanitization. Input: ' . $rawUser);
-}
 
 // ====== Construction de la requête SQL sécurisée ======
 $params = [];
 $whereConditions = [];
 
 // Filtre par utilisateur (recherche multi-mots)
-error_log('Point 3 - Vérification searchUser !== "": ' . ($searchUser !== '' ? 'OUI' : 'NON'));
-
 if ($searchUser !== '') {
-    error_log('Point 4 - Entrée dans le bloc if searchUser');
     $tokens = preg_split('/\s+/', $searchUser);
-    error_log('Point 4 - Tokens après preg_split: ' . json_encode($tokens, JSON_UNESCAPED_UNICODE));
-    error_log('Point 4 - Nombre de tokens: ' . count($tokens));
-    
     $userConditions = [];
     $tokenIndex = 0;
     
     foreach ($tokens as $token) {
         $token = trim($token);
-        error_log('Point 5 - Token brut: ' . var_export($token, true));
-        error_log('Point 5 - Token après trim: ' . var_export($token, true));
-        error_log('Point 5 - Token vide?: ' . ($token === '' ? 'OUI' : 'NON'));
-        
         if ($token === '') {
-            error_log('Point 5 - Token vide, on continue');
             continue;
         }
         // Créer DEUX placeholders uniques pour chaque token (un pour nom, un pour prénom)
@@ -128,32 +104,16 @@ if ($searchUser !== '') {
         $tokenIndex++;
         $paramValue = '%' . $token . '%';
         
-        error_log('Point 6 - paramKeyNom: ' . $paramKeyNom);
-        error_log('Point 6 - paramKeyPrenom: ' . $paramKeyPrenom);
-        error_log('Point 6 - paramValue: ' . $paramValue);
-        
         // Construire la condition avec deux placeholders distincts
         $condition = "(u.nom LIKE " . $paramKeyNom . " OR u.prenom LIKE " . $paramKeyPrenom . ")";
         $userConditions[] = $condition;
         $params[$paramKeyNom] = $paramValue;
         $params[$paramKeyPrenom] = $paramValue;
-        
-        error_log('Point 6 - Condition créée: ' . $condition);
-        error_log('Point 6 - Params ajoutés: ' . $paramKeyNom . ' => ' . $paramValue . ', ' . $paramKeyPrenom . ' => ' . $paramValue);
     }
-    
-    error_log('Point 7 - Nombre de userConditions: ' . count($userConditions));
-    error_log('Point 7 - userConditions: ' . json_encode($userConditions, JSON_UNESCAPED_UNICODE));
     
     if (!empty($userConditions)) {
-        $combinedCondition = '(' . implode(' AND ', $userConditions) . ')';
-        $whereConditions[] = $combinedCondition;
-        error_log('Point 7 - Condition combinée ajoutée: ' . $combinedCondition);
-    } else {
-        error_log('⚠️ Point 7 - userConditions est vide !');
+        $whereConditions[] = '(' . implode(' AND ', $userConditions) . ')';
     }
-} else {
-    error_log('Point 4 - searchUser est vide, on ne rentre pas dans le bloc if');
 }
 
 // Filtre par date
@@ -177,68 +137,36 @@ $sql = "
     LEFT JOIN utilisateurs u ON h.user_id = u.id
 ";
 
-error_log('Point 8 - SQL de base: ' . $sql);
-error_log('Point 8 - whereConditions: ' . json_encode($whereConditions, JSON_UNESCAPED_UNICODE));
-error_log('Point 8 - Nombre de whereConditions: ' . count($whereConditions));
-
 if (!empty($whereConditions)) {
-    $whereClause = ' WHERE ' . implode(' AND ', $whereConditions);
-    $sql .= $whereClause;
-    error_log('Point 8 - WHERE clause ajoutée: ' . $whereClause);
-} else {
-    error_log('Point 8 - Aucune condition WHERE');
+    $sql .= ' WHERE ' . implode(' AND ', $whereConditions);
 }
 
 // LIMIT doit être un entier, pas un paramètre nommé (compatibilité PDO)
 $limit = (int)HISTORIQUE_PAGE_LIMIT;
 $sql .= ' ORDER BY h.date_action DESC LIMIT ' . $limit;
 
-error_log('Point 9 - SQL FINAL: ' . $sql);
-error_log('Point 9 - Params FINAUX: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
-error_log('Point 9 - Nombre de params: ' . count($params));
+if (DEBUG_MODE) {
+    error_log('SQL: ' . $sql);
+    error_log('Params: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
+}
 
 // ====== Exécution de la requête ======
 $historique = [];
 $dbError = null;
+$errorDetails = null;
 
 try {
-    error_log('Point 10 - Début try/catch');
-    error_log('Point 10 - Params empty?: ' . (empty($params) ? 'OUI' : 'NON'));
+    $stmt = $pdo->prepare($sql);
     
-    // Vérification de la requête SQL avant exécution (debug)
-    if (empty($params)) {
-        error_log('Point 11 - Exécution sans paramètres');
-        // Pas de paramètres, exécution directe
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute();
-        error_log('Point 11 - Requête exécutée sans paramètres');
-    } else {
-        error_log('Point 12 - Exécution avec paramètres');
-        $stmt = $pdo->prepare($sql);
-        error_log('Point 12 - Requête préparée');
-        
-        // Bind des paramètres un par un pour plus de contrôle
-        foreach ($params as $key => $value) {
-            error_log('Point 13 - Binding: ' . $key . ' => ' . var_export($value, true));
-            $stmt->bindValue($key, $value, PDO::PARAM_STR);
-            error_log('Point 13 - Bind réussi pour: ' . $key);
-        }
-        
-        error_log('Point 14 - Tous les paramètres bindés, exécution...');
-        $stmt->execute();
-        error_log('Point 14 - Requête exécutée avec succès');
+    // Bind des paramètres un par un pour plus de contrôle
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value, PDO::PARAM_STR);
     }
     
+    $stmt->execute();
     $historique = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    error_log('Point 15 - Résultats récupérés: ' . count($historique) . ' lignes');
-    
-    if (count($historique) > 0) {
-        error_log('Point 15 - Premier résultat: ' . json_encode($historique[0], JSON_UNESCAPED_UNICODE));
-    }
-    
 } catch (PDOException $e) {
     $dbError = 'Impossible de charger l\'historique pour le moment.';
-    // Log détaillé pour le débogage
     $errorDetails = [
         'message' => $e->getMessage(),
         'code' => $e->getCode(),
@@ -248,20 +176,15 @@ try {
         'rawUser' => $rawUser ?? '',
     ];
     
-    error_log('❌ ERREUR SQL (historique): ' . $e->getMessage());
-    error_log('❌ Code erreur: ' . $e->getCode());
-    error_log('❌ SQL: ' . $sql);
-    error_log('❌ Params: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
-    error_log('❌ SearchUser: ' . $searchUser);
-    error_log('❌ Stack trace: ' . $e->getTraceAsString());
-    
-    // AFFICHAGE TEMPORAIRE POUR DÉBOGAGE (à retirer en production)
-    $dbError .= ' [DEBUG: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . ']';
+    error_log('Erreur SQL (historique): ' . $e->getMessage());
+    if (DEBUG_MODE) {
+        error_log('SQL: ' . $sql);
+        error_log('Params: ' . json_encode($params, JSON_UNESCAPED_UNICODE));
+        error_log('Stack trace: ' . $e->getTraceAsString());
+    }
     
     $historique = [];
 }
-
-error_log('=== FIN DÉBOGAGE HISTORIQUE ===');
 
 // ====== Calcul des statistiques ======
 $historiqueCount = count($historique);
@@ -321,7 +244,6 @@ function formatDetails(PDO $pdo, ?string $details): string {
         $clientIds = array_filter($clientIds, function($id) { return $id > 0; });
         
         if (!empty($clientIds)) {
-            // Récupérer les clients non encore en cache
             $missingIds = array_diff($clientIds, array_keys($detailsCache['clients']));
             if (!empty($missingIds)) {
                 $placeholders = implode(',', array_fill(0, count($missingIds), '?'));
@@ -332,7 +254,6 @@ function formatDetails(PDO $pdo, ?string $details): string {
                 }
             }
             
-            // Remplacer dans le texte
             foreach ($clientIds as $clientId) {
                 if (isset($detailsCache['clients'][$clientId])) {
                     $formatted = preg_replace(
@@ -402,7 +323,6 @@ function formatDetails(PDO $pdo, ?string $details): string {
     }
     
     // Remplacer les références d'utilisateurs (utilisateur #X, Utilisateur #X, Statut utilisateur #X, etc.)
-    // Pattern pour "utilisateur #X", "Utilisateur #X", "Statut utilisateur #X" (insensible à la casse)
     if (preg_match_all('/(?:Statut\s+)?[Uu]tilisateur\s+#(\d+)/i', $formatted, $matches)) {
         $userIds = array_unique(array_map('intval', $matches[1]));
         $userIds = array_filter($userIds, function($id) { return $id > 0; });
@@ -439,7 +359,6 @@ function formatDetails(PDO $pdo, ?string $details): string {
     }
     
     // Remplacer aussi les patterns "#X" isolés qui apparaissent dans un contexte d'utilisateur
-    // (mais pas SAV #X ou Livraison #X qui sont déjà traités)
     if (preg_match_all('/(?<!SAV\s)(?<!Livraison\s)(?<!Livraison\s)(?<!SAV\s)#(\d+)/i', $formatted, $matches)) {
         $userIds = array_unique(array_map('intval', $matches[1]));
         $userIds = array_filter($userIds, function($id) { 
@@ -463,7 +382,6 @@ function formatDetails(PDO $pdo, ?string $details): string {
             foreach ($userIds as $userId) {
                 if (isset($detailsCache['utilisateurs'][$userId])) {
                     // Remplacer seulement si c'est dans un contexte qui suggère un utilisateur
-                    // (précédé de "Statut", "utilisateur", etc. ou si le mot "utilisateur" est dans le texte)
                     if (stripos($formatted, 'utilisateur') !== false || 
                         preg_match('/Statut\s+#?' . $userId . '/i', $formatted) ||
                         preg_match('/[Uu]tilisateur.*#' . $userId . '/i', $formatted)) {
@@ -479,23 +397,20 @@ function formatDetails(PDO $pdo, ?string $details): string {
     }
     
     // Supprimer les références de messages (#X après "message")
-    // Pattern pour "message #X", "Message #X", "au message #X", "au Message #X", etc.
     $formatted = preg_replace('/\s*(?:au\s+)?[Mm]essage\s+#\d+/i', '', $formatted);
     
     // Supprimer les patterns (ID X) restants qui ont été remplacés
     $formatted = preg_replace('/\s*\(ID\s+\d+\)\s*/i', ' ', $formatted);
     
     // Supprimer les références #X isolées restantes dans un contexte de message/réponse
-    // (mais pas celles déjà traitées pour SAV/Livraison/Utilisateur)
     if (stripos($formatted, 'message') !== false || stripos($formatted, 'réponse') !== false || stripos($formatted, 'Réponse') !== false) {
-        // Supprimer les #X qui suivent "au message" ou qui sont dans un contexte de message
         $formatted = preg_replace('/\s*#\d+\s*/i', ' ', $formatted);
     }
     
     // Normaliser les espaces multiples et nettoyer
     $formatted = preg_replace('/\s+/', ' ', $formatted);
-    $formatted = preg_replace('/\s*:\s*/', ': ', $formatted); // Normaliser les deux-points
-    $formatted = preg_replace('/\s*-\s*/', ' - ', $formatted); // Normaliser les tirets
+    $formatted = preg_replace('/\s*:\s*/', ': ', $formatted);
+    $formatted = preg_replace('/\s*-\s*/', ' - ', $formatted);
     $formatted = trim($formatted);
     
     return $formatted;
@@ -631,14 +546,14 @@ function formatDetails(PDO $pdo, ?string $details): string {
                         <td colspan="5" class="aucun" role="alert">
                             <span class="error-icon" aria-hidden="true">⚠</span>
                             <?= h($dbError) ?>
-                            <?php if (isset($errorDetails)): ?>
-                                <div style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; font-size: 0.85rem; text-align: left; max-width: 800px; margin-left: auto; margin-right: auto;">
+                            <?php if (DEBUG_MODE && isset($errorDetails)): ?>
+                                <div class="debug-error-details">
                                     <strong>Détails de l'erreur (DEBUG):</strong><br>
                                     <strong>Message:</strong> <?= h($errorDetails['message']) ?><br>
                                     <strong>Code:</strong> <?= h((string)$errorDetails['code']) ?><br>
                                     <strong>SearchUser:</strong> <?= h($errorDetails['searchUser']) ?><br>
                                     <strong>RawUser:</strong> <?= h($errorDetails['rawUser']) ?><br>
-                                    <strong>SQL:</strong> <code style="word-break: break-all;"><?= h($errorDetails['sql']) ?></code><br>
+                                    <strong>SQL:</strong> <code><?= h($errorDetails['sql']) ?></code><br>
                                     <strong>Params:</strong> <code><?= h(json_encode($errorDetails['params'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></code>
                                 </div>
                             <?php endif; ?>

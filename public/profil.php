@@ -169,9 +169,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /public/profil.php');
         exit;
     }
-    
+
     $action = $_POST['action'] ?? '';
-    
+
     try {
         // ===== CRÉATION D'UTILISATEUR =====
         if ($action === 'create') {
@@ -226,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Invalider le cache des rôles si nouveau rôle
             @unlink(__DIR__ . '/../cache/roles_enum.json');
-            
+
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur créé avec succès."];
         }
         // ===== MISE À JOUR D'UTILISATEUR =====
@@ -260,7 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Vous ne pouvez pas modifier votre propre statut.');
                 }
             }
-            
+
             $data = [
                 'Email' => trim($_POST['Email'] ?? ''),
                 'nom' => trim($_POST['nom'] ?? ''),
@@ -324,7 +324,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $detail = $changes ? implode(', ', $changes) : 'Aucun changement détecté';
             logProfilAction($pdo, $currentUser['id'], 'utilisateur_modifie', "Utilisateur #{$id} mis à jour. {$detail}");
-            
+
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Utilisateur mis à jour."];
         }
         // ===== TOGGLE STATUT =====
@@ -349,11 +349,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // ===== RÉINITIALISATION MOT DE PASSE =====
         elseif ($action === 'resetpwd') {
             $id = validateId($_POST['id'] ?? 0, 'ID utilisateur');
-            
+
             if ($isLivreur && $id !== $currentUser['id']) {
                 throw new RuntimeException('Vous ne pouvez réinitialiser que votre propre mot de passe.');
             }
-            
+
             $newPassword = (string)($_POST['new_password'] ?? '');
             if (strlen($newPassword) < 8) {
                 throw new RuntimeException('Mot de passe trop court (min. 8 caractères).');
@@ -362,9 +362,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hash = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => 12]);
             $stmt = $pdo->prepare("UPDATE utilisateurs SET password = ? WHERE id = ?");
             $stmt->execute([$hash, $id]);
-            
+
             logProfilAction($pdo, $currentUser['id'], 'utilisateur_pwd_reset', "Mot de passe utilisateur #{$id} réinitialisé");
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Mot de passe réinitialisé."];
+        }
+        // ===== SAUVEGARDE DES PERMISSIONS =====
+        elseif ($action === 'save_permissions') {
+            if (!$isAdminOrDirigeant) {
+                throw new RuntimeException('Vous n\'êtes pas autorisé à gérer les permissions.');
+            }
+            
+            $targetUserId = validateId($_POST['target_user_id'] ?? 0, 'ID utilisateur');
+            $redirectAfterSave = $targetUserId; // Pour la redirection
+            
+            // Vérifier que l'utilisateur cible existe
+            $targetUser = safeFetch($pdo, "SELECT id, nom, prenom FROM utilisateurs WHERE id = ?", [$targetUserId], 'check_target_user');
+            if (!$targetUser) {
+                throw new RuntimeException('Utilisateur introuvable.');
+            }
+            
+            // Liste des pages disponibles
+            $availablePages = [
+                'dashboard' => 'Dashboard',
+                'agenda' => 'Agenda',
+                'clients' => 'Clients',
+                'client_fiche' => 'Fiche Client',
+                'historique' => 'Historique',
+                'profil' => 'Gestion Utilisateurs',
+                'maps' => 'Cartes & Planification',
+                'messagerie' => 'Messagerie',
+                'sav' => 'SAV',
+                'livraison' => 'Livraisons',
+                'stock' => 'Stock',
+                'photocopieurs_details' => 'Détails Photocopieurs'
+            ];
+            
+            // Récupérer les permissions envoyées
+            $permissions = $_POST['permissions'] ?? [];
+            
+            // Démarrer une transaction
+            $pdo->beginTransaction();
+            
+            try {
+                // Supprimer les permissions existantes pour cet utilisateur
+                $stmt = $pdo->prepare("DELETE FROM user_permissions WHERE user_id = ?");
+                $stmt->execute([$targetUserId]);
+                
+                // Insérer les nouvelles permissions
+                $stmt = $pdo->prepare("INSERT INTO user_permissions (user_id, page, allowed) VALUES (?, ?, ?)");
+                
+                foreach ($availablePages as $pageKey => $pageName) {
+                    $allowed = isset($permissions[$pageKey]) && $permissions[$pageKey] === '1' ? 1 : 0;
+                    $stmt->execute([$targetUserId, $pageKey, $allowed]);
+                }
+                
+                $pdo->commit();
+                
+                $changes = [];
+                foreach ($availablePages as $pageKey => $pageName) {
+                    $allowed = isset($permissions[$pageKey]) && $permissions[$pageKey] === '1' ? 1 : 0;
+                    $changes[] = "{$pageName}: " . ($allowed ? 'autorisé' : 'interdit');
+                }
+                
+                logProfilAction($pdo, $currentUser['id'], 'permissions_modifiees', 
+                    "Permissions utilisateur #{$targetUserId} ({$targetUser['nom']} {$targetUser['prenom']}) modifiées. " . implode(', ', $changes));
+                
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Permissions mises à jour avec succès."];
+    } catch (Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
         }
     } catch (InvalidArgumentException $e) {
         $_SESSION['flash'] = ['type' => 'error', 'msg' => $e->getMessage()];
@@ -374,8 +441,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         error_log('profil.php error: ' . $e->getMessage());
         $_SESSION['flash'] = ['type' => 'error', 'msg' => "Une erreur est survenue. Veuillez réessayer."];
     }
-    
-    header('Location: /public/profil.php' . ($action === 'update' && isset($id) ? '?edit=' . $id : ''));
+
+    // Redirection après action
+    $redirectUrl = '/public/profil.php';
+    if ($action === 'update' && isset($id)) {
+        $redirectUrl .= '?edit=' . $id;
+    } elseif ($action === 'save_permissions' && isset($redirectAfterSave)) {
+        $redirectUrl .= '?perm_user=' . $redirectAfterSave;
+    }
+    header('Location: ' . $redirectUrl);
     exit;
 }
 
@@ -457,12 +531,12 @@ $editing = $editId > 0 ? safeFetch($pdo,
 // Récupérer les imports (seulement si nécessaire pour l'affichage)
 $imports = [];
 if (true) { // Toujours charger pour l'icône
-    $imports = safeFetchAll(
-        $pdo,
-        "SELECT id, ran_at, imported, skipped, ok, msg FROM import_run ORDER BY id DESC LIMIT " . IMPORT_HISTORY_LIMIT,
-        [],
-        'imports_history'
-    );
+$imports = safeFetchAll(
+    $pdo,
+    "SELECT id, ran_at, imported, skipped, ok, msg FROM import_run ORDER BY id DESC LIMIT " . IMPORT_HISTORY_LIMIT,
+    [],
+    'imports_history'
+);
 }
 
 // Calcul des statistiques (compte TOUS les utilisateurs, pas seulement ceux affichés)
@@ -848,16 +922,16 @@ function decode_msg($row) {
                     <?php else: ?>
                         <?php foreach ($imports as $row): ?>
                             <?php
-                            $ok = (int)($row['ok'] ?? 0);
-                            $icoCls = $ok === 1 ? 'ok' : ($ok === 0 ? 'ko' : 'run');
-                            $icoTxt = $ok === 1 ? '✓' : ($ok === 0 ? '!' : '⏳');
-                            $msg = decode_msg($row);
-                            $files = $msg['files'] ?? null;
-                            $filesStr = '';
+                                $ok = (int)($row['ok'] ?? 0);
+                                $icoCls = $ok === 1 ? 'ok' : ($ok === 0 ? 'ko' : 'run');
+                                $icoTxt = $ok === 1 ? '✓' : ($ok === 0 ? '!' : '⏳');
+                                $msg = decode_msg($row);
+                                $files = $msg['files'] ?? null;
+                                $filesStr = '';
                             if (is_array($files) && !empty($files)) {
-                                $filesStr = implode(', ', array_slice($files, 0, 5));
-                                if (count($files) > 5) $filesStr .= ' …';
-                            }
+                                    $filesStr = implode(', ', array_slice($files, 0, 5));
+                                    if (count($files) > 5) $filesStr .= ' …';
+                                }
                             ?>
                             <div class="imp-item">
                                 <div class="imp-ico <?= h($icoCls) ?>" aria-label="<?= $ok === 1 ? 'Succès' : ($ok === 0 ? 'Erreur' : 'En cours') ?>">
@@ -944,7 +1018,7 @@ function decode_msg($row) {
     <?php if ($filtersActive): ?>
         <div class="active-filters" role="status" aria-live="polite">
             <span class="badge">Filtre actif</span>
-            <span class="pill">Recherche : <?= h($search) ?></span>
+                <span class="pill">Recherche : <?= h($search) ?></span>
             <a class="pill pill-clear" href="/public/profil.php" aria-label="Réinitialiser le filtre">Réinitialiser</a>
         </div>
     <?php endif; ?>
@@ -968,7 +1042,7 @@ function decode_msg($row) {
                     <span aria-hidden="true">✕</span>
                 </button>
             </div>
-        </div>
+            </div>
         <div class="filter-hint">
             <small>Recherche en temps réel - tapez un nom, prénom ou email (recherche par début de mot).</small>
         </div>
@@ -1146,7 +1220,7 @@ function decode_msg($row) {
                     <input type="date" id="edit-date_debut" name="date_debut" value="<?= h($editing['date_debut']) ?>" required aria-required="true">
                 </label>
                 <div class="form-actions">
-                    <button class="fiche-action-btn" type="submit">Enregistrer</button>
+                <button class="fiche-action-btn" type="submit">Enregistrer</button>
                     <a class="fiche-action-btn btn-close" href="/public/profil.php">Fermer</a>
                 </div>
             </form>
@@ -1162,6 +1236,81 @@ function decode_msg($row) {
                     <input type="password" id="reset-password" name="new_password" minlength="8" required aria-required="true">
                 </label>
                 <button class="btn-danger btn-compact" type="submit">Réinitialiser</button>
+            </form>
+        </section>
+    <?php endif; ?>
+    
+    <?php if ($isAdminOrDirigeant): ?>
+        <!-- Section Gestion des Permissions (ACL) -->
+        <section class="panel permissions-panel" id="permissionsPanel">
+            <h2 class="panel-title">Gestion des Permissions</h2>
+            <p class="panel-subtitle">Contrôlez l'accès aux pages pour chaque utilisateur. Si aucune permission n'est définie, les rôles par défaut s'appliquent.</p>
+            
+            <form class="standard-form" method="post" action="/public/profil.php" id="permissionsForm">
+                <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+                <input type="hidden" name="action" value="save_permissions">
+                
+                <label for="perm_user_select">Sélectionner un utilisateur <span aria-label="requis">*</span>
+                    <select id="perm_user_select" name="target_user_id" required aria-required="true" 
+                            onchange="window.location.href='/public/profil.php?perm_user=' + this.value;">
+                        <option value="">-- Choisir un utilisateur --</option>
+                        <?php foreach ($users as $u): ?>
+                            <option value="<?= (int)$u['id'] ?>" 
+                                    <?= $permissionTargetUserId === (int)$u['id'] ? 'selected' : '' ?>>
+                                <?= h($u['nom'] . ' ' . $u['prenom']) ?> (<?= h($u['Emploi']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                
+                <?php if ($permissionTargetUserId > 0): ?>
+                    <?php
+                    $targetUserInfo = safeFetch($pdo, 
+                        "SELECT nom, prenom, Emploi FROM utilisateurs WHERE id = ?", 
+                        [$permissionTargetUserId], 
+                        'target_user_info'
+                    );
+                    ?>
+                    <div class="permissions-grid">
+                        <div class="permissions-header">
+                            <h3>Permissions pour : <strong><?= $targetUserInfo ? h($targetUserInfo['prenom'] . ' ' . $targetUserInfo['nom']) : 'Utilisateur #' . $permissionTargetUserId ?></strong></h3>
+                            <div class="permissions-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" id="selectAllPerms">Tout autoriser</button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="deselectAllPerms">Tout interdire</button>
+                            </div>
+                        </div>
+                        
+                        <div class="permissions-list">
+                            <?php foreach ($availablePages as $pageKey => $pageName): ?>
+                                <?php $isAllowed = $userPermissions[$pageKey] ?? true; ?>
+                                <div class="permission-item">
+                                    <label class="permission-toggle">
+                                        <input type="checkbox" 
+                                               name="permissions[<?= h($pageKey) ?>]" 
+                                               value="1" 
+                                               <?= $isAllowed ? 'checked' : '' ?>
+                                               class="permission-checkbox"
+                                               data-page="<?= h($pageKey) ?>">
+                                        <span class="toggle-slider"></span>
+                                        <span class="permission-label">
+                                            <strong><?= h($pageName) ?></strong>
+                                            <small><?= h($pageKey) ?>.php</small>
+                                        </span>
+                                    </label>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button class="fiche-action-btn" type="submit">Enregistrer les permissions</button>
+                            <a class="fiche-action-btn btn-close" href="/public/profil.php">Annuler</a>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="permissions-placeholder">
+                        <p>Sélectionnez un utilisateur ci-dessus pour gérer ses permissions.</p>
+                    </div>
+                <?php endif; ?>
             </form>
         </section>
     <?php endif; ?>
@@ -1184,9 +1333,9 @@ function decode_msg($row) {
 (function() {
     const btn = document.getElementById('impBtn');
     const drop = document.getElementById('impDrop');
-    
+
     if (!btn || !drop) return;
-    
+
     function toggleDropdown() {
         const isOpen = drop.classList.contains('open');
         drop.classList.toggle('open', !isOpen);
@@ -1206,7 +1355,7 @@ function decode_msg($row) {
         drop.classList.remove('open');
         btn.setAttribute('aria-expanded', 'false');
     });
-    
+
     // Fermer avec Échap
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && drop.classList.contains('open')) {
@@ -1385,6 +1534,29 @@ function decode_msg($row) {
             const query = searchInput.value.trim();
             clearTimeout(debounceTimer);
             performSearch(query);
+        });
+    }
+})();
+
+/* Gestion des permissions */
+(function() {
+    const selectAllBtn = document.getElementById('selectAllPerms');
+    const deselectAllBtn = document.getElementById('deselectAllPerms');
+    const permissionCheckboxes = document.querySelectorAll('.permission-checkbox');
+    
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+            permissionCheckboxes.forEach(function(cb) {
+                cb.checked = true;
+            });
+        });
+    }
+    
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', function() {
+            permissionCheckboxes.forEach(function(cb) {
+                cb.checked = false;
+            });
         });
     }
 })();

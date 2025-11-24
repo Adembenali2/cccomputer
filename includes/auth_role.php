@@ -37,4 +37,64 @@ function requireAdmin() {
 function requireCommercial() {
     return authorize_roles(['Chargé relation clients', 'Admin']);
 }
+
+/**
+ * Vérifie si l'utilisateur a la permission d'accéder à une page spécifique.
+ * Utilise le système ACL (user_permissions) si une permission existe,
+ * sinon utilise le système de rôles par défaut (fallback).
+ *
+ * @param string $page Nom de la page (ex: 'dashboard', 'historique', 'maps')
+ * @param array $allowed_roles Liste des rôles autorisés par défaut (fallback)
+ * @return bool True si l'utilisateur a accès, false sinon
+ */
+function checkPagePermission(string $page, array $allowed_roles = []): bool {
+    global $pdo, $user_id, $emploi;
+    
+    // Si pas de connexion DB ou pas d'utilisateur, refuser
+    if (!isset($pdo) || empty($user_id)) {
+        return false;
+    }
+    
+    try {
+        // Vérifier si une permission explicite existe pour cet utilisateur et cette page
+        $stmt = $pdo->prepare("SELECT allowed FROM user_permissions WHERE user_id = ? AND page = ? LIMIT 1");
+        $stmt->execute([$user_id, $page]);
+        $permission = $stmt->fetchColumn();
+        
+        // Si une permission existe, l'utiliser
+        if ($permission !== false) {
+            return (int)$permission === 1;
+        }
+        
+        // Sinon, utiliser le système de rôles par défaut (fallback)
+        if (!empty($allowed_roles)) {
+            return in_array($emploi, $allowed_roles, true);
+        }
+        
+        // Si aucun rôle par défaut n'est spécifié et aucune permission n'existe, autoriser par défaut
+        // (pour éviter de bloquer l'accès si le système ACL n'est pas encore configuré)
+        return true;
+    } catch (PDOException $e) {
+        // Si la table n'existe pas encore (migration pas appliquée), utiliser les rôles par défaut
+        error_log('Warning: user_permissions table may not exist: ' . $e->getMessage());
+        if (!empty($allowed_roles)) {
+            return in_array($emploi, $allowed_roles, true);
+        }
+        return true;
+    }
+}
+
+/**
+ * Vérifie l'accès à une page avec le système ACL.
+ * Si l'utilisateur n'a pas accès, redirige vers la page d'accès interdit.
+ *
+ * @param string $page Nom de la page (ex: 'dashboard', 'historique', 'maps')
+ * @param array $allowed_roles Liste des rôles autorisés par défaut (fallback)
+ */
+function authorize_page(string $page, array $allowed_roles = []): void {
+    if (!checkPagePermission($page, $allowed_roles)) {
+        header('Location: /redirection/acces_interdit.php', true, 302);
+        exit;
+    }
+}
 ?>

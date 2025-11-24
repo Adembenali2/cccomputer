@@ -1,10 +1,10 @@
 /* ===============================
-   Historique - Version refactorisée
-   Interface moderne et accessible
+   HISTORIQUE - STYLES PRINCIPAUX
+   Version optimisée et organisée
    =============================== */
 
 /* ===============================
-   Mise en page principale
+   1. MISE EN PAGE PRINCIPALE
    =============================== */
 .page-container {
   max-width: 1400px;
@@ -32,7 +32,7 @@
 }
 
 /* ===============================
-   Cartes de statistiques
+   2. CARTES DE STATISTIQUES
    =============================== */
 .history-meta {
   display: grid;
@@ -93,7 +93,7 @@
 }
 
 /* ===============================
-   Filtres actifs
+   3. FILTRES ACTIFS
    =============================== */
 .active-filters {
   display: flex;
@@ -152,7 +152,7 @@
 }
 
 /* ===============================
-   Formulaire de filtres
+   4. FORMULAIRE DE FILTRES
    =============================== */
 .filtre-form {
   background: var(--bg-primary, #ffffff);
@@ -236,7 +236,7 @@
 }
 
 /* ===============================
-   États vides et erreurs
+   5. ÉTATS VIDES ET ERREURS
    =============================== */
 .aucun,
 .aucun-resultat {
@@ -261,8 +261,31 @@
   font-style: italic;
 }
 
+.debug-error-details {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  text-align: left;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.debug-error-details code {
+  word-break: break-all;
+  display: block;
+  background: #e9ecef;
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+}
+
 /* ===============================
-   Tableau desktop
+   6. TABLEAU DESKTOP
    =============================== */
 .table-responsive {
   overflow-x: auto;
@@ -320,7 +343,6 @@
   outline-offset: -2px;
 }
 
-/* Formatage des cellules */
 .history-table time {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -352,15 +374,13 @@
   color: var(--text-primary, #1a1a1a);
 }
 
-/* Attributs data-label pour accessibilité mobile */
+/* Attributs data-label pour accessibilité mobile (masqué sur desktop) */
 .history-table td[data-label]::before {
-  content: attr(data-label) ": ";
-  font-weight: 600;
-  color: var(--text-secondary, #666);
+  content: none;
 }
 
 /* ===============================
-   Liste mobile (cartes)
+   7. LISTE MOBILE (CARTES)
    =============================== */
 .history-list {
   display: none;
@@ -441,7 +461,7 @@
 }
 
 /* ===============================
-   Responsivité
+   8. RESPONSIVITÉ
    =============================== */
 @media (max-width: 1024px) {
   .page-container {
@@ -493,6 +513,15 @@
     display: block;
   }
   
+  /* Afficher les data-labels sur mobile */
+  .history-table td[data-label]::before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    color: var(--text-secondary, #666);
+    display: inline-block;
+    min-width: 100px;
+  }
+  
   .item-detail {
     grid-template-columns: 85px 1fr;
     gap: 0.5rem;
@@ -539,7 +568,7 @@
 }
 
 /* ===============================
-   Accessibilité et animations
+   9. ACCESSIBILITÉ
    =============================== */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -552,13 +581,11 @@
   }
 }
 
-/* Focus visible pour accessibilité clavier */
 *:focus-visible {
   outline: 2px solid var(--accent-primary, #3b82f6);
   outline-offset: 2px;
 }
 
-/* Amélioration du contraste pour les lecteurs d'écran */
 @media (prefers-contrast: high) {
   .meta-card,
   .history-item,
@@ -571,7 +598,9 @@
   }
 }
 
-/* Mode sombre (si supporté) */
+/* ===============================
+   10. MODE SOMBRE
+   =============================== */
 @media (prefers-color-scheme: dark) {
   .page-title {
     color: #f0f0f0;
