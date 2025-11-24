@@ -32,12 +32,7 @@ function currentUserRole(): ?string {
 }
 
 /** CSRF minimal (même logique que dans clients.php) **/
-function ensureCsrfToken(): string {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
-}
+// La fonction ensureCsrfToken() est définie dans includes/helpers.php
 function assertValidCsrf(string $token): void {
     if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         throw new RuntimeException("Session expirée. Veuillez recharger la page.");

@@ -67,6 +67,7 @@ try {
       v.Model IS NULL, v.Model,
       v.SerialNumber IS NULL, v.SerialNumber,
       v.MacAddress
+    LIMIT 500
   ";
   $stmt = $pdo->prepare($sql);
   $stmt->execute();

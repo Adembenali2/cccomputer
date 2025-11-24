@@ -10,12 +10,7 @@ function h(?string $s): string {
     return htmlspecialchars((string)$s ?? '', ENT_QUOTES, 'UTF-8');
 }
 
-function ensureCsrfToken(): string {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
-}
+// La fonction ensureCsrfToken() est définie dans includes/helpers.php
 
 $CSRF = ensureCsrfToken();
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
@@ -252,7 +247,7 @@ try {
         $messageIds = array_map(function($m) { return (int)$m['id']; }, $messages);
         $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
         
-        // Récupérer les réponses aux messages affichés
+        // Récupérer les réponses aux messages affichés (limité à 500 réponses max)
         $sqlReplies = "
             SELECT 
                 m.*,
@@ -274,6 +269,8 @@ try {
             LEFT JOIN sav s ON s.id = m.id_lien AND m.type_lien = 'sav'
             LEFT JOIN messagerie_lectures ml ON ml.id_message = m.id AND ml.id_utilisateur = ?
             WHERE m.id_message_parent IN ({$placeholders})
+            ORDER BY m.date_envoi DESC
+            LIMIT 500
         ";
         
         $paramsReplies = array_merge([$currentUserId], $messageIds);

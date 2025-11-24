@@ -30,12 +30,7 @@ function currentUserRole(): ?string {
 }
 
 /** CSRF minimal **/
-function ensureCsrfToken(): string {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
-}
+// La fonction ensureCsrfToken() est définie dans includes/helpers.php
 function assertValidCsrf(string $token): void {
     if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         throw new RuntimeException("Session expirée. Veuillez recharger la page.");
@@ -437,7 +432,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   <!-- Flash -->
   <?php if ($flash['type']): ?>
     <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
-      <?= $flash['msg'] ?>
+      <?= h($flash['msg']) ?>
     </div>
   <?php endif; ?>
 

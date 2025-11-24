@@ -37,12 +37,7 @@ function validatePostalCode(string $postal): bool {
 function validateSiret(string $siret): bool {
     return (bool)preg_match(SIRET_PATTERN, $siret);
 }
-function ensureCsrfToken(): string {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
-}
+// La fonction ensureCsrfToken() est définie dans includes/helpers.php
 function assertValidCsrf(string $token): void {
     if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         throw new RuntimeException("Session expirée. Veuillez recharger la page.");
@@ -269,6 +264,7 @@ if ($view === 'unassigned') {
       SELECT * FROM unassigned_without_read
     ) x
     ORDER BY COALESCE(x.SerialNumber, x.mac_norm) ASC
+    LIMIT 1000
     ";
 } else {
     // Attribués uniquement (avec ou sans relevé)
@@ -320,6 +316,7 @@ if ($view === 'unassigned') {
     ORDER BY
       COALESCE(x.raison_sociale, '—') ASC,
       COALESCE(x.SerialNumber, x.mac_norm) ASC
+    LIMIT 1000
     ";
 }
 
@@ -425,7 +422,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   <!-- Flash -->
   <?php if ($flash['type']): ?>
     <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
-      <?= $flash['msg'] ?>
+      <?= h($flash['msg']) ?>
     </div>
   <?php endif; ?>
 
@@ -543,7 +540,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 
   <?php if ($flash['type'] && $shouldOpenModal): ?>
     <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
-      <?= $flash['msg'] ?>
+      <?= h($flash['msg']) ?>
     </div>
   <?php endif; ?>
 

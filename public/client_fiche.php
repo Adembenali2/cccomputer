@@ -298,7 +298,7 @@ if (($_GET['saved'] ?? '') === '1') {
 
     <?php if ($flash['type']): ?>
       <div class="flash <?= $flash['type']==='error'?'flash-error':'flash-success' ?>" style="margin-bottom:.75rem;">
-        <?= $flash['msg'] ?>
+        <?= h($flash['msg']) ?>
       </div>
     <?php endif; ?>
 

@@ -300,7 +300,7 @@ if (empty($_SESSION['csrf_token'])) {
                         <?php
                         $currentYear = (int)date('Y');
                         for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
-                            echo "<option value=\"$y\">$y</option>";
+                            echo '<option value="' . h((string)$y) . '">' . h((string)$y) . '</option>';
                         }
                         ?>
                     </select>
@@ -595,7 +595,7 @@ if (empty($_SESSION['csrf_token'])) {
                             <?php
                             $currentYear = (int)date('Y');
                             for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
-                                echo "<option value=\"$y\">$y</option>";
+                                echo '<option value="' . h((string)$y) . '">' . h((string)$y) . '</option>';
                             }
                             ?>
                         </select>

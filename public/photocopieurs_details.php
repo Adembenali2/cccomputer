@@ -15,12 +15,7 @@ function normalizeMac(?string $mac): array {
   return ['norm' => $hex, 'colon' => implode(':', str_split($hex, 2))];
 }
 
-function ensureCsrfToken(): string {
-  if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-  }
-  return $_SESSION['csrf_token'];
-}
+// La fonction ensureCsrfToken() est définie dans includes/helpers.php
 
 function assertValidCsrf(string $token): void {
   if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {

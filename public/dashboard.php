@@ -33,12 +33,7 @@ $safeFetchAll = static function (PDO $pdo, string $sql, array $params = [], stri
 };
 
 /** CSRF minimal **/
-function ensureCsrfToken(): string {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
-}
+// La fonction ensureCsrfToken() est définie dans includes/helpers.php
 
 // Générer un token CSRF si manquant
 ensureCsrfToken();

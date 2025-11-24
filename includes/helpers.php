@@ -64,11 +64,13 @@ function formatDate(?string $date, string $format = 'd/m/Y'): string {
 /**
  * Génère un token CSRF si manquant
  */
-function ensureCsrfToken(): string {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+if (!function_exists('ensureCsrfToken')) {
+    function ensureCsrfToken(): string {
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf_token'];
     }
-    return $_SESSION['csrf_token'];
 }
 
 /**
