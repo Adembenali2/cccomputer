@@ -281,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ========================================================================
 // PRÉPARATION DE L'AFFICHAGE (Requêtes GET)
 // ========================================================================
-function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+// La fonction h() est définie dans includes/helpers.php
 $CSRF = $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 
 $search = sanitizeSearch($_GET['q'] ?? '');

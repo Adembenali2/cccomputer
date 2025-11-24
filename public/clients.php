@@ -16,7 +16,7 @@ const PHONE_PATTERN   = '/^[0-9+\-.\s]{6,}$/';
 const POSTAL_PATTERN  = '/^[0-9]{4,10}$/';
 const SIRET_PATTERN   = '/^[0-9]{14}$/';
 
-function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+// La fonction h() est définie dans includes/helpers.php
 function pctOrDash($v): string { if ($v === null || $v === '' || !is_numeric($v)) return '—'; $v = max(0, min(100, (int)$v)); return $v.'%'; }
 function old(string $key, string $default=''): string { return htmlspecialchars($_POST[$key] ?? $default, ENT_QUOTES, 'UTF-8'); }
 function currentUserId(): ?int {

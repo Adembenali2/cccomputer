@@ -84,11 +84,8 @@ try {
     error_log('Erreur SQL (historique): ' . $e->getMessage());
 }
 
-// ====== Helper d’échappement ======
-function h(?string $s): string
-{
-    return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
-}
+// ====== Helper d'échappement ======
+// La fonction h() est définie dans includes/helpers.php
 
 function formatDateTime(?string $dateTime): string
 {

@@ -6,7 +6,7 @@ require_once __DIR__ . '/../includes/db.php';
 try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
 
 /* Helpers */
-function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+// La fonction h() est définie dans includes/helpers.php
 function stateBadge(?string $etat): string {
   $e = strtoupper(trim((string)$etat));
   if (!in_array($e, ['A','B','C'], true)) return '<span class="state state-na">—</span>';

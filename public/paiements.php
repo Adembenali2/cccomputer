@@ -5,9 +5,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
-function h(?string $s): string {
-    return htmlspecialchars((string)$s ?? '', ENT_QUOTES, 'UTF-8');
-}
+// La fonction h() est définie dans includes/helpers.php
 
 // Données factices pour le développement
 // TODO: Remplacer par des requêtes à la base de données

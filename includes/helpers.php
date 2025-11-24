@@ -6,8 +6,10 @@
  * Échappe les données pour éviter les attaques XSS
  * Utilisé dans tous les templates PHP
  */
-function h(?string $s): string {
-    return htmlspecialchars((string)$s ?? '', ENT_QUOTES, 'UTF-8');
+if (!function_exists('h')) {
+    function h(?string $s): string {
+        return htmlspecialchars((string)$s ?? '', ENT_QUOTES, 'UTF-8');
+    }
 }
 
 /**

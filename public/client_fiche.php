@@ -12,7 +12,7 @@ const ALLOWED_DEPOT_CF  = ['espece','cheque','virement','paiement_carte'];
 const ALLOWED_OFFRES_CF = ['packbronze','packargent'];
 const ALLOWED_UPLOAD_EXT = ['pdf','jpg','jpeg','png'];
 
-function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+// La fonction h() est définie dans includes/helpers.php
 function v(?string $k, $default='') { return $_POST[$k] ?? $default; }
 
 function ensure_csrf_token(): string {

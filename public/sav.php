@@ -12,9 +12,7 @@ if (method_exists($pdo, 'setAttribute')) {
 }
 
 /** Helpers **/
-function h(?string $s): string {
-    return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8');
-}
+// La fonction h() est définie dans includes/helpers.php
 
 function currentUserId(): ?int {
     if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
