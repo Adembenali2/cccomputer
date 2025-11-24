@@ -109,8 +109,7 @@ try {
     }
     
     // Vérifier si la table messagerie existe et si id_message_parent existe
-    $checkColumn = $pdo->query("SHOW COLUMNS FROM messagerie LIKE 'id_message_parent'");
-    $hasParentColumn = $checkColumn->rowCount() > 0;
+    $hasParentColumn = columnExists($pdo, 'messagerie', 'id_message_parent');
     
     if ($hasParentColumn) {
         $sql = "

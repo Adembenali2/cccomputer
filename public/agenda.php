@@ -57,12 +57,13 @@ if ($viewMode === 'week') {
 // Récupérer la liste des utilisateurs pour le filtre
 $users = [];
 try {
-    $stmt = $pdo->query("
+    $stmt = $pdo->prepare("
         SELECT id, nom, prenom, Emploi 
         FROM utilisateurs 
         WHERE statut = 'actif' 
         ORDER BY nom, prenom
     ");
+    $stmt->execute();
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('agenda.php - Erreur récupération utilisateurs: ' . $e->getMessage());
@@ -71,15 +72,9 @@ try {
 // Vérifier si la colonne date_intervention_prevue existe
 $hasDateIntervention = false;
 try {
-    $checkCol = $pdo->query("
-        SELECT COUNT(*) as cnt 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'sav' 
-        AND COLUMN_NAME = 'date_intervention_prevue'
-    ");
-    $hasDateIntervention = ($checkCol->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
-} catch (PDOException $e) {
+    require_once __DIR__ . '/../includes/api_helpers.php';
+    $hasDateIntervention = columnExists($pdo, 'sav', 'date_intervention_prevue');
+} catch (Throwable $e) {
     error_log('agenda.php - Erreur vérification colonne date_intervention_prevue: ' . $e->getMessage());
 }
 
@@ -122,15 +117,9 @@ try {
     // Vérifier si type_panne existe
     $hasTypePanne = false;
     try {
-        $checkTypePanne = $pdo->query("
-            SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = DATABASE() 
-            AND TABLE_NAME = 'sav' 
-            AND COLUMN_NAME = 'type_panne'
-        ");
-        $hasTypePanne = ($checkTypePanne->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
-    } catch (PDOException $e) {
+        require_once __DIR__ . '/../includes/api_helpers.php';
+        $hasTypePanne = columnExists($pdo, 'sav', 'type_panne');
+    } catch (Throwable $e) {
         error_log('agenda.php - Erreur vérification colonne type_panne: ' . $e->getMessage());
     }
     

@@ -63,7 +63,8 @@ if ($messageId <= 0) {
 try {
     // Vérifier que la table messagerie existe
     try {
-        $checkTable = $pdo->query("SHOW TABLES LIKE 'messagerie'");
+        $checkTable = $pdo->prepare("SHOW TABLES LIKE :table");
+        $checkTable->execute([':table' => 'messagerie']);
         if ($checkTable->rowCount() === 0) {
             jsonResponse(['ok' => false, 'error' => 'Table messagerie introuvable. Veuillez exécuter la migration SQL.'], 500);
         }
@@ -75,14 +76,15 @@ try {
     // Vérifier si la colonne id_message_parent existe
     $hasParentColumn = false;
     try {
-        $checkColumn = $pdo->query("
+        $checkColumn = $pdo->prepare("
             SELECT COUNT(*) as cnt 
             FROM INFORMATION_SCHEMA.COLUMNS 
             WHERE TABLE_SCHEMA = DATABASE() 
-            AND TABLE_NAME = 'messagerie' 
-            AND COLUMN_NAME = 'id_message_parent'
+            AND TABLE_NAME = :table 
+            AND COLUMN_NAME = :column
         ");
-        $hasParentColumn = ($checkColumn->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+        $checkColumn->execute([':table' => 'messagerie', ':column' => 'id_message_parent']);
+        $hasParentColumn = ((int)$checkColumn->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
     } catch (PDOException $e) {
         // Si on ne peut pas vérifier, on assume que la colonne n'existe pas
         error_log('messagerie_delete.php - Erreur vérification colonne id_message_parent: ' . $e->getMessage());

@@ -47,7 +47,8 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 
 try {
     // Vérifier si la table sav existe
-    $checkTable = $pdo->query("SHOW TABLES LIKE 'sav'");
+    $checkTable = $pdo->prepare("SHOW TABLES LIKE :table");
+    $checkTable->execute([':table' => 'sav']);
     if ($checkTable->rowCount() === 0) {
         // Table n'existe pas encore, retourner une liste vide
         jsonResponse(['ok' => true, 'savs' => []]);

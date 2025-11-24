@@ -139,8 +139,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $pdo->beginTransaction();
                     try {
                         // Vérifier si la colonne notes_techniques existe, sinon utiliser commentaire
-                        $checkColumn = $pdo->query("SHOW COLUMNS FROM sav LIKE 'notes_techniques'");
-                        $hasNotesTechniques = $checkColumn->rowCount() > 0;
+                        require_once __DIR__ . '/../includes/api_helpers.php';
+                        $hasNotesTechniques = columnExists($pdo, 'sav', 'notes_techniques');
                         
                         if ($hasNotesTechniques) {
                             $upd = $pdo->prepare("

@@ -101,14 +101,15 @@ try {
     // Vérifier si les colonnes de suppression existent
     $hasSupprimeColumns = false;
     try {
-        $checkCols = $pdo->query("
+        $checkCols = $pdo->prepare("
             SELECT COUNT(*) as cnt 
             FROM INFORMATION_SCHEMA.COLUMNS 
             WHERE TABLE_SCHEMA = DATABASE() 
-            AND TABLE_NAME = 'messagerie' 
+            AND TABLE_NAME = :table 
             AND COLUMN_NAME IN ('supprime_expediteur', 'supprime_destinataire')
         ");
-        $hasSupprimeColumns = ($checkCols->fetch(PDO::FETCH_ASSOC)['cnt'] >= 2);
+        $checkCols->execute([':table' => 'messagerie']);
+        $hasSupprimeColumns = ((int)$checkCols->fetch(PDO::FETCH_ASSOC)['cnt'] >= 2);
     } catch (PDOException $e) {
         error_log('messagerie.php - Erreur vérification colonnes: ' . $e->getMessage());
     }
@@ -154,15 +155,9 @@ try {
     // Vérifier si la colonne id_message_parent existe
     $hasParentColumn = false;
     try {
-        $checkParentCol = $pdo->query("
-            SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = DATABASE() 
-            AND TABLE_NAME = 'messagerie' 
-            AND COLUMN_NAME = 'id_message_parent'
-        ");
-        $hasParentColumn = ($checkParentCol->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
-    } catch (PDOException $e) {
+        require_once __DIR__ . '/../includes/api_helpers.php';
+        $hasParentColumn = columnExists($pdo, 'messagerie', 'id_message_parent');
+    } catch (Throwable $e) {
         error_log('messagerie.php - Erreur vérification colonne id_message_parent: ' . $e->getMessage());
     }
     

@@ -49,7 +49,8 @@ if (empty($query) || strlen($query) < 1) {
 
 // Vérifier que la table clients existe
 try {
-    $checkTable = $pdo->query("SHOW TABLES LIKE 'clients'");
+    $checkTable = $pdo->prepare("SHOW TABLES LIKE :table");
+    $checkTable->execute([':table' => 'clients']);
     if ($checkTable->rowCount() === 0) {
         error_log('maps_search_clients.php: Table clients does not exist');
         jsonResponse(['ok' => false, 'error' => 'Table clients introuvable'], 500);

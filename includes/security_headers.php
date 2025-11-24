@@ -28,7 +28,7 @@ if ($isSecure) {
 // Cette politique est stricte, vous devrez peut-être l'ajuster
 // Note: 'unsafe-eval' est nécessaire pour certaines bibliothèques JavaScript
 // En production, essayez de l'enlever si possible
-$csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';";
+$csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';";
 header("Content-Security-Policy: {$csp}");
 
 // Permissions Policy (anciennement Feature Policy)

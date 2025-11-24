@@ -202,26 +202,68 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- BADGE MESSAGERIE (nombre de messages non lus) ---
   const messagerieBadge = document.getElementById('messagerie-badge');
   if (messagerieBadge) {
+    let isUpdating = false;
+    let lastUpdate = 0;
+    const UPDATE_INTERVAL = 30000; // 30 secondes
+    const MIN_UPDATE_INTERVAL = 5000; // Minimum 5 secondes entre mises à jour
+    
     async function updateMessagerieBadge() {
+      // Éviter les requêtes simultanées
+      if (isUpdating) return;
+      
+      const now = Date.now();
+      if (now - lastUpdate < MIN_UPDATE_INTERVAL) return;
+      
+      isUpdating = true;
+      lastUpdate = now;
+      
       try {
-        const response = await fetch('/API/messagerie_get_unread_count.php');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 secondes
+        
+        const response = await fetch('/API/messagerie_get_unread_count.php', {
+          signal: controller.signal,
+          cache: 'no-cache'
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         if (data.ok && data.count > 0) {
-          messagerieBadge.textContent = data.count > 99 ? '99+' : data.count;
+          messagerieBadge.textContent = data.count > 99 ? '99+' : String(data.count);
           messagerieBadge.style.display = 'inline-block';
+          messagerieBadge.setAttribute('aria-label', `${data.count} message${data.count > 1 ? 's' : ''} non lu${data.count > 1 ? 's' : ''}`);
         } else {
           messagerieBadge.style.display = 'none';
+          messagerieBadge.removeAttribute('aria-label');
         }
       } catch (err) {
-        console.error('Erreur mise à jour badge messagerie:', err);
+        if (err.name !== 'AbortError') {
+          console.error('Erreur mise à jour badge messagerie:', err);
+        }
+        // En cas d'erreur, ne pas afficher le badge
+        messagerieBadge.style.display = 'none';
+      } finally {
+        isUpdating = false;
       }
     }
     
-    // Charger au démarrage
-    updateMessagerieBadge();
+    // Charger au démarrage (avec délai pour ne pas bloquer le chargement de la page)
+    setTimeout(updateMessagerieBadge, 1000);
     
-    // Mettre à jour toutes les 30 secondes
-    setInterval(updateMessagerieBadge, 30000);
+    // Mettre à jour périodiquement
+    setInterval(updateMessagerieBadge, UPDATE_INTERVAL);
+    
+    // Mettre à jour quand la page redevient visible (si l'utilisateur revient sur l'onglet)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        updateMessagerieBadge();
+      }
+    });
   }
 });
 </script>

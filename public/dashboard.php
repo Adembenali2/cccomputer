@@ -93,42 +93,63 @@ $nb_livraisons_a_faire = (int)($safeFetchColumn(
 $payClass = ($nb_paiements_en_attente > 0) ? 'count-bad' : 'count-ok';
 
 // ==================================================================
-// Récupération clients depuis la BDD (limité pour performance)
+// Récupération clients depuis la BDD (optimisé pour performance)
 // ==================================================================
-// Limite à 1000 clients pour éviter les problèmes de mémoire
+// Limite à 500 clients pour éviter les problèmes de mémoire
 // Pour plus de clients, utiliser la pagination ou le chargement à la demande
-$clients = $safeFetchAll(
-    $pdo,
-    "SELECT 
-        id,
-        numero_client,
-        raison_sociale,
-        nom_dirigeant,
-        prenom_dirigeant,
-        email,
-        adresse,
-        code_postal,
-        ville,
-        adresse_livraison,
-        livraison_identique,
-        siret,
-        numero_tva,
-        depot_mode,
-        telephone1,
-        telephone2,
-        parrain,
-        offre,
-        date_creation,
-        date_dajout,
-        pdf1, pdf2, pdf3, pdf4, pdf5,
-        pdfcontrat,
-        iban
-    FROM clients
-    ORDER BY raison_sociale ASC
-    LIMIT 1000",
-    [],
-    'clients_list'
-);
+// Utilisation de cache pour améliorer les performances
+$cacheKey = 'dashboard_clients_list_' . md5($user_id);
+$cacheFile = __DIR__ . '/../cache/' . md5($cacheKey) . '.json';
+
+$clients = [];
+if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 300) {
+    // Cache valide pendant 5 minutes
+    $cached = json_decode(file_get_contents($cacheFile), true);
+    if (is_array($cached)) {
+        $clients = $cached;
+    }
+}
+
+if (empty($clients)) {
+    $clients = $safeFetchAll(
+        $pdo,
+        "SELECT 
+            id,
+            numero_client,
+            raison_sociale,
+            nom_dirigeant,
+            prenom_dirigeant,
+            email,
+            adresse,
+            code_postal,
+            ville,
+            adresse_livraison,
+            livraison_identique,
+            siret,
+            numero_tva,
+            depot_mode,
+            telephone1,
+            telephone2,
+            parrain,
+            offre,
+            date_creation,
+            date_dajout,
+            pdf1, pdf2, pdf3, pdf4, pdf5,
+            pdfcontrat,
+            iban
+        FROM clients
+        ORDER BY raison_sociale ASC
+        LIMIT 500",
+        [],
+        'clients_list'
+    );
+    
+    // Sauvegarder dans le cache
+    if (!is_dir(__DIR__ . '/../cache')) {
+        @mkdir(__DIR__ . '/../cache', 0755, true);
+    }
+    @file_put_contents($cacheFile, json_encode($clients));
+}
 
 $nbClients = is_array($clients) ? count($clients) : 0;
 ?>

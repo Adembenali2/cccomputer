@@ -1,38 +1,8 @@
 <?php
 // API pour rechercher des livraisons dans la messagerie
-ob_start();
-
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('html_errors', 0);
-
-if (!headers_sent()) {
-    header('Content-Type: application/json; charset=utf-8');
-}
-
-function jsonResponse(array $data, int $statusCode = 200): void {
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    http_response_code($statusCode);
-    if (!headers_sent()) {
-        header('Content-Type: application/json; charset=utf-8');
-    }
-    echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-try {
-    require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
-} catch (Throwable $e) {
-    error_log('messagerie_search_livraisons.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
-}
-
-if (empty($_SESSION['user_id'])) {
-    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
-}
+require_once __DIR__ . '/../includes/api_helpers.php';
+initApi();
+requireApiAuth();
 
 $query = trim($_GET['q'] ?? '');
 $limit = min((int)($_GET['limit'] ?? 10), 20);
@@ -43,7 +13,8 @@ if (empty($query) || strlen($query) < 1) {
 
 try {
     // Vérifier que la table livraisons existe
-    $checkTable = $pdo->query("SHOW TABLES LIKE 'livraisons'");
+    $checkTable = $pdo->prepare("SHOW TABLES LIKE :table");
+    $checkTable->execute([':table' => 'livraisons']);
     if ($checkTable->rowCount() === 0) {
         jsonResponse(['ok' => true, 'results' => []]); // Retourne vide si la table n'existe pas
     }

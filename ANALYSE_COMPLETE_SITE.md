@@ -230,3 +230,5 @@ foreach ($allMessages as $msg) {
 - Les index de base de données doivent être vérifiés régulièrement
 - Un monitoring des performances est recommandé
 
+
+

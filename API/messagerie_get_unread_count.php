@@ -38,7 +38,8 @@ $userId = (int)$_SESSION['user_id'];
 
 try {
     // Vérifier si la table messagerie existe
-    $checkTable = $pdo->query("SHOW TABLES LIKE 'messagerie'");
+    $checkTable = $pdo->prepare("SHOW TABLES LIKE :table");
+    $checkTable->execute([':table' => 'messagerie']);
     if ($checkTable->rowCount() === 0) {
         // Table n'existe pas encore, retourner 0
         jsonResponse(['ok' => true, 'count' => 0]);
@@ -65,7 +66,8 @@ try {
     $countBroadcast = 0;
     try {
         // Vérifier si la table messagerie_lectures existe
-        $checkLectures = $pdo->query("SHOW TABLES LIKE 'messagerie_lectures'");
+        $checkLectures = $pdo->prepare("SHOW TABLES LIKE :table");
+        $checkLectures->execute([':table' => 'messagerie_lectures']);
         $hasLecturesTable = $checkLectures->rowCount() > 0;
         
         if ($hasLecturesTable) {
