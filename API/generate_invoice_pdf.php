@@ -54,7 +54,6 @@ try {
     }
     
     // Récupérer les données depuis la session ou recréer les données mock
-    // Pour l'instant, on utilise les données mock (même logique que paiements.php)
     // TODO: Remplacer par une vraie requête à la base de données
     
     $clientNames = [
@@ -69,7 +68,7 @@ try {
     // Recréer les données du client et de sa facture (mock)
     // En production, récupérer depuis la base de données
     if ($client_id >= 1 && $client_id <= 10) {
-        // Générer les factures pour ce client (même logique que paiements.php)
+        // Générer les factures pour ce client
         $invoices = [];
         for ($m = 11; $m >= 0; $m--) {
             $invoiceMonth = date('Y-m', strtotime("-$m months"));

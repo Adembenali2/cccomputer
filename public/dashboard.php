@@ -36,9 +36,6 @@ $historique_par_jour = safeFetchAll(
 // ==================================================================
 // Compteurs réels depuis la BDD
 // ==================================================================
-// Note: La table 'paiements' n'existe pas dans le schéma actuel
-$nb_paiements_en_attente = 0; // Table 'paiements' non présente dans le schéma
-
 // Pour SAV, les statuts ENUM sont: 'ouvert','en_cours','resolu','annule'
 // On compte les SAV ouverts et en cours comme "à traiter"
 $nb_sav_a_traiter = (int)(safeFetchColumn(
@@ -58,8 +55,6 @@ $nb_livraisons_a_faire = (int)(safeFetchColumn(
     0,
     'livraisons_a_faire'
 ) ?? 0);
-
-$payClass = ($nb_paiements_en_attente > 0) ? 'count-bad' : 'count-ok';
 
 // ==================================================================
 // Récupération clients depuis la BDD (optimisé pour performance)
@@ -146,19 +141,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         </div>
 
         <div class="dashboard-grid">
-            <div class="dash-card" data-href="/public/paiements.php" tabindex="0" role="button" aria-label="Voir les paiements en attente">
-                <div class="card-icon payments" aria-hidden="true">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
-                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                        <line x1="1" y1="10" x2="23" y2="10"/>
-                    </svg>
-                </div>
-                <h3 class="card-title">Paiements</h3>
-                <p class="card-count <?= htmlspecialchars($payClass, ENT_QUOTES, 'UTF-8') ?>">
-                    <?= htmlspecialchars($nb_paiements_en_attente, ENT_QUOTES, 'UTF-8') ?>
-                </p>
-            </div>
-
             <div class="dash-card" data-href="/public/sav.php" tabindex="0" role="button" aria-label="Accéder au SAV">
                 <div class="card-icon sav" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
