@@ -707,6 +707,11 @@ function initDetailModal(){
   if (overlay) overlay.addEventListener('click', closeFn);
 
   function renderDetails(type, row){
+    if (!grid || !titleEl) {
+      console.error('Grid ou titleEl manquant');
+      return;
+    }
+    
     grid.innerHTML = '';
     const typeNames = {
       'copiers': 'PHOTOCOPIEUR',
@@ -767,15 +772,22 @@ function initDetailModal(){
 
   // Fonction pour gérer le clic sur une ligne
   function handleRowClick(tr, e) {
+    console.log('handleRowClick appelé', {tr, hasEvent: !!e});
+    
     // Ne pas ouvrir si on clique sur un bouton, un lien ou un input
-    if (e && e.target && e.target.closest('button, a, input, select, .btn-add')) {
-      return;
+    if (e && e.target) {
+      const clickedElement = e.target.closest('button, a, input, select, .btn-add');
+      if (clickedElement) {
+        console.log('Clic sur élément interactif, ignoré:', clickedElement);
+        return;
+      }
     }
     
     // Ne pas ouvrir si l'utilisateur est en train de sélectionner du texte
     if (e) {
       const selection = window.getSelection();
       if (selection && selection.toString().trim().length > 0) {
+        console.log('Texte sélectionné, ignoré');
         return;
       }
     }
@@ -827,14 +839,27 @@ function initDetailModal(){
     
     console.log('✓ Ligne trouvée, ouverture modale pour:', type, row);
     renderDetails(type, row);
-    open();
+    
+    // Vérifier que open() est définie
+    if (typeof open === 'function') {
+      open();
+    } else {
+      console.error('La fonction open() n\'est pas définie!');
+    }
   }
   
   // Utiliser la délégation d'événements au niveau du document
+  // Mais seulement pour les lignes de tableau, pas pour les boutons
   document.addEventListener('click', function(e) {
+    // Ignorer si on clique sur un bouton d'ajout
+    if (e.target.closest('.btn-add')) {
+      return;
+    }
+    
     // Trouver la ligne la plus proche avec data-type et data-id
     const tr = e.target.closest('tbody tr[data-type][data-id]');
     if (tr) {
+      console.log('Ligne trouvée via délégation:', tr);
       handleRowClick(tr, e);
     }
   });
@@ -842,6 +867,21 @@ function initDetailModal(){
   // Rendre les lignes visuellement cliquables et ajouter support clavier
   const clickableRows = document.querySelectorAll('tbody tr[data-type][data-id]');
   console.log('Lignes cliquables trouvées:', clickableRows.length);
+  
+  if (clickableRows.length === 0) {
+    console.warn('⚠️ AUCUNE ligne cliquable trouvée! Vérifiez que les attributs data-type et data-id sont présents.');
+    // Essayer de trouver toutes les lignes pour déboguer
+    const allRows = document.querySelectorAll('tbody tr');
+    console.log('Toutes les lignes tbody trouvées:', allRows.length);
+    allRows.forEach((r, i) => {
+      console.log(`Ligne ${i}:`, {
+        hasDataType: r.hasAttribute('data-type'),
+        hasDataId: r.hasAttribute('data-id'),
+        dataType: r.getAttribute('data-type'),
+        dataId: r.getAttribute('data-id')
+      });
+    });
+  }
   
   clickableRows.forEach(tr => {
     tr.style.cursor = 'pointer';
@@ -857,19 +897,12 @@ function initDetailModal(){
         handleRowClick(tr, null);
       }
     });
-    
-    // Ajouter un indicateur visuel au survol
-    tr.addEventListener('mouseenter', function() {
-      tr.style.backgroundColor = 'var(--bg-secondary)';
-    });
-    tr.addEventListener('mouseleave', function() {
-      tr.style.backgroundColor = '';
-    });
   });
   
-  // Exporter la fonction pour le débogage
+  // Exporter pour le débogage
   window.handleRowClick = handleRowClick;
   window.DATASETS_DEBUG = DATASETS;
+  window.openModal = open;
 })();
 }
 

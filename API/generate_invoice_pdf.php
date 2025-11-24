@@ -29,7 +29,13 @@ if (!$client_id || !$invoice_number) {
 
 try {
     // Charger la bibliothèque TCPDF
-    require_once __DIR__ . '/../vendor/autoload.php';
+    // Vérifier si vendor/autoload.php existe
+    $vendorPath = __DIR__ . '/../vendor/autoload.php';
+    if (!file_exists($vendorPath)) {
+        error_log('Erreur: vendor/autoload.php introuvable. Assurez-vous que composer install a été exécuté.');
+        jsonResponse(['error' => 'Dépendances non installées. Veuillez exécuter: composer install'], 500);
+    }
+    require_once $vendorPath;
     
     // Récupérer les données depuis la session ou recréer les données mock
     // Pour l'instant, on utilise les données mock (même logique que paiements.php)
