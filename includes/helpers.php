@@ -26,26 +26,30 @@ function validateEmail(string $email): string {
 /**
  * Valide un ID numérique
  */
-function validateId($id, string $name = 'ID'): int {
-    $id = (int)$id;
-    if ($id <= 0) {
-        throw new InvalidArgumentException("{$name} invalide");
+if (!function_exists('validateId')) {
+    function validateId($id, string $name = 'ID'): int {
+        $id = (int)$id;
+        if ($id <= 0) {
+            throw new InvalidArgumentException("{$name} invalide");
+        }
+        return $id;
     }
-    return $id;
 }
 
 /**
  * Valide une chaîne avec longueur min/max
  */
-function validateString(string $value, string $name, int $minLength = 1, int $maxLength = 1000): string {
-    $value = trim($value);
-    if (strlen($value) < $minLength) {
-        throw new InvalidArgumentException("{$name} trop court (min {$minLength} caractères)");
+if (!function_exists('validateString')) {
+    function validateString(string $value, string $name, int $minLength = 1, int $maxLength = 1000): string {
+        $value = trim($value);
+        if (strlen($value) < $minLength) {
+            throw new InvalidArgumentException("{$name} trop court (min {$minLength} caractères)");
+        }
+        if (strlen($value) > $maxLength) {
+            throw new InvalidArgumentException("{$name} trop long (max {$maxLength} caractères)");
+        }
+        return $value;
     }
-    if (strlen($value) > $maxLength) {
-        throw new InvalidArgumentException("{$name} trop long (max {$maxLength} caractères)");
-    }
-    return $value;
 }
 
 /**
