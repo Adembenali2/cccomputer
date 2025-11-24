@@ -467,12 +467,17 @@ $currentUserInfo = safeFetch($pdo,
     'current_user_info'
 );
 
-// Utilisateurs en ligne (activité récente dans les 10 dernières minutes)
+// Utilisateurs en ligne (activité récente dans les 5 dernières minutes)
+// Utilise le champ last_activity si disponible, sinon utilise date_modification comme fallback
 $onlineUsers = safeFetchColumn($pdo, "
-    SELECT COUNT(DISTINCT h.user_id)
-    FROM historique h
-    WHERE h.date_action >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
-    AND h.user_id IS NOT NULL
+    SELECT COUNT(DISTINCT id)
+    FROM utilisateurs
+    WHERE statut = 'actif'
+    AND (
+        (last_activity IS NOT NULL AND last_activity >= DATE_SUB(NOW(), INTERVAL 5 MINUTE))
+        OR 
+        (last_activity IS NULL AND date_modification >= DATE_SUB(NOW(), INTERVAL 5 MINUTE))
+    )
 ", [], 0, 'online_users_count');
 
 $filtersActive = ($search !== '' || ($status !== '' && in_array($status, ['actif', 'inactif'], true)) || ($role !== '' && in_array($role, $ROLES, true)));
@@ -780,7 +785,7 @@ function decode_msg($row) {
         <div class="meta-card">
             <span class="meta-label">En ligne</span>
             <strong class="meta-value" style="color: #16a34a;"><?= h((string)$onlineUsers) ?></strong>
-            <span class="meta-sub">Dernières 10 min</span>
+            <span class="meta-sub">Dernières 5 min</span>
         </div>
     </section>
 

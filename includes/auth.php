@@ -32,6 +32,20 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
+// Mise à jour de last_activity pour le suivi des utilisateurs en ligne
+// On met à jour toutes les 30 secondes pour éviter trop de requêtes
+$lastActivityUpdate = $_SESSION['last_activity_update'] ?? 0;
+if (time() - $lastActivityUpdate > 30) {
+    try {
+        $stmt = $pdo->prepare("UPDATE utilisateurs SET last_activity = NOW() WHERE id = :id");
+        $stmt->execute(['id' => $user_id]);
+        $_SESSION['last_activity_update'] = time();
+    } catch (PDOException $e) {
+        // Si le champ n'existe pas encore, on ignore l'erreur (migration pas encore appliquée)
+        error_log('Warning: last_activity update failed (field may not exist): ' . $e->getMessage());
+    }
+}
+
 // Optionnel: vérifier que l'utilisateur existe toujours (avec cache pour éviter requêtes répétées)
 // On vérifie seulement toutes les 5 minutes pour améliorer les performances
 $lastCheck = $_SESSION['user_check_time'] ?? 0;

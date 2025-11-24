@@ -57,6 +57,16 @@ $_SESSION['user_prenom'] = $user['prenom'];
 $_SESSION['emploi']      = $user['Emploi'];
 $_SESSION['csrf_token']  = bin2hex(random_bytes(32));
 $_SESSION['last_regenerate'] = time();
+$_SESSION['last_activity_update'] = time();
+
+// Mise à jour de last_activity lors de la connexion
+try {
+    $stmt = $pdo->prepare("UPDATE utilisateurs SET last_activity = NOW() WHERE id = ?");
+    $stmt->execute([(int)$user['id']]);
+} catch (PDOException $e) {
+    // Si le champ n'existe pas encore, on ignore l'erreur (migration pas encore appliquée)
+    error_log('Warning: last_activity update on login failed (field may not exist): ' . $e->getMessage());
+}
 
 // Note: Les connexions/déconnexions ne sont plus enregistrées dans l'historique
 

@@ -350,7 +350,7 @@ function formatAction(?string $action): string {
     <?php endif; ?>
 
     <!-- Formulaire de filtres -->
-    <form class="filtre-form" id="filterForm" method="get" action="historique.php" novalidate aria-label="Filtres de recherche">
+    <form class="filtre-form" id="filterForm" method="get" action="historique.php" novalidate aria-label="Filtres de recherche" data-debounce-delay="<?= (int)DEBOUNCE_DELAY_MS ?>">
         <div class="filter-group">
             <label for="user_search">Filtrer par utilisateur</label>
             <div class="input-wrapper">
