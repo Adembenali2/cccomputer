@@ -46,6 +46,41 @@ if (time() - $lastActivityUpdate > 30) {
     }
 }
 
+// Vérification du statut de l'utilisateur (plus fréquente pour déconnexion immédiate si inactif)
+// On vérifie toutes les 30 secondes pour une réactivité rapide
+$lastStatusCheck = $_SESSION['user_status_check_time'] ?? 0;
+if (time() - $lastStatusCheck > 30) {
+    $stmt = $pdo->prepare("SELECT id, statut FROM utilisateurs WHERE id = :id LIMIT 1");
+    $stmt->execute(['id' => $user_id]);
+    $userCheck = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // Si l'utilisateur n'existe plus ou est inactif, déconnexion immédiate
+    if (!$userCheck || ($userCheck['statut'] ?? 'inactif') !== 'actif') {
+        // Stocker le message d'erreur dans la session avant de la nettoyer
+        $_SESSION['login_error'] = "Votre compte a été désactivé. Vous avez été déconnecté.";
+        
+        // Nettoyer toutes les données utilisateur de la session
+        unset($_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_nom'], 
+              $_SESSION['user_prenom'], $_SESSION['emploi'], $_SESSION['last_regenerate'],
+              $_SESSION['last_activity_update'], $_SESSION['user_status_check_time'], 
+              $_SESSION['user_check_time']);
+        
+        // Supprimer le cookie de session
+        if (ini_get('session.use_cookies')) {
+            $p = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
+        }
+        
+        // Régénérer l'ID de session pour sécurité
+        session_regenerate_id(true);
+        
+        header('Location: /public/login.php', true, 302);
+        exit;
+    }
+    
+    $_SESSION['user_status_check_time'] = time();
+}
+
 // Optionnel: vérifier que l'utilisateur existe toujours (avec cache pour éviter requêtes répétées)
 // On vérifie seulement toutes les 5 minutes pour améliorer les performances
 $lastCheck = $_SESSION['user_check_time'] ?? 0;
