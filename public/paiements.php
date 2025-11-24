@@ -918,7 +918,7 @@ if (empty($_SESSION['csrf_token'])) {
             });
         }
         
-        // Fonction pour télécharger une facture
+        // Fonction pour télécharger une facture en PDF
         function downloadInvoice(clientId, invoiceNumber) {
             const client = clientsDataJS.find(c => c.id === clientId);
             if (!client) {
@@ -932,25 +932,9 @@ if (empty($_SESSION['csrf_token'])) {
                 return;
             }
             
-            // Créer un document Excel pour la facture
-            const invoiceData = [{
-                'Numéro Facture': invoice.invoice_number,
-                'Date Facture': new Date(invoice.invoice_date).toLocaleDateString('fr-FR'),
-                'Période Début': new Date(invoice.period_start).toLocaleDateString('fr-FR'),
-                'Période Fin': new Date(invoice.period_end).toLocaleDateString('fr-FR'),
-                'Échéance': new Date(invoice.due_date).toLocaleDateString('fr-FR'),
-                'Client': client.name,
-                'Numéro Client': client.numero_client,
-                'NB - Pages': invoice.nb_pages,
-                'NB - Montant (€)': invoice.nb_amount,
-                'Couleur - Pages': invoice.color_pages,
-                'Couleur - Montant (€)': invoice.color_amount,
-                'Total Pages': invoice.total_pages,
-                'Total Montant (€)': invoice.total_amount,
-                'Statut': invoice.status === 'paid' ? 'Payée' : (invoice.status === 'overdue' ? 'En retard' : 'En attente')
-            }];
-            
-            exportToExcel(invoiceData, `${invoice.invoice_number}.xlsx`);
+            // Télécharger le PDF depuis l'API
+            const url = `/API/generate_invoice_pdf.php?client_id=${clientId}&invoice_number=${encodeURIComponent(invoiceNumber)}`;
+            window.open(url, '_blank');
         }
 
         // Fermeture de la modal

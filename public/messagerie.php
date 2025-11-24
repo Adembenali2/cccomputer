@@ -492,11 +492,35 @@ $totalMessages = count($messages);
                                 $lienLabel = '👤 Client: ' . h($msg['client_nom'] ?? 'N/A');
                                 $lienUrl = '/public/client_fiche.php?id=' . (int)$msg['id_lien'];
                             } elseif ($msg['type_lien'] === 'livraison') {
-                                $lienLabel = '📦 Livraison: ' . h($msg['livraison_ref'] ?? 'N/A');
-                                $lienUrl = '/public/livraison.php?ref=' . urlencode($msg['livraison_ref'] ?? '');
+                                $ref = $msg['livraison_ref'] ?? '';
+                                if (empty($ref)) {
+                                    // Si pas de référence, récupérer depuis l'ID
+                                    try {
+                                        $stmtRef = $pdo->prepare("SELECT reference FROM livraisons WHERE id = :id LIMIT 1");
+                                        $stmtRef->execute([':id' => (int)$msg['id_lien']]);
+                                        $refRow = $stmtRef->fetch(PDO::FETCH_ASSOC);
+                                        $ref = $refRow['reference'] ?? '';
+                                    } catch (PDOException $e) {
+                                        error_log('messagerie.php - Erreur récupération ref livraison: ' . $e->getMessage());
+                                    }
+                                }
+                                $lienLabel = '📦 Livraison: ' . h($ref ?: 'N/A');
+                                $lienUrl = $ref ? '/public/livraison.php?ref=' . urlencode($ref) : '#';
                             } elseif ($msg['type_lien'] === 'sav') {
-                                $lienLabel = '🔧 SAV: ' . h($msg['sav_ref'] ?? 'N/A');
-                                $lienUrl = '/public/sav.php?ref=' . urlencode($msg['sav_ref'] ?? '');
+                                $ref = $msg['sav_ref'] ?? '';
+                                if (empty($ref)) {
+                                    // Si pas de référence, récupérer depuis l'ID
+                                    try {
+                                        $stmtRef = $pdo->prepare("SELECT reference FROM sav WHERE id = :id LIMIT 1");
+                                        $stmtRef->execute([':id' => (int)$msg['id_lien']]);
+                                        $refRow = $stmtRef->fetch(PDO::FETCH_ASSOC);
+                                        $ref = $refRow['reference'] ?? '';
+                                    } catch (PDOException $e) {
+                                        error_log('messagerie.php - Erreur récupération ref SAV: ' . $e->getMessage());
+                                    }
+                                }
+                                $lienLabel = '🔧 SAV: ' . h($ref ?: 'N/A');
+                                $lienUrl = $ref ? '/public/sav.php?ref=' . urlencode($ref) : '#';
                             }
                         }
                         

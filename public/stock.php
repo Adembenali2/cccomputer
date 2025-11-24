@@ -208,12 +208,16 @@ $nbStockFaible = count($stockFaible['papier']) + count($stockFaible['toners']) +
 // Normaliser les données papier pour le dataset (ajouter 'id' et 'qty')
 $papersNormalized = [];
 foreach ($papers as $p) {
+    $paperId = $p['paper_id'] ?? null;
+    if (empty($paperId)) continue; // Ignorer les entrées sans ID
+    
     $papersNormalized[] = [
-        'id'      => (int)($p['paper_id'] ?? 0),
-        'marque'  => $p['marque'] ?? '',
-        'modele'  => $p['modele'] ?? '',
-        'poids'   => $p['poids'] ?? '',
-        'qty'     => (int)($p['qty_stock'] ?? 0),
+        'id'        => (int)$paperId,
+        'paper_id'  => (int)$paperId, // Garder aussi paper_id pour compatibilité
+        'marque'    => $p['marque'] ?? '',
+        'modele'    => $p['modele'] ?? '',
+        'poids'     => $p['poids'] ?? '',
+        'qty'       => (int)($p['qty_stock'] ?? 0),
         'qty_stock' => (int)($p['qty_stock'] ?? 0),
     ];
 }
@@ -359,14 +363,16 @@ $sectionImages = [
           <thead><tr><th>Qté</th><th>Modèle</th><th>Poids</th></tr></thead>
           <tbody>
           <?php foreach ($papers as $p): ?>
+            <?php if (!empty($p['paper_id'])): ?>
             <tr 
               data-type="papier" 
-              data-id="<?= h($p['paper_id'] ?? '') ?>"
+              data-id="<?= h((string)($p['paper_id'])) ?>"
               data-search="<?= h(strtolower(($p['marque']??'').' '.($p['modele']??'').' '.($p['poids']??''))) ?>">
               <td data-th="Qté"     class="td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
               <td data-th="Modèle"  title="<?= h($p['modele'] ?? '—') ?>"><?= h($p['modele'] ?? '—') ?></td>
               <td data-th="Poids"   title="<?= h($p['poids'] ?? '—') ?>"><?= h($p['poids'] ?? '—') ?></td>
             </tr>
+            <?php endif; ?>
           <?php endforeach; if (empty($papers)): ?>
             <tr><td colspan="3">— Aucun papier —</td></tr>
           <?php endif; ?>
@@ -759,71 +765,111 @@ function initDetailModal(){
     }
   }
 
-  // Rendre toutes les lignes cliquables (toners, papier, lcd, pc)
-  const clickableRows = document.querySelectorAll('.click-rows tbody tr[data-type][data-id]');
+  // Fonction pour gérer le clic sur une ligne
+  function handleRowClick(tr, e) {
+    // Ne pas ouvrir si on clique sur un bouton, un lien ou un input
+    if (e && e.target && e.target.closest('button, a, input, select, .btn-add')) {
+      return;
+    }
+    
+    // Ne pas ouvrir si l'utilisateur est en train de sélectionner du texte
+    if (e) {
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length > 0) {
+        return;
+      }
+    }
+    
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    const type = tr.getAttribute('data-type');
+    const id   = tr.getAttribute('data-id');
+    
+    console.log('Clic détecté sur ligne:', {type, id, datasets: Object.keys(DATASETS)});
+    
+    if (!type || !id) {
+      console.warn('Type ou ID manquant:', {type, id});
+      return;
+    }
+    
+    const rows = (DATASETS[type] || []);
+    console.log('Dataset pour type', type, ':', rows.length, 'éléments');
+    
+    if (rows.length === 0) {
+      console.warn('Dataset vide pour type:', type, 'Datasets disponibles:', Object.keys(DATASETS));
+      return;
+    }
+    
+    // Chercher la ligne correspondante (gérer différents formats d'ID)
+    const searchId = String(id).trim();
+    let row = rows.find(r => {
+      // Essayer avec id
+      if (r.id !== undefined && String(r.id).trim() === searchId) return true;
+      // Essayer avec paper_id
+      if (r.paper_id !== undefined && String(r.paper_id).trim() === searchId) return true;
+      // Essayer avec toner_id
+      if (r.toner_id !== undefined && String(r.toner_id).trim() === searchId) return true;
+      return false;
+    });
+    
+    if (!row) {
+      console.warn('Ligne non trouvée dans le dataset:', {
+        type, 
+        searchedId: id,
+        availableIds: rows.slice(0, 5).map(r => r.id || r.paper_id),
+        firstRow: rows[0]
+      });
+      return;
+    }
+    
+    console.log('✓ Ligne trouvée, ouverture modale pour:', type, row);
+    renderDetails(type, row);
+    open();
+  }
+  
+  // Utiliser la délégation d'événements au niveau du document
+  document.addEventListener('click', function(e) {
+    // Trouver la ligne la plus proche avec data-type et data-id
+    const tr = e.target.closest('tbody tr[data-type][data-id]');
+    if (tr) {
+      handleRowClick(tr, e);
+    }
+  });
+  
+  // Rendre les lignes visuellement cliquables et ajouter support clavier
+  const clickableRows = document.querySelectorAll('tbody tr[data-type][data-id]');
   console.log('Lignes cliquables trouvées:', clickableRows.length);
   
-  clickableRows.forEach(tr=>{
+  clickableRows.forEach(tr => {
     tr.style.cursor = 'pointer';
     tr.tabIndex = 0;
     tr.setAttribute('role', 'button');
     tr.setAttribute('aria-label', 'Afficher les détails');
     
-    tr.addEventListener('click', function(e){
-      // Ne pas ouvrir si l'utilisateur est en train de sélectionner du texte
-      const selection = window.getSelection();
-      if (selection && selection.toString().trim().length > 0) {
-        return;
+    // Support clavier
+    tr.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleRowClick(tr, null);
       }
-      
-      // Empêcher la propagation si on clique sur un bouton ou un lien
-      if (e.target.closest('button, a, input, select')) {
-        return;
-      }
-      
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const type = tr.getAttribute('data-type');
-      const id   = tr.getAttribute('data-id');
-      
-      console.log('Clic sur ligne:', {type, id, datasets: Object.keys(DATASETS)});
-      
-      if (!type || !id) {
-        console.warn('Type ou ID manquant:', {type, id});
-        return;
-      }
-      
-      const rows = (DATASETS[type]||[]);
-      console.log('Dataset pour type', type, ':', rows.length, 'éléments');
-      
-      const row  = rows.find(r=>String(r.id)===String(id));
-      if (!row) {
-        console.warn('Ligne non trouvée dans le dataset:', {type, id, availableIds: rows.map(r=>r.id)});
-        return;
-      }
-      
-      console.log('Ouverture modale pour:', type, row);
-      renderDetails(type, row); 
-      open();
     });
     
-    tr.addEventListener('keydown', function(e){
-      if (e.key === 'Enter' || e.key === ' ') { 
-        e.preventDefault(); 
-        e.stopPropagation();
-        tr.click(); 
-      }
+    // Ajouter un indicateur visuel au survol
+    tr.addEventListener('mouseenter', function() {
+      tr.style.backgroundColor = 'var(--bg-secondary)';
+    });
+    tr.addEventListener('mouseleave', function() {
+      tr.style.backgroundColor = '';
     });
   });
   
-  // Si aucune ligne n'est trouvée, essayer une approche alternative
-  if (clickableRows.length === 0) {
-    console.warn('Aucune ligne cliquable trouvée avec .click-rows tbody tr[data-type][data-id]');
-    // Essayer de trouver toutes les lignes avec data-type et data-id
-    const allRows = document.querySelectorAll('tbody tr[data-type][data-id]');
-    console.log('Lignes avec data-type et data-id trouvées:', allRows.length);
-  }
+  // Exporter la fonction pour le débogage
+  window.handleRowClick = handleRowClick;
+  window.DATASETS_DEBUG = DATASETS;
 })();
 }
 

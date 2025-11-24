@@ -1,6 +1,7 @@
 {
   "require": {
     "php": ">=8.0",
-    "phpseclib/phpseclib": "^3.0"
+    "phpseclib/phpseclib": "^3.0",
+    "tecnickcom/tcpdf": "^6.6"
   }
 }

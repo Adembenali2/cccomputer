@@ -604,11 +604,26 @@ th.th-etat,  td.td-etat  {
 }
 
 /* Accessibilité: focus visible sur lignes cliquables */
-.click-rows tbody tr { cursor: pointer; outline: none; }
+.click-rows tbody tr { 
+  cursor: pointer; 
+  outline: none;
+  position: relative;
+  user-select: text; /* Permettre la sélection de texte */
+}
+
+.click-rows tbody tr[data-type][data-id] {
+  cursor: pointer !important;
+}
+
 .click-rows tbody tr:focus {
   outline: 2px solid var(--brand, #3b82f6);
   outline-offset: -2px;
   background: var(--bg-tertiary);
+}
+
+/* Améliorer le feedback visuel au survol */
+.click-rows tbody tr[data-type][data-id]:hover {
+  background: var(--bg-secondary) !important;
 }
 
 /* ===== Mobile: tableau en cartes lisibles (<=640px) ===== */

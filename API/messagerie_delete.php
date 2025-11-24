@@ -23,6 +23,10 @@ function jsonResponse(array $data, int $statusCode = 200): void {
 }
 
 try {
+    // Démarrer la session AVANT tout
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/db.php';
     require_once __DIR__ . '/../includes/historique.php';
@@ -32,6 +36,7 @@ try {
 }
 
 if (empty($_SESSION['user_id'])) {
+    error_log('messagerie_delete.php - Session user_id vide. Session ID: ' . session_id());
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
 }
 
