@@ -383,42 +383,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // PRÉPARATION DE L'AFFICHAGE (Requêtes GET)
 // ========================================================================
 
-// Paramètres de recherche - barre de recherche unique
+// Paramètres de recherche - barre de recherche unique avec filtrage intelligent
 $search = sanitizeSearch($_GET['q'] ?? '');
 
-// Construction de la requête SQL optimisée avec détection automatique
+// Construction de la requête SQL optimisée avec recherche partielle intelligente
 $params = [];
 $where = [];
 
 if ($search !== '') {
     $searchLower = mb_strtolower(trim($search));
     
-    // Détecter si c'est un statut (actif/inactif)
-    $detectedStatus = null;
-    if ($searchLower === 'actif' || $searchLower === 'inactif') {
-        $detectedStatus = $searchLower;
-        $where[] = "statut = :statut";
-        $params[':statut'] = $detectedStatus;
+    // Recherche intelligente : combine toutes les possibilités avec OR
+    // 1. Recherche dans nom, prénom, email, téléphone
+    // 2. Recherche dans les rôles (correspondance partielle, insensible à la casse)
+    // 3. Recherche dans les statuts (correspondance partielle)
+    
+    $searchConditions = [];
+    $paramIndex = 0;
+    
+    // Recherche dans les champs texte (nom, prénom, email, téléphone) - insensible à la casse
+    $key = ':search_text';
+    $searchConditions[] = "(LOWER(Email) LIKE LOWER({$key}) OR LOWER(nom) LIKE LOWER({$key}) OR LOWER(prenom) LIKE LOWER({$key}) OR telephone LIKE {$key})";
+    $params[$key] = "%{$search}%";
+    
+    // Recherche dans les rôles (correspondance partielle, insensible à la casse)
+    // Recherche directement dans le champ Emploi avec LIKE
+    $key = ':search_role';
+    $searchConditions[] = "LOWER(Emploi) LIKE LOWER({$key})";
+    $params[$key] = "%{$search}%";
+    
+    // Recherche dans les statuts (correspondance partielle)
+    $statusConditions = [];
+    if (stripos('actif', $searchLower) !== false || stripos($searchLower, 'actif') !== false) {
+        $key = ':search_status_actif';
+        $statusConditions[] = "statut = {$key}";
+        $params[$key] = 'actif';
     }
-    // Détecter si c'est un rôle
-    elseif (in_array($search, $ROLES, true)) {
-        $where[] = "Emploi = :role";
-        $params[':role'] = $search;
+    if (stripos('inactif', $searchLower) !== false || stripos($searchLower, 'inactif') !== false) {
+        $key = ':search_status_inactif';
+        $statusConditions[] = "statut = {$key}";
+        $params[$key] = 'inactif';
     }
-    // Sinon, recherche dans nom, prénom, email, téléphone
-    else {
-        $tokens = preg_split('/\s+/', $search);
-        $tokenIndex = 0;
-        $searchConditions = [];
-        foreach ($tokens as $token) {
-            if ($token === '') continue;
-            $key = ':q' . $tokenIndex++;
-            $searchConditions[] = "(Email LIKE {$key} OR nom LIKE {$key} OR prenom LIKE {$key} OR telephone LIKE {$key})";
-            $params[$key] = "%{$token}%";
-        }
-        if (!empty($searchConditions)) {
-            $where[] = '(' . implode(' AND ', $searchConditions) . ')';
-        }
+    if (!empty($statusConditions)) {
+        $searchConditions[] = '(' . implode(' OR ', $statusConditions) . ')';
+    }
+    
+    // Combiner toutes les conditions avec OR pour un filtrage intelligent
+    // Si l'utilisateur tape "diri", ça cherche dans nom/prénom/email/téléphone ET dans les rôles
+    if (!empty($searchConditions)) {
+        $where[] = '(' . implode(' OR ', $searchConditions) . ')';
     }
 }
 
@@ -946,7 +959,7 @@ function decode_msg($row) {
             <div class="filter-field grow">
                 <label for="q" class="sr-only">Rechercher</label>
                 <input class="filter-input" type="search" id="q" name="q" value="<?= h($search) ?>" 
-                       placeholder="Rechercher par nom, email, téléphone, statut (actif/inactif) ou rôle…" 
+                       placeholder="Rechercher par nom, prénom, email, téléphone, rôle ou statut…" 
                        aria-label="Rechercher un utilisateur" 
                        autocomplete="off" />
                 <?php if ($search !== ''): ?>
@@ -960,7 +973,7 @@ function decode_msg($row) {
             </div>
         </div>
         <div class="filter-hint">
-            <small>Astuce : Tapez "actif" ou "inactif" pour filtrer par statut, ou un nom de rôle pour filtrer par rôle.</small>
+            <small>Astuce : Recherche intelligente - tapez un nom, un numéro, "actif"/"inactif", ou un rôle (ex: "diri" pour "Dirigeant").</small>
         </div>
     </form>
 

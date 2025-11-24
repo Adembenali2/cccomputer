@@ -296,6 +296,117 @@ function formatAction(?string $action): string {
     }
     return str_replace('_', ' ', $action);
 }
+
+// ====== Cache pour éviter les requêtes répétées ======
+static $detailsCache = [
+    'clients' => [],
+    'sav' => [],
+    'livraisons' => []
+];
+
+// ====== Helper pour formater les détails en remplaçant les IDs par les noms/références ======
+function formatDetails(PDO $pdo, ?string $details): string {
+    global $detailsCache;
+    
+    if (!$details || $details === '') {
+        return '—';
+    }
+    
+    $formatted = $details;
+    
+    // Remplacer les références de clients (ID X) par le nom du client
+    if (preg_match_all('/client\s+[^(]*\(ID\s+(\d+)\)/i', $details, $matches)) {
+        $clientIds = array_unique(array_map('intval', $matches[1]));
+        $clientIds = array_filter($clientIds, function($id) { return $id > 0; });
+        
+        if (!empty($clientIds)) {
+            // Récupérer les clients non encore en cache
+            $missingIds = array_diff($clientIds, array_keys($detailsCache['clients']));
+            if (!empty($missingIds)) {
+                $placeholders = implode(',', array_fill(0, count($missingIds), '?'));
+                $stmt = $pdo->prepare("SELECT id, raison_sociale FROM clients WHERE id IN ($placeholders)");
+                $stmt->execute($missingIds);
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $detailsCache['clients'][(int)$row['id']] = $row['raison_sociale'];
+                }
+            }
+            
+            // Remplacer dans le texte
+            foreach ($clientIds as $clientId) {
+                if (isset($detailsCache['clients'][$clientId])) {
+                    $formatted = preg_replace(
+                        '/client\s+[^(]*\(ID\s+' . $clientId . '\)/i',
+                        'client ' . $detailsCache['clients'][$clientId],
+                        $formatted
+                    );
+                }
+            }
+        }
+    }
+    
+    // Remplacer les références SAV (#X) par la référence SAV
+    if (preg_match_all('/SAV\s+#(\d+)/i', $details, $matches)) {
+        $savIds = array_unique(array_map('intval', $matches[1]));
+        $savIds = array_filter($savIds, function($id) { return $id > 0; });
+        
+        if (!empty($savIds)) {
+            $missingIds = array_diff($savIds, array_keys($detailsCache['sav']));
+            if (!empty($missingIds)) {
+                $placeholders = implode(',', array_fill(0, count($missingIds), '?'));
+                $stmt = $pdo->prepare("SELECT id, reference FROM sav WHERE id IN ($placeholders)");
+                $stmt->execute($missingIds);
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $detailsCache['sav'][(int)$row['id']] = $row['reference'];
+                }
+            }
+            
+            foreach ($savIds as $savId) {
+                if (isset($detailsCache['sav'][$savId])) {
+                    $formatted = preg_replace(
+                        '/SAV\s+#' . $savId . '/i',
+                        'SAV ' . $detailsCache['sav'][$savId],
+                        $formatted
+                    );
+                }
+            }
+        }
+    }
+    
+    // Remplacer les références de livraisons (#X) par la référence de livraison
+    if (preg_match_all('/Livraison\s+#(\d+)/i', $details, $matches)) {
+        $livIds = array_unique(array_map('intval', $matches[1]));
+        $livIds = array_filter($livIds, function($id) { return $id > 0; });
+        
+        if (!empty($livIds)) {
+            $missingIds = array_diff($livIds, array_keys($detailsCache['livraisons']));
+            if (!empty($missingIds)) {
+                $placeholders = implode(',', array_fill(0, count($missingIds), '?'));
+                $stmt = $pdo->prepare("SELECT id, reference FROM livraisons WHERE id IN ($placeholders)");
+                $stmt->execute($missingIds);
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $detailsCache['livraisons'][(int)$row['id']] = $row['reference'];
+                }
+            }
+            
+            foreach ($livIds as $livId) {
+                if (isset($detailsCache['livraisons'][$livId])) {
+                    $formatted = preg_replace(
+                        '/Livraison\s+#' . $livId . '/i',
+                        'Livraison ' . $detailsCache['livraisons'][$livId],
+                        $formatted
+                    );
+                }
+            }
+        }
+    }
+    
+    // Supprimer les patterns (ID X) restants qui ont été remplacés
+    $formatted = preg_replace('/\s*\(ID\s+\d+\)\s*/i', ' ', $formatted);
+    $formatted = preg_replace('/\s+/', ' ', $formatted); // Normaliser les espaces
+    $formatted = trim($formatted);
+    
+    return $formatted;
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -461,7 +572,7 @@ function formatAction(?string $action): string {
                             </td>
                             <td data-label="Détails">
                                 <?php if (!empty($entree['details'])): ?>
-                                    <span class="details-text"><?= h($entree['details']) ?></span>
+                                    <span class="details-text"><?= h(formatDetails($pdo, $entree['details'])) ?></span>
                                 <?php else: ?>
                                     <span class="text-muted">—</span>
                                 <?php endif; ?>
@@ -519,7 +630,7 @@ function formatAction(?string $action): string {
                         <?php if (!empty($entree['details'])): ?>
                             <div class="item-detail">
                                 <span class="label">Détails :</span>
-                                <span class="value"><?= h($entree['details']) ?></span>
+                                <span class="value"><?= h(formatDetails($pdo, $entree['details'])) ?></span>
                             </div>
                         <?php endif; ?>
                         <?php if (!empty($entree['ip_address'])): ?>
