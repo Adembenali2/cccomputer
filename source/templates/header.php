@@ -7,9 +7,17 @@ $csrf            = $_SESSION['csrf_token']    ?? '';
 $isAdmin         = ($emploi === 'Admin'); // Utilise la valeur exacte de la base de données
 $canCommercial   = in_array($emploi, ['Chargé relation clients', 'Admin'], true); // 'Chargé relation clients' remplace 'Commercial'
 
-// Helper très léger si besoin d’échapper (pas utilisé ici)
+// Helper pour l'échappement XSS
+// Utilise le helper centralisé si disponible, sinon définit une fonction locale
 if (!function_exists('h')) {
-    function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+    // Essayer de charger le helper centralisé
+    $helpersFile = __DIR__ . '/../../includes/helpers.php';
+    if (file_exists($helpersFile)) {
+        require_once $helpersFile;
+    } else {
+        // Fallback local
+        function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+    }
 }
 ?>
 <link rel="stylesheet" href="/assets/css/header.css">

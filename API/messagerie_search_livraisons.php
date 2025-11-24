@@ -26,9 +26,10 @@ try {
     }
     
     $searchTerm = '%' . $query . '%';
-    $limitInt = (int)$limit;
+    $limitInt = max(1, min((int)$limit, 50)); // Entre 1 et 50
     
     // Requête simplifiée avec binding correct
+    // Note: LIMIT ne peut pas être lié en paramètre dans MySQL, donc on cast en int (sécurisé)
     $sql = "
         SELECT 
             l.id,
@@ -41,7 +42,7 @@ try {
            OR l.objet LIKE :q2
            OR c.raison_sociale LIKE :q3
         ORDER BY l.date_prevue DESC, l.id DESC
-        LIMIT {$limitInt}
+        LIMIT " . (int)$limitInt . "
     ";
     
     $stmt = $pdo->prepare($sql);
