@@ -121,20 +121,25 @@ if ($searchUser !== '') {
             error_log('Point 5 - Token vide, on continue');
             continue;
         }
-        // Créer un placeholder unique pour chaque token
-        $paramKey = ':search_user_' . $tokenIndex++;
+        // Créer DEUX placeholders uniques pour chaque token (un pour nom, un pour prénom)
+        // PDO ne permet pas de réutiliser le même placeholder plusieurs fois
+        $paramKeyNom = ':search_user_nom_' . $tokenIndex;
+        $paramKeyPrenom = ':search_user_prenom_' . $tokenIndex;
+        $tokenIndex++;
         $paramValue = '%' . $token . '%';
         
-        error_log('Point 6 - paramKey: ' . $paramKey);
+        error_log('Point 6 - paramKeyNom: ' . $paramKeyNom);
+        error_log('Point 6 - paramKeyPrenom: ' . $paramKeyPrenom);
         error_log('Point 6 - paramValue: ' . $paramValue);
         
-        // Construire la condition avec concaténation explicite pour éviter les problèmes d'interpolation
-        $condition = "(u.nom LIKE " . $paramKey . " OR u.prenom LIKE " . $paramKey . ")";
+        // Construire la condition avec deux placeholders distincts
+        $condition = "(u.nom LIKE " . $paramKeyNom . " OR u.prenom LIKE " . $paramKeyPrenom . ")";
         $userConditions[] = $condition;
-        $params[$paramKey] = $paramValue;
+        $params[$paramKeyNom] = $paramValue;
+        $params[$paramKeyPrenom] = $paramValue;
         
         error_log('Point 6 - Condition créée: ' . $condition);
-        error_log('Point 6 - Param ajouté: ' . $paramKey . ' => ' . $paramValue);
+        error_log('Point 6 - Params ajoutés: ' . $paramKeyNom . ' => ' . $paramValue . ', ' . $paramKeyPrenom . ' => ' . $paramValue);
     }
     
     error_log('Point 7 - Nombre de userConditions: ' . count($userConditions));

@@ -446,17 +446,16 @@ if (true) { // Toujours charger pour l'icône
     );
 }
 
-// Calcul des statistiques (optimisé avec une seule requête SQL)
+// Calcul des statistiques (compte TOUS les utilisateurs, pas seulement ceux affichés)
 $stats = safeFetch($pdo, "
     SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN statut = 'actif' THEN 1 ELSE 0 END) as actifs,
         SUM(CASE WHEN statut = 'inactif' THEN 1 ELSE 0 END) as inactifs
     FROM utilisateurs
-    WHERE id IN (SELECT id FROM utilisateurs ORDER BY nom ASC, prenom ASC LIMIT ?)
-", [USERS_LIMIT], 'stats_users');
+", [], 'stats_users');
 
-$totalUsers = (int)($stats['total'] ?? count($users));
+$totalUsers = (int)($stats['total'] ?? 0);
 $activeUsers = (int)($stats['actifs'] ?? 0);
 $inactiveUsers = (int)($stats['inactifs'] ?? 0);
 
