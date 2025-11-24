@@ -297,6 +297,26 @@
     gap: 1.5rem;
 }
 
+.payment-form input[type="file"] {
+    padding: 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+    cursor: pointer;
+}
+
+.payment-form input[type="file"]:hover {
+    border-color: #3b82f6;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;

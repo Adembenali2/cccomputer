@@ -79,19 +79,51 @@ try {
     }
     
     // Vérifier que le message appartient bien au destinataire (ou message à tous)
+    // Pour les messages directs, vérifier que lu = 0
+    // Pour les messages "à tous", vérifier qu'il n'est pas déjà dans la table de lectures
     $check = $pdo->prepare("
-        SELECT id, lu, id_destinataire
+        SELECT id, lu, id_destinataire, id_expediteur
         FROM messagerie 
         WHERE id = :id 
           AND (id_destinataire = :user_id OR (id_destinataire IS NULL AND id_expediteur != :user_id2))
-          AND lu = 0
         LIMIT 1
     ");
     $check->execute([':id' => $messageId, ':user_id' => $userId, ':user_id2' => $userId]);
     $message = $check->fetch(PDO::FETCH_ASSOC);
     
     if (!$message) {
-        jsonResponse(['ok' => false, 'error' => 'Message introuvable ou déjà lu'], 404);
+        jsonResponse(['ok' => false, 'error' => 'Message introuvable'], 404);
+    }
+    
+    // Pour les messages directs, vérifier qu'ils ne sont pas déjà lus
+    if ($message['id_destinataire'] !== null && (int)$message['lu'] === 1) {
+        jsonResponse(['ok' => false, 'error' => 'Message déjà lu'], 400);
+    }
+    
+    // Pour les messages "à tous", vérifier qu'ils ne sont pas déjà dans la table de lectures
+    if ($message['id_destinataire'] === null) {
+        try {
+            $checkLectures = $pdo->prepare("
+                SELECT COUNT(*) as cnt 
+                FROM INFORMATION_SCHEMA.TABLES 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = :table
+            ");
+            $checkLectures->execute([':table' => 'messagerie_lectures']);
+            if (((int)$checkLectures->fetch(PDO::FETCH_ASSOC)['cnt']) > 0) {
+                $checkRead = $pdo->prepare("
+                    SELECT id FROM messagerie_lectures 
+                    WHERE id_message = :id_message AND id_utilisateur = :user_id
+                    LIMIT 1
+                ");
+                $checkRead->execute([':id_message' => $messageId, ':user_id' => $userId]);
+                if ($checkRead->fetch()) {
+                    jsonResponse(['ok' => false, 'error' => 'Message déjà lu'], 400);
+                }
+            }
+        } catch (PDOException $e) {
+            // Si la table n'existe pas, on continue
+        }
     }
     
     // Gérer différemment les messages directs et les messages "à tous"

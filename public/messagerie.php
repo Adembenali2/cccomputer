@@ -590,7 +590,16 @@ $totalMessages = count($messages);
                                 </div>
                                 <div class="message-meta">
                                     <span class="message-date"><?= h($dateFormatted) ?></span>
-                                    <?php if ($isToMe && !$msg['lu'] && !$isFromMe): ?>
+                                    <?php 
+                                    // Afficher le bouton "Marquer comme lu" si :
+                                    // - Le message est pour moi (destinataire direct ou message à tous)
+                                    // - Le message n'est pas lu
+                                    // - Je ne suis pas l'expéditeur
+                                    $canMarkAsRead = $isToMe && !$isFromMe && (
+                                        ($msg['id_destinataire'] !== null && !$msg['lu']) || 
+                                        ($msg['id_destinataire'] === null && empty($msg['lu_par_moi']))
+                                    );
+                                    if ($canMarkAsRead): ?>
                                         <button type="button" 
                                                 class="btn-mark-read" 
                                                 data-id="<?= (int)$msg['id'] ?>"
@@ -1202,6 +1211,19 @@ function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
                 credentials: 'same-origin'
             });
             
+            if (!response.ok) {
+                const errorText = await response.text();
+                let errorMsg = 'Erreur lors de l\'envoi de la réponse';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) {
+                    errorMsg = errorText || errorMsg;
+                }
+                alert('Erreur: ' + errorMsg);
+                return;
+            }
+            
             const result = await response.json();
             
             if (result.ok) {
@@ -1213,7 +1235,7 @@ function createReplyModal(messageId, expediteurId, expediteurNom, sujet) {
             }
         } catch (err) {
             console.error('Erreur envoi réponse:', err);
-            alert('Erreur lors de l\'envoi de la réponse');
+            alert('Erreur lors de l\'envoi de la réponse: ' + (err.message || 'Erreur inconnue'));
         }
         });
     }

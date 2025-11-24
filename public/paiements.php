@@ -356,7 +356,7 @@ if (empty($_SESSION['csrf_token'])) {
             </div>
             
             <div class="payment-form-container">
-                <form id="paymentForm" class="payment-form">
+                <form id="paymentForm" class="payment-form" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
                     
                     <div class="form-group">
@@ -384,12 +384,28 @@ if (empty($_SESSION['csrf_token'])) {
                             <label for="paymentType">Type de paiement *</label>
                             <select id="paymentType" name="payment_type" required>
                                 <option value="">-- Sélectionner --</option>
-                                <option value="virement">Virement</option>
-                                <option value="cheque">Chèque</option>
-                                <option value="carte">Carte bancaire</option>
                                 <option value="especes">Espèces</option>
+                                <option value="cheque">Chèque</option>
+                                <option value="virement">Virement</option>
                             </select>
                         </div>
+                    </div>
+
+                    <!-- Champ IBAN (visible uniquement pour virement) -->
+                    <div class="form-group" id="ibanGroup" style="display: none;">
+                        <label for="paymentIban">IBAN du client *</label>
+                        <input type="text" id="paymentIban" name="iban" 
+                               placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" 
+                               pattern="[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}" />
+                        <small class="form-hint">Format: FR76 XXXX XXXX XXXX XXXX XXXX XXX</small>
+                    </div>
+
+                    <!-- Champ justificatif (visible pour chèque et virement) -->
+                    <div class="form-group" id="justificatifGroup" style="display: none;">
+                        <label for="paymentJustificatif">Justificatif de paiement *</label>
+                        <input type="file" id="paymentJustificatif" name="justificatif" 
+                               accept=".pdf,.jpg,.jpeg,.png" />
+                        <small class="form-hint">Formats acceptés: PDF, JPG, PNG (max 10 Mo)</small>
                     </div>
 
                     <div class="form-group">
@@ -710,6 +726,42 @@ if (empty($_SESSION['csrf_token'])) {
         document.getElementById('historyClientFilter').addEventListener('change', filterHistory);
         document.getElementById('historyStatusFilter').addEventListener('change', filterHistory);
         
+        // Gestion de l'affichage conditionnel des champs selon le type de paiement
+        document.getElementById('paymentType').addEventListener('change', function() {
+            const paymentType = this.value;
+            const ibanGroup = document.getElementById('ibanGroup');
+            const justificatifGroup = document.getElementById('justificatifGroup');
+            const ibanInput = document.getElementById('paymentIban');
+            const justificatifInput = document.getElementById('paymentJustificatif');
+            
+            // Réinitialiser
+            ibanGroup.style.display = 'none';
+            justificatifGroup.style.display = 'none';
+            ibanInput.removeAttribute('required');
+            justificatifInput.removeAttribute('required');
+            
+            if (paymentType === 'virement') {
+                ibanGroup.style.display = 'block';
+                justificatifGroup.style.display = 'block';
+                ibanInput.setAttribute('required', 'required');
+                justificatifInput.setAttribute('required', 'required');
+            } else if (paymentType === 'cheque') {
+                justificatifGroup.style.display = 'block';
+                justificatifInput.setAttribute('required', 'required');
+            }
+            // Espèces : aucun champ supplémentaire requis
+        });
+
+        // Mise à jour du montant dû quand on sélectionne un client
+        document.getElementById('paymentClient').addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const pending = selectedOption ? parseFloat(selectedOption.dataset.pending || 0) : 0;
+            document.getElementById('pendingAmount').textContent = pending.toLocaleString('fr-FR', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            });
+        });
+
         // Gestion du formulaire de paiement
         document.getElementById('paymentForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -722,6 +774,9 @@ if (empty($_SESSION['csrf_token'])) {
             // Validation
             const amount = parseFloat(document.getElementById('paymentAmount').value);
             const pending = parseFloat(document.getElementById('pendingAmount').textContent.replace(/\s/g, '').replace(',', '.'));
+            const paymentType = document.getElementById('paymentType').value;
+            const iban = document.getElementById('paymentIban').value.trim();
+            const justificatif = document.getElementById('paymentJustificatif').files[0];
             
             if (amount > pending) {
                 errorDiv.textContent = 'Le montant ne peut pas dépasser le montant dû (' + pending.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) + ')';
@@ -729,16 +784,59 @@ if (empty($_SESSION['csrf_token'])) {
                 return;
             }
             
-            // TODO: Envoyer les données au serveur
-            // Pour l'instant, on simule juste un succès
-            successDiv.textContent = 'Paiement enregistré avec succès !';
-            successDiv.style.display = 'block';
+            // Validation spécifique selon le type
+            if (paymentType === 'virement') {
+                if (!iban) {
+                    errorDiv.textContent = 'L\'IBAN est obligatoire pour un virement';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                if (!justificatif) {
+                    errorDiv.textContent = 'Le justificatif est obligatoire pour un virement';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+            } else if (paymentType === 'cheque') {
+                if (!justificatif) {
+                    errorDiv.textContent = 'Le justificatif est obligatoire pour un chèque';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+            }
             
-            setTimeout(() => {
-                this.reset();
-                successDiv.style.display = 'none';
-                document.getElementById('pendingAmount').textContent = '0.00';
-            }, 3000);
+            // Préparer les données pour l'envoi
+            const formData = new FormData(this);
+            
+            // Envoyer les données au serveur
+            fetch('/API/payment_process.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    successDiv.textContent = 'Paiement enregistré avec succès !';
+                    successDiv.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        this.reset();
+                        successDiv.style.display = 'none';
+                        document.getElementById('pendingAmount').textContent = '0.00';
+                        document.getElementById('ibanGroup').style.display = 'none';
+                        document.getElementById('justificatifGroup').style.display = 'none';
+                        // Recharger la page pour mettre à jour les données
+                        location.reload();
+                    }, 2000);
+                } else {
+                    errorDiv.textContent = data.error || 'Erreur lors de l\'enregistrement du paiement';
+                    errorDiv.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                errorDiv.textContent = 'Erreur de communication avec le serveur';
+                errorDiv.style.display = 'block';
+            });
         });
 
         // Gestion de la modal "Voir les détails"

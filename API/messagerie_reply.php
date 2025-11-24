@@ -94,8 +94,12 @@ try {
     // Déterminer le destinataire de la réponse
     // Si je réponds à un message dont je suis le destinataire, je réponds à l'expéditeur
     // Si je réponds à un message dont je suis l'expéditeur, je réponds au destinataire
+    // Si le message parent est "à tous" (id_destinataire IS NULL), la réponse est aussi "à tous"
     $idDestinataire = null;
-    if ((int)$parent['id_expediteur'] === $idExpediteur) {
+    if ($parent['id_destinataire'] === null) {
+        // Message "à tous" : la réponse est aussi "à tous"
+        $idDestinataire = null;
+    } elseif ((int)$parent['id_expediteur'] === $idExpediteur) {
         // Je suis l'expéditeur, je réponds au destinataire
         $idDestinataire = $parent['id_destinataire'];
     } else {
@@ -115,7 +119,26 @@ try {
     }
     
     // Vérifier si la table messagerie existe et si id_message_parent existe
-    $hasParentColumn = columnExists($pdo, 'messagerie', 'id_message_parent');
+    $hasParentColumn = false;
+    try {
+        if (function_exists('columnExists')) {
+            $hasParentColumn = columnExists($pdo, 'messagerie', 'id_message_parent');
+        } else {
+            // Fallback : vérifier directement avec SQL
+            $checkCol = $pdo->prepare("
+                SELECT COUNT(*) as cnt 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = :table 
+                AND COLUMN_NAME = :column
+            ");
+            $checkCol->execute([':table' => 'messagerie', ':column' => 'id_message_parent']);
+            $hasParentColumn = ((int)$checkCol->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
+        }
+    } catch (Throwable $e) {
+        error_log('messagerie_reply.php - Erreur vérification colonne id_message_parent: ' . $e->getMessage());
+        $hasParentColumn = false;
+    }
     
     if ($hasParentColumn) {
         $sql = "
