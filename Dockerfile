@@ -28,7 +28,9 @@ WORKDIR /var/www/html
 COPY composer.json composer.lock* ./
 
 # 2) Installer les dépendances (génère /var/www/html/vendor)
-RUN composer install --no-dev --prefer-dist --no-progress --no-interaction
+# Utiliser update si le lock file n'est pas à jour (plus flexible pour Railway)
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer update --no-dev --prefer-dist --no-progress --no-interaction --no-scripts || \
+    COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --prefer-dist --no-progress --no-interaction
 
 # 3) Copier le reste du code (y compris API/)
 COPY . /var/www/html
