@@ -478,9 +478,24 @@ function formatDetails(PDO $pdo, ?string $details): string {
         }
     }
     
+    // Supprimer les références de messages (#X après "message")
+    // Pattern pour "message #X", "Message #X", "au message #X", "au Message #X", etc.
+    $formatted = preg_replace('/\s*(?:au\s+)?[Mm]essage\s+#\d+/i', '', $formatted);
+    
     // Supprimer les patterns (ID X) restants qui ont été remplacés
     $formatted = preg_replace('/\s*\(ID\s+\d+\)\s*/i', ' ', $formatted);
-    $formatted = preg_replace('/\s+/', ' ', $formatted); // Normaliser les espaces
+    
+    // Supprimer les références #X isolées restantes dans un contexte de message/réponse
+    // (mais pas celles déjà traitées pour SAV/Livraison/Utilisateur)
+    if (stripos($formatted, 'message') !== false || stripos($formatted, 'réponse') !== false || stripos($formatted, 'Réponse') !== false) {
+        // Supprimer les #X qui suivent "au message" ou qui sont dans un contexte de message
+        $formatted = preg_replace('/\s*#\d+\s*/i', ' ', $formatted);
+    }
+    
+    // Normaliser les espaces multiples et nettoyer
+    $formatted = preg_replace('/\s+/', ' ', $formatted);
+    $formatted = preg_replace('/\s*:\s*/', ': ', $formatted); // Normaliser les deux-points
+    $formatted = preg_replace('/\s*-\s*/', ' - ', $formatted); // Normaliser les tirets
     $formatted = trim($formatted);
     
     return $formatted;

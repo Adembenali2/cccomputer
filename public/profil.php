@@ -401,10 +401,11 @@ if ($search !== '') {
     $searchConditions = [];
     $paramIndex = 0;
     
-    // Recherche dans les champs texte (nom, prénom, email, téléphone) - insensible à la casse
+    // Recherche intelligente : nom OU prénom OU email commence par la saisie (LIKE 'saisie%')
     $key = ':search_text';
-    $searchConditions[] = "(LOWER(Email) LIKE LOWER({$key}) OR LOWER(nom) LIKE LOWER({$key}) OR LOWER(prenom) LIKE LOWER({$key}) OR telephone LIKE {$key})";
-    $params[$key] = "%{$search}%";
+    $searchPattern = $search . '%';
+    $searchConditions[] = "(LOWER(nom) LIKE LOWER({$key}) OR LOWER(prenom) LIKE LOWER({$key}) OR LOWER(Email) LIKE LOWER({$key}))";
+    $params[$key] = $searchPattern;
     
     // Recherche dans les rôles (correspondance partielle, insensible à la casse)
     // Recherche directement dans le champ Emploi avec LIKE
@@ -954,26 +955,22 @@ function decode_msg($row) {
         </div>
     <?php endif; ?>
 
-    <form class="filtre-form" method="get" action="/public/profil.php" novalidate>
+    <form class="filtre-form" method="get" action="/public/profil.php" novalidate id="searchForm">
         <div class="filter-bar">
             <div class="filter-field grow">
                 <label for="q" class="sr-only">Rechercher</label>
                 <input class="filter-input" type="search" id="q" name="q" value="<?= h($search) ?>" 
-                       placeholder="Rechercher par nom, prénom, email, téléphone, rôle ou statut…" 
+                       placeholder="Rechercher par nom, prénom ou email (commence par)…" 
                        aria-label="Rechercher un utilisateur" 
                        autocomplete="off" />
-                <?php if ($search !== ''): ?>
-                    <button type="button" class="input-clear" aria-label="Effacer la recherche" onclick="document.getElementById('q').value=''; this.form.submit();">
-                        <span aria-hidden="true">✕</span>
-                    </button>
-                <?php endif; ?>
-            </div>
-            <div class="filter-field">
-                <button class="filter-submit" type="submit">Rechercher</button>
+                <span class="search-loading" id="searchLoading" style="display: none;" aria-hidden="true">⏳</span>
+                <button type="button" class="input-clear" id="clearSearch" aria-label="Effacer la recherche" style="<?= $search === '' ? 'display: none;' : '' ?>">
+                    <span aria-hidden="true">✕</span>
+                </button>
             </div>
         </div>
         <div class="filter-hint">
-            <small>Astuce : Recherche intelligente - tapez un nom, un numéro, "actif"/"inactif", ou un rôle (ex: "diri" pour "Dirigeant").</small>
+            <small>Recherche en temps réel - tapez un nom, prénom ou email (recherche par début de mot).</small>
         </div>
     </form>
 
@@ -1025,7 +1022,7 @@ function decode_msg($row) {
         <?php endif; ?>
 
         <div class="panel <?= !$isAdminOrDirigeant ? 'grid-full' : '' ?>">
-            <h2 class="panel-title">Utilisateurs (<?= count($users) ?>)</h2>
+            <h2 class="panel-title">Utilisateurs (<span id="usersCount"><?= count($users) ?></span>)</h2>
             <div class="table-responsive">
                 <table class="users-table" role="table" aria-label="Liste des utilisateurs">
                     <thead>
@@ -1039,7 +1036,7 @@ function decode_msg($row) {
                             <th scope="col">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="usersTableBody">
                     <?php if (empty($users)): ?>
                         <tr>
                             <td colspan="7" class="aucun" role="cell">Aucun utilisateur trouvé.</td>
@@ -1220,32 +1217,176 @@ function decode_msg($row) {
     });
 })();
 
-/* Recherche avec debounce */
+/* Recherche intelligente en temps réel avec AJAX */
 (function() {
     const searchInput = document.getElementById('q');
-    const searchForm = searchInput?.closest('form');
+    const searchForm = document.getElementById('searchForm');
+    const usersTableBody = document.getElementById('usersTableBody');
+    const usersCount = document.getElementById('usersCount');
+    const searchLoading = document.getElementById('searchLoading');
+    const clearSearchBtn = document.getElementById('clearSearch');
     
-    if (!searchInput || !searchForm) return;
+    if (!searchInput || !usersTableBody) return;
     
     let debounceTimer;
-    const DEBOUNCE_DELAY = 500; // 500ms
+    let currentRequest = null;
+    const DEBOUNCE_DELAY = 300; // 300ms pour une recherche réactive
     
-    // Soumission automatique après saisie (debounce)
+    // Variables PHP nécessaires pour le rendu
+    const currentUserId = <?= json_encode($currentUser['id']) ?>;
+    const hasRestrictions = <?= json_encode($hasRestrictions) ?>;
+    const isAdminOrDirigeant = <?= json_encode($isAdminOrDirigeant) ?>;
+    const csrfToken = <?= json_encode($CSRF) ?>;
+    
+    // Fonction pour mettre à jour le tableau
+    function updateTable(users) {
+        if (!users || users.length === 0) {
+            usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun" role="cell">Aucun utilisateur trouvé.</td></tr>';
+            usersCount.textContent = '0';
+            return;
+        }
+        
+        usersCount.textContent = users.length.toString();
+        
+        let html = '';
+        users.forEach(function(u) {
+            const fullName = (u.prenom || '') + ' ' + (u.nom || '');
+            const canEdit = !hasRestrictions || u.id === currentUserId;
+            const statusClass = u.statut === 'actif' ? 'success' : 'muted';
+            const toggleClass = u.statut === 'actif' ? 'btn-danger' : 'btn-success';
+            const toggleText = u.statut === 'actif' ? 'Désactiver' : 'Activer';
+            const toggleLabel = u.statut === 'actif' ? 'Désactiver' : 'Activer';
+            
+            html += '<tr role="row">';
+            html += '<td data-label="Nom" role="cell">' + escapeHtml(fullName.trim()) + '</td>';
+            html += '<td data-label="Email" role="cell">' + escapeHtml(u.email || '') + '</td>';
+            html += '<td data-label="Téléphone" role="cell">' + escapeHtml(u.telephone || '') + '</td>';
+            html += '<td data-label="Rôle" role="cell"><span class="badge role">' + escapeHtml(u.emploi || '') + '</span></td>';
+            html += '<td data-label="Statut" role="cell"><span class="badge ' + statusClass + '">' + escapeHtml(u.statut || '') + '</span></td>';
+            html += '<td data-label="Début" role="cell">' + escapeHtml(u.date_debut || '') + '</td>';
+            html += '<td data-label="Actions" class="actions" role="cell">';
+            
+            if (!canEdit) {
+                html += '<span class="text-muted" aria-label="Action non autorisée">Non autorisé</span>';
+            } else {
+                html += '<a class="btn btn-primary" href="/public/profil.php?edit=' + u.id + '" aria-label="Modifier l\'utilisateur ' + escapeHtml(fullName.trim()) + '">Modifier</a>';
+                if (isAdminOrDirigeant) {
+                    html += '<form method="post" action="/public/profil.php" class="inline">';
+                    html += '<input type="hidden" name="csrf_token" value="' + escapeHtml(csrfToken) + '">';
+                    html += '<input type="hidden" name="action" value="toggle">';
+                    html += '<input type="hidden" name="id" value="' + u.id + '">';
+                    html += '<input type="hidden" name="to" value="' + (u.statut === 'actif' ? 'inactif' : 'actif') + '">';
+                    html += '<button type="submit" class="btn ' + toggleClass + '" aria-label="' + toggleLabel + ' l\'utilisateur ' + escapeHtml(fullName.trim()) + '">' + toggleText + '</button>';
+                    html += '</form>';
+                }
+            }
+            
+            html += '</td></tr>';
+        });
+        
+        usersTableBody.innerHTML = html;
+    }
+    
+    // Fonction d'échappement HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Fonction de recherche AJAX
+    function performSearch(query) {
+        // Annuler la requête précédente si elle existe
+        if (currentRequest) {
+            currentRequest.abort();
+        }
+        
+        // Afficher le loader
+        if (searchLoading) {
+            searchLoading.style.display = 'inline-block';
+        }
+        
+        // Effectuer la requête AJAX (si vide, charge tous les utilisateurs)
+        const url = '/API/profil_search_users.php?q=' + encodeURIComponent(query || '');
+        currentRequest = fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('Erreur réseau');
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.ok && data.users) {
+                updateTable(data.users);
+            } else {
+                console.error('Erreur de recherche:', data.error || 'Erreur inconnue');
+                usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun" role="cell">Erreur lors de la recherche.</td></tr>';
+                usersCount.textContent = '0';
+            }
+        })
+        .catch(function(error) {
+            if (error.name !== 'AbortError') {
+                console.error('Erreur AJAX:', error);
+                usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun" role="cell">Erreur de connexion.</td></tr>';
+                usersCount.textContent = '0';
+            }
+        })
+        .finally(function() {
+            // Masquer le loader
+            if (searchLoading) {
+                searchLoading.style.display = 'none';
+            }
+            currentRequest = null;
+        });
+    }
+    
+    // Fonction pour afficher/masquer le bouton de nettoyage
+    function toggleClearButton(show) {
+        if (clearSearchBtn) {
+            if (show) {
+                clearSearchBtn.style.display = 'block';
+            } else {
+                clearSearchBtn.style.display = 'none';
+            }
+        }
+    }
+    
+    // Écouteur sur l'input avec debounce
     searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        toggleClearButton(query !== '');
         clearTimeout(debounceTimer);
+        
         debounceTimer = setTimeout(function() {
-            searchForm.submit();
+            performSearch(query);
         }, DEBOUNCE_DELAY);
     });
     
-    // Soumission immédiate avec Enter
-    searchInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
+    // Bouton de nettoyage
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', function() {
+            searchInput.value = '';
+            toggleClearButton(false);
+            performSearch('');
+            searchInput.focus();
+        });
+    }
+    
+    // Empêcher la soumission du formulaire (on utilise AJAX)
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
             e.preventDefault();
+            const query = searchInput.value.trim();
             clearTimeout(debounceTimer);
-            searchForm.submit();
-        }
-    });
+            performSearch(query);
+        });
+    }
 })();
 </script>
 
