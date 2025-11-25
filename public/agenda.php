@@ -84,7 +84,7 @@ try {
 $savs = [];
 try {
     if ($hasDateIntervention) {
-        $whereSav = ["(date_ouverture BETWEEN :start_date AND :end_date OR (date_intervention_prevue IS NOT NULL AND date_intervention_prevue BETWEEN :start_date2 AND :end_date2))"];
+        $whereSav = ["(s.date_ouverture BETWEEN :start_date AND :end_date OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue BETWEEN :start_date2 AND :end_date2))"];
         $paramsSav = [
             ':start_date' => $startDate,
             ':end_date' => $endDate,
@@ -94,7 +94,7 @@ try {
         $dateOrderBy = "COALESCE(s.date_intervention_prevue, s.date_ouverture)";
         $selectDateIntervention = "s.date_intervention_prevue,";
     } else {
-        $whereSav = ["date_ouverture BETWEEN :start_date AND :end_date"];
+        $whereSav = ["s.date_ouverture BETWEEN :start_date AND :end_date"];
         $paramsSav = [
             ':start_date' => $startDate,
             ':end_date' => $endDate
@@ -105,12 +105,12 @@ try {
     
     // Filtrer par technicien si spécifié
     if ($filterUser) {
-        $whereSav[] = "id_technicien = :tech_id";
+        $whereSav[] = "s.id_technicien = :tech_id";
         $paramsSav[':tech_id'] = $filterUser;
     } elseif (!$isAdmin) {
         // Si technicien, afficher uniquement les SAV assignés à l'utilisateur
         if ($isTechnicien) {
-            $whereSav[] = "id_technicien = :current_user_id";
+            $whereSav[] = "s.id_technicien = :current_user_id";
             $paramsSav[':current_user_id'] = $currentUserId;
         } else {
             // Si pas technicien, ne pas afficher de SAV
@@ -120,7 +120,7 @@ try {
     // Pour les admins, pas de filtre sur id_technicien (ils voient tous les SAV)
     
     // Exclure les SAV résolus et annulés
-    $whereSav[] = "statut NOT IN ('resolu', 'annule')";
+    $whereSav[] = "s.statut NOT IN ('resolu', 'annule')";
     
     // Vérifier si type_panne existe
     $hasTypePanne = false;
@@ -175,7 +175,7 @@ try {
 // Récupérer les livraisons
 $livraisons = [];
 try {
-    $whereLiv = ["date_prevue BETWEEN :start_date AND :end_date"];
+    $whereLiv = ["l.date_prevue BETWEEN :start_date AND :end_date"];
     $paramsLiv = [
         ':start_date' => $startDate,
         ':end_date' => $endDate
@@ -183,12 +183,12 @@ try {
     
     // Filtrer par livreur si spécifié
     if ($filterUser) {
-        $whereLiv[] = "id_livreur = :livreur_id";
+        $whereLiv[] = "l.id_livreur = :livreur_id";
         $paramsLiv[':livreur_id'] = $filterUser;
     } elseif (!$isAdmin) {
         // Si livreur, afficher uniquement les livraisons assignées à l'utilisateur
         if ($isLivreur) {
-            $whereLiv[] = "id_livreur = :current_user_id";
+            $whereLiv[] = "l.id_livreur = :current_user_id";
             $paramsLiv[':current_user_id'] = $currentUserId;
         } else {
             // Si pas livreur, ne pas afficher de livraisons
@@ -198,7 +198,7 @@ try {
     // Pour les admins, pas de filtre sur id_livreur (ils voient toutes les livraisons)
     
     // Exclure les livraisons livrées et annulées
-    $whereLiv[] = "statut NOT IN ('livree', 'annulee')";
+    $whereLiv[] = "l.statut NOT IN ('livree', 'annulee')";
     
     $sqlLiv = "
         SELECT 
