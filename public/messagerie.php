@@ -480,79 +480,65 @@ function renderMessages(messages, append = false) {
 // ============================================
 // Fonction helper pour afficher les erreurs de debug
 // ============================================
-function displayDebugError(error, context, response = null) {
+function displayDebugError(error, context, response = null, responseData = null) {
     console.group('🔴 ERREUR DEBUG - ' + context);
     console.error('Message:', error.message);
     console.error('Erreur complète:', error);
     
+    let debugInfo = `ERREUR: ${context}\n\nMessage: ${error.message}\n`;
+    
     if (response) {
         console.error('Status HTTP:', response.status, response.statusText);
         console.error('URL:', response.url);
+        debugInfo += `\nStatus HTTP: ${response.status} ${response.statusText}\n`;
+        debugInfo += `URL: ${response.url}\n`;
     }
     
-    let debugInfo = `ERREUR: ${context}\n\nMessage: ${error.message}\n`;
-    
-    // Essayer de récupérer les détails depuis la réponse
-    if (response) {
-        response.clone().json().then(data => {
-            console.error('Réponse JSON:', data);
-            debugInfo += `\nStatus HTTP: ${response.status} ${response.statusText}\n`;
-            debugInfo += `URL: ${response.url}\n`;
+    // Utiliser les données de réponse passées en paramètre (si disponibles)
+    if (responseData) {
+        console.error('Réponse JSON:', responseData);
+        debugInfo += `\n=== DÉTAILS DE DÉBOGAGE ===\n`;
+        
+        if (responseData.debug) {
+            console.group('📋 Détails de débogage:');
+            debugInfo += `Message: ${responseData.debug.message || responseData.error || 'N/A'}\n`;
+            debugInfo += `Type: ${responseData.debug.type || 'N/A'}\n`;
+            debugInfo += `Fichier: ${responseData.debug.file || 'N/A'}\n`;
+            debugInfo += `Ligne: ${responseData.debug.line || 'N/A'}\n`;
             
-            if (data.debug) {
-                console.group('📋 Détails de débogage:');
-                debugInfo += `\n=== DÉTAILS DE DÉBOGAGE ===\n`;
-                debugInfo += `Message: ${data.debug.message || data.error || 'N/A'}\n`;
-                debugInfo += `Type: ${data.debug.type || 'N/A'}\n`;
-                debugInfo += `Fichier: ${data.debug.file || 'N/A'}\n`;
-                debugInfo += `Ligne: ${data.debug.line || 'N/A'}\n`;
-                if (data.debug.code) {
-                    debugInfo += `Code erreur: ${data.debug.code}\n`;
-                    console.error('Code erreur:', data.debug.code);
-                }
-                if (data.debug.sql_state) {
-                    debugInfo += `SQL State: ${data.debug.sql_state}\n`;
-                    console.error('SQL State:', data.debug.sql_state);
-                }
-                if (data.debug.driver_code) {
-                    debugInfo += `Driver Code: ${data.debug.driver_code}\n`;
-                    console.error('Driver Code:', data.debug.driver_code);
-                }
-                console.error('Message:', data.debug.message || data.error);
-                console.error('Type:', data.debug.type);
-                console.error('Fichier:', data.debug.file);
-                console.error('Ligne:', data.debug.line);
-                console.groupEnd();
+            if (responseData.debug.code) {
+                debugInfo += `Code erreur: ${responseData.debug.code}\n`;
+                console.error('Code erreur:', responseData.debug.code);
+            }
+            if (responseData.debug.sql_state) {
+                debugInfo += `SQL State: ${responseData.debug.sql_state}\n`;
+                console.error('SQL State:', responseData.debug.sql_state);
+            }
+            if (responseData.debug.driver_code) {
+                debugInfo += `Driver Code: ${responseData.debug.driver_code}\n`;
+                console.error('Driver Code:', responseData.debug.driver_code);
+            }
+            if (responseData.debug.trace) {
+                console.error('Stack trace:', responseData.debug.trace);
+                debugInfo += `\nStack trace:\n${responseData.debug.trace.slice(0, 5).join('\n')}\n`;
             }
             
-            // Afficher dans le panneau de debug
-            const panel = document.getElementById('debugErrorPanel');
-            const content = document.getElementById('debugErrorContent');
-            if (panel && content) {
-                content.textContent = debugInfo;
-                panel.style.display = 'block';
-            }
-        }).catch(() => {
-            response.clone().text().then(text => {
-                console.error('Réponse texte:', text.substring(0, 500));
-                debugInfo += `\nRéponse (texte): ${text.substring(0, 500)}\n`;
-                
-                const panel = document.getElementById('debugErrorPanel');
-                const content = document.getElementById('debugErrorContent');
-                if (panel && content) {
-                    content.textContent = debugInfo;
-                    panel.style.display = 'block';
-                }
-            });
-        });
-    } else {
-        // Afficher dans le panneau même sans réponse
-        const panel = document.getElementById('debugErrorPanel');
-        const content = document.getElementById('debugErrorContent');
-        if (panel && content) {
-            content.textContent = debugInfo;
-            panel.style.display = 'block';
+            console.error('Message:', responseData.debug.message || responseData.error);
+            console.error('Type:', responseData.debug.type);
+            console.error('Fichier:', responseData.debug.file);
+            console.error('Ligne:', responseData.debug.line);
+            console.groupEnd();
+        } else {
+            debugInfo += `Erreur: ${responseData.error || 'Erreur inconnue'}\n`;
         }
+    }
+    
+    // Afficher dans le panneau de debug
+    const panel = document.getElementById('debugErrorPanel');
+    const content = document.getElementById('debugErrorContent');
+    if (panel && content) {
+        content.textContent = debugInfo;
+        panel.style.display = 'block';
     }
     
     console.groupEnd();
@@ -577,12 +563,18 @@ async function loadMessages(append = false) {
         try {
             data = await response.json();
         } catch (e) {
-            const text = await response.text();
-            throw new Error(`Réponse non-JSON (${response.status}): ${text.substring(0, 200)}`);
+            // Si le JSON échoue, essayer de récupérer le texte
+            try {
+                const text = await response.text();
+                throw new Error(`Réponse non-JSON (${response.status}): ${text.substring(0, 200)}`);
+            } catch (textError) {
+                throw new Error(`Impossible de lire la réponse (${response.status}): ${textError.message}`);
+            }
         }
         
         if (!response.ok) {
-            displayDebugError(new Error(data.error || `HTTP ${response.status}`), 'loadMessages', response);
+            // Passer les données JSON à displayDebugError au lieu de la réponse
+            displayDebugError(new Error(data.error || `HTTP ${response.status}`), 'loadMessages', response, data);
             
             // Afficher les détails dans l'interface
             let errorMsg = data.error || `Erreur HTTP ${response.status}`;
@@ -592,6 +584,7 @@ async function loadMessages(append = false) {
                 errorMsg += `- Fichier: ${data.debug.file || 'N/A'}\n`;
                 errorMsg += `- Ligne: ${data.debug.line || 'N/A'}\n`;
                 if (data.debug.code) errorMsg += `- Code: ${data.debug.code}\n`;
+                if (data.debug.sql_state) errorMsg += `- SQL State: ${data.debug.sql_state}\n`;
             }
             
             if (loadingIndicator) {
@@ -678,11 +671,15 @@ async function sendMessage() {
                 try {
                     errorData = await uploadResponse.json();
                 } catch (e) {
-                    const text = await uploadResponse.text();
-                    throw new Error(`Réponse non-JSON (${uploadResponse.status}): ${text.substring(0, 200)}`);
+                    try {
+                        const text = await uploadResponse.text();
+                        throw new Error(`Réponse non-JSON (${uploadResponse.status}): ${text.substring(0, 200)}`);
+                    } catch (textError) {
+                        throw new Error(`Impossible de lire la réponse (${uploadResponse.status}): ${textError.message}`);
+                    }
                 }
                 
-                displayDebugError(new Error(errorData.error || `HTTP ${uploadResponse.status}`), 'uploadImage', uploadResponse);
+                displayDebugError(new Error(errorData.error || `HTTP ${uploadResponse.status}`), 'uploadImage', uploadResponse, errorData);
                 throw new Error(errorData.error || 'Erreur lors de l\'upload de l\'image');
             }
             
@@ -712,12 +709,18 @@ async function sendMessage() {
         try {
             data = await response.json();
         } catch (e) {
-            const text = await response.text();
-            throw new Error(`Réponse non-JSON (${response.status}): ${text.substring(0, 200)}`);
+            // Si le JSON échoue, essayer de récupérer le texte
+            try {
+                const text = await response.text();
+                throw new Error(`Réponse non-JSON (${response.status}): ${text.substring(0, 200)}`);
+            } catch (textError) {
+                throw new Error(`Impossible de lire la réponse (${response.status}): ${textError.message}`);
+            }
         }
         
         if (!response.ok) {
-            displayDebugError(new Error(data.error || `HTTP ${response.status}`), 'sendMessage', response);
+            // Passer les données JSON à displayDebugError au lieu de la réponse
+            displayDebugError(new Error(data.error || `HTTP ${response.status}`), 'sendMessage', response, data);
             
             // Construire un message d'erreur détaillé
             let errorMsg = data.error || `Erreur HTTP ${response.status}`;

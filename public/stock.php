@@ -409,7 +409,7 @@ $sectionImages = [
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows">
+                <table class="tbl-stock tbl-compact click-rows" data-section="toners">
                     <colgroup>
                         <col class="col-couleur"><col class="col-modele"><col class="col-qty">
                     </colgroup>
@@ -447,7 +447,7 @@ $sectionImages = [
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows">
+                <table class="tbl-stock tbl-compact click-rows" data-section="papier">
                     <colgroup>
                         <col class="col-qty"><col class="col-modele"><col class="col-poids">
                     </colgroup>
@@ -487,7 +487,7 @@ $sectionImages = [
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows">
+                <table class="tbl-stock tbl-compact click-rows" data-section="lcd">
                     <colgroup>
                         <col class="col-etat"><col class="col-modele"><col class="col-qty">
                     </colgroup>
@@ -525,7 +525,7 @@ $sectionImages = [
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows">
+                <table class="tbl-stock tbl-compact click-rows" data-section="pc">
                     <colgroup>
                         <col class="col-etat"><col class="col-modele"><col class="col-qty">
                     </colgroup>

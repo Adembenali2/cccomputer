@@ -512,8 +512,8 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         $dirNom  = trim(($r['nom_dirigeant'] ?? '').' '.($r['prenom_dirigeant'] ?? ''));
         $tel     = $r['telephone1'] ?: '';
         $modele  = $r['Model'] ?: '';
-        $sn      = $r['SerialNumber'] ?: '';
-        $mac     = $r['MacAddress'] ?: ($r['mac_norm'] ?? '');
+        $sn      = $r['SerialNumber'] ?? '';
+        $mac     = $r['MacAddress'] ?? '';
         $macNorm = $r['mac_norm'] ?? '';
         $nom     = $r['Nom'] ?: '';
         $lastTsRaw = $r['last_ts'] ?? null;
@@ -537,13 +537,12 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         // Construction de l'URL : utiliser mac_norm si disponible, sinon normaliser MacAddress, sinon utiliser SerialNumber
         $rowHref = '';
         
-        // Vérifier que mac_norm est valide (12 hex sans séparateurs) et le convertir en majuscules
-        if (!empty($macNorm) && preg_match('/^[0-9A-F]{12}$/i', $macNorm)) {
+        // Nettoyer et valider mac_norm (12 hex sans séparateurs)
+        $macNormClean = trim($macNorm ?? '');
+        if (!empty($macNormClean) && preg_match('/^[0-9A-F]{12}$/i', $macNormClean)) {
             // mac_norm est déjà au format 12 hex sans séparateurs, convertir en majuscules pour cohérence
-            $macNormUpper = strtoupper(trim($macNorm));
-            if (strlen($macNormUpper) === 12) {
-                $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($macNormUpper);
-            }
+            $macNormUpper = strtoupper($macNormClean);
+            $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($macNormUpper);
         }
         
         // Si mac_norm n'est pas valide, essayer de normaliser MacAddress

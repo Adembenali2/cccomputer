@@ -397,7 +397,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color: var(--text-secondary);
   font-weight: 700;
   font-size: 0.8125rem;
-  padding: 0.875rem 0.75rem;
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   border-bottom: 2px solid var(--border-color);
   text-align: left;
   position: sticky; top: 0; z-index: 1;
@@ -405,18 +408,21 @@ html, body { max-width: 100%; overflow-x: hidden; }
   line-height: 1.5;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  box-sizing: border-box;
 }
 
 /* ===== ALIGNEMENT PARFAIT ENTRE EN-TÊTES ET CELLULES ===== */
-/* Padding uniforme de base pour toutes les colonnes */
+/* Padding uniforme de base pour toutes les colonnes - vertical identique */
 .tbl-stock thead th,
 .tbl-stock tbody td {
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   box-sizing: border-box;
 }
 
-/* Colonnes de gauche (première colonne) - alignement à gauche */
+/* Colonnes de gauche (première colonne) - alignement à gauche par défaut */
 .tbl-stock thead th:first-child,
 .tbl-stock tbody td:first-child {
   padding-left: 0.75rem;
@@ -424,7 +430,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   text-align: left;
 }
 
-/* Colonnes du milieu - alignement à gauche */
+/* Colonnes du milieu (2ème colonne) - alignement à gauche */
 .tbl-stock thead th:nth-child(2),
 .tbl-stock tbody td:nth-child(2) {
   padding-left: 0.75rem;
@@ -432,7 +438,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   text-align: left;
 }
 
-/* Colonnes de droite (dernière colonne) - alignement à droite pour les numériques */
+/* Colonnes de droite (dernière colonne) - alignement à droite pour Qté */
 .tbl-stock thead th:last-child,
 .tbl-stock tbody td:last-child {
   padding-left: 0.75rem;
@@ -450,15 +456,21 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 /* Pour le tableau Papier : Qté est en première colonne, alignée à droite */
-.tbl-stock thead tr th:first-child:has-text("Qté"),
-.tbl-stock tbody td:first-child.td-metric {
+.tbl-stock[data-section="papier"] thead th:first-child,
+.tbl-stock[data-section="papier"] tbody td:first-child.td-metric {
   text-align: right;
   padding-right: 1rem;
   padding-left: 0.75rem;
 }
 
 /* Colonnes d'état (première colonne pour LCD/PC) - centré */
-.tbl-stock thead th:first-child:has-text("État"),
+.tbl-stock[data-section="lcd"] thead th:first-child,
+.tbl-stock[data-section="pc"] thead th:first-child {
+  text-align: center;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
 .tbl-stock tbody td[data-th="État"] {
   text-align: center;
   padding-left: 0.75rem;
@@ -466,7 +478,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 .tbl-stock tbody td {
-  padding: 0.875rem 0.75rem;
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
   white-space: nowrap;
@@ -476,6 +491,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   line-height: 1.5;
   font-size: 0.9375rem;
   color: var(--text-primary);
+  box-sizing: border-box;
 }
 
 .tbl-stock tbody tr {
@@ -531,19 +547,30 @@ html, body { max-width: 100%; overflow-x: hidden; }
   background-color: var(--bg-tertiary);
 }
 
-/* Alignement spécifique pour les colonnes numériques */
-.tbl-stock thead th:last-child,
-.tbl-stock tbody td.td-metric,
+/* Alignement spécifique pour les colonnes numériques - cohérent avec les en-têtes */
 .tbl-stock tbody td[data-th="Qté"],
 .tbl-stock tbody td[data-th="Poids"] {
   text-align: right;
   vertical-align: middle;
+  padding-right: 1rem;
+  padding-left: 0.75rem;
+  box-sizing: border-box;
 }
 
-/* Alignement des colonnes d'état (centré) - pour LCD et PC */
+/* Alignement des colonnes d'état (centré) - pour LCD et PC - cohérent avec les en-têtes */
+.tbl-stock[data-section="lcd"] thead th:first-child,
+.tbl-stock[data-section="pc"] thead th:first-child {
+  text-align: center;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
 .tbl-stock tbody td[data-th="État"] {
   text-align: center;
   vertical-align: middle;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  box-sizing: border-box;
 }
 
 .td-metric { 
@@ -551,9 +578,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
   text-align: right;
   font-variant-numeric: tabular-nums;
   vertical-align: middle;
+  /* Padding cohérent avec les en-têtes */
+  padding-left: 0.75rem;
   padding-right: 1rem;
   color: var(--text-primary);
   font-size: 0.9375rem;
+  box-sizing: border-box;
 }
 
 .td-metric.is-zero { 
