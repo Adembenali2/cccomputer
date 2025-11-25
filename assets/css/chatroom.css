@@ -3,11 +3,29 @@
    Adapté au style du site CCComputer
    ============================================ */
 
+/* Agrandir le conteneur principal de la page */
+.page-chatroom .page-container {
+    max-width: 95%;
+    width: 100%;
+    padding: 1rem 2rem;
+    min-height: calc(100vh - 100px);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Réduire l'espace du header pour laisser plus de place à la chatroom */
+.page-chatroom .page-header {
+    margin-bottom: 1rem;
+    padding: 0;
+    flex-shrink: 0;
+}
+
 .page-chatroom {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 80px);
-    max-height: calc(100vh - 80px);
+    min-height: calc(100vh - 100px);
+    height: calc(100vh - 100px);
     overflow: hidden;
 }
 
@@ -15,6 +33,8 @@
 .chatroom-container {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 600px;
     height: 100%;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
@@ -77,6 +97,8 @@
     flex-direction: column;
     gap: 1.25rem;
     scroll-behavior: smooth;
+    min-height: 500px;
+    max-height: calc(100vh - 300px);
 }
 
 /* Scrollbar personnalisée */
@@ -490,8 +512,20 @@
 
 /* ====== Responsive ====== */
 @media (max-width: 768px) {
+    .page-chatroom .page-container {
+        max-width: 100%;
+        padding: 1rem;
+        height: calc(100vh - 80px);
+    }
+
     .page-chatroom {
-        height: calc(100vh - 60px);
+        height: calc(100vh - 80px);
+        min-height: calc(100vh - 80px);
+    }
+
+    .chatroom-container {
+        min-height: 400px;
+        max-height: calc(100vh - 150px);
     }
 
     .chatroom-message {
@@ -508,10 +542,27 @@
 
     .chatroom-messages {
         padding: 1.5rem;
+        min-height: 300px;
+        max-height: calc(100vh - 250px);
     }
 
     .chatroom-input-container {
         padding: 1rem 1.25rem;
+    }
+}
+
+/* ====== Desktop large screens ====== */
+@media (min-width: 1400px) {
+    .page-chatroom .page-container {
+        max-width: 1600px;
+    }
+
+    .chatroom-container {
+        max-height: calc(100vh - 180px);
+    }
+
+    .chatroom-messages {
+        max-height: calc(100vh - 280px);
     }
 }
 
