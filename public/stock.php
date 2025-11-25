@@ -435,7 +435,7 @@ $sectionImages = [
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows" data-section="toners" role="table" aria-label="Liste des toners">
+                <table class="tbl-stock click-rows" data-section="toners" role="table" aria-label="Liste des toners">
                     <colgroup>
                         <col class="col-couleur">
                         <col class="col-modele">
@@ -443,15 +443,15 @@ $sectionImages = [
                     </colgroup>
                     <thead>
                         <tr>
-                            <th scope="col">Couleur</th>
-                            <th scope="col">Modèle</th>
-                            <th scope="col">Qté</th>
+                            <th scope="col" class="col-text">Couleur</th>
+                            <th scope="col" class="col-text">Modèle</th>
+                            <th scope="col" class="col-number">Qté</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($toners)): ?>
                             <tr>
-                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                <td colspan="3" class="col-empty">
                                     <em>Aucun toner en stock</em>
                                 </td>
                             </tr>
@@ -464,9 +464,9 @@ $sectionImages = [
                                     role="button"
                                     tabindex="0"
                                     aria-label="Voir les détails du toner <?= h($t['modele']) ?>">
-                                    <td data-th="Couleur" title="<?= h($t['couleur']) ?>"><?= h($t['couleur']) ?></td>
-                                    <td data-th="Modèle" title="<?= h($t['modele']) ?>"><?= h($t['modele']) ?></td>
-                                    <td data-th="Qté" class="td-metric <?= (int)$t['qty'] === 0 ? 'is-zero' : '' ?>"><?= (int)$t['qty'] ?></td>
+                                    <td class="col-text" title="<?= h($t['couleur']) ?>"><?= h($t['couleur']) ?></td>
+                                    <td class="col-text" title="<?= h($t['modele']) ?>"><?= h($t['modele']) ?></td>
+                                    <td class="col-number td-metric <?= (int)$t['qty'] === 0 ? 'is-zero' : '' ?>"><?= (int)$t['qty'] ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -498,7 +498,7 @@ $sectionImages = [
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows" data-section="papier" role="table" aria-label="Liste du papier">
+                <table class="tbl-stock click-rows" data-section="papier" role="table" aria-label="Liste du papier">
                     <colgroup>
                         <col class="col-qty">
                         <col class="col-modele">
@@ -506,15 +506,15 @@ $sectionImages = [
                     </colgroup>
                     <thead>
                         <tr>
-                            <th scope="col">Qté</th>
-                            <th scope="col">Modèle</th>
-                            <th scope="col">Poids</th>
+                            <th scope="col" class="col-number">Qté</th>
+                            <th scope="col" class="col-text">Modèle</th>
+                            <th scope="col" class="col-text">Poids</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($papers)): ?>
                             <tr>
-                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                <td colspan="3" class="col-empty">
                                     <em>Aucun papier en stock</em>
                                 </td>
                             </tr>
@@ -528,9 +528,9 @@ $sectionImages = [
                                     role="button"
                                     tabindex="0"
                                     aria-label="Voir les détails du papier <?= h($p['modele'] ?? '') ?>">
-                                    <td data-th="Qté" class="td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
-                                    <td data-th="Modèle" title="<?= h($p['modele'] ?? '—') ?>"><?= h($p['modele'] ?? '—') ?></td>
-                                    <td data-th="Poids" title="<?= h($p['poids'] ?? '—') ?>"><?= h($p['poids'] ?? '—') ?></td>
+                                    <td class="col-number td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
+                                    <td class="col-text" title="<?= h($p['modele'] ?? '—') ?>"><?= h($p['modele'] ?? '—') ?></td>
+                                    <td class="col-text" title="<?= h($p['poids'] ?? '—') ?>"><?= h($p['poids'] ?? '—') ?></td>
                                 </tr>
                                 <?php endif; ?>
                             <?php endforeach; ?>
@@ -563,7 +563,7 @@ $sectionImages = [
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows" data-section="lcd" role="table" aria-label="Liste des écrans LCD">
+                <table class="tbl-stock click-rows" data-section="lcd" role="table" aria-label="Liste des écrans LCD">
                     <colgroup>
                         <col class="col-etat">
                         <col class="col-modele">
@@ -571,15 +571,15 @@ $sectionImages = [
                     </colgroup>
                     <thead>
                         <tr>
-                            <th scope="col">État</th>
-                            <th scope="col">Modèle</th>
-                            <th scope="col">Qté</th>
+                            <th scope="col" class="col-state">État</th>
+                            <th scope="col" class="col-text">Modèle</th>
+                            <th scope="col" class="col-number">Qté</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($lcd)): ?>
                             <tr>
-                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                <td colspan="3" class="col-empty">
                                     <em>Aucun LCD en stock</em>
                                 </td>
                             </tr>
@@ -592,9 +592,9 @@ $sectionImages = [
                                     role="button"
                                     tabindex="0"
                                     aria-label="Voir les détails de l'écran LCD <?= h($row['modele']) ?>">
-                                    <td data-th="État"><?= stateBadge($row['etat']) ?></td>
-                                    <td data-th="Modèle" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
-                                    <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
+                                    <td class="col-state"><?= stateBadge($row['etat']) ?></td>
+                                    <td class="col-text" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
+                                    <td class="col-number td-metric"><?= (int)$row['qty'] ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -626,7 +626,7 @@ $sectionImages = [
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows" data-section="pc" role="table" aria-label="Liste des PC reconditionnés">
+                <table class="tbl-stock click-rows" data-section="pc" role="table" aria-label="Liste des PC reconditionnés">
                     <colgroup>
                         <col class="col-etat">
                         <col class="col-modele">
@@ -634,15 +634,15 @@ $sectionImages = [
                     </colgroup>
                     <thead>
                         <tr>
-                            <th scope="col">État</th>
-                            <th scope="col">Modèle</th>
-                            <th scope="col">Qté</th>
+                            <th scope="col" class="col-state">État</th>
+                            <th scope="col" class="col-text">Modèle</th>
+                            <th scope="col" class="col-number">Qté</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($pc)): ?>
                             <tr>
-                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                <td colspan="3" class="col-empty">
                                     <em>Aucun PC en stock</em>
                                 </td>
                             </tr>
@@ -655,9 +655,9 @@ $sectionImages = [
                                     role="button"
                                     tabindex="0"
                                     aria-label="Voir les détails du PC <?= h($row['modele']) ?>">
-                                    <td data-th="État"><?= stateBadge($row['etat']) ?></td>
-                                    <td data-th="Modèle" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
-                                    <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
+                                    <td class="col-state"><?= stateBadge($row['etat']) ?></td>
+                                    <td class="col-text" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
+                                    <td class="col-number td-metric"><?= (int)$row['qty'] ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>

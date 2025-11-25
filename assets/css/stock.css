@@ -367,249 +367,147 @@ html, body { max-width: 100%; overflow-x: hidden; }
   box-shadow: 0 4px 8px rgba(0,0,0,.12);
 }
 
-/* ================== TABLES - ALIGNEMENT PARFAIT ================== */
+/* ================== TABLES - STRUCTURE PROPRE ET ALIGNEMENT PARFAIT ================== */
 .table-wrapper { 
   overflow-x: auto;
   border-radius: var(--radius-lg);
   background: var(--bg-primary);
+  border: 1px solid var(--border-color);
 }
 
-/* Configuration de base du tableau */
+/* Configuration de base du tableau - STRUCTURE STABLE */
 .tbl-stock {
   width: 100%;
-  border-collapse: separate;
+  border-collapse: collapse;
   border-spacing: 0;
-  table-layout: fixed; /* CRITIQUE: Force les colonnes à respecter les largeurs */
+  table-layout: fixed;
   background: var(--bg-primary);
-  empty-cells: show;
+  font-size: 0.9375rem;
 }
 
-/* Largeurs de colonnes via colgroup */
-.col-qty     { width: 90px !important; }
-.col-poids   { width: 120px !important; }
-.col-couleur { width: 140px !important; }
-.col-statut  { width: 120px !important; }
-.col-etat    { width: 90px !important; }
-.col-sn      { width: 220px !important; }
+/* Largeurs de colonnes via colgroup - FIXES */
+.col-etat    { width: 100px; }
+.col-couleur { width: 150px; }
 .col-modele  { width: auto; }
+.col-qty     { width: 100px; }
+.col-poids   { width: 120px; }
 
-.tbl-stock colgroup col {
-  display: table-column;
-}
-
-/* ===== RÈGLES DE BASE UNIFIÉES POUR th ET td ===== */
-/* PADDING IDENTIQUE pour garantir l'alignement parfait */
+/* ===== RÈGLES UNIFIÉES - PADDING ET BORDURES IDENTIQUES ===== */
 .tbl-stock thead th,
 .tbl-stock tbody td {
-  padding-top: 0.875rem;
-  padding-bottom: 0.875rem;
+  padding: 1rem 1rem;
   box-sizing: border-box;
   vertical-align: middle;
   line-height: 1.5;
+  border-bottom: 1px solid var(--border-color);
 }
 
-/* Styles spécifiques pour les en-têtes */
-.tbl-stock thead th {
+/* En-têtes */
+.tbl-stock thead {
   background: var(--bg-tertiary);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.tbl-stock thead th {
   color: var(--text-secondary);
   font-weight: 700;
   font-size: 0.8125rem;
-  border-bottom: 2px solid var(--border-color);
-  position: sticky;
-  top: 0;
-  z-index: 1;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* Padding de base - sera surchargé par colonne */
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
   text-align: left;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-/* Styles spécifiques pour les cellules */
+/* Cellules */
 .tbl-stock tbody td {
-  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background-color 0.15s ease;
-  font-size: 0.9375rem;
-  color: var(--text-primary);
-  /* Padding de base - sera surchargé par colonne */
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
   text-align: left;
 }
 
-/* ===== ALIGNEMENT PARFAIT PAR COLONNE - RÈGLES TRÈS SPÉCIFIQUES ===== */
-
-/* COLONNE 1 - Première colonne (par défaut: gauche) */
-.tbl-stock thead th:nth-child(1),
-.tbl-stock tbody td:nth-child(1) {
-  padding-left: 0.75rem !important;
-  padding-right: 0.75rem !important;
+/* ===== ALIGNEMENT PAR TYPE DE COLONNE ===== */
+/* Colonnes texte (par défaut à gauche) */
+.tbl-stock thead th.col-text,
+.tbl-stock tbody td.col-text {
   text-align: left !important;
 }
 
-/* COLONNE 2 - Deuxième colonne (toujours gauche) */
-.tbl-stock thead th:nth-child(2),
-.tbl-stock tbody td:nth-child(2) {
-  padding-left: 0.75rem !important;
-  padding-right: 0.75rem !important;
-  text-align: left !important;
-}
-
-/* COLONNE 3 - Dernière colonne (Qté, Poids) - ALIGNEMENT À DROITE */
-.tbl-stock thead th:nth-child(3),
-.tbl-stock tbody td:nth-child(3) {
-  padding-left: 0.75rem !important;
-  padding-right: 1rem !important;
+/* Colonnes numériques (alignées à droite) */
+.tbl-stock thead th.col-number,
+.tbl-stock tbody td.col-number {
   text-align: right !important;
-}
-
-/* ===== EXCEPTIONS SPÉCIFIQUES PAR TABLEAU ===== */
-
-/* Tableau PAPIER : Qté est en première colonne, alignée à droite */
-.tbl-stock[data-section="papier"] thead th:nth-child(1),
-.tbl-stock[data-section="papier"] tbody td:nth-child(1) {
-  text-align: right !important;
-  padding-right: 1rem !important;
-  padding-left: 0.75rem !important;
-}
-
-/* Tableaux LCD et PC : État est en première colonne, centré */
-.tbl-stock[data-section="lcd"] thead th:nth-child(1),
-.tbl-stock[data-section="lcd"] tbody td:nth-child(1),
-.tbl-stock[data-section="pc"] thead th:nth-child(1),
-.tbl-stock[data-section="pc"] tbody td:nth-child(1) {
-  text-align: center !important;
-  padding-left: 0.75rem !important;
-  padding-right: 0.75rem !important;
-}
-
-/* ===== COLONNES NUMÉRIQUES (Qté uniquement) - RENFORCEMENT FINAL ===== */
-/* Ces règles DOIVENT être après toutes les autres pour garantir l'alignement */
-.tbl-stock tbody td.td-metric,
-.tbl-stock tbody td[data-th="Qté"] {
-  text-align: right !important;
-  padding-right: 1rem !important;
-  padding-left: 0.75rem !important;
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-/* Poids n'est pas numérique, donc alignement à gauche */
-.tbl-stock tbody td[data-th="Poids"] {
-  text-align: left !important;
-  padding-right: 0.75rem !important;
-  padding-left: 0.75rem !important;
-}
-
-/* Renforcement pour les en-têtes numériques - GARANTIR L'ALIGNEMENT */
-.tbl-stock thead th:last-child {
-  text-align: right !important;
-  padding-right: 1rem !important;
-  padding-left: 0.75rem !important;
-}
-
-/* Règle finale pour garantir que la dernière colonne (Qté) est parfaitement alignée */
-/* Par défaut, la dernière colonne est numérique (Qté) donc alignée à droite */
-.tbl-stock thead tr th:last-child,
-.tbl-stock tbody tr td:last-child {
-  padding-left: 0.75rem !important;
-  padding-right: 1rem !important;
-  text-align: right !important;
-}
-
-/* Exception pour le tableau Papier : dernière colonne = Poids (texte, gauche) */
-.tbl-stock[data-section="papier"] thead tr th:last-child,
-.tbl-stock[data-section="papier"] tbody tr td:last-child {
-  padding-left: 0.75rem !important;
-  padding-right: 0.75rem !important;
-  text-align: left !important;
-}
-
-/* Exception pour le tableau Papier : première colonne = Qté (numérique, droite) */
-.tbl-stock[data-section="papier"] thead tr th:first-child,
-.tbl-stock[data-section="papier"] tbody tr td:first-child.td-metric {
-  padding-left: 0.75rem !important;
-  padding-right: 1rem !important;
-  text-align: right !important;
-}
-
-.td-metric { 
-  font-weight: 600; 
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-  padding-left: 0.75rem !important;
-  padding-right: 1rem !important;
-  color: var(--text-primary);
-  font-size: 0.9375rem;
-}
-
-.td-metric.is-zero { 
-  color: #dc2626; 
+.tbl-stock thead th.col-number {
   font-weight: 700;
-  position: relative;
+}
+
+.tbl-stock tbody td.col-number {
+  font-weight: 600;
+}
+
+/* Colonnes état (centrées) */
+.tbl-stock thead th.col-state,
+.tbl-stock tbody td.col-state {
+  text-align: center !important;
+}
+
+/* ===== CLASSES UTILITAIRES ===== */
+.td-metric {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.td-metric.is-zero {
+  color: #dc2626;
+  font-weight: 700;
 }
 
 .td-metric.is-zero::after {
-  content: '⚠';
-  margin-left: 0.35rem;
+  content: ' ⚠';
   font-size: 0.85em;
   opacity: 0.8;
 }
 
-/* ===== LIGNES ET INTERACTIONS ===== */
+/* ===== INTERACTIONS - SANS TREMBLEMENT ===== */
 .tbl-stock tbody tr {
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-  position: relative;
   background-color: var(--bg-primary);
-  border-left: 3px solid transparent;
-}
-
-.tbl-stock tbody tr::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--accent-primary);
-  opacity: 0;
-  transition: opacity 0.15s ease;
+  cursor: pointer;
+  user-select: text;
 }
 
 .tbl-stock tbody tr:hover {
   background-color: var(--bg-secondary);
-  border-left-color: var(--accent-primary);
-}
-
-.tbl-stock tbody tr:hover::before {
-  opacity: 1;
 }
 
 .tbl-stock tbody tr:active {
   background-color: var(--bg-tertiary);
 }
 
-/* Pour les badges d'état, centrer le contenu */
-.tbl-stock tbody td .state {
-  margin: 0 auto;
-  display: inline-flex;
+.click-rows tbody tr:focus {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
 }
 
-/* Compact (densité) */
-.tbl-compact thead th { 
-  font-size: 0.8125rem; 
-  padding: 0.875rem 0.75rem;
+/* Badges d'état */
+.tbl-stock tbody td .state {
+  display: inline-flex;
+  margin: 0 auto;
 }
-.tbl-compact tbody td { 
-  font-size: 0.9375rem; 
-  padding: 0.875rem 0.75rem;
+
+/* Cellule vide (message "Aucun...") */
+.tbl-stock tbody td.col-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* Badges état + chip */
@@ -625,7 +523,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
   font-size: 0.75rem;
   border: 1.5px solid;
   letter-spacing: 0.02em;
-  transition: all 0.15s ease;
 }
 .state-A { 
   background: #dcfce7; 
