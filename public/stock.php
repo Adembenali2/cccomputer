@@ -340,9 +340,14 @@ $sectionImages = [
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/stock.css" />
     <style>
-        /* Styles spécifiques pour le scanner de caméra */
+        /* Styles spécifiques pour le scanner de caméra - Qualité professionnelle */
         #reader {
             position: relative;
+            background: #000;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-height: 400px;
         }
         
         #reader video,
@@ -352,16 +357,39 @@ $sectionImages = [
             height: auto !important;
             display: block !important;
             border-radius: var(--radius-md);
+            object-fit: cover;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
         }
         
+        /* Zone de scan optimisée avec animation */
         #reader #qr-shaded-region {
-            border: 2px solid var(--accent-primary) !important;
-            border-radius: 8px;
+            border: 3px solid var(--accent-primary) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2),
+                        0 0 20px rgba(59, 130, 246, 0.4) !important;
+            animation: scanPulse 2s ease-in-out infinite;
         }
         
-        /* Forcer l'affichage de la vidéo */
+        @keyframes scanPulse {
+            0%, 100% {
+                box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2),
+                            0 0 20px rgba(59, 130, 246, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.3),
+                            0 0 30px rgba(59, 130, 246, 0.6);
+            }
+        }
+        
+        /* Forcer l'affichage de la vidéo en haute qualité */
         #reader video[style*="display: none"] {
             display: block !important;
+        }
+        
+        #reader video {
+            transform: scale(1);
+            filter: contrast(1.1) brightness(1.05) saturate(1.1);
         }
         
         /* Style pour le conteneur de scan */
@@ -369,6 +397,20 @@ $sectionImages = [
             background: var(--bg-secondary);
             border-radius: var(--radius-md);
             padding: 1rem;
+            position: relative;
+        }
+        
+        /* Amélioration de la qualité d'affichage */
+        #reader img {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+        
+        /* Optimisation des performances */
+        #reader video {
+            will-change: transform;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
         }
     </style>
 </head>
@@ -1864,27 +1906,64 @@ $sectionImages = [
                 let started = false;
                 
                 try {
-                    // Essayer la caméra arrière (environment)
+                    // Essayer la caméra arrière (environment) avec qualité professionnelle
                     await html5QrcodeScanner.start(
                         cameraConfig,
                         {
-                            fps: 10,
+                            // FPS élevé pour une détection rapide (30 fps pour réactivité maximale)
+                            fps: 30,
+                            
+                            // Zone de scan optimisée (70% pour meilleure détection)
                             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                                // Calculer une taille adaptative (60% de la largeur minimale)
                                 let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                                let qrboxSize = Math.floor(minEdge * 0.6);
+                                // Augmenter à 70% pour une meilleure détection
+                                let qrboxSize = Math.floor(minEdge * 0.7);
+                                // Minimum 250px pour garantir la qualité
+                                qrboxSize = Math.max(qrboxSize, 250);
                                 return {
                                     width: qrboxSize,
                                     height: qrboxSize
                                 };
                             },
+                            
+                            // Paramètres de qualité
                             aspectRatio: 1.0,
                             disableFlip: false,
+                            
+                            // Contraintes vidéo haute qualité
                             videoConstraints: {
                                 facingMode: 'environment',
-                                width: { ideal: 1280 },
-                                height: { ideal: 720 }
-                            }
+                                // Résolution haute pour meilleure qualité
+                                width: { 
+                                    ideal: 1920,
+                                    min: 1280,
+                                    max: 3840
+                                },
+                                height: { 
+                                    ideal: 1080,
+                                    min: 720,
+                                    max: 2160
+                                },
+                                // Autres paramètres de qualité
+                                frameRate: { ideal: 30, min: 15, max: 60 },
+                                focusMode: 'continuous',
+                                exposureMode: 'continuous'
+                            },
+                            
+                            // Paramètres de scan avancés pour performance
+                            rememberLastUsedCamera: true,
+                            // Formats de codes-barres supportés (optimisation - si disponible)
+                            formatsToSupport: (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
+                                Html5QrcodeSupportedFormats.EAN_13,
+                                Html5QrcodeSupportedFormats.EAN_8,
+                                Html5QrcodeSupportedFormats.UPC_A,
+                                Html5QrcodeSupportedFormats.UPC_E,
+                                Html5QrcodeSupportedFormats.CODE_128,
+                                Html5QrcodeSupportedFormats.CODE_39,
+                                Html5QrcodeSupportedFormats.QR_CODE
+                            ] : undefined,
+                            // Désactiver le son (optionnel, pour performance)
+                            verbose: false
                         },
                         onScanSuccess,
                         onScanError
@@ -1892,7 +1971,7 @@ $sectionImages = [
                     started = true;
                 } catch (envError) {
                     console.log('Caméra arrière non disponible, essai caméra avant:', envError);
-                    // Essayer la caméra avant (user)
+                    // Essayer la caméra avant (user) avec qualité professionnelle
                     try {
                         await html5QrcodeScanner.stop();
                         html5QrcodeScanner.clear();
@@ -1906,22 +1985,54 @@ $sectionImages = [
                     await html5QrcodeScanner.start(
                         cameraConfig,
                         {
-                            fps: 10,
+                            // FPS élevé pour une détection rapide
+                            fps: 30,
+                            
+                            // Zone de scan optimisée
                             qrbox: function(viewfinderWidth, viewfinderHeight) {
                                 let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                                let qrboxSize = Math.floor(minEdge * 0.6);
+                                let qrboxSize = Math.floor(minEdge * 0.7);
+                                qrboxSize = Math.max(qrboxSize, 250);
                                 return {
                                     width: qrboxSize,
                                     height: qrboxSize
                                 };
                             },
+                            
                             aspectRatio: 1.0,
                             disableFlip: false,
+                            
+                            // Contraintes vidéo haute qualité
                             videoConstraints: {
                                 facingMode: 'user',
-                                width: { ideal: 1280 },
-                                height: { ideal: 720 }
-                            }
+                                width: { 
+                                    ideal: 1920,
+                                    min: 1280,
+                                    max: 3840
+                                },
+                                height: { 
+                                    ideal: 1080,
+                                    min: 720,
+                                    max: 2160
+                                },
+                                frameRate: { ideal: 30, min: 15, max: 60 },
+                                focusMode: 'continuous',
+                                exposureMode: 'continuous'
+                            },
+                            
+                            rememberLastUsedCamera: true,
+                            // Formats de codes-barres supportés (optimisation)
+                            formatsToSupport: (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
+                                Html5QrcodeSupportedFormats.EAN_13,
+                                Html5QrcodeSupportedFormats.EAN_8,
+                                Html5QrcodeSupportedFormats.UPC_A,
+                                Html5QrcodeSupportedFormats.UPC_E,
+                                Html5QrcodeSupportedFormats.CODE_128,
+                                Html5QrcodeSupportedFormats.CODE_39,
+                                Html5QrcodeSupportedFormats.QR_CODE
+                            ] : undefined,
+                            // Désactiver le mode verbose pour performance
+                            verbose: false
                         },
                         onScanSuccess,
                         onScanError
@@ -2005,28 +2116,53 @@ $sectionImages = [
             }
         }
         
-        // Callback succès scan
+        // Variable pour éviter les scans multiples
+        let lastScannedCode = '';
+        let scanCooldown = false;
+        
+        // Callback succès scan - Optimisé pour rapidité
         function onScanSuccess(decodedText, decodedResult) {
-            if (decodedText) {
-                // Arrêter le scan immédiatement
-                stopScanning();
-                
-                // Remplir automatiquement le champ de recherche
-                fillSearchField(decodedText);
-                
-                // Afficher un message de succès
-                showResult('✓ Code-barres scanné : ' + decodedText);
-                
-                // Optionnel : rechercher le produit et afficher les détails
-                setTimeout(() => {
-                    processBarcode(decodedText);
-                }, 500);
+            if (!decodedText || scanCooldown) {
+                return;
             }
+            
+            // Éviter les scans multiples du même code
+            if (decodedText === lastScannedCode) {
+                return;
+            }
+            
+            // Activer le cooldown pour éviter les scans répétés
+            scanCooldown = true;
+            lastScannedCode = decodedText;
+            
+            // Arrêter le scan immédiatement pour performance
+            stopScanning();
+            
+            // Remplir automatiquement le champ de recherche
+            fillSearchField(decodedText);
+            
+            // Afficher un message de succès avec feedback visuel
+            showResult('✓ Code-barres scanné : <strong>' + decodedText + '</strong>');
+            
+            // Rechercher le produit immédiatement (sans délai)
+            processBarcode(decodedText);
+            
+            // Réinitialiser le cooldown après 2 secondes
+            setTimeout(() => {
+                scanCooldown = false;
+                lastScannedCode = '';
+            }, 2000);
         }
         
-        // Callback erreur scan (on ignore les erreurs continues)
+        // Callback erreur scan (on ignore les erreurs continues pour performance)
         function onScanError(errorMessage) {
-            // Ignorer les erreurs continues de scan
+            // Ignorer les erreurs continues de scan pour ne pas ralentir
+            // Seulement logger les erreurs critiques
+            if (errorMessage && errorMessage.includes('No QR code')) {
+                // Erreur normale, on ignore
+                return;
+            }
+            // Autres erreurs peuvent être loggées si nécessaire
         }
         
         // Fonction pour remplir le champ de recherche
