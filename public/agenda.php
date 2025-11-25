@@ -25,6 +25,8 @@ function currentUserRole(): ?string {
 $currentUserId = currentUserId();
 $currentUserRole = currentUserRole();
 $isAdmin = ($currentUserRole === 'Admin' || $currentUserRole === 'Dirigeant');
+$isTechnicien = ($currentUserRole === 'Technicien');
+$isLivreur = ($currentUserRole === 'Livreur');
 
 // Paramètres de filtrage
 $filterUser = isset($_GET['user_id']) ? (int)$_GET['user_id'] : null;
@@ -106,9 +108,14 @@ try {
         $whereSav[] = "id_technicien = :tech_id";
         $paramsSav[':tech_id'] = $filterUser;
     } elseif (!$isAdmin) {
-        // Si pas admin, afficher uniquement les SAV assignés à l'utilisateur
-        $whereSav[] = "id_technicien = :current_user_id";
-        $paramsSav[':current_user_id'] = $currentUserId;
+        // Si technicien, afficher uniquement les SAV assignés à l'utilisateur
+        if ($isTechnicien) {
+            $whereSav[] = "id_technicien = :current_user_id";
+            $paramsSav[':current_user_id'] = $currentUserId;
+        } else {
+            // Si pas technicien, ne pas afficher de SAV
+            $whereSav[] = "1 = 0"; // Condition toujours fausse pour ne rien retourner
+        }
     }
     
     // Exclure les SAV résolus et annulés
@@ -170,9 +177,14 @@ try {
         $whereLiv[] = "id_livreur = :livreur_id";
         $paramsLiv[':livreur_id'] = $filterUser;
     } elseif (!$isAdmin) {
-        // Si pas admin, afficher uniquement les livraisons assignées à l'utilisateur
-        $whereLiv[] = "id_livreur = :current_user_id";
-        $paramsLiv[':current_user_id'] = $currentUserId;
+        // Si livreur, afficher uniquement les livraisons assignées à l'utilisateur
+        if ($isLivreur) {
+            $whereLiv[] = "id_livreur = :current_user_id";
+            $paramsLiv[':current_user_id'] = $currentUserId;
+        } else {
+            // Si pas livreur, ne pas afficher de livraisons
+            $whereLiv[] = "1 = 0"; // Condition toujours fausse pour ne rien retourner
+        }
     }
     
     // Exclure les livraisons livrées et annulées
