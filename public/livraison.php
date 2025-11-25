@@ -79,6 +79,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     if (!$flash['type']) {
         $livraisonId = (int)($_POST['livraison_id'] ?? 0);
         $newStatut   = $_POST['statut'] ?? '';
+        $newDatePrevue = trim($_POST['date_prevue'] ?? '');
 
         $allowedStatuts = ['planifiee','en_cours','livree','annulee'];
         if (!$livraisonId || !in_array($newStatut, $allowedStatuts, true)) {
@@ -106,32 +107,53 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 } else {
                     // Gestion automatique de la date_reelle :
                     // - si on passe en "livree" et qu'il n'y a pas encore de date_reelle -> on met aujourd'hui
-                    // - sinon on laisse la date_reelle telle quelle
+                    // - si on passe d'un statut "livree" à un autre -> on supprime la date_reelle (replanification)
                     $dateReelle = $liv['date_reelle'] ?? null;
                     $oldStatut = $liv['statut'] ?? '';
                     $isBecomingLivree = ($newStatut === 'livree' && $oldStatut !== 'livree');
+                    $isLeavingLivree = ($oldStatut === 'livree' && $newStatut !== 'livree');
                     
                     if ($newStatut === 'livree' && empty($dateReelle)) {
+                        // Passer à "livrée" : mettre la date réelle à aujourd'hui si elle n'existe pas
                         $dateReelle = $today;
+                    } elseif ($newStatut !== 'livree') {
+                        // Passer à un autre statut (planifiee, en_cours, annulee) : supprimer la date réelle
+                        // Cela permet de replanifier la livraison et de la sortir des archives
+                        $dateReelle = null;
+                    }
+                    
+                    // Gestion de la date prévue : utiliser la nouvelle date si fournie, sinon garder l'ancienne
+                    $datePrevue = !empty($newDatePrevue) ? $newDatePrevue : ($liv['date_prevue'] ?? null);
+                    
+                    // Validation de la date prévue si fournie
+                    if (!empty($newDatePrevue)) {
+                        $dateParts = explode('-', $newDatePrevue);
+                        if (count($dateParts) !== 3 || !checkdate((int)$dateParts[1], (int)$dateParts[2], (int)$dateParts[0])) {
+                            $flash = ['type'=>'error','msg'=>"Date prévue invalide."];
+                            $datePrevue = $liv['date_prevue'] ?? null;
+                        }
                     }
 
-                    $pdo->beginTransaction();
-                    try {
-                        $upd = $pdo->prepare("
-                            UPDATE livraisons
-                            SET statut = :statut,
-                                date_reelle = :date_reelle,
-                                updated_at = NOW()
-                            WHERE id = :id
-                        ");
-                        $upd->execute([
-                            ':statut'      => $newStatut,
-                            ':date_reelle' => $dateReelle,
-                            ':id'          => $livraisonId,
-                        ]);
+                    if (!$flash['type']) {
+                        $pdo->beginTransaction();
+                        try {
+                            $upd = $pdo->prepare("
+                                UPDATE livraisons
+                                SET statut = :statut,
+                                    date_prevue = :date_prevue,
+                                    date_reelle = :date_reelle,
+                                    updated_at = NOW()
+                                WHERE id = :id
+                            ");
+                            $upd->execute([
+                                ':statut'      => $newStatut,
+                                ':date_prevue'  => $datePrevue,
+                                ':date_reelle' => $dateReelle,
+                                ':id'          => $livraisonId,
+                            ]);
 
-                        // Si la livraison vient d'être marquée comme "livrée", ajouter au stock client
-                        if ($isBecomingLivree) {
+                            // Si la livraison vient d'être marquée comme "livrée", ajouter au stock client
+                            if ($isBecomingLivree) {
                             $productType = $liv['product_type'] ?? null;
                             $productId = isset($liv['product_id']) ? (int)$liv['product_id'] : 0;
                             $productQty = isset($liv['product_qty']) ? (int)$liv['product_qty'] : 0;
@@ -195,10 +217,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 }
                             } else {
                                 error_log("Données produit manquantes ou invalides - Type: " . ($productType ?? 'null') . ", ID: {$productId}, Qty: {$productQty}, Client: {$clientId}");
+                                }
                             }
-                        }
 
-                        $pdo->commit();
+                            $pdo->commit();
                         
                         // Enregistrer dans l'historique
                         try {
@@ -227,17 +249,35 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 $details .= sprintf(' - Date réelle: %s', $dateReelle);
                             }
                             
+                            // Ajouter la date prévue si modifiée
+                            if (!empty($newDatePrevue) && $newDatePrevue !== ($liv['date_prevue'] ?? '')) {
+                                $details .= sprintf(' - Date prévue: %s', $datePrevue);
+                            }
+                            
+                            // Ajouter une note si replanification
+                            if ($isLeavingLivree) {
+                                $details .= ' - Livraison replanifiée';
+                            }
+                            
                             enregistrerAction($pdo, currentUserId(), 'livraison_modifiee', $details);
                         } catch (Throwable $e) {
                             error_log('livraison.php historique error: ' . $e->getMessage());
                             // Ne pas faire échouer la transaction pour une erreur d'historique
                         }
                         
-                        $flash = ['type'=>'success','msg'=>"Livraison mise à jour avec succès." . ($isBecomingLivree && !empty($liv['product_type']) ? " Stock client mis à jour." : "")];
+                        $flashMsg = "Livraison mise à jour avec succès.";
+                        if ($isBecomingLivree && !empty($liv['product_type'])) {
+                            $flashMsg .= " Stock client mis à jour.";
+                        }
+                        if ($isLeavingLivree) {
+                            $flashMsg .= " La livraison a été replanifiée et est sortie de l'archive.";
+                        }
+                        $flash = ['type'=>'success','msg'=>$flashMsg];
                     } catch (PDOException $e) {
                         $pdo->rollBack();
                         error_log('livraisons.php UPDATE/STOCK error: ' . $e->getMessage());
                         $flash = ['type'=>'error','msg'=>"Erreur SQL : impossible de mettre à jour la livraison."];
+                    }
                     }
                 }
             } catch (PDOException $e) {
@@ -565,6 +605,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           data-adresse="<?= h($adresse) ?>"
           data-objet="<?= h($objet) ?>"
           data-prevue="<?= h($prevueLabel) ?>"
+          data-prevue-iso="<?= $prevue ? h($prevue) : '' ?>"
           data-reelle="<?= h($reelleLabel) ?>"
           data-statut="<?= h($liv['statut']) ?>"
           data-livreur="<?= h($livreurNomComplet) ?>"
@@ -645,11 +686,13 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         <div class="grid-two">
           <div>
             <label>Date prévue</label>
-            <input type="text" id="modal_prevue" readonly>
+            <input type="date" name="date_prevue" id="modal_prevue">
+            <small style="color: #6b7280; font-size: 0.85rem;">Vous pouvez modifier la date prévue pour replanifier la livraison</small>
           </div>
           <div>
             <label>Date réelle</label>
             <input type="text" id="modal_reelle" readonly>
+            <small style="color: #6b7280; font-size: 0.85rem;">Remplie automatiquement lors de la livraison</small>
           </div>
         </div>
 
@@ -663,6 +706,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           <option value="livree">Livrée</option>
           <option value="annulee">Annulée</option>
         </select>
+        <small style="color: #6b7280; font-size: 0.85rem;">Changer le statut de "Livrée" vers un autre statut permet de replanifier la livraison</small>
 
         <label>Commentaire (lecture seule)</label>
         <textarea id="modal_commentaire" rows="3" readonly></textarea>
@@ -673,7 +717,8 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 
     <div class="modal-actions">
       <div class="modal-hint">
-        <strong>Permissions :</strong> Seul le livreur assigné à cette livraison peut modifier son statut. Les administrateurs et dirigeants peuvent modifier toutes les livraisons.
+        <strong>Permissions :</strong> Seul le livreur assigné à cette livraison peut modifier son statut. Les administrateurs et dirigeants peuvent modifier toutes les livraisons.<br>
+        <strong>Replanification :</strong> Vous pouvez replanifier une livraison déjà livrée en changeant son statut vers "Planifiée" ou "En cours" et en modifiant la date prévue. La date réelle sera automatiquement supprimée.
       </div>
       <button type="submit" id="modal_submit_btn" class="fiche-action-btn">Enregistrer</button>
     </div>
@@ -735,13 +780,27 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       const statut    = tr.getAttribute('data-statut') || 'planifiee';
       const com       = tr.getAttribute('data-commentaire') || '';
       const canEdit   = tr.getAttribute('data-can-edit') === '1';
+      
+      // Récupérer la date prévue au format ISO depuis l'attribut data-prevue-iso si disponible
+      // Sinon, convertir depuis le format dd/mm/yyyy
+      let prevueISO = tr.getAttribute('data-prevue-iso') || '';
+      if (!prevueISO && prevue && prevue !== '—') {
+        // Convertir dd/mm/yyyy en yyyy-mm-dd
+        const parts = prevue.split('/');
+        if (parts.length === 3) {
+          prevueISO = parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+        }
+      }
 
       if (inputId)      inputId.value = id;
       if (inputClient)  inputClient.value = client;
       if (inputRef)     inputRef.value = ref;
       if (inputAdresse) inputAdresse.value = adresse;
       if (inputObjet)   inputObjet.value = objet;
-      if (inputPrevue)  inputPrevue.value = prevue;
+      if (inputPrevue)  {
+        inputPrevue.value = prevueISO;
+        inputPrevue.disabled = !canEdit;
+      }
       if (inputReelle)  inputReelle.value = reelle;
       if (inputLivreur) inputLivreur.value = livreur;
       if (textareaCom)  textareaCom.value = com;
