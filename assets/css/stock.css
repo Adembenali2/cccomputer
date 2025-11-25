@@ -403,8 +403,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .tbl-stock tbody td {
   padding-top: 0.875rem;
   padding-bottom: 0.875rem;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
   box-sizing: border-box;
   vertical-align: middle;
   line-height: 1.5;
@@ -417,7 +415,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
   font-weight: 700;
   font-size: 0.8125rem;
   border-bottom: 2px solid var(--border-color);
-  text-align: left;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -426,6 +423,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Padding de base - sera surchargé par colonne */
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  text-align: left;
 }
 
 /* Styles spécifiques pour les cellules */
@@ -437,69 +438,106 @@ html, body { max-width: 100%; overflow-x: hidden; }
   transition: background-color 0.15s ease;
   font-size: 0.9375rem;
   color: var(--text-primary);
-  text-align: left;
-}
-
-/* ===== ALIGNEMENT PAR COLONNE - GARANTIR LA CORRESPONDANCE th/td ===== */
-
-/* COLONNE 1 - Première colonne (Couleur, Qté, État) */
-.tbl-stock thead th:first-child,
-.tbl-stock tbody td:first-child {
+  /* Padding de base - sera surchargé par colonne */
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   text-align: left;
 }
 
-/* COLONNE 2 - Deuxième colonne (Modèle) */
+/* ===== ALIGNEMENT PARFAIT PAR COLONNE - RÈGLES TRÈS SPÉCIFIQUES ===== */
+
+/* COLONNE 1 - Première colonne (par défaut: gauche) */
+.tbl-stock thead th:nth-child(1),
+.tbl-stock tbody td:nth-child(1) {
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+  text-align: left !important;
+}
+
+/* COLONNE 2 - Deuxième colonne (toujours gauche) */
 .tbl-stock thead th:nth-child(2),
 .tbl-stock tbody td:nth-child(2) {
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-  text-align: left;
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+  text-align: left !important;
 }
 
 /* COLONNE 3 - Dernière colonne (Qté, Poids) - ALIGNEMENT À DROITE */
-.tbl-stock thead th:last-child,
-.tbl-stock tbody td:last-child {
-  padding-left: 0.75rem;
-  padding-right: 1rem;
-  text-align: right;
+.tbl-stock thead th:nth-child(3),
+.tbl-stock tbody td:nth-child(3) {
+  padding-left: 0.75rem !important;
+  padding-right: 1rem !important;
+  text-align: right !important;
 }
 
 /* ===== EXCEPTIONS SPÉCIFIQUES PAR TABLEAU ===== */
 
 /* Tableau PAPIER : Qté est en première colonne, alignée à droite */
-.tbl-stock[data-section="papier"] thead th:first-child,
-.tbl-stock[data-section="papier"] tbody td:first-child {
-  text-align: right;
-  padding-right: 1rem;
-  padding-left: 0.75rem;
+.tbl-stock[data-section="papier"] thead th:nth-child(1),
+.tbl-stock[data-section="papier"] tbody td:nth-child(1) {
+  text-align: right !important;
+  padding-right: 1rem !important;
+  padding-left: 0.75rem !important;
 }
 
 /* Tableaux LCD et PC : État est en première colonne, centré */
-.tbl-stock[data-section="lcd"] thead th:first-child,
-.tbl-stock[data-section="pc"] thead th:first-child {
-  text-align: center;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
+.tbl-stock[data-section="lcd"] thead th:nth-child(1),
+.tbl-stock[data-section="lcd"] tbody td:nth-child(1),
+.tbl-stock[data-section="pc"] thead th:nth-child(1),
+.tbl-stock[data-section="pc"] tbody td:nth-child(1) {
+  text-align: center !important;
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
 }
 
-.tbl-stock[data-section="lcd"] tbody td:first-child,
-.tbl-stock[data-section="pc"] tbody td:first-child {
-  text-align: center;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-}
-
-/* ===== COLONNES NUMÉRIQUES (Qté, Poids) - RENFORCEMENT ===== */
+/* ===== COLONNES NUMÉRIQUES (Qté uniquement) - RENFORCEMENT FINAL ===== */
+/* Ces règles DOIVENT être après toutes les autres pour garantir l'alignement */
 .tbl-stock tbody td.td-metric,
-.tbl-stock tbody td[data-th="Qté"],
-.tbl-stock tbody td[data-th="Poids"] {
+.tbl-stock tbody td[data-th="Qté"] {
   text-align: right !important;
   padding-right: 1rem !important;
   padding-left: 0.75rem !important;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* Poids n'est pas numérique, donc alignement à gauche */
+.tbl-stock tbody td[data-th="Poids"] {
+  text-align: left !important;
+  padding-right: 0.75rem !important;
+  padding-left: 0.75rem !important;
+}
+
+/* Renforcement pour les en-têtes numériques - GARANTIR L'ALIGNEMENT */
+.tbl-stock thead th:last-child {
+  text-align: right !important;
+  padding-right: 1rem !important;
+  padding-left: 0.75rem !important;
+}
+
+/* Règle finale pour garantir que la dernière colonne (Qté) est parfaitement alignée */
+/* Par défaut, la dernière colonne est numérique (Qté) donc alignée à droite */
+.tbl-stock thead tr th:last-child,
+.tbl-stock tbody tr td:last-child {
+  padding-left: 0.75rem !important;
+  padding-right: 1rem !important;
+  text-align: right !important;
+}
+
+/* Exception pour le tableau Papier : dernière colonne = Poids (texte, gauche) */
+.tbl-stock[data-section="papier"] thead tr th:last-child,
+.tbl-stock[data-section="papier"] tbody tr td:last-child {
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+  text-align: left !important;
+}
+
+/* Exception pour le tableau Papier : première colonne = Qté (numérique, droite) */
+.tbl-stock[data-section="papier"] thead tr th:first-child,
+.tbl-stock[data-section="papier"] tbody tr td:first-child.td-metric {
+  padding-left: 0.75rem !important;
+  padding-right: 1rem !important;
+  text-align: right !important;
 }
 
 .td-metric { 

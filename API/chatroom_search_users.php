@@ -19,35 +19,61 @@ try {
     $query = trim($_GET['q'] ?? '');
     $limit = min((int)($_GET['limit'] ?? 10), 20);
 
+    // Si la query est vide, retourner tous les utilisateurs actifs
     if (empty($query) || strlen($query) < 1) {
-        jsonResponse(['ok' => true, 'users' => []]);
+        $stmt = $pdo->prepare("
+            SELECT 
+                id,
+                nom,
+                prenom,
+                Email,
+                Emploi
+            FROM utilisateurs
+            WHERE statut = 'actif'
+              AND id != :current_user_id
+            ORDER BY nom ASC, prenom ASC
+            LIMIT :limit
+        ");
+        $stmt->bindValue(':current_user_id', $currentUserId, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    } else {
+        // Recherche avec filtrage par début de nom/prénom (plus performant et intuitif)
+        // Utiliser LIKE 'query%' pour rechercher les noms qui COMMENCENT par la query
+        $searchTerm = $query . '%';
+        $stmt = $pdo->prepare("
+            SELECT 
+                id,
+                nom,
+                prenom,
+                Email,
+                Emploi
+            FROM utilisateurs
+            WHERE statut = 'actif'
+              AND id != :current_user_id
+              AND (
+                nom LIKE :search
+                OR prenom LIKE :search
+                OR Email LIKE :search
+                OR CONCAT(prenom, ' ', nom) LIKE :search
+                OR CONCAT(nom, ' ', prenom) LIKE :search
+              )
+            ORDER BY 
+                CASE 
+                    WHEN prenom LIKE :search_exact THEN 1
+                    WHEN nom LIKE :search_exact THEN 2
+                    WHEN CONCAT(prenom, ' ', nom) LIKE :search_exact THEN 3
+                    ELSE 4
+                END,
+                nom ASC, 
+                prenom ASC
+            LIMIT :limit
+        ");
+        $stmt->bindValue(':current_user_id', $currentUserId, PDO::PARAM_INT);
+        $stmt->bindValue(':search', $searchTerm, PDO::PARAM_STR);
+        $stmt->bindValue(':search_exact', $searchTerm, PDO::PARAM_STR);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     }
-
-    $searchTerm = '%' . $query . '%';
-    $stmt = $pdo->prepare("
-        SELECT 
-            id,
-            nom,
-            prenom,
-            Email,
-            Emploi
-        FROM utilisateurs
-        WHERE statut = 'actif'
-          AND id != :current_user_id
-          AND (
-            nom LIKE :search
-            OR prenom LIKE :search
-            OR Email LIKE :search
-            OR CONCAT(prenom, ' ', nom) LIKE :search
-            OR CONCAT(nom, ' ', prenom) LIKE :search
-          )
-        ORDER BY nom ASC, prenom ASC
-        LIMIT :limit
-    ");
-
-    $stmt->bindValue(':current_user_id', $currentUserId, PDO::PARAM_INT);
-    $stmt->bindValue(':search', $searchTerm, PDO::PARAM_STR);
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    
     $stmt->execute();
 
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);

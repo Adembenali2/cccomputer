@@ -257,23 +257,33 @@ function scrollToBottom(smooth = true) {
 // Gestion des mentions
 // ============================================
 async function searchUsers(query) {
-    if (!query || query.length < 1) {
-        mentionSuggestions.classList.remove('show');
-        return;
-    }
+    // Permettre la recherche même avec query vide (pour afficher tous les utilisateurs)
+    // query peut être une chaîne vide ou undefined
+    const searchQuery = query || '';
     
     try {
-        const response = await fetch(`/API/chatroom_search_users.php?q=${encodeURIComponent(query)}&limit=10`, {
+        const response = await fetch(`/API/chatroom_search_users.php?q=${encodeURIComponent(searchQuery)}&limit=10`, {
             credentials: 'same-origin'
         });
+        
+        if (!response.ok) {
+            console.error('Erreur recherche utilisateurs: HTTP', response.status);
+            mentionSuggestions.classList.remove('show');
+            return;
+        }
+        
         const data = await response.json();
         
         if (data.ok && data.users) {
             mentionSuggestionsList = data.users;
             displayMentionSuggestions();
+        } else {
+            mentionSuggestionsList = [];
+            mentionSuggestions.classList.remove('show');
         }
     } catch (error) {
         console.error('Erreur recherche utilisateurs:', error);
+        mentionSuggestions.classList.remove('show');
     }
 }
 
@@ -786,14 +796,23 @@ messageInput.addEventListener('input', (e) => {
     const atIndex = textBefore.lastIndexOf('@');
     
     if (atIndex !== -1) {
+        // Récupérer le texte après le @ jusqu'au curseur
         const query = textBefore.substring(atIndex + 1).trim();
-        if (query.length > 0 && !query.includes(' ')) {
+        
+        // Vérifier qu'il n'y a pas d'espace entre @ et le curseur (sinon ce n'est pas une mention)
+        const textAfterAt = textBefore.substring(atIndex + 1);
+        if (!textAfterAt.includes(' ')) {
+            // Lancer la recherche même si query est vide (pour afficher tous les utilisateurs)
             clearTimeout(mentionSearchTimeout);
-            mentionSearchTimeout = setTimeout(() => searchUsers(query), 300);
+            mentionSearchTimeout = setTimeout(() => {
+                searchUsers(query);
+            }, 200); // Réduire le délai pour une meilleure réactivité
             return;
         }
     }
+    // Si on n'est pas dans une mention, cacher les suggestions
     mentionSuggestions.classList.remove('show');
+    mentionSearchIndex = -1;
 });
 
 messageInput.addEventListener('keydown', (e) => {
