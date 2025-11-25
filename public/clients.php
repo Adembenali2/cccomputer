@@ -888,6 +888,9 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 <script src="/assets/js/clients.js"></script>
 
 <script>
+  // Données clients pour la recherche
+  window.__CLIENTS_DATA__ = <?= json_encode($clientsList, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  
   // Ouverture auto si erreurs validation
   window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode($shouldOpenModal) ?>;
   window.__ATTACH_MODAL_INIT_OPEN__ = <?= json_encode($shouldOpenAttachModal) ?>;
@@ -939,6 +942,22 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         attachModalOverlay.setAttribute('aria-hidden', 'false');
         attachModalOverlay.style.display = 'block';
         attachModal.style.display = 'block';
+        
+        // Réinitialiser le champ de recherche
+        const searchInput = document.getElementById('attachClientSearch');
+        const clientIdInput = document.getElementById('attachClientId');
+        const resultsDiv = document.getElementById('attachClientResults');
+        if (searchInput) {
+          setTimeout(() => {
+            searchInput.value = '';
+            if (clientIdInput) clientIdInput.value = '';
+            if (resultsDiv) {
+              resultsDiv.style.display = 'none';
+              resultsDiv.classList.remove('show');
+            }
+            searchInput.focus();
+          }, 100);
+        }
       } else {
         // Sinon, trouver la première ligne non attribuée
         const firstUnassigned = document.querySelector('table#tbl tbody tr[data-unassigned="1"]');
@@ -968,14 +987,27 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       document.getElementById('attachSN').textContent = serialNumber || '—';
       document.getElementById('attachMAC').textContent = macAddress || macNorm || '—';
 
-      // Réinitialiser le select
-      document.getElementById('attachClientSelect').value = '';
+      // Réinitialiser la recherche de client
+      const searchInput = document.getElementById('attachClientSearch');
+      const clientIdInput = document.getElementById('attachClientId');
+      const resultsDiv = document.getElementById('attachClientResults');
+      if (searchInput) searchInput.value = '';
+      if (clientIdInput) clientIdInput.value = '';
+      if (resultsDiv) {
+        resultsDiv.style.display = 'none';
+        resultsDiv.classList.remove('show');
+      }
 
       // Ouvrir la modale
       document.body.classList.add('modal-open');
       attachModalOverlay.setAttribute('aria-hidden', 'false');
       attachModalOverlay.style.display = 'block';
       attachModal.style.display = 'block';
+      
+      // Focus sur le champ de recherche
+      if (searchInput) {
+        setTimeout(() => searchInput.focus(), 100);
+      }
     }
 
     function closeAttachModal() {
@@ -1045,6 +1077,205 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         });
       }
     }
+
+    // ===== Recherche de client avec autocomplétion =====
+    (function() {
+      const searchInput = document.getElementById('attachClientSearch');
+      const clientIdInput = document.getElementById('attachClientId');
+      const resultsDiv = document.getElementById('attachClientResults');
+      const clientsData = window.__CLIENTS_DATA__ || [];
+
+      if (!searchInput || !clientIdInput || !resultsDiv) return;
+
+      let selectedIndex = -1;
+      let filteredClients = [];
+
+      // Fonction pour mettre en évidence le texte recherché
+      function highlightText(text, query) {
+        if (!query) return text;
+        const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return text.replace(regex, '<span class="highlight">$1</span>');
+      }
+
+      // Fonction de recherche
+      function searchClients(query) {
+        if (!query || query.trim().length < 1) {
+          return [];
+        }
+
+        const q = query.trim().toLowerCase();
+        return clientsData.filter(client => {
+          const numero = (client.numero_client || '').toLowerCase();
+          const raison = (client.raison_sociale || '').toLowerCase();
+          const nom = (client.nom_dirigeant || '').toLowerCase();
+          const prenom = (client.prenom_dirigeant || '').toLowerCase();
+          const fullName = (nom + ' ' + prenom).trim().toLowerCase();
+
+          return numero.includes(q) || 
+                 raison.includes(q) || 
+                 nom.includes(q) || 
+                 prenom.includes(q) ||
+                 fullName.includes(q);
+        }).slice(0, 20); // Limiter à 20 résultats
+      }
+
+      // Fonction pour afficher les résultats
+      function displayResults(clients) {
+        filteredClients = clients;
+        selectedIndex = -1;
+
+        if (clients.length === 0) {
+          resultsDiv.innerHTML = '<div class="client-result-item empty">Aucun client trouvé</div>';
+          resultsDiv.classList.add('show');
+          resultsDiv.style.display = 'block';
+          return;
+        }
+
+        const query = searchInput.value.trim().toLowerCase();
+        resultsDiv.innerHTML = clients.map((client, index) => {
+          const numero = client.numero_client || '';
+          const raison = client.raison_sociale || '';
+          const nom = client.nom_dirigeant || '';
+          const prenom = client.prenom_dirigeant || '';
+          const fullName = (nom + ' ' + prenom).trim();
+
+          return `
+            <div class="client-result-item" data-index="${index}" data-client-id="${client.id}">
+              <strong>${highlightText(raison, query)}</strong>
+              <span class="client-ref">${highlightText(numero, query)}</span>
+              ${fullName ? `<span class="client-name">${highlightText(fullName, query)}</span>` : ''}
+            </div>
+          `;
+        }).join('');
+
+        resultsDiv.classList.add('show');
+        resultsDiv.style.display = 'block';
+
+        // Ajouter les event listeners sur les items
+        resultsDiv.querySelectorAll('.client-result-item').forEach(item => {
+          item.addEventListener('click', function() {
+            const clientId = this.getAttribute('data-client-id');
+            const index = parseInt(this.getAttribute('data-index'));
+            selectClient(clientId, index);
+          });
+
+          item.addEventListener('mouseenter', function() {
+            resultsDiv.querySelectorAll('.client-result-item').forEach(i => i.classList.remove('selected'));
+            this.classList.add('selected');
+            selectedIndex = parseInt(this.getAttribute('data-index'));
+          });
+        });
+      }
+
+      // Fonction pour sélectionner un client
+      function selectClient(clientId, index) {
+        if (index >= 0 && index < filteredClients.length) {
+          const client = filteredClients[index];
+          const numero = client.numero_client || '';
+          const raison = client.raison_sociale || '';
+          const nom = client.nom_dirigeant || '';
+          const prenom = client.prenom_dirigeant || '';
+          const fullName = (nom + ' ' + prenom).trim();
+          
+          searchInput.value = `${numero} — ${raison}${fullName ? ' (' + fullName + ')' : ''}`;
+          clientIdInput.value = clientId;
+          
+          resultsDiv.style.display = 'none';
+          resultsDiv.classList.remove('show');
+          selectedIndex = -1;
+        }
+      }
+
+      // Event listener sur le champ de recherche
+      let searchTimeout;
+      searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+
+        if (query.length === 0) {
+          resultsDiv.style.display = 'none';
+          resultsDiv.classList.remove('show');
+          clientIdInput.value = '';
+          return;
+        }
+
+        // Debounce de 150ms
+        searchTimeout = setTimeout(() => {
+          const results = searchClients(query);
+          displayResults(results);
+        }, 150);
+      });
+
+      // Navigation au clavier
+      searchInput.addEventListener('keydown', function(e) {
+        if (!resultsDiv.classList.contains('show') || filteredClients.length === 0) {
+          return;
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedIndex = Math.min(selectedIndex + 1, filteredClients.length - 1);
+          updateSelection();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedIndex = Math.max(selectedIndex - 1, -1);
+          updateSelection();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (selectedIndex >= 0 && selectedIndex < filteredClients.length) {
+            selectClient(filteredClients[selectedIndex].id, selectedIndex);
+          }
+        } else if (e.key === 'Escape') {
+          resultsDiv.style.display = 'none';
+          resultsDiv.classList.remove('show');
+          selectedIndex = -1;
+        }
+      });
+
+      function updateSelection() {
+        const items = resultsDiv.querySelectorAll('.client-result-item');
+        items.forEach((item, idx) => {
+          if (idx === selectedIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          } else {
+            item.classList.remove('selected');
+          }
+        });
+      }
+
+      // Fermer la liste si on clique en dehors
+      document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+          resultsDiv.style.display = 'none';
+          resultsDiv.classList.remove('show');
+        }
+      });
+
+      // Réinitialiser lors de l'ouverture de la modale
+      // On intercepte l'ouverture de la modale pour réinitialiser le champ de recherche
+      const attachModalEl = document.getElementById('attachModal');
+      if (attachModalEl) {
+        const observer = new MutationObserver(function(mutations) {
+          mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+              const isVisible = attachModalEl.style.display !== 'none';
+              if (isVisible && searchInput) {
+                // Réinitialiser le champ de recherche quand la modale s'ouvre
+                setTimeout(() => {
+                  searchInput.value = '';
+                  clientIdInput.value = '';
+                  resultsDiv.style.display = 'none';
+                  resultsDiv.classList.remove('show');
+                  searchInput.focus();
+                }, 100);
+              }
+            }
+          });
+        });
+        observer.observe(attachModalEl, { attributes: true, attributeFilter: ['style'] });
+      }
+    })();
   })();
 </script>
 </body>
