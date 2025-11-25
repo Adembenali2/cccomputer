@@ -4,7 +4,7 @@
  * Affiche les différents types de produits en stock (papier, toners, LCD, PC)
  * 
  * @package CCComputer
- * @version 2.0
+ * @version 3.0 - Design moderne Dashboard avec alignement parfait des tableaux
  */
 
 require_once __DIR__ . '/../includes/auth.php';
@@ -344,18 +344,21 @@ $sectionImages = [
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
 <div class="page-container">
+    <!-- En-tête de page -->
     <div class="page-header">
-        <h2 class="page-title">Stock</h2>
-        <p class="page-subtitle">Disposition <strong>dynamique</strong> — la section la plus remplie s'affiche en premier.</p>
+        <h1 class="page-title">Gestion du Stock</h1>
+        <p class="page-subtitle">Vue d'ensemble complète de votre inventaire — disposition <strong>dynamique</strong> selon le contenu</p>
     </div>
 
+    <!-- Messages flash -->
     <?php if ($flash && isset($flash['type'])): ?>
         <div class="flash <?= h($flash['type']) ?>" role="alert">
             <?= h($flash['msg'] ?? '') ?>
         </div>
     <?php endif; ?>
 
-    <section class="stock-meta">
+    <!-- Statistiques globales -->
+    <section class="stock-meta" aria-label="Statistiques du stock">
         <div class="meta-card" data-type="papier">
             <div class="meta-card-icon">📄</div>
             <span class="meta-card-label">Total Papier</span>
@@ -385,165 +388,279 @@ $sectionImages = [
         <?php endif; ?>
     </section>
 
+    <!-- Barre de recherche -->
     <div class="filters-row">
         <div class="search-wrapper">
-            <input type="text" id="q" placeholder="Filtrer partout (réf., modèle, SN, MAC, CPU…)" aria-label="Filtrer" />
-            <button type="button" class="search-clear-btn" id="clearSearch" aria-label="Effacer la recherche" title="Effacer">×</button>
+            <input 
+                type="text" 
+                id="q" 
+                placeholder="Rechercher dans le stock (référence, modèle, SN, MAC, CPU…)" 
+                aria-label="Filtrer le stock"
+                autocomplete="off" />
+            <button 
+                type="button" 
+                class="search-clear-btn" 
+                id="clearSearch" 
+                aria-label="Effacer la recherche" 
+                title="Effacer">
+                ×
+            </button>
         </div>
-        <span class="search-results-count" id="searchResultsCount" style="display: none;"></span>
+        <span class="search-results-count" id="searchResultsCount" style="display: none;" aria-live="polite"></span>
     </div>
 
-    <!-- Masonry 2 colonnes -->
+    <!-- Grille Masonry 2 colonnes -->
     <div id="stockMasonry" class="stock-masonry">
-        <!-- Toners -->
-        <section class="card-section" data-section="toners">
+        
+        <!-- Section Toners -->
+        <section class="card-section" data-section="toners" aria-labelledby="section-toners-title">
             <div class="section-head">
                 <div class="head-left">
-                    <img src="<?= h($sectionImages['toners']) ?>" class="section-icon" alt="Toners" loading="lazy" onerror="this.style.display='none'">
-                    <h3 class="section-title">Toners</h3>
+                    <img 
+                        src="<?= h($sectionImages['toners']) ?>" 
+                        class="section-icon" 
+                        alt="Toners" 
+                        loading="lazy" 
+                        onerror="this.style.display='none'">
+                    <h2 id="section-toners-title" class="section-title">Toners</h2>
                 </div>
                 <div class="head-right">
-                    <button type="button" class="btn btn-primary btn-sm btn-add" data-add-type="toner">
-                        + Ajouter toner
+                    <button 
+                        type="button" 
+                        class="btn btn-primary btn-sm btn-add" 
+                        data-add-type="toner"
+                        aria-label="Ajouter un toner">
+                        <span aria-hidden="true">+</span> Ajouter toner
                     </button>
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows" data-section="toners">
+                <table class="tbl-stock tbl-compact click-rows" data-section="toners" role="table" aria-label="Liste des toners">
                     <colgroup>
-                        <col class="col-couleur"><col class="col-modele"><col class="col-qty">
+                        <col class="col-couleur">
+                        <col class="col-modele">
+                        <col class="col-qty">
                     </colgroup>
-                    <thead><tr><th>Couleur</th><th>Modèle</th><th>Qté</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($toners as $t): ?>
-                        <tr 
-                            data-type="toners" 
-                            data-id="<?= h((string)$t['id']) ?>"
-                            data-search="<?= h(strtolower($t['marque'] . ' ' . $t['modele'] . ' ' . $t['couleur'])) ?>">
-                            <td data-th="Couleur" title="<?= h($t['couleur']) ?>"><?= h($t['couleur']) ?></td>
-                            <td data-th="Modèle" title="<?= h($t['modele']) ?>"><?= h($t['modele']) ?></td>
-                            <td data-th="Qté" class="td-metric <?= (int)$t['qty'] === 0 ? 'is-zero' : '' ?>"><?= (int)$t['qty'] ?></td>
+                    <thead>
+                        <tr>
+                            <th scope="col">Couleur</th>
+                            <th scope="col">Modèle</th>
+                            <th scope="col">Qté</th>
                         </tr>
-                    <?php endforeach; ?>
-                    <?php if (empty($toners)): ?>
-                        <tr><td colspan="3">— Aucun toner —</td></tr>
-                    <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- Papier (depuis BDD) -->
-        <section class="card-section" data-section="papier">
-            <div class="section-head">
-                <div class="head-left">
-                    <img src="<?= h($sectionImages['papier']) ?>" class="section-icon" alt="Papier" loading="lazy" onerror="this.style.display='none'">
-                    <h3 class="section-title">Papier</h3>
-                </div>
-                <div class="head-right">
-                    <button type="button" class="btn btn-primary btn-sm btn-add" data-add-type="papier">
-                        + Ajouter papier
-                    </button>
-                </div>
-            </div>
-            <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows" data-section="papier">
-                    <colgroup>
-                        <col class="col-qty"><col class="col-modele"><col class="col-poids">
-                    </colgroup>
-                    <thead><tr><th>Qté</th><th>Modèle</th><th>Poids</th></tr></thead>
+                    </thead>
                     <tbody>
-                    <?php foreach ($papers as $p): ?>
-                        <?php if (!empty($p['paper_id'])): ?>
-                        <tr 
-                            data-type="papier" 
-                            data-id="<?= h((string)$p['paper_id']) ?>"
-                            data-search="<?= h(strtolower(($p['marque'] ?? '') . ' ' . ($p['modele'] ?? '') . ' ' . ($p['poids'] ?? ''))) ?>">
-                            <td data-th="Qté" class="td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
-                            <td data-th="Modèle" title="<?= h($p['modele'] ?? '—') ?>"><?= h($p['modele'] ?? '—') ?></td>
-                            <td data-th="Poids" title="<?= h($p['poids'] ?? '—') ?>"><?= h($p['poids'] ?? '—') ?></td>
-                        </tr>
+                        <?php if (empty($toners)): ?>
+                            <tr>
+                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                    <em>Aucun toner en stock</em>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($toners as $t): ?>
+                                <tr 
+                                    data-type="toners" 
+                                    data-id="<?= h((string)$t['id']) ?>"
+                                    data-search="<?= h(strtolower($t['marque'] . ' ' . $t['modele'] . ' ' . $t['couleur'])) ?>"
+                                    role="button"
+                                    tabindex="0"
+                                    aria-label="Voir les détails du toner <?= h($t['modele']) ?>">
+                                    <td data-th="Couleur" title="<?= h($t['couleur']) ?>"><?= h($t['couleur']) ?></td>
+                                    <td data-th="Modèle" title="<?= h($t['modele']) ?>"><?= h($t['modele']) ?></td>
+                                    <td data-th="Qté" class="td-metric <?= (int)$t['qty'] === 0 ? 'is-zero' : '' ?>"><?= (int)$t['qty'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
                         <?php endif; ?>
-                    <?php endforeach; ?>
-                    <?php if (empty($papers)): ?>
-                        <tr><td colspan="3">— Aucun papier —</td></tr>
-                    <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- LCD -->
-        <section class="card-section" data-section="lcd">
+        <!-- Section Papier -->
+        <section class="card-section" data-section="papier" aria-labelledby="section-papier-title">
             <div class="section-head">
                 <div class="head-left">
-                    <img src="<?= h($sectionImages['lcd']) ?>" class="section-icon" alt="Écrans LCD" loading="lazy" onerror="this.style.display='none'">
-                    <h3 class="section-title">LCD</h3>
+                    <img 
+                        src="<?= h($sectionImages['papier']) ?>" 
+                        class="section-icon" 
+                        alt="Papier" 
+                        loading="lazy" 
+                        onerror="this.style.display='none'">
+                    <h2 id="section-papier-title" class="section-title">Papier</h2>
                 </div>
                 <div class="head-right">
-                    <button type="button" class="btn btn-primary btn-sm btn-add" data-add-type="lcd">
-                        + Ajouter LCD
+                    <button 
+                        type="button" 
+                        class="btn btn-primary btn-sm btn-add" 
+                        data-add-type="papier"
+                        aria-label="Ajouter du papier">
+                        <span aria-hidden="true">+</span> Ajouter papier
                     </button>
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows" data-section="lcd">
+                <table class="tbl-stock tbl-compact click-rows" data-section="papier" role="table" aria-label="Liste du papier">
                     <colgroup>
-                        <col class="col-etat"><col class="col-modele"><col class="col-qty">
+                        <col class="col-qty">
+                        <col class="col-modele">
+                        <col class="col-poids">
                     </colgroup>
-                    <thead><tr><th>État</th><th>Modèle</th><th>Qté</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($lcd as $row): ?>
-                        <tr
-                            data-type="lcd" 
-                            data-id="<?= h((string)$row['id']) ?>"
-                            data-search="<?= h(strtolower($row['modele'] . ' ' . $row['reference'] . ' ' . $row['marque'] . ' ' . $row['resolution'] . ' ' . $row['connectique'])) ?>">
-                            <td data-th="État"><?= stateBadge($row['etat']) ?></td>
-                            <td data-th="Modèle" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
-                            <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
+                    <thead>
+                        <tr>
+                            <th scope="col">Qté</th>
+                            <th scope="col">Modèle</th>
+                            <th scope="col">Poids</th>
                         </tr>
-                    <?php endforeach; ?>
-                    <?php if (empty($lcd)): ?>
-                        <tr><td colspan="3">— Aucun LCD —</td></tr>
-                    <?php endif; ?>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($papers)): ?>
+                            <tr>
+                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                    <em>Aucun papier en stock</em>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($papers as $p): ?>
+                                <?php if (!empty($p['paper_id'])): ?>
+                                <tr 
+                                    data-type="papier" 
+                                    data-id="<?= h((string)$p['paper_id']) ?>"
+                                    data-search="<?= h(strtolower(($p['marque'] ?? '') . ' ' . ($p['modele'] ?? '') . ' ' . ($p['poids'] ?? ''))) ?>"
+                                    role="button"
+                                    tabindex="0"
+                                    aria-label="Voir les détails du papier <?= h($p['modele'] ?? '') ?>">
+                                    <td data-th="Qté" class="td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
+                                    <td data-th="Modèle" title="<?= h($p['modele'] ?? '—') ?>"><?= h($p['modele'] ?? '—') ?></td>
+                                    <td data-th="Poids" title="<?= h($p['poids'] ?? '—') ?>"><?= h($p['poids'] ?? '—') ?></td>
+                                </tr>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- PC -->
-        <section class="card-section" data-section="pc">
+        <!-- Section LCD -->
+        <section class="card-section" data-section="lcd" aria-labelledby="section-lcd-title">
             <div class="section-head">
                 <div class="head-left">
-                    <img src="<?= h($sectionImages['pc']) ?>" class="section-icon" alt="PC reconditionnés" loading="lazy" onerror="this.style.display='none'">
-                    <h3 class="section-title">PC reconditionnés</h3>
+                    <img 
+                        src="<?= h($sectionImages['lcd']) ?>" 
+                        class="section-icon" 
+                        alt="Écrans LCD" 
+                        loading="lazy" 
+                        onerror="this.style.display='none'">
+                    <h2 id="section-lcd-title" class="section-title">LCD</h2>
                 </div>
                 <div class="head-right">
-                    <button type="button" class="btn btn-primary btn-sm btn-add" data-add-type="pc">
-                        + Ajouter PC
+                    <button 
+                        type="button" 
+                        class="btn btn-primary btn-sm btn-add" 
+                        data-add-type="lcd"
+                        aria-label="Ajouter un écran LCD">
+                        <span aria-hidden="true">+</span> Ajouter LCD
                     </button>
                 </div>
             </div>
             <div class="table-wrapper">
-                <table class="tbl-stock tbl-compact click-rows" data-section="pc">
+                <table class="tbl-stock tbl-compact click-rows" data-section="lcd" role="table" aria-label="Liste des écrans LCD">
                     <colgroup>
-                        <col class="col-etat"><col class="col-modele"><col class="col-qty">
+                        <col class="col-etat">
+                        <col class="col-modele">
+                        <col class="col-qty">
                     </colgroup>
-                    <thead><tr><th>État</th><th>Modèle</th><th>Qté</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($pc as $row): ?>
-                        <tr
-                            data-type="pc" 
-                            data-id="<?= h((string)$row['id']) ?>"
-                            data-search="<?= h(strtolower($row['modele'] . ' ' . $row['reference'] . ' ' . $row['marque'] . ' ' . $row['cpu'] . ' ' . $row['os'] . ' ' . $row['ram'] . ' ' . $row['stockage'])) ?>">
-                            <td data-th="État"><?= stateBadge($row['etat']) ?></td>
-                            <td data-th="Modèle" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
-                            <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
+                    <thead>
+                        <tr>
+                            <th scope="col">État</th>
+                            <th scope="col">Modèle</th>
+                            <th scope="col">Qté</th>
                         </tr>
-                    <?php endforeach; ?>
-                    <?php if (empty($pc)): ?>
-                        <tr><td colspan="3">— Aucun PC —</td></tr>
-                    <?php endif; ?>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($lcd)): ?>
+                            <tr>
+                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                    <em>Aucun LCD en stock</em>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($lcd as $row): ?>
+                                <tr
+                                    data-type="lcd" 
+                                    data-id="<?= h((string)$row['id']) ?>"
+                                    data-search="<?= h(strtolower($row['modele'] . ' ' . $row['reference'] . ' ' . $row['marque'] . ' ' . $row['resolution'] . ' ' . $row['connectique'])) ?>"
+                                    role="button"
+                                    tabindex="0"
+                                    aria-label="Voir les détails de l'écran LCD <?= h($row['modele']) ?>">
+                                    <td data-th="État"><?= stateBadge($row['etat']) ?></td>
+                                    <td data-th="Modèle" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
+                                    <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Section PC -->
+        <section class="card-section" data-section="pc" aria-labelledby="section-pc-title">
+            <div class="section-head">
+                <div class="head-left">
+                    <img 
+                        src="<?= h($sectionImages['pc']) ?>" 
+                        class="section-icon" 
+                        alt="PC reconditionnés" 
+                        loading="lazy" 
+                        onerror="this.style.display='none'">
+                    <h2 id="section-pc-title" class="section-title">PC reconditionnés</h2>
+                </div>
+                <div class="head-right">
+                    <button 
+                        type="button" 
+                        class="btn btn-primary btn-sm btn-add" 
+                        data-add-type="pc"
+                        aria-label="Ajouter un PC">
+                        <span aria-hidden="true">+</span> Ajouter PC
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="tbl-stock tbl-compact click-rows" data-section="pc" role="table" aria-label="Liste des PC reconditionnés">
+                    <colgroup>
+                        <col class="col-etat">
+                        <col class="col-modele">
+                        <col class="col-qty">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th scope="col">État</th>
+                            <th scope="col">Modèle</th>
+                            <th scope="col">Qté</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($pc)): ?>
+                            <tr>
+                                <td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                    <em>Aucun PC en stock</em>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($pc as $row): ?>
+                                <tr
+                                    data-type="pc" 
+                                    data-id="<?= h((string)$row['id']) ?>"
+                                    data-search="<?= h(strtolower($row['modele'] . ' ' . $row['reference'] . ' ' . $row['marque'] . ' ' . $row['cpu'] . ' ' . $row['os'] . ' ' . $row['ram'] . ' ' . $row['stockage'])) ?>"
+                                    role="button"
+                                    tabindex="0"
+                                    aria-label="Voir les détails du PC <?= h($row['modele']) ?>">
+                                    <td data-th="État"><?= stateBadge($row['etat']) ?></td>
+                                    <td data-th="Modèle" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
+                                    <td data-th="Qté" class="td-metric"><?= (int)$row['qty'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -552,11 +669,23 @@ $sectionImages = [
 </div><!-- /.page-container -->
 
 <!-- ===== Modale détails (Photocopieurs / LCD / PC) ===== -->
-<div id="detailOverlay" class="modal-overlay" aria-hidden="true"></div>
-<div id="detailModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" style="display:none;">
+<div id="detailOverlay" class="modal-overlay" aria-hidden="true" role="presentation"></div>
+<div 
+    id="detailModal" 
+    class="modal" 
+    role="dialog" 
+    aria-modal="true" 
+    aria-labelledby="modalTitle" 
+    style="display:none;">
     <div class="modal-header">
         <h3 id="modalTitle">Détails</h3>
-        <button type="button" id="modalClose" class="icon-btn icon-btn--close" aria-label="Fermer">×</button>
+        <button 
+            type="button" 
+            id="modalClose" 
+            class="icon-btn icon-btn--close" 
+            aria-label="Fermer la modale">
+            ×
+        </button>
     </div>
     <div class="modal-body">
         <div class="detail-grid" id="detailGrid"></div>
@@ -564,20 +693,32 @@ $sectionImages = [
 </div>
 
 <!-- ===== Modale ajout produit ===== -->
-<div id="addOverlay" class="modal-overlay" aria-hidden="true"></div>
-<div id="addModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="addModalTitle" style="display:none;">
+<div id="addOverlay" class="modal-overlay" aria-hidden="true" role="presentation"></div>
+<div 
+    id="addModal" 
+    class="modal" 
+    role="dialog" 
+    aria-modal="true" 
+    aria-labelledby="addModalTitle" 
+    style="display:none;">
     <div class="modal-header">
         <h3 id="addModalTitle">Ajouter</h3>
-        <button type="button" id="addModalClose" class="icon-btn icon-btn--close" aria-label="Fermer">×</button>
+        <button 
+            type="button" 
+            id="addModalClose" 
+            class="icon-btn icon-btn--close" 
+            aria-label="Fermer la modale">
+            ×
+        </button>
     </div>
     <div class="modal-body">
-        <form id="addForm">
+        <form id="addForm" novalidate>
             <div id="addFields" class="detail-grid"></div>
             <div class="modal-actions" style="margin-top:1rem; display:flex; gap:.5rem; justify-content:flex-end;">
                 <button type="button" id="addCancel" class="btn btn-secondary">Annuler</button>
                 <button type="submit" class="btn btn-primary">Enregistrer</button>
             </div>
-            <div id="addError" class="form-error" style="color:#c00; margin-top:.5rem; display:none;"></div>
+            <div id="addError" class="form-error" style="color:#c00; margin-top:.5rem; display:none;" role="alert"></div>
         </form>
     </div>
 </div>
