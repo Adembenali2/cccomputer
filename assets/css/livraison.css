@@ -118,11 +118,33 @@ body.modal-open { overflow: hidden; }
 }
 .btn-primary:hover { filter: brightness(.97); }
 
+/* Animation de clignotement pour les retards */
+@keyframes blink-red {
+  0%, 100% { 
+    background: rgba(239, 68, 68, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.2);
+  }
+  50% { 
+    background: rgba(239, 68, 68, 0.15);
+    box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.4);
+  }
+}
+
 .row-alert {
   background: rgba(239, 68, 68, 0.08);
+  animation: blink-red 1.5s ease-in-out infinite;
 }
 .row-alert:hover {
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.18);
+  animation: none; /* Arrêter l'animation au survol */
+}
+
+/* Respecter les préférences d'accessibilité */
+@media (prefers-reduced-motion: reduce) {
+  .row-alert {
+    animation: none;
+    background: rgba(239, 68, 68, 0.12);
+  }
 }
 
 /* ligne marquée "aujourd’hui" */
@@ -178,6 +200,17 @@ body.modal-open { overflow: hidden; }
 .tbl-livraisons tbody td.has-pullout { position: relative; }
 
 /* --- Badge d'alerte tiré à droite, hors tableau --- */
+@keyframes blink-badge {
+  0%, 100% { 
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  50% { 
+    opacity: 0.85;
+    transform: translateY(-50%) scale(1.05);
+  }
+}
+
 .alert-pullout {
   position: absolute;
   top: 50%;
@@ -196,6 +229,14 @@ body.modal-open { overflow: hidden; }
   white-space: nowrap;
   z-index: 5;
   pointer-events: none; /* ne gêne pas les clics */
+  animation: blink-badge 1.2s ease-in-out infinite;
+}
+
+/* Respecter les préférences d'accessibilité */
+@media (prefers-reduced-motion: reduce) {
+  .alert-pullout {
+    animation: none;
+  }
 }
 
 /* Badge "Aujourd’hui" plus discret */

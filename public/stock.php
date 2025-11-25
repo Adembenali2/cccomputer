@@ -340,14 +340,16 @@ $sectionImages = [
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/stock.css" />
     <style>
-        /* Styles spécifiques pour le scanner de caméra - Qualité professionnelle */
+        /* Styles spécifiques pour le scanner de caméra - Taille compacte QR code */
         #reader {
             position: relative;
             background: #000;
             border-radius: var(--radius-md);
             overflow: hidden;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            min-height: 400px;
+            max-width: 400px;
+            margin: 0 auto;
+            min-height: 300px;
         }
         
         #reader video,
@@ -362,23 +364,23 @@ $sectionImages = [
             image-rendering: crisp-edges;
         }
         
-        /* Zone de scan optimisée avec animation */
+        /* Zone de scan compacte - taille QR code (250x250px) */
         #reader #qr-shaded-region {
-            border: 3px solid var(--accent-primary) !important;
-            border-radius: 12px !important;
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2),
-                        0 0 20px rgba(59, 130, 246, 0.4) !important;
-            animation: scanPulse 2s ease-in-out infinite;
+            border: 3px solid #10b981 !important;
+            border-radius: 8px !important;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3),
+                        0 0 15px rgba(16, 185, 129, 0.5) !important;
+            animation: scanPulse 1.5s ease-in-out infinite;
         }
         
         @keyframes scanPulse {
             0%, 100% {
-                box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2),
-                            0 0 20px rgba(59, 130, 246, 0.4);
+                box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3),
+                            0 0 15px rgba(16, 185, 129, 0.5);
             }
             50% {
-                box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.3),
-                            0 0 30px rgba(59, 130, 246, 0.6);
+                box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4),
+                            0 0 20px rgba(16, 185, 129, 0.7);
             }
         }
         
@@ -1910,19 +1912,16 @@ $sectionImages = [
                     await html5QrcodeScanner.start(
                         cameraConfig,
                         {
-                            // FPS élevé pour une détection rapide (30 fps pour réactivité maximale)
-                            fps: 30,
+                            // FPS très élevé pour détection ultra-rapide
+                            fps: 60,
                             
-                            // Zone de scan optimisée (70% pour meilleure détection)
+                            // Zone de scan de la taille d'un QR code (compacte et rapide)
                             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                                let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                                // Augmenter à 70% pour une meilleure détection
-                                let qrboxSize = Math.floor(minEdge * 0.7);
-                                // Minimum 250px pour garantir la qualité
-                                qrboxSize = Math.max(qrboxSize, 250);
+                                // Taille fixe optimale pour QR code (200-250px)
+                                // Pas trop grande, juste la taille du code QR
                                 return {
-                                    width: qrboxSize,
-                                    height: qrboxSize
+                                    width: 250,
+                                    height: 250
                                 };
                             },
                             
@@ -1930,22 +1929,20 @@ $sectionImages = [
                             aspectRatio: 1.0,
                             disableFlip: false,
                             
-                            // Contraintes vidéo haute qualité
+                            // Contraintes vidéo optimisées pour scan rapide
                             videoConstraints: {
                                 facingMode: 'environment',
-                                // Résolution haute pour meilleure qualité
+                                // Résolution moyenne pour performance (assez pour détecter QR)
                                 width: { 
-                                    ideal: 1920,
-                                    min: 1280,
-                                    max: 3840
+                                    ideal: 1280,
+                                    min: 640
                                 },
                                 height: { 
-                                    ideal: 1080,
-                                    min: 720,
-                                    max: 2160
+                                    ideal: 720,
+                                    min: 480
                                 },
-                                // Autres paramètres de qualité
-                                frameRate: { ideal: 30, min: 15, max: 60 },
+                                // Frame rate élevé pour détection rapide
+                                frameRate: { ideal: 60, min: 30, max: 60 },
                                 focusMode: 'continuous',
                                 exposureMode: 'continuous'
                             },
@@ -1985,37 +1982,33 @@ $sectionImages = [
                     await html5QrcodeScanner.start(
                         cameraConfig,
                         {
-                            // FPS élevé pour une détection rapide
-                            fps: 30,
+                            // FPS très élevé pour détection ultra-rapide
+                            fps: 60,
                             
-                            // Zone de scan optimisée
+                            // Zone de scan de la taille d'un QR code (compacte)
                             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                                let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                                let qrboxSize = Math.floor(minEdge * 0.7);
-                                qrboxSize = Math.max(qrboxSize, 250);
+                                // Taille fixe optimale pour QR code
                                 return {
-                                    width: qrboxSize,
-                                    height: qrboxSize
+                                    width: 250,
+                                    height: 250
                                 };
                             },
                             
                             aspectRatio: 1.0,
                             disableFlip: false,
                             
-                            // Contraintes vidéo haute qualité
+                            // Contraintes vidéo optimisées pour scan rapide
                             videoConstraints: {
                                 facingMode: 'user',
                                 width: { 
-                                    ideal: 1920,
-                                    min: 1280,
-                                    max: 3840
+                                    ideal: 1280,
+                                    min: 640
                                 },
                                 height: { 
-                                    ideal: 1080,
-                                    min: 720,
-                                    max: 2160
+                                    ideal: 720,
+                                    min: 480
                                 },
-                                frameRate: { ideal: 30, min: 15, max: 60 },
+                                frameRate: { ideal: 60, min: 30, max: 60 },
                                 focusMode: 'continuous',
                                 exposureMode: 'continuous'
                             },
@@ -2116,42 +2109,46 @@ $sectionImages = [
             }
         }
         
-        // Variable pour éviter les scans multiples
+        // Variable pour éviter les scans multiples (cooldown court pour rapidité)
         let lastScannedCode = '';
-        let scanCooldown = false;
+        let lastScanTime = 0;
+        const SCAN_COOLDOWN_MS = 500; // 500ms entre chaque scan (rapide)
         
-        // Callback succès scan - Optimisé pour rapidité
+        // Callback succès scan - Optimisé pour détection ultra-rapide
         function onScanSuccess(decodedText, decodedResult) {
-            if (!decodedText || scanCooldown) {
+            // Debug: vérifier que la fonction est appelée
+            console.log('Scan détecté:', decodedText);
+            
+            if (!decodedText) {
                 return;
             }
             
-            // Éviter les scans multiples du même code
-            if (decodedText === lastScannedCode) {
+            const now = Date.now();
+            
+            // Éviter les scans multiples du même code (déduplication rapide)
+            if (decodedText === lastScannedCode && (now - lastScanTime) < SCAN_COOLDOWN_MS) {
+                console.log('Scan ignoré (déjà scanné récemment)');
                 return;
             }
             
-            // Activer le cooldown pour éviter les scans répétés
-            scanCooldown = true;
+            // Mettre à jour les variables
             lastScannedCode = decodedText;
+            lastScanTime = now;
             
-            // Arrêter le scan immédiatement pour performance
-            stopScanning();
+            console.log('✓ Code scanné avec succès:', decodedText);
             
-            // Remplir automatiquement le champ de recherche
+            // Remplir automatiquement le champ de recherche IMMÉDIATEMENT
             fillSearchField(decodedText);
             
             // Afficher un message de succès avec feedback visuel
-            showResult('✓ Code-barres scanné : <strong>' + decodedText + '</strong>');
+            showResult('✓ Code scanné : <strong>' + decodedText + '</strong>');
             
-            // Rechercher le produit immédiatement (sans délai)
-            processBarcode(decodedText);
+            // Rechercher le produit en arrière-plan (ne bloque pas le scan)
+            processBarcode(decodedText).catch(err => {
+                console.error('Erreur traitement barcode:', err);
+            });
             
-            // Réinitialiser le cooldown après 2 secondes
-            setTimeout(() => {
-                scanCooldown = false;
-                lastScannedCode = '';
-            }, 2000);
+            // NE PAS arrêter le scan - permettre de scanner plusieurs codes rapidement
         }
         
         // Callback erreur scan (on ignore les erreurs continues pour performance)
