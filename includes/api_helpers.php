@@ -75,11 +75,17 @@ function requirePdoConnection(?PDO $pdo = null): PDO {
                 throw new RuntimeException('La connexion PDO n\'est pas disponible. Vérifiez la configuration de la base de données.');
             }
         } catch (Throwable $e) {
-            error_log('requirePdoConnection error: ' . $e->getMessage());
+            error_log('requirePdoConnection error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
             jsonResponse([
                 'ok' => false, 
                 'error' => 'Erreur de connexion à la base de données',
-                'debug' => $e->getMessage()
+                'debug' => [
+                    'message' => $e->getMessage(),
+                    'type' => get_class($e),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => explode("\n", $e->getTraceAsString())
+                ]
             ], 500);
         }
     }
@@ -109,7 +115,13 @@ function initApi(): void {
         jsonResponse([
             'ok' => false, 
             'error' => 'Erreur d\'initialisation de la session',
-            'debug' => $e->getMessage()
+            'debug' => [
+                'message' => $e->getMessage(),
+                'type' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => explode("\n", $e->getTraceAsString())
+            ]
         ], 500);
     }
     
@@ -119,20 +131,46 @@ function initApi(): void {
         // Vérifier que $pdo a été créé
         global $pdo;
         if (!isset($pdo) || !($pdo instanceof PDO)) {
-            throw new RuntimeException('La connexion PDO n\'a pas été initialisée par db.php');
+            // Vérifier dans GLOBALS aussi
+            if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+                $pdo = $GLOBALS['pdo'];
+            } else {
+                throw new RuntimeException('La connexion PDO n\'a pas été initialisée par db.php. Vérifiez la configuration de la base de données.');
+            }
         }
         
         // Stocker dans GLOBALS pour être sûr
         $GLOBALS['pdo'] = $pdo;
         
+        // Tester la connexion
+        try {
+            $pdo->query('SELECT 1');
+        } catch (PDOException $e) {
+            error_log('API init error (db test): ' . $e->getMessage());
+            throw new RuntimeException('La connexion PDO existe mais ne fonctionne pas: ' . $e->getMessage(), 0, $e);
+        }
+        
     } catch (Throwable $e) {
+        $errorInfo = [];
+        if ($e instanceof PDOException && isset($e->errorInfo)) {
+            $errorInfo = [
+                'sql_state' => $e->errorInfo[0] ?? null,
+                'driver_code' => $e->errorInfo[1] ?? null,
+                'driver_message' => $e->errorInfo[2] ?? null
+            ];
+        }
+        
         error_log('API init error (db): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
         jsonResponse([
             'ok' => false, 
             'error' => 'Erreur de connexion à la base de données',
-            'debug' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine()
+            'debug' => array_merge([
+                'message' => $e->getMessage(),
+                'type' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => explode("\n", $e->getTraceAsString())
+            ], $errorInfo)
         ], 500);
     }
     

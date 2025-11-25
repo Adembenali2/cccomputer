@@ -413,6 +413,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* ===== ALIGNEMENT PARFAIT ENTRE EN-TÊTES ET CELLULES ===== */
 /* Padding uniforme de base pour toutes les colonnes - vertical identique */
+/* NOTE: padding-right sera surchargé pour les colonnes numériques plus bas */
 .tbl-stock thead th,
 .tbl-stock tbody td {
   padding-top: 0.875rem;
@@ -439,20 +440,32 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 /* Colonnes de droite (dernière colonne) - alignement à droite pour Qté */
-.tbl-stock thead th:last-child,
+/* IMPORTANT: Même padding exact pour th et td pour alignement parfait */
+.tbl-stock thead th:last-child {
+  padding-left: 0.75rem;
+  padding-right: 1rem;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+/* Toutes les dernières colonnes (Qté) - alignement parfait */
 .tbl-stock tbody td:last-child {
   padding-left: 0.75rem;
   padding-right: 1rem;
   text-align: right;
+  box-sizing: border-box;
 }
 
-/* Colonnes numériques (Qté) - alignement à droite cohérent */
-.tbl-stock thead th:last-child,
+/* Colonnes numériques (Qté) - alignement à droite cohérent et parfait */
+/* Règles très spécifiques pour garantir l'alignement */
 .tbl-stock tbody td.td-metric,
-.tbl-stock tbody td:last-child.td-metric {
-  text-align: right;
-  padding-right: 1rem;
-  padding-left: 0.75rem;
+.tbl-stock tbody td:last-child.td-metric,
+.tbl-stock tbody td[data-th="Qté"],
+.tbl-stock tbody tr td.td-metric {
+  text-align: right !important;
+  padding-right: 1rem !important;
+  padding-left: 0.75rem !important;
+  box-sizing: border-box !important;
 }
 
 /* Pour le tableau Papier : Qté est en première colonne, alignée à droite */
@@ -492,6 +505,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
   font-size: 0.9375rem;
   color: var(--text-primary);
   box-sizing: border-box;
+}
+
+/* Surcharge FINALE pour les colonnes numériques - DOIT être après la règle générale */
+/* Garantit que les valeurs numériques sont parfaitement alignées sous les en-têtes */
+.tbl-stock tbody td:last-child:not([data-th="État"]) {
+  padding-right: 1rem !important;
+  text-align: right !important;
 }
 
 .tbl-stock tbody tr {
@@ -550,10 +570,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Alignement spécifique pour les colonnes numériques - cohérent avec les en-têtes */
 .tbl-stock tbody td[data-th="Qté"],
 .tbl-stock tbody td[data-th="Poids"] {
-  text-align: right;
+  text-align: right !important;
   vertical-align: middle;
-  padding-right: 1rem;
-  padding-left: 0.75rem;
+  padding-right: 1rem !important;
+  padding-left: 0.75rem !important;
   box-sizing: border-box;
 }
 
@@ -575,12 +595,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 .td-metric { 
   font-weight: 600; 
-  text-align: right;
+  text-align: right !important;
   font-variant-numeric: tabular-nums;
   vertical-align: middle;
-  /* Padding cohérent avec les en-têtes */
-  padding-left: 0.75rem;
-  padding-right: 1rem;
+  /* Padding EXACTEMENT identique aux en-têtes pour alignement parfait */
+  padding-left: 0.75rem !important;
+  padding-right: 1rem !important;
   color: var(--text-primary);
   font-size: 0.9375rem;
   box-sizing: border-box;

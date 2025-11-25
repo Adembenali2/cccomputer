@@ -65,26 +65,53 @@ set_exception_handler(function($exception) {
 try {
     initApi();
 } catch (Throwable $e) {
+    $errorInfo = [];
+    if ($e instanceof PDOException && isset($e->errorInfo)) {
+        $errorInfo = [
+            'sql_state' => $e->errorInfo[0] ?? null,
+            'driver_code' => $e->errorInfo[1] ?? null,
+            'driver_message' => $e->errorInfo[2] ?? null
+        ];
+    }
+    
     error_log('chatroom_send.php - Erreur initApi: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
     jsonResponse([
         'ok' => false, 
         'error' => 'Erreur d\'initialisation',
-        'debug' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
+        'debug' => array_merge([
+            'message' => $e->getMessage(),
+            'type' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString())
+        ], $errorInfo)
     ], 500);
 }
 
 try {
     $pdo = requirePdoConnection();
 } catch (Throwable $e) {
+    // requirePdoConnection() devrait déjà avoir renvoyé une réponse JSON, mais au cas où...
+    $errorInfo = [];
+    if ($e instanceof PDOException && isset($e->errorInfo)) {
+        $errorInfo = [
+            'sql_state' => $e->errorInfo[0] ?? null,
+            'driver_code' => $e->errorInfo[1] ?? null,
+            'driver_message' => $e->errorInfo[2] ?? null
+        ];
+    }
+    
     error_log('chatroom_send.php - Erreur requirePdoConnection: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
     jsonResponse([
         'ok' => false, 
         'error' => 'Erreur de connexion à la base de données',
-        'debug' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
+        'debug' => array_merge([
+            'message' => $e->getMessage(),
+            'type' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString())
+        ], $errorInfo)
     ], 500);
 }
 
