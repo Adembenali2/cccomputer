@@ -83,22 +83,19 @@ try {
 // Récupérer les SAV
 $savs = [];
 try {
-    // Date du jour pour inclure les SAV en cours
-    $today = date('Y-m-d');
-    // Calculer une date de début pour inclure les SAV en cours (7 jours avant la période ou début de la période, selon le plus récent)
+    // Calculer une date de début pour inclure les SAV en cours (7 jours avant la période ou maximum 30 jours en arrière)
     $dateObjMin = new DateTime($startDate);
     $dateObjMin->modify('-7 days');
     $minDateForOngoing = $dateObjMin->format('Y-m-d');
-    // Utiliser la date la plus récente entre (startDate - 7 jours) et aujourd'hui - 30 jours pour éviter de remonter trop loin
     $dateObjLimit = new DateTime();
     $dateObjLimit->modify('-30 days');
     $limitDate = $dateObjLimit->format('Y-m-d');
     $actualMinDate = max($minDateForOngoing, $limitDate);
     
     if ($hasDateIntervention) {
-        // Inclure les SAV dans la période OU les SAV en cours (non résolus) depuis une date raisonnable jusqu'à la fin de la période
+        // Inclure les SAV dans la période OU les SAV en cours jusqu'à la fin de la période
         $whereSav = [
-            "(s.date_ouverture BETWEEN :start_date AND :end_date 
+            "((s.date_ouverture BETWEEN :start_date AND :end_date)
               OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue BETWEEN :start_date2 AND :end_date2)
               OR (s.date_ouverture >= :min_ongoing_date AND s.date_ouverture <= :end_date AND s.statut IN ('ouvert', 'en_cours'))
               OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue >= :min_ongoing_date2 AND s.date_intervention_prevue <= :end_date3 AND s.statut IN ('ouvert', 'en_cours')))"
@@ -115,9 +112,10 @@ try {
         $dateOrderBy = "COALESCE(s.date_intervention_prevue, s.date_ouverture)";
         $selectDateIntervention = "s.date_intervention_prevue,";
     } else {
-        // Inclure les SAV dans la période OU les SAV en cours (non résolus) depuis une date raisonnable jusqu'à la fin de la période
+        // Inclure les SAV dans la période OU les SAV en cours jusqu'à la fin de la période
+        // Simplification : pour l'instant, on inclut juste ceux dans la période pour déboguer
         $whereSav = [
-            "(s.date_ouverture BETWEEN :start_date AND :end_date 
+            "(s.date_ouverture BETWEEN :start_date AND :end_date
               OR (s.date_ouverture >= :min_ongoing_date AND s.date_ouverture <= :end_date AND s.statut IN ('ouvert', 'en_cours')))"
         ];
         $paramsSav = [
@@ -184,16 +182,33 @@ try {
         ORDER BY {$dateOrderBy} ASC, s.priorite DESC
     ";
     
+    // Debug : Afficher la requête SQL et les paramètres
+    error_log('agenda.php - SQL SAV: ' . $sqlSav);
+    error_log('agenda.php - Paramètres SAV: ' . json_encode($paramsSav));
+    error_log('agenda.php - Période: ' . $startDate . ' à ' . $endDate);
+    error_log('agenda.php - hasDateIntervention: ' . ($hasDateIntervention ? 'true' : 'false'));
+    
     $stmtSav = $pdo->prepare($sqlSav);
     $stmtSav->execute($paramsSav);
     $savs = $stmtSav->fetchAll(PDO::FETCH_ASSOC);
     
     // Debug temporaire
     if (empty($savs)) {
-        error_log('agenda.php - Aucun SAV trouvé. SQL: ' . $sqlSav);
-        error_log('agenda.php - Paramètres: ' . json_encode($paramsSav));
+        error_log('agenda.php - Aucun SAV trouvé après exécution');
         error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isTechnicien: ' . ($isTechnicien ? 'true' : 'false') . ', currentUserId: ' . $currentUserId . ', currentUserRole: ' . ($currentUserRole ?? 'null'));
-        error_log('agenda.php - Période: ' . $startDate . ' à ' . $endDate);
+        
+        // Test direct de la requête
+        try {
+            $testSql = "SELECT COUNT(*) as cnt FROM sav WHERE date_ouverture BETWEEN :start_date AND :end_date AND statut NOT IN ('resolu', 'annule')";
+            $testStmt = $pdo->prepare($testSql);
+            $testStmt->execute([':start_date' => $startDate, ':end_date' => $endDate]);
+            $testResult = $testStmt->fetch(PDO::FETCH_ASSOC);
+            error_log('agenda.php - Test direct (sans JOIN): ' . ($testResult['cnt'] ?? 0) . ' SAV trouvés');
+        } catch (PDOException $e) {
+            error_log('agenda.php - Erreur test direct: ' . $e->getMessage());
+        }
+    } else {
+        error_log('agenda.php - ' . count($savs) . ' SAV trouvés');
     }
 } catch (PDOException $e) {
     error_log('agenda.php - Erreur récupération SAV: ' . $e->getMessage());
