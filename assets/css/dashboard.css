@@ -785,11 +785,19 @@ body {
   }
 }
 
-/* ====== Badge import SFTP ====== */
-.import-badge {
+/* ====== Badges import SFTP et Ancien ====== */
+.import-badges {
   position: absolute;
   right: 0;
   top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.import-badge {
   display: flex;
   align-items: center;
   gap: 8px;

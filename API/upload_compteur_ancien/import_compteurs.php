@@ -7,9 +7,11 @@ require_once __DIR__ . '/../../includes/db.php';
 
 // Vérifier qu'on a bien un PDO
 if (!isset($GLOBALS['pdo']) || !$GLOBALS['pdo'] instanceof PDO) {
-    http_response_code(500);
-    echo "Erreur : PDO non initialisé par includes/db.php";
-    exit;
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    echo "Erreur : PDO non initialisé par includes/db.php\n";
+    exit(1);
 }
 
 $pdo = $GLOBALS['pdo'];
@@ -17,9 +19,16 @@ $pdo = $GLOBALS['pdo'];
 // 2) URL source : ta page IONOS
 $sourceUrl = 'https://cccomputer.fr/test_compteur.php';
 
-// --- helper pour log (affichage dans le navigateur) ---
+// --- helper pour log (affichage dans le navigateur ou CLI) ---
 function logLine(string $msg): void {
-    echo htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . "<br>\n";
+    $isCli = php_sapi_name() === 'cli';
+    if ($isCli) {
+        // En CLI, pas de HTML
+        echo $msg . "\n";
+    } else {
+        // En HTTP, avec HTML
+        echo htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . "<br>\n";
+    }
 }
 
 // --- 3) Récupération HTML ---
@@ -27,9 +36,11 @@ logLine("🔁 Récupération de la page : $sourceUrl");
 
 $html = @file_get_contents($sourceUrl);
 if ($html === false) {
-    http_response_code(500);
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
     logLine("❌ Impossible de récupérer la page (file_get_contents a échoué).");
-    exit;
+    exit(1);
 }
 
 // 4) Parsing HTML avec DOM + XPath
@@ -235,3 +246,46 @@ foreach ($rows as $row) {
 logLine("🎉 Import terminé.");
 logLine("➡️ Lignes insérées : $inserted");
 logLine("➡️ Lignes ignorées (déjà présentes MAC+Timestamp) : $skipped");
+
+// 7) Enregistrement dans import_run pour suivi du dashboard
+try {
+    // Créer la table si elle n'existe pas
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS import_run (
+            id INT NOT NULL AUTO_INCREMENT,
+            ran_at DATETIME NOT NULL,
+            imported INT NOT NULL,
+            skipped INT NOT NULL,
+            ok TINYINT(1) NOT NULL,
+            msg TEXT,
+            PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    
+    $totalProcessed = $inserted + $skipped;
+    $hasError = ($inserted === 0 && $totalProcessed > 0 && $skipped > 0);
+    
+    $msg = json_encode([
+        'source' => 'ancien_import',
+        'processed' => $totalProcessed,
+        'inserted' => $inserted,
+        'skipped' => $skipped,
+        'url' => $sourceUrl
+    ], JSON_UNESCAPED_UNICODE);
+    
+    $stmtLog = $pdo->prepare("
+        INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
+        VALUES (NOW(), :imported, :skipped, :ok, :msg)
+    ");
+    
+    $stmtLog->execute([
+        ':imported' => $inserted,
+        ':skipped'  => $skipped,
+        ':ok'       => ($hasError ? 0 : 1),
+        ':msg'      => $msg
+    ]);
+    
+    logLine("📝 Enregistrement dans import_run réussi.");
+} catch (Throwable $e) {
+    logLine("⚠️ Erreur lors de l'enregistrement dans import_run : " . $e->getMessage());
+}
