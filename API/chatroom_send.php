@@ -353,6 +353,16 @@ try {
         $mentionsArray = json_decode($messageData['mentions'], true) ?: [];
     }
 
+    // Nettoyer le chemin de l'image (s'assurer qu'il commence par /)
+    $imagePath = null;
+    if (isset($messageData['image_path']) && !empty($messageData['image_path'])) {
+        $imagePath = $messageData['image_path'];
+        // S'assurer que le chemin commence par /
+        if (substr($imagePath, 0, 1) !== '/') {
+            $imagePath = '/' . $imagePath;
+        }
+    }
+    
     // Formater la réponse
     jsonResponse([
         'ok' => true,
@@ -360,7 +370,7 @@ try {
             'id' => (int)$messageData['id'],
             'id_user' => (int)$messageData['id_user'],
             'message' => $messageData['message'],
-            'image_path' => isset($messageData['image_path']) ? $messageData['image_path'] : null,
+            'image_path' => $imagePath,
             'date_envoi' => $messageData['date_envoi'],
             'user_nom' => $messageData['nom'],
             'user_prenom' => $messageData['prenom'],

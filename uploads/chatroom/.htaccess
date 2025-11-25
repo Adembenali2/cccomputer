@@ -1,0 +1,26 @@
+# Autoriser l'accès public aux images de la chatroom
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from all
+</IfModule>
+
+# Désactiver l'exécution de scripts PHP dans ce répertoire (sécurité)
+<FilesMatch "\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Autoriser uniquement les fichiers images
+<FilesMatch "\.(jpg|jpeg|png|gif|webp)$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>
+
+# Headers de sécurité
+<IfModule mod_headers.c>
+    Header set Content-Type "image/*"
+</IfModule>
+

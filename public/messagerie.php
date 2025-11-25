@@ -62,13 +62,26 @@ try {
             cursor: pointer;
             font-size: 0.85rem;
         }
+        .message-image-container {
+            margin-top: 0.5rem;
+        }
         .message-image {
             max-width: 100%;
             max-height: 400px;
             border-radius: var(--radius-md);
-            margin-top: 0.5rem;
             cursor: pointer;
             object-fit: contain;
+            display: block;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .message-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .message-image-error {
+            font-size: 0.9rem;
+            text-align: center;
         }
         .image-upload-btn {
             background: var(--bg-tertiary);
@@ -430,14 +443,24 @@ function renderMessage(message) {
     
     let imageHtml = '';
     if (message.image_path) {
-        imageHtml = `<img src="${escapeHtml(message.image_path)}" alt="Image" class="message-image" onclick="window.open('${escapeHtml(message.image_path)}', '_blank')">`;
+        // S'assurer que le chemin commence par /
+        const imagePath = message.image_path.startsWith('/') ? message.image_path : '/' + message.image_path;
+        imageHtml = `<div class="message-image-container">
+            <img src="${escapeHtml(imagePath)}" alt="Image" class="message-image" 
+                 onclick="window.open('${escapeHtml(imagePath)}', '_blank')"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block'; console.error('Erreur chargement image:', '${escapeHtml(imagePath)}');">
+            <div class="message-image-error" style="display:none; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); color: var(--text-secondary);">
+                ⚠️ Image non disponible
+            </div>
+        </div>`;
     }
     
+    // Afficher l'image AVANT le texte du message (comme demandé)
     const messageHtml = `
         <div class="chatroom-message ${messageClass}" data-message-id="${message.id}">
             <div class="message-bubble">
-                ${messageContent}
                 ${imageHtml}
+                ${messageContent}
             </div>
             <div class="message-info">
                 ${userInfo}

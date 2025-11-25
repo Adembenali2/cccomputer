@@ -43,10 +43,22 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Fichier trop volumineux (max 5MB)'], 400);
     }
 
+    // Déterminer le chemin d'upload (accessible publiquement)
+    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+    if ($docRoot !== '' && is_dir($docRoot)) {
+        // Utiliser le document root si disponible (production)
+        $uploadDir = $docRoot . '/uploads/chatroom';
+    } else {
+        // Fallback : utiliser le répertoire du projet (développement local)
+        $uploadDir = dirname(__DIR__) . '/uploads/chatroom';
+    }
+    
     // Créer le répertoire d'upload si nécessaire
-    $uploadDir = dirname(__DIR__) . '/uploads/chatroom';
     if (!is_dir($uploadDir)) {
-        @mkdir($uploadDir, 0755, true);
+        if (!@mkdir($uploadDir, 0755, true)) {
+            error_log('chatroom_upload_image.php - Impossible de créer le répertoire: ' . $uploadDir);
+            jsonResponse(['ok' => false, 'error' => 'Erreur lors de la création du répertoire d\'upload'], 500);
+        }
     }
 
     // Générer un nom de fichier sécurisé
@@ -62,14 +74,23 @@ try {
 
     // Déplacer le fichier
     if (!move_uploaded_file($file['tmp_name'], $filepath)) {
+        error_log('chatroom_upload_image.php - Erreur move_uploaded_file vers: ' . $filepath);
         jsonResponse(['ok' => false, 'error' => 'Erreur lors de l\'enregistrement du fichier'], 500);
     }
 
-    // Définir les permissions
+    // Définir les permissions (lecture pour tous, écriture pour le propriétaire)
     @chmod($filepath, 0644);
+    
+    // Vérifier que le fichier existe bien
+    if (!file_exists($filepath)) {
+        error_log('chatroom_upload_image.php - Fichier non trouvé après upload: ' . $filepath);
+        jsonResponse(['ok' => false, 'error' => 'Fichier non trouvé après l\'upload'], 500);
+    }
 
-    // Chemin relatif pour l'URL
+    // Chemin relatif pour l'URL (toujours accessible depuis la racine web)
     $relativePath = '/uploads/chatroom/' . $filename;
+    
+    error_log('chatroom_upload_image.php - Image uploadée avec succès: ' . $relativePath . ' (fichier: ' . $filepath . ')');
 
     jsonResponse([
         'ok' => true,

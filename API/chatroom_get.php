@@ -246,11 +246,21 @@ try {
             $mentionsArray = json_decode($msg['mentions'], true) ?: [];
         }
 
+        // Nettoyer le chemin de l'image (s'assurer qu'il commence par /)
+        $imagePath = null;
+        if (isset($msg['image_path']) && !empty($msg['image_path'])) {
+            $imagePath = $msg['image_path'];
+            // S'assurer que le chemin commence par /
+            if (substr($imagePath, 0, 1) !== '/') {
+                $imagePath = '/' . $imagePath;
+            }
+        }
+        
         $formattedMessages[] = [
             'id' => (int)$msg['id'],
             'id_user' => (int)$msg['id_user'],
             'message' => $msg['message'],
-            'image_path' => isset($msg['image_path']) ? $msg['image_path'] : null,
+            'image_path' => $imagePath,
             'date_envoi' => $msg['date_envoi'],
             'user_nom' => $msg['nom'],
             'user_prenom' => $msg['prenom'],
