@@ -17,7 +17,7 @@ $pdo = $GLOBALS['pdo'];
 // 2) URL source : ta page IONOS
 $sourceUrl = 'https://cccomputer.fr/test_compteur.php';
 
-// --- helper pour log ---
+// --- helper pour log (affichage dans le navigateur) ---
 function logLine(string $msg): void {
     echo htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . "<br>\n";
 }
@@ -77,9 +77,9 @@ function extractTonerValue(DOMXPath $xpath, DOMNode $td): ?int {
     return null;
 }
 
-// 5) Préparation de la requête INSERT dans compteur_relevee
+// 5) Préparation de la requête INSERT dans compteur_relevee_ancien
 $sqlInsert = "
-    INSERT INTO compteur_relevee (
+    INSERT INTO compteur_relevee_ancien (
       Timestamp,
       IpAddress,
       Nom,
@@ -138,12 +138,12 @@ $sqlInsert = "
 
 $stmtInsert = $pdo->prepare($sqlInsert);
 
-// 🔍 Requête pour vérifier si le compteur existe déjà (MAC + Timestamp)
-// On reproduit la logique de mac_norm : REPLACE(UPPER(MacAddress), ':', '')
+// 🔍 Requête pour vérifier si le compteur existe déjà (unicité MAC + Timestamp)
+// On utilise la colonne calculée mac_norm : REPLACE(UPPER(MacAddress), ':', '')
 $sqlCheck = "
     SELECT id
-    FROM compteur_relevee
-    WHERE REPLACE(UPPER(MacAddress), ':', '') = REPLACE(UPPER(:mac), ':', '')
+    FROM compteur_relevee_ancien
+    WHERE mac_norm = REPLACE(UPPER(:mac), ':', '')
       AND Timestamp <=> :ts
     LIMIT 1
 ";
@@ -182,7 +182,7 @@ foreach ($rows as $row) {
     $etat = getCellText($cells->item(5));
 
     if ($mac === '' && $tsStr === '') {
-        // ligne bizarre, on saute
+        // ligne vide / bizarre, on saute
         continue;
     }
 
@@ -195,10 +195,10 @@ foreach ($rows as $row) {
     $tonerM = extractTonerValue($xpath, $cells->item(8));
     $tonerY = extractTonerValue($xpath, $cells->item(9));
 
-    // Timestamp tel quel
+    // Timestamp tel quel (MySQL acceptera un DATETIME ou NULL)
     $timestamp = $tsStr !== '' ? $tsStr : null;
 
-    // 🔍 6.a Vérifier si ce compteur existe déjà (MAC + Timestamp)
+    // 🔍 6.a Vérifier si ce compteur existe déjà (MAC normalisée + Timestamp)
     $stmtCheck->execute([
         ':mac' => $mac,
         ':ts'  => $timestamp,
