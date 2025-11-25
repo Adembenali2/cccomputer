@@ -38,73 +38,6 @@ try {
     
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/chatroom.css">
-    <style>
-        .image-preview-container {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem;
-            background: var(--bg-secondary);
-            border-radius: var(--radius-md);
-            margin-bottom: 0.5rem;
-        }
-        .image-preview {
-            max-width: 100px;
-            max-height: 100px;
-            border-radius: var(--radius-sm);
-            object-fit: cover;
-        }
-        .image-preview-remove {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-sm);
-            padding: 0.25rem 0.5rem;
-            cursor: pointer;
-            font-size: 0.85rem;
-        }
-        .message-image-container {
-            margin-top: 0.5rem;
-        }
-        .message-image {
-            max-width: 100%;
-            max-height: 400px;
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            object-fit: contain;
-            display: block;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .message-image:hover {
-            transform: scale(1.02);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        .message-image-error {
-            font-size: 0.9rem;
-            text-align: center;
-        }
-        .image-upload-btn {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            margin-right: 0.5rem;
-        }
-        .image-upload-btn:hover {
-            background: var(--bg-primary);
-            border-color: var(--accent-primary);
-        }
-        #imageInput {
-            display: none;
-        }
-    </style>
 </head>
 <body class="page-maps page-chatroom">
 
@@ -114,7 +47,7 @@ try {
     <header class="page-header">
         <h1 class="page-title">💬 Chatroom Globale</h1>
         <p class="page-sub">
-            Discutez en temps réel avec tous vos collègues connectés. Mentionnez des utilisateurs avec @nom ou envoyez des photos.
+            Discutez en temps réel avec tous vos collègues connectés. Mentionnez des utilisateurs avec @nom.
             <br><small style="color: var(--text-secondary);">Les messages sont automatiquement supprimés après 24h.</small>
         </p>
     </header>
@@ -156,10 +89,6 @@ try {
 
         <!-- Barre de saisie (fixe en bas) -->
         <div class="chatroom-input-container">
-            <div id="imagePreviewContainer" class="image-preview-container" style="display:none;">
-                <img id="imagePreview" class="image-preview" src="" alt="Aperçu">
-                <button type="button" id="removeImageBtn" class="image-preview-remove">✕ Supprimer</button>
-            </div>
             <div class="chatroom-input-wrapper">
                 <textarea 
                     id="messageInput" 
@@ -169,15 +98,6 @@ try {
                     maxlength="5000"></textarea>
                 <div id="mentionSuggestions" class="chatroom-mention-suggestions"></div>
             </div>
-            <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp">
-            <button 
-                type="button" 
-                id="imageUploadBtn" 
-                class="image-upload-btn" 
-                title="Envoyer une photo"
-                aria-label="Envoyer une photo">
-                📷
-            </button>
             <button 
                 type="button" 
                 id="sendButton" 
@@ -212,11 +132,6 @@ const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const mentionSuggestions = document.getElementById('mentionSuggestions');
-const imageInput = document.getElementById('imageInput');
-const imageUploadBtn = document.getElementById('imageUploadBtn');
-const imagePreviewContainer = document.getElementById('imagePreviewContainer');
-const imagePreview = document.getElementById('imagePreview');
-const removeImageBtn = document.getElementById('removeImageBtn');
 
 // ============================================
 // Variables d'état
@@ -230,7 +145,6 @@ let mentionSearchTimeout = null;
 let mentionSearchIndex = -1;
 let mentionSuggestionsList = [];
 let allUsers = []; // Cache des utilisateurs pour les mentions
-let selectedImageFile = null;
 
 // ============================================
 // Fonctions utilitaires
@@ -386,48 +300,6 @@ function formatMessageContent(message, mentions = []) {
 }
 
 // ============================================
-// Gestion des images
-// ============================================
-imageUploadBtn.addEventListener('click', () => {
-    imageInput.click();
-});
-
-imageInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    // Vérifier le type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-        alert('Type de fichier non autorisé. Formats acceptés: JPEG, PNG, GIF, WebP');
-        return;
-    }
-    
-    // Vérifier la taille (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-        alert('Fichier trop volumineux (max 5MB)');
-        return;
-    }
-    
-    selectedImageFile = file;
-    
-    // Afficher l'aperçu
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        imagePreview.src = e.target.result;
-        imagePreviewContainer.style.display = 'flex';
-    };
-    reader.readAsDataURL(file);
-});
-
-removeImageBtn.addEventListener('click', () => {
-    selectedImageFile = null;
-    imageInput.value = '';
-    imagePreviewContainer.style.display = 'none';
-    imagePreview.src = '';
-});
-
-// ============================================
 // Affichage des messages
 // ============================================
 function renderMessage(message) {
@@ -441,25 +313,9 @@ function renderMessage(message) {
         messageContent = `<p class="message-content">${formatMessageContent(message.message, message.mentions || [])}</p>`;
     }
     
-    let imageHtml = '';
-    if (message.image_path) {
-        // S'assurer que le chemin commence par /
-        const imagePath = message.image_path.startsWith('/') ? message.image_path : '/' + message.image_path;
-        imageHtml = `<div class="message-image-container">
-            <img src="${escapeHtml(imagePath)}" alt="Image" class="message-image" 
-                 onclick="window.open('${escapeHtml(imagePath)}', '_blank')"
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block'; console.error('Erreur chargement image:', '${escapeHtml(imagePath)}');">
-            <div class="message-image-error" style="display:none; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); color: var(--text-secondary);">
-                ⚠️ Image non disponible
-            </div>
-        </div>`;
-    }
-    
-    // Afficher l'image AVANT le texte du message (comme demandé)
     const messageHtml = `
         <div class="chatroom-message ${messageClass}" data-message-id="${message.id}">
             <div class="message-bubble">
-                ${imageHtml}
                 ${messageContent}
             </div>
             <div class="message-info">
@@ -656,8 +512,8 @@ async function loadMessages(append = false) {
 async function sendMessage() {
     const messageText = messageInput.value.trim();
     
-    // Le message ou l'image doit être présent
-    if (!messageText && !selectedImageFile) {
+    // Le message doit être présent
+    if (!messageText) {
         return;
     }
     
@@ -671,7 +527,6 @@ async function sendMessage() {
     isSending = true;
     sendButton.disabled = true;
     const originalMessage = messageText;
-    const originalImageFile = selectedImageFile;
     
     // Extraire les mentions
     const mentionNames = detectMentions(messageText);
@@ -680,59 +535,16 @@ async function sendMessage() {
     // Réinitialiser l'interface
     messageInput.value = '';
     adjustTextareaHeight();
-    selectedImageFile = null;
-    imageInput.value = '';
-    imagePreviewContainer.style.display = 'none';
-    imagePreview.src = '';
     
     try {
-        let imagePath = null;
-        
-        // Upload de l'image si présente
-        if (originalImageFile) {
-            const formData = new FormData();
-            formData.append('image', originalImageFile);
-            
-            const uploadResponse = await fetch('/API/chatroom_upload_image.php', {
-                method: 'POST',
-                body: formData,
-                credentials: 'same-origin'
-            });
-            
-            if (!uploadResponse.ok) {
-                let errorData;
-                try {
-                    errorData = await uploadResponse.json();
-                } catch (e) {
-                    try {
-                        const text = await uploadResponse.text();
-                        throw new Error(`Réponse non-JSON (${uploadResponse.status}): ${text.substring(0, 200)}`);
-                    } catch (textError) {
-                        throw new Error(`Impossible de lire la réponse (${uploadResponse.status}): ${textError.message}`);
-                    }
-                }
-                
-                displayDebugError(new Error(errorData.error || `HTTP ${uploadResponse.status}`), 'uploadImage', uploadResponse, errorData);
-                throw new Error(errorData.error || 'Erreur lors de l\'upload de l\'image');
-            }
-            
-            const uploadData = await uploadResponse.json();
-            if (uploadData.ok && uploadData.image_path) {
-                imagePath = uploadData.image_path;
-            } else {
-                throw new Error('Erreur lors de l\'upload de l\'image');
-            }
-        }
-        
         // Envoyer le message
         const response = await fetch('/API/chatroom_send.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
                 csrf_token: CONFIG.csrfToken,
-                message: originalMessage || '',
-                mentions: mentionIds,
-                image_path: imagePath
+                message: originalMessage,
+                mentions: mentionIds
             }),
             credentials: 'same-origin'
         });
@@ -786,15 +598,6 @@ async function sendMessage() {
         alert(alertMsg);
         messageInput.value = originalMessage;
         adjustTextareaHeight();
-        if (originalImageFile) {
-            selectedImageFile = originalImageFile;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                imagePreview.src = e.target.result;
-                imagePreviewContainer.style.display = 'flex';
-            };
-            reader.readAsDataURL(originalImageFile);
-        }
     } finally {
         isSending = false;
         sendButton.disabled = false;

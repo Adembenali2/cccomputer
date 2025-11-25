@@ -157,13 +157,12 @@ try {
 
 try {
 
-    // Valider le message (peut être vide si une image est envoyée)
+    // Valider le message
     $message = trim($data['message'] ?? '');
-    $imagePath = $data['image_path'] ?? null;
 
-    // Le message ou l'image doit être présent
-    if (empty($message) && empty($imagePath)) {
-        jsonResponse(['ok' => false, 'error' => 'Le message ou une image doit être fourni'], 400);
+    // Le message doit être présent
+    if (empty($message)) {
+        jsonResponse(['ok' => false, 'error' => 'Le message ne peut pas être vide'], 400);
     }
 
     // Limiter la longueur du message (5000 caractères max)
@@ -191,54 +190,20 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Table chatroom_messages non trouvée. Veuillez exécuter la migration SQL.'], 500);
     }
 
-    // Vérifier si la colonne image_path existe
-    $hasImagePath = false;
-    try {
-        $checkColumn = $pdo->query("
-            SELECT COUNT(*) as cnt 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = DATABASE() 
-            AND TABLE_NAME = 'chatroom_messages' 
-            AND COLUMN_NAME = 'image_path'
-        ");
-        $hasImagePath = (int)$checkColumn->fetchColumn() > 0;
-    } catch (PDOException $e) {
-        error_log('chatroom_send.php - Erreur vérification colonne image_path: ' . $e->getMessage());
-        $hasImagePath = false;
-    }
-
     // Préparer les mentions en JSON
     $mentionsJson = !empty($mentions) ? json_encode($mentions) : null;
 
-    // Insérer le message (avec ou sans image_path selon la structure de la table)
+    // Insérer le message
     try {
-        if ($hasImagePath) {
-            $stmt = $pdo->prepare("
-                INSERT INTO chatroom_messages (id_user, message, image_path, date_envoi, mentions)
-                VALUES (:id_user, :message, :image_path, NOW(), :mentions)
-            ");
-            $stmt->execute([
-                ':id_user' => $userId,
-                ':message' => $message,
-                ':image_path' => $imagePath,
-                ':mentions' => $mentionsJson
-            ]);
-        } else {
-            // Si la colonne n'existe pas, on insère sans image_path
-            // L'image sera ignorée mais le message sera sauvegardé
-            if (!empty($imagePath)) {
-                error_log('chatroom_send.php - Warning: image_path fourni mais colonne n\'existe pas dans la table');
-            }
-            $stmt = $pdo->prepare("
-                INSERT INTO chatroom_messages (id_user, message, date_envoi, mentions)
-                VALUES (:id_user, :message, NOW(), :mentions)
-            ");
-            $stmt->execute([
-                ':id_user' => $userId,
-                ':message' => $message,
-                ':mentions' => $mentionsJson
-            ]);
-        }
+        $stmt = $pdo->prepare("
+            INSERT INTO chatroom_messages (id_user, message, date_envoi, mentions)
+            VALUES (:id_user, :message, NOW(), :mentions)
+        ");
+        $stmt->execute([
+            ':id_user' => $userId,
+            ':message' => $message,
+            ':mentions' => $mentionsJson
+        ]);
 
         $messageId = (int)$pdo->lastInsertId();
         
@@ -316,15 +281,11 @@ try {
 
     // Récupérer les informations complètes du message pour la réponse
     try {
-        // Utiliser la même vérification de colonne que pour l'insertion
-        $imagePathSelect = $hasImagePath ? 'm.image_path,' : 'NULL as image_path,';
-        
         $stmt = $pdo->prepare("
             SELECT 
                 m.id,
                 m.id_user,
                 m.message,
-                $imagePathSelect
                 m.date_envoi,
                 m.mentions,
                 u.nom,
@@ -352,16 +313,6 @@ try {
     if (!empty($messageData['mentions'])) {
         $mentionsArray = json_decode($messageData['mentions'], true) ?: [];
     }
-
-    // Nettoyer le chemin de l'image (s'assurer qu'il commence par /)
-    $imagePath = null;
-    if (isset($messageData['image_path']) && !empty($messageData['image_path'])) {
-        $imagePath = $messageData['image_path'];
-        // S'assurer que le chemin commence par /
-        if (substr($imagePath, 0, 1) !== '/') {
-            $imagePath = '/' . $imagePath;
-        }
-    }
     
     // Formater la réponse
     jsonResponse([
@@ -370,7 +321,6 @@ try {
             'id' => (int)$messageData['id'],
             'id_user' => (int)$messageData['id_user'],
             'message' => $messageData['message'],
-            'image_path' => $imagePath,
             'date_envoi' => $messageData['date_envoi'],
             'user_nom' => $messageData['nom'],
             'user_prenom' => $messageData['prenom'],
