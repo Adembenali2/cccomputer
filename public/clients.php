@@ -411,10 +411,24 @@ $view = ($view === 'unassigned') ? 'unassigned' : 'assigned';
 if ($view === 'unassigned') {
     // Non attribués = relevé sans client + entrée pc sans client et sans relevé
     $sql = "
-    WITH v_compteur_last AS (
-      SELECT r.*,
-             ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+    WITH v_compteur_unified AS (
+      -- Relevés nouveaux (priorité 1)
+      SELECT r.*, 'nouveau' AS source
       FROM compteur_relevee r
+      UNION ALL
+      -- Relevés anciens (priorité 2)
+      SELECT r.*, 'ancien' AS source
+      FROM compteur_relevee_ancien r
+    ),
+    v_compteur_last AS (
+      SELECT r.*,
+             ROW_NUMBER() OVER (
+               PARTITION BY r.mac_norm 
+               ORDER BY 
+                 CASE r.source WHEN 'nouveau' THEN 0 ELSE 1 END,
+                 r.`Timestamp` DESC
+             ) AS rn
+      FROM v_compteur_unified r
     ),
     v_last AS (
       SELECT *, TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
@@ -426,6 +440,7 @@ if ($view === 'unassigned') {
         v.`Timestamp` AS last_ts, v.age_hours AS last_age_hours,
         v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
         v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
+        v.source AS data_source,
         NULL AS client_id, NULL AS numero_client, NULL AS raison_sociale,
         NULL AS nom_dirigeant, NULL AS prenom_dirigeant, NULL AS telephone1
       FROM v_last v
@@ -439,6 +454,7 @@ if ($view === 'unassigned') {
         NULL AS last_ts, NULL AS last_age_hours,
         NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
         NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+        NULL AS data_source,
         NULL AS client_id, NULL AS numero_client, NULL AS raison_sociale,
         NULL AS nom_dirigeant, NULL AS prenom_dirigeant, NULL AS telephone1
       FROM photocopieurs_clients pc
@@ -456,10 +472,24 @@ if ($view === 'unassigned') {
 } else {
     // Attribués uniquement (avec ou sans relevé)
     $sql = "
-    WITH v_compteur_last AS (
-      SELECT r.*,
-             ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+    WITH v_compteur_unified AS (
+      -- Relevés nouveaux (priorité 1)
+      SELECT r.*, 'nouveau' AS source
       FROM compteur_relevee r
+      UNION ALL
+      -- Relevés anciens (priorité 2)
+      SELECT r.*, 'ancien' AS source
+      FROM compteur_relevee_ancien r
+    ),
+    v_compteur_last AS (
+      SELECT r.*,
+             ROW_NUMBER() OVER (
+               PARTITION BY r.mac_norm 
+               ORDER BY 
+                 CASE r.source WHEN 'nouveau' THEN 0 ELSE 1 END,
+                 r.`Timestamp` DESC
+             ) AS rn
+      FROM v_compteur_unified r
     ),
     v_last AS (
       SELECT *, TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
@@ -474,6 +504,7 @@ if ($view === 'unassigned') {
         v.`Timestamp` AS last_ts, v.age_hours AS last_age_hours,
         v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
         v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
+        v.source AS data_source,
         c.id AS client_id, c.numero_client, c.raison_sociale,
         c.nom_dirigeant, c.prenom_dirigeant, c.telephone1
       FROM photocopieurs_clients pc
@@ -488,6 +519,7 @@ if ($view === 'unassigned') {
         NULL AS last_ts, NULL AS last_age_hours,
         NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
         NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
+        NULL AS data_source,
         c.id AS client_id, c.numero_client, c.raison_sociale,
         c.nom_dirigeant, c.prenom_dirigeant, c.telephone1
       FROM photocopieurs_clients pc
@@ -646,6 +678,9 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
         $totCol  = is_null($r['TotalColor']) ? '—' : number_format((int)$r['TotalColor'], 0, ',', ' ');
 
+        $dataSource = $r['data_source'] ?? null; // 'nouveau', 'ancien', ou null
+        $isAncien = ($dataSource === 'ancien');
+
         $tk = is_null($r['TonerBlack'])   ? null : max(0, min(100, (int)$r['TonerBlack']));
         $tc = is_null($r['TonerCyan'])    ? null : max(0, min(100, (int)$r['TonerCyan']));
         $tm = is_null($r['TonerMagenta']) ? null : max(0, min(100, (int)$r['TonerMagenta']));
@@ -716,7 +751,12 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 
           <td data-th="Photocopieur">
             <div class="machine-cell">
-              <div class="machine-line"><strong><?= h($modele ?: '—') ?></strong></div>
+              <div class="machine-line">
+                <strong><?= h($modele ?: '—') ?></strong>
+                <?php if ($isAncien): ?>
+                  <span class="ancien-badge" title="Données provenant de l'ancien système" aria-label="Ancien système">📜</span>
+                <?php endif; ?>
+              </div>
               <div class="machine-sub">SN: <?= h($sn ?: '—') ?> · MAC: <?= h($mac ?: '—') ?></div>
               <?php if ($nom): ?><div class="machine-sub">Nom: <?= h($nom) ?></div><?php endif; ?>
             </div>
