@@ -359,6 +359,33 @@ $sectionImages = [
             font-size: 0.95rem;
         }
         
+        /* Barre de recherche pleine largeur */
+        .search-bar-full {
+            width: 100%;
+            margin-bottom: 1.5rem;
+        }
+        
+        .search-input-full {
+            width: 100%;
+            padding: 0.875rem 1.25rem;
+            font-size: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+        
+        .search-input-full:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .search-input-full::placeholder {
+            color: var(--text-muted);
+        }
+        
         /* Layout avec sidebar gauche */
         .stock-layout {
             display: flex;
@@ -808,25 +835,16 @@ $sectionImages = [
         <?php endif; ?>
     </section>
 
-    <!-- Barre de recherche (style comme livraison.php) -->
-    <div class="filters-row">
-        <div class="filters-left">
-            <input 
-                type="text" 
-                id="q" 
-                class="filter-input"
-                placeholder="Rechercher dans le stock (référence, modèle, SN, MAC, CPU…)" 
-                aria-label="Filtrer le stock"
-                autocomplete="off" />
-            <button 
-                type="button" 
-                class="btn btn-secondary" 
-                id="clearSearch" 
-                aria-label="Effacer la recherche">
-                Effacer
-            </button>
-        </div>
-        <span class="search-results-count" id="searchResultsCount" style="display: none; margin-left: 1rem; color: var(--text-secondary); font-size: 0.875rem;" aria-live="polite"></span>
+    <!-- Barre de recherche - Pleine largeur -->
+    <div class="search-bar-full">
+        <input 
+            type="text" 
+            id="q" 
+            class="search-input-full"
+            placeholder="Rechercher dans le stock (référence, modèle, SN, MAC, CPU…)" 
+            aria-label="Filtrer le stock"
+            autocomplete="off" />
+        <span class="search-results-count" id="searchResultsCount" style="display: none; color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;" aria-live="polite"></span>
     </div>
 
     <!-- Layout avec sidebar gauche pour le scanner -->
@@ -1400,7 +1418,6 @@ $sectionImages = [
     function initFilter() {
         const q = document.getElementById('q');
         const mason = document.getElementById('stockMasonry');
-        const clearBtn = document.getElementById('clearSearch');
         const resultsCount = document.getElementById('searchResultsCount');
         const allRows = Array.from(document.querySelectorAll('.tbl-stock tbody tr'));
 
@@ -1486,47 +1503,25 @@ $sectionImages = [
             });
         }
         
-        // Debounce pour améliorer les performances
+        // Tri automatique à chaque frappe (debounce pour performance)
         if (q) {
-            const searchWrapper = q.parentElement;
-            
-            function updateSearchState() {
-                if (q.value.trim()) {
-                    searchWrapper.classList.add('has-value');
-                } else {
-                    searchWrapper.classList.remove('has-value');
-                }
-            }
-            
             q.addEventListener('input', function() {
-                updateSearchState();
                 clearTimeout(filterTimeout);
-                filterTimeout = setTimeout(applyFilter, 200);
+                // Appliquer le filtre immédiatement (pas de délai pour réactivité)
+                filterTimeout = setTimeout(applyFilter, 100);
             });
             
-            q.addEventListener('focus', function() {
-                searchWrapper.classList.add('focused');
+            // Quand on supprime le contenu, le filtre se réinitialise automatiquement
+            q.addEventListener('keydown', function(e) {
+                // Si on appuie sur Suppr ou Backspace et que le champ est vide, réinitialiser
+                if ((e.key === 'Delete' || e.key === 'Backspace') && q.value.length <= 1) {
+                    setTimeout(applyFilter, 50);
+                }
             });
-            
-            q.addEventListener('blur', function() {
-                searchWrapper.classList.remove('focused');
-            });
-            
-            updateSearchState();
         }
         
-        // Bouton clear
-        if (clearBtn) {
-            clearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (q) {
-                    q.value = '';
-                    q.focus();
-                    applyFilter();
-                }
-            });
-        }
+        // Le tri se fait automatiquement via l'événement 'input' ci-dessus
+        // Quand on supprime le contenu, le filtre se réinitialise automatiquement
         
         // Initialisation
         reorderSections();
