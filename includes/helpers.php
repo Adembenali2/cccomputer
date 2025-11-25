@@ -236,3 +236,17 @@ if (!function_exists('old')) {
     }
 }
 
+/**
+ * Génère un badge HTML pour l'état d'un produit (A, B, C)
+ * Utilisé dans stock.php pour afficher l'état des LCD et PC
+ */
+if (!function_exists('stateBadge')) {
+    function stateBadge(?string $etat): string {
+        $e = strtoupper(trim((string)$etat));
+        if (!in_array($e, ['A', 'B', 'C'], true)) {
+            return '<span class="state state-na">—</span>';
+        }
+        return '<span class="state state-' . h($e) . '">' . h($e) . '</span>';
+    }
+}
+

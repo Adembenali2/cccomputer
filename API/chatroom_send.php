@@ -2,24 +2,11 @@
 // API/chatroom_send.php
 // Endpoint pour envoyer un message dans la chatroom globale
 
-ob_start();
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('html_errors', 0);
-
-if (!headers_sent()) {
-    header('Content-Type: application/json; charset=utf-8');
-}
-
 require_once __DIR__ . '/../includes/api_helpers.php';
 
-try {
-    require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
-} catch (Throwable $e) {
-    error_log('chatroom_send.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
-}
+initApi();
+$pdo = requirePdoConnection();
+requireApiAuth();
 
 // Vérifier que la requête est en POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -27,10 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Récupérer l'ID utilisateur depuis la session
-$userId = (int)($_SESSION['user_id'] ?? 0);
-if ($userId <= 0) {
-    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
-}
+$userId = (int)$_SESSION['user_id'];
 
 // Récupérer les données JSON
 $input = file_get_contents('php://input');
@@ -40,12 +24,9 @@ if (!$data) {
     jsonResponse(['ok' => false, 'error' => 'Données JSON invalides'], 400);
 }
 
-// Vérifier le token CSRF
+// Vérifier le token CSRF (depuis les données JSON)
 $csrfToken = $data['csrf_token'] ?? '';
-$csrfSession = $_SESSION['csrf_token'] ?? '';
-if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrfToken)) {
-    jsonResponse(['ok' => false, 'error' => 'Token CSRF invalide'], 403);
-}
+requireCsrfToken($csrfToken);
 
 try {
 

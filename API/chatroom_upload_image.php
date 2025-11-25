@@ -2,33 +2,16 @@
 // API/chatroom_upload_image.php
 // Endpoint pour uploader une image dans la chatroom
 
-ob_start();
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('html_errors', 0);
-
-if (!headers_sent()) {
-    header('Content-Type: application/json; charset=utf-8');
-}
-
 require_once __DIR__ . '/../includes/api_helpers.php';
 
-try {
-    require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
-} catch (Throwable $e) {
-    error_log('chatroom_upload_image.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
-}
+initApi();
+requireApiAuth();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
 
-$currentUserId = (int)($_SESSION['user_id'] ?? 0);
-if ($currentUserId <= 0) {
-    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
-}
+$currentUserId = (int)$_SESSION['user_id'];
 
 try {
 

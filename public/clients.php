@@ -4,105 +4,159 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('clients', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/historique.php'; // journalisation
+require_once __DIR__ . '/../includes/historique.php';
 
-/** PDO en mode exceptions **/
+// Configuration PDO en mode exceptions
 if (method_exists($pdo, 'setAttribute')) {
-    try { $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); } catch (\Throwable $e) {}
+    try {
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    } catch (\Throwable $e) {
+        error_log('clients.php: Failed to set PDO error mode: ' . $e->getMessage());
+    }
 }
 
-// ==================================================================
-// Constantes & Helpers
-// ==================================================================
-// Toutes les fonctions helper sont maintenant dans includes/helpers.php
-// Les fonctions suivantes sont disponibles :
-// - h(), validateEmail(), validateEmailBool(), validateId(), validateString()
-// - formatDate(), ensureCsrfToken(), verifyCsrfToken(), assertValidCsrf()
-// - safeFetchAll(), safeFetch(), safeFetchColumn()
-// - currentUserId(), validatePhone(), validatePostalCode(), validateSiret()
-// - pctOrDash(), old()
+/**
+ * Vérifie si une ligne de données a une alerte (relevé manquant ou trop ancien)
+ */
 function rowHasAlert(array $row): bool {
     $macNorm = $row['mac_norm'] ?? '';
-    $sn      = $row['SerialNumber'] ?? '';
-    $modele  = $row['Model'] ?? '';
+    $sn = $row['SerialNumber'] ?? '';
+    $modele = $row['Model'] ?? '';
     $hasMachine = ($macNorm || $sn || $modele);
+    
     if (!$hasMachine) {
         return false;
     }
+    
     $lastTsRaw = $row['last_ts'] ?? null;
     if (!$lastTsRaw) {
         return true;
     }
+    
     $ageHours = isset($row['last_age_hours']) ? (int)$row['last_age_hours'] : null;
     if ($ageHours !== null && $ageHours >= 48) {
         return true;
     }
+    
     return false;
 }
 
-/** Génération numéro client C12345 **/
+/**
+ * Génère un numéro client au format C12345
+ */
 function generateClientNumber(PDO $pdo): string {
     $sql = "SELECT LPAD(COALESCE(MAX(CAST(SUBSTRING(numero_client, 2) AS UNSIGNED)), 0) + 1, 5, '0') AS next_num
             FROM clients WHERE numero_client REGEXP '^C[0-9]{5}$'";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $next = $stmt->fetchColumn();
-    if (!$next) $next = '00001';
-    return 'C'.$next;
+    
+    if (!$next) {
+        $next = '00001';
+    }
+    
+    return 'C' . $next;
 }
-function nextClientId(PDO $pdo): int { 
+
+/**
+ * Récupère le prochain ID client disponible
+ */
+function nextClientId(PDO $pdo): int {
     $stmt = $pdo->prepare("SELECT COALESCE(MAX(id),0)+1 FROM clients");
     $stmt->execute();
-    return (int)$stmt->fetchColumn(); 
+    return (int)$stmt->fetchColumn();
 }
-function isNoDefaultIdError(PDOException $e): bool { $code = (int)($e->errorInfo[1] ?? 0); return in_array($code, [1364,1048], true); }
 
-/** POST: ajout client **/
-$flash = ['type'=>null,'msg'=>null];
+/**
+ * Vérifie si l'erreur PDO est liée à un ID manquant (code 1364 ou 1048)
+ */
+function isNoDefaultIdError(PDOException $e): bool {
+    $code = (int)($e->errorInfo[1] ?? 0);
+    return in_array($code, [1364, 1048], true);
+}
+
+// Traitement du formulaire POST pour ajouter un client
+$flash = ['type' => null, 'msg' => null];
 $shouldOpenModal = false;
 $CSRF = ensureCsrfToken();
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'add_client') {
     try {
         assertValidCsrf($_POST['csrf_token'] ?? '');
     } catch (RuntimeException $csrfEx) {
-        $flash = ['type'=>'error','msg'=>$csrfEx->getMessage()];
+        $flash = ['type' => 'error', 'msg' => $csrfEx->getMessage()];
         $shouldOpenModal = true;
     }
 
-    $raison_sociale      = trim($_POST['raison_sociale'] ?? '');
-    $adresse             = trim($_POST['adresse'] ?? '');
-    $code_postal         = trim($_POST['code_postal'] ?? '');
-    $ville               = trim($_POST['ville'] ?? '');
+    // Récupération et nettoyage des données du formulaire
+    $raison_sociale = trim($_POST['raison_sociale'] ?? '');
+    $adresse = trim($_POST['adresse'] ?? '');
+    $code_postal = trim($_POST['code_postal'] ?? '');
+    $ville = trim($_POST['ville'] ?? '');
     $livraison_identique = isset($_POST['livraison_identique']) ? 1 : 0;
-    $adresse_livraison   = trim($_POST['adresse_livraison'] ?? '');
-    $nom_dirigeant       = trim($_POST['nom_dirigeant'] ?? '');
-    $prenom_dirigeant    = trim($_POST['prenom_dirigeant'] ?? '');
-    $telephone1          = trim($_POST['telephone1'] ?? '');
-    $telephone2          = trim($_POST['telephone2'] ?? '');
-    $email               = trim($_POST['email'] ?? '');
-    $siret               = trim($_POST['siret'] ?? '');
-    $numero_tva          = trim($_POST['numero_tva'] ?? '');
-    $parrain             = trim($_POST['parrain'] ?? '');
-    $offre               = in_array(($_POST['offre'] ?? 'packbronze'), ['packbronze','packargent'], true) ? $_POST['offre'] : 'packbronze';
+    $adresse_livraison = trim($_POST['adresse_livraison'] ?? '');
+    $nom_dirigeant = trim($_POST['nom_dirigeant'] ?? '');
+    $prenom_dirigeant = trim($_POST['prenom_dirigeant'] ?? '');
+    $telephone1 = trim($_POST['telephone1'] ?? '');
+    $telephone2 = trim($_POST['telephone2'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $siret = trim($_POST['siret'] ?? '');
+    $numero_tva = trim($_POST['numero_tva'] ?? '');
+    $parrain = trim($_POST['parrain'] ?? '');
+    $offre = in_array(($_POST['offre'] ?? 'packbronze'), ['packbronze', 'packargent'], true) 
+        ? $_POST['offre'] 
+        : 'packbronze';
 
-    if ($livraison_identique) $adresse_livraison = $adresse;
+    if ($livraison_identique) {
+        $adresse_livraison = $adresse;
+    }
 
+    // Validation des champs obligatoires
     $errors = [];
-    if ($raison_sociale==='')   $errors[]="La raison sociale est obligatoire.";
-    if ($adresse==='')          $errors[]="L'adresse est obligatoire.";
-    if ($code_postal==='')      $errors[]="Le code postal est obligatoire.";
-    if ($ville==='')            $errors[]="La ville est obligatoire.";
-    if ($nom_dirigeant==='')    $errors[]="Le nom du dirigeant est obligatoire.";
-    if ($prenom_dirigeant==='') $errors[]="Le prénom du dirigeant est obligatoire.";
-    if ($telephone1==='')       $errors[]="Le téléphone est obligatoire.";
-    if ($email==='')            $errors[]="L'email est obligatoire.";
-    if ($siret==='')            $errors[]="Le SIRET est obligatoire.";
-    if ($email && !validateEmailBool($email)) $errors[] = "L'email est invalide.";
-    if ($telephone1 && !validatePhone($telephone1)) $errors[] = "Le téléphone doit contenir au moins 6 caractères valides.";
-    if ($telephone2 && !validatePhone($telephone2)) $errors[] = "Le téléphone 2 doit contenir au moins 6 caractères valides.";
-    if ($code_postal && !validatePostalCode($code_postal)) $errors[] = "Code postal invalide.";
-    if ($siret && !validateSiret($siret)) $errors[] = "Le SIRET doit contenir 14 chiffres.";
+    if ($raison_sociale === '') {
+        $errors[] = "La raison sociale est obligatoire.";
+    }
+    if ($adresse === '') {
+        $errors[] = "L'adresse est obligatoire.";
+    }
+    if ($code_postal === '') {
+        $errors[] = "Le code postal est obligatoire.";
+    }
+    if ($ville === '') {
+        $errors[] = "La ville est obligatoire.";
+    }
+    if ($nom_dirigeant === '') {
+        $errors[] = "Le nom du dirigeant est obligatoire.";
+    }
+    if ($prenom_dirigeant === '') {
+        $errors[] = "Le prénom du dirigeant est obligatoire.";
+    }
+    if ($telephone1 === '') {
+        $errors[] = "Le téléphone est obligatoire.";
+    }
+    if ($email === '') {
+        $errors[] = "L'email est obligatoire.";
+    }
+    if ($siret === '') {
+        $errors[] = "Le SIRET est obligatoire.";
+    }
+    if ($email && !validateEmailBool($email)) {
+        $errors[] = "L'email est invalide.";
+    }
+    if ($telephone1 && !validatePhone($telephone1)) {
+        $errors[] = "Le téléphone doit contenir au moins 6 caractères valides.";
+    }
+    if ($telephone2 && !validatePhone($telephone2)) {
+        $errors[] = "Le téléphone 2 doit contenir au moins 6 caractères valides.";
+    }
+    if ($code_postal && !validatePostalCode($code_postal)) {
+        $errors[] = "Code postal invalide.";
+    }
+    if ($siret && !validateSiret($siret)) {
+        $errors[] = "Le SIRET doit contenir 14 chiffres.";
+    }
 
+    // Insertion en base de données si validation OK
     if (empty($errors) && !$shouldOpenModal) {
         $numero = generateClientNumber($pdo);
         $sqlInsert = "INSERT INTO clients
@@ -115,29 +169,42 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
              :adresse_livraison, :livraison_identique, :siret, :numero_tva,
              :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
              :email, :parrain, :offre)";
+        
         $params = [
-            ':numero_client'=>$numero, ':raison_sociale'=>$raison_sociale, ':adresse'=>$adresse,
-            ':code_postal'=>$code_postal, ':ville'=>$ville,
-            ':adresse_livraison'=>($adresse_livraison!==''?$adresse_livraison:null),
-            ':livraison_identique'=>$livraison_identique, ':siret'=>$siret,
-            ':numero_tva'=>($numero_tva!==''?$numero_tva:null),
-            ':nom_dirigeant'=>$nom_dirigeant, ':prenom_dirigeant'=>$prenom_dirigeant,
-            ':telephone1'=>$telephone1, ':telephone2'=>($telephone2!==''?$telephone2:null),
-            ':email'=>$email, ':parrain'=>($parrain!==''?$parrain:null), ':offre'=>$offre,
+            ':numero_client' => $numero,
+            ':raison_sociale' => $raison_sociale,
+            ':adresse' => $adresse,
+            ':code_postal' => $code_postal,
+            ':ville' => $ville,
+            ':adresse_livraison' => ($adresse_livraison !== '' ? $adresse_livraison : null),
+            ':livraison_identique' => $livraison_identique,
+            ':siret' => $siret,
+            ':numero_tva' => ($numero_tva !== '' ? $numero_tva : null),
+            ':nom_dirigeant' => $nom_dirigeant,
+            ':prenom_dirigeant' => $prenom_dirigeant,
+            ':telephone1' => $telephone1,
+            ':telephone2' => ($telephone2 !== '' ? $telephone2 : null),
+            ':email' => $email,
+            ':parrain' => ($parrain !== '' ? $parrain : null),
+            ':offre' => $offre,
         ];
+        
         try {
             $pdo->beginTransaction();
             $pdo->prepare($sqlInsert)->execute($params);
-            $insertedId = (int)$pdo->lastInsertId() ?: null;
+            $insertedId = $pdo->lastInsertId();
+            $insertedId = $insertedId ? (int)$insertedId : null;
 
-            $userId  = currentUserId();
+            $userId = currentUserId();
             $details = "Client créé: ID=" . ($insertedId ?? 'NULL') . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
             enregistrerAction($pdo, $userId, 'client_ajoute', $details);
             $pdo->commit();
 
-            header('Location: /public/clients.php?added=1'); exit;
+            header('Location: /public/clients.php?added=1');
+            exit;
         } catch (PDOException $e) {
             $pdo->rollBack();
+            
             if (isNoDefaultIdError($e)) {
                 try {
                     $pdo->beginTransaction();
@@ -153,15 +220,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                          :adresse_livraison, :livraison_identique, :siret, :numero_tva,
                          :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
                          :email, :parrain, :offre)
-                    ")->execute($params + [':id'=>$id]);
+                    ")->execute($params + [':id' => $id]);
 
-                    enregistrerAction($pdo, currentUserId(), 'client_ajoute', "Client créé: ID=$id, numero=$numero, raison_sociale=$raison_sociale");
+                    $details = "Client créé: ID=" . $id . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
+                    enregistrerAction($pdo, currentUserId(), 'client_ajoute', $details);
                     $pdo->commit();
-                    header('Location: /public/clients.php?added=1'); exit;
+                    header('Location: /public/clients.php?added=1');
+                    exit;
                 } catch (PDOException $eId) {
                     $pdo->rollBack();
-                    error_log('clients.php INSERT with id error: '.$eId->getMessage());
-                    $flash = ['type'=>'error','msg'=>"Erreur SQL: impossible de créer le client (id requis)."];
+                    error_log('clients.php INSERT with id error: ' . $eId->getMessage());
+                    $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client (id requis)."];
                 }
             } elseif ((int)($e->errorInfo[1] ?? 0) === 1062) {
                 try {
@@ -169,36 +238,36 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $numero = generateClientNumber($pdo);
                     $params[':numero_client'] = $numero;
                     $pdo->prepare($sqlInsert)->execute($params);
-                    enregistrerAction($pdo, currentUserId(), 'client_ajoute', "Client créé (retry): numero=$numero, raison_sociale=$raison_sociale");
+                    $details = "Client créé (retry): numero=" . $numero . ", raison_sociale=" . $raison_sociale;
+                    enregistrerAction($pdo, currentUserId(), 'client_ajoute', $details);
                     $pdo->commit();
-                    header('Location: /public/clients.php?added=1'); exit;
+                    header('Location: /public/clients.php?added=1');
+                    exit;
                 } catch (PDOException $e2) {
                     $pdo->rollBack();
-                    error_log('clients.php INSERT retry duplicate error: '.$e2->getMessage());
-                    $flash = ['type'=>'error','msg'=>"Erreur SQL (unicité): impossible de créer le client."];
+                    error_log('clients.php INSERT retry duplicate error: ' . $e2->getMessage());
+                    $flash = ['type' => 'error', 'msg' => "Erreur SQL (unicité): impossible de créer le client."];
                 }
             } else {
-                error_log('clients.php INSERT error: '.$e->getMessage());
-                $flash = ['type'=>'error','msg'=>"Erreur SQL: impossible de créer le client."];
+                error_log('clients.php INSERT error: ' . $e->getMessage());
+                $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client."];
             }
         }
     } else {
-        $flash = ['type'=>'error','msg'=>implode('<br>', array_map('htmlspecialchars',$errors))];
+        $flash = ['type' => 'error', 'msg' => implode('<br>', array_map('htmlspecialchars', $errors))];
         $shouldOpenModal = true;
     }
 }
+
 if (($_GET['added'] ?? '') === '1') {
-    $flash = ['type'=>'success','msg'=>"Client ajouté avec succès."];
+    $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
 }
 
-/* ===== VUES =====
-   - défaut: 'assigned' → seulement photocopieurs attribués
-   - ?view=unassigned → seulement non attribués
-*/
+// Détermination de la vue (assigned ou unassigned)
 $view = ($_GET['view'] ?? 'assigned');
 $view = ($view === 'unassigned') ? 'unassigned' : 'assigned';
 
-/** SQL selon la vue **/
+// Construction de la requête SQL selon la vue
 if ($view === 'unassigned') {
     // Non attribués = relevé sans client + entrée pc sans client et sans relevé
     $sql = "
@@ -307,6 +376,7 @@ try {
     $rows = [];
 }
 
+// Calcul des statistiques
 $machineTotal = count($rows);
 $alertCount = 0;
 $uniqueClients = [];
@@ -453,11 +523,16 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         $isAlert = rowHasAlert($r);
 
         $rowClasses = [];
-        if ($rowHref)  $rowClasses[] = 'is-clickable';
-        if ($isAlert)  $rowClasses[] = 'row-alert';
+        if ($rowHref) {
+            $rowClasses[] = 'is-clickable';
+        }
+        if ($isAlert) {
+            $rowClasses[] = 'row-alert';
+        }
         $rowClassAttr = $rowClasses ? ' class="'.h(implode(' ', $rowClasses)).'"' : '';
+        $rowHrefAttr = $rowHref ? ' data-href="'.h($rowHref).'"' : '';
       ?>
-        <tr data-search="<?= h($searchText) ?>" <?= $rowHref ? 'data-href="'.h($rowHref).'"' : '' ?><?= $rowClassAttr ?>>
+        <tr data-search="<?= h($searchText) ?>"<?= $rowHrefAttr ?><?= $rowClassAttr ?>>
           <td data-th="Client">
             <div class="client-cell">
               <div class="client-raison"><?= h($raison) ?></div>
@@ -597,43 +672,72 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 
   (function(){
     const overlay = document.getElementById('clientModalOverlay');
-    const modal   = document.getElementById('clientModal');
+    const modal = document.getElementById('clientModal');
     const openBtn = document.getElementById('btnAddClient');
-    const closeBtn= document.getElementById('btnCloseModal');
+    const closeBtn = document.getElementById('btnCloseModal');
 
-    function openModal(){ document.body.classList.add('modal-open'); overlay.setAttribute('aria-hidden','false'); overlay.style.display='block'; modal.style.display='block'; }
-    function closeModal(){ document.body.classList.remove('modal-open'); overlay.setAttribute('aria-hidden','true'); overlay.style.display='none'; modal.style.display='none'; }
+    function openModal() {
+      document.body.classList.add('modal-open');
+      overlay.setAttribute('aria-hidden', 'false');
+      overlay.style.display = 'block';
+      modal.style.display = 'block';
+    }
 
-    openBtn && openBtn.addEventListener('click', openModal);
-    closeBtn && closeBtn.addEventListener('click', closeModal);
-    overlay && overlay.addEventListener('click', closeModal);
-    if (window.__CLIENT_MODAL_INIT_OPEN__) openModal();
+    function closeModal() {
+      document.body.classList.remove('modal-open');
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.style.display = 'none';
+      modal.style.display = 'none';
+    }
+
+    if (openBtn) {
+      openBtn.addEventListener('click', openModal);
+    }
+    if (closeBtn) {
+      closeBtn.addEventListener('click', closeModal);
+    }
+    if (overlay) {
+      overlay.addEventListener('click', closeModal);
+    }
+    if (window.__CLIENT_MODAL_INIT_OPEN__) {
+      openModal();
+    }
 
     // Lignes cliquables
     const rows = document.querySelectorAll('table#tbl tbody tr.is-clickable[data-href]');
-    rows.forEach(tr=>{
-      tr.style.cursor='pointer';
-      tr.addEventListener('click', (e)=>{
-        if (window.getSelection && String(window.getSelection())) return;
+    rows.forEach(tr => {
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', (e) => {
+        if (window.getSelection && String(window.getSelection())) {
+          return;
+        }
         const href = tr.getAttribute('data-href');
-        if (href) window.location.assign(href);
+        if (href) {
+          window.location.assign(href);
+        }
       });
     });
 
     // Filtre rapide
     const q = document.getElementById('q');
     const clear = document.getElementById('clearQ');
-    if (q){
+    if (q) {
       const lines = Array.from(document.querySelectorAll('table#tbl tbody tr'));
-      function apply(){
-        const v = (q.value||'').trim().toLowerCase();
-        lines.forEach(tr=>{
-          const t = (tr.getAttribute('data-search')||'').toLowerCase();
+      function apply() {
+        const v = (q.value || '').trim().toLowerCase();
+        lines.forEach(tr => {
+          const t = (tr.getAttribute('data-search') || '').toLowerCase();
           tr.style.display = !v || t.includes(v) ? '' : 'none';
         });
       }
       q.addEventListener('input', apply);
-      clear && clear.addEventListener('click', ()=>{ q.value=''; apply(); q.focus(); });
+      if (clear) {
+        clear.addEventListener('click', () => {
+          q.value = '';
+          apply();
+          q.focus();
+        });
+      }
     }
   })();
 </script>
