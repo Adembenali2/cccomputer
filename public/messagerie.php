@@ -278,9 +278,9 @@ function formatMessageContent(message, mentions = []) {
     // Cette regex détecte @ suivi d'un ou plusieurs caractères (pas d'espaces ni @)
     const mentionRegex = /@([^\s@]+)/g;
     
-    // Remplacer toutes les mentions par des spans stylisés
+    // Remplacer toutes les mentions par des spans stylisés (sans le @, juste le nom)
     content = content.replace(mentionRegex, (match, mentionName) => {
-        return `<span class="mention">@${mentionName}</span>`;
+        return `<span class="mention">${mentionName}</span>`;
     });
     
     return content;
