@@ -12,3 +12,5 @@ UPDATE `utilisateurs`
 SET `last_activity` = `date_modification` 
 WHERE `last_activity` IS NULL;
 
+
+

@@ -2,32 +2,41 @@
 // API/chatroom_search_users.php
 // Endpoint pour rechercher des utilisateurs pour les mentions (@username)
 
-header('Content-Type: application/json; charset=utf-8');
+ob_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('html_errors', 0);
 
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/helpers.php';
+if (!headers_sent()) {
+    header('Content-Type: application/json; charset=utf-8');
+}
+
+require_once __DIR__ . '/../includes/api_helpers.php';
 
 try {
-    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-        http_response_code(405);
-        echo json_encode(['ok' => false, 'error' => 'Méthode non autorisée']);
-        exit;
-    }
+    require_once __DIR__ . '/../includes/session_config.php';
+    require_once __DIR__ . '/../includes/db.php';
+} catch (Throwable $e) {
+    error_log('chatroom_search_users.php require error: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+}
 
-    $currentUserId = (int)($_SESSION['user_id'] ?? 0);
-    if ($currentUserId <= 0) {
-        http_response_code(401);
-        echo json_encode(['ok' => false, 'error' => 'Non authentifié']);
-        exit;
-    }
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
+}
+
+$currentUserId = (int)($_SESSION['user_id'] ?? 0);
+if ($currentUserId <= 0) {
+    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
+}
+
+try {
 
     $query = trim($_GET['q'] ?? '');
     $limit = min((int)($_GET['limit'] ?? 10), 20);
 
     if (empty($query) || strlen($query) < 1) {
-        echo json_encode(['ok' => true, 'users' => []]);
-        exit;
+        jsonResponse(['ok' => true, 'users' => []]);
     }
 
     $searchTerm = '%' . $query . '%';
@@ -70,18 +79,16 @@ try {
         ];
     }, $users);
 
-    echo json_encode([
+    jsonResponse([
         'ok' => true,
         'users' => $formatted
     ]);
 
 } catch (PDOException $e) {
     error_log('chatroom_search_users.php - Erreur PDO: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Erreur serveur']);
+    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
 } catch (Exception $e) {
     error_log('chatroom_search_users.php - Erreur: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Erreur serveur']);
+    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
 }
 

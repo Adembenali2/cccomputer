@@ -7,3 +7,5 @@ ALTER TABLE `chatroom_messages`
   DROP COLUMN IF EXISTS `id_lien`,
   DROP INDEX IF EXISTS `idx_type_lien`;
 
+
+
