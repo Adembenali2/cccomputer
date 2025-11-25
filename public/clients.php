@@ -863,18 +863,18 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         </div>
 
         <div class="subsection-title">Sélectionner un client</div>
-        <label for="attachClientSelect">Client*</label>
-        <select name="id_client" id="attachClientSelect" required style="width:100%; padding:0.5rem;">
-          <option value="">— Choisir un client —</option>
-          <?php foreach ($clientsList as $client): ?>
-            <option value="<?= h((string)$client['id']) ?>" <?= (isset($_POST['id_client']) && (int)$_POST['id_client'] === (int)$client['id']) ? 'selected' : '' ?>>
-              <?= h($client['numero_client'] ?? '') ?> — <?= h($client['raison_sociale'] ?? '') ?>
-              <?php if (!empty($client['nom_dirigeant']) || !empty($client['prenom_dirigeant'])): ?>
-                (<?= h(trim(($client['nom_dirigeant'] ?? '') . ' ' . ($client['prenom_dirigeant'] ?? ''))) ?>)
-              <?php endif; ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
+        <label for="attachClientSearch">Client*</label>
+        <div class="client-search-wrapper" style="position: relative;">
+          <input 
+            type="text" 
+            id="attachClientSearch" 
+            class="client-search-input" 
+            placeholder="Rechercher par référence, raison sociale ou nom..."
+            autocomplete="off"
+            style="width:100%; padding:0.5rem; box-sizing:border-box;">
+          <input type="hidden" name="id_client" id="attachClientId" value="<?= h(isset($_POST['id_client']) ? (string)$_POST['id_client'] : '') ?>" required>
+          <div id="attachClientResults" class="client-results" style="display:none;"></div>
+        </div>
       </div>
 
     <div class="modal-actions">

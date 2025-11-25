@@ -18,6 +18,52 @@ function logStockAction(PDO $pdo, string $action, string $details): void {
 }
 
 /**
+ * Génère un QR Code pour un produit et le sauvegarde
+ * 
+ * @param string $barcode Code-barres du produit
+ * @param int $productId ID du produit
+ * @param string $type Type de produit (papier, toner, lcd, pc)
+ * @return string|null Chemin vers l'image QR Code ou null en cas d'erreur
+ */
+function generateQRCode(string $barcode, int $productId, string $type): ?string {
+    try {
+        // Créer le répertoire de stockage des QR codes s'il n'existe pas
+        $qrDir = __DIR__ . '/../assets/qr_codes';
+        if (!is_dir($qrDir)) {
+            @mkdir($qrDir, 0755, true);
+        }
+        
+        // Nom du fichier : TYPE_ID_BARCODE.png
+        $filename = strtoupper(substr($type, 0, 3)) . '_' . $productId . '_' . preg_replace('/[^A-Z0-9-]/i', '', $barcode) . '.png';
+        $filepath = $qrDir . '/' . $filename;
+        
+        // Générer le QR Code via une API externe (qr-server.com - gratuit)
+        $qrSize = 300;
+        $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=' . $qrSize . 'x' . $qrSize . '&data=' . urlencode($barcode);
+        
+        // Télécharger l'image
+        $qrImage = @file_get_contents($qrUrl);
+        if ($qrImage === false) {
+            error_log('Erreur génération QR Code: impossible de télécharger depuis l\'API');
+            return null;
+        }
+        
+        // Sauvegarder l'image
+        if (@file_put_contents($filepath, $qrImage) === false) {
+            error_log('Erreur sauvegarde QR Code: impossible d\'écrire le fichier');
+            return null;
+        }
+        
+        // Retourner le chemin relatif
+        return '/assets/qr_codes/' . $filename;
+        
+    } catch (Throwable $e) {
+        error_log('Erreur génération QR Code: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
  * Génère un code-barres unique pour un produit
  * Format: TYPE-YYYYMMDD-HHMMSS-XXXX (ex: PAP-20241201-143022-0001)
  * 
@@ -150,6 +196,13 @@ try {
                     ':barcode' => $barcode,
                 ]);
                 $paperId = $pdo->lastInsertId();
+                
+                // Générer et sauvegarder le QR Code
+                $qrPath = generateQRCode($barcode, $paperId, 'papier');
+                if ($qrPath) {
+                    $stmt = $pdo->prepare("UPDATE paper_catalog SET qr_code_path = :qr_path WHERE id = :id");
+                    $stmt->execute([':qr_path' => $qrPath, ':id' => $paperId]);
+                }
             }
 
             // 2) insérer le mouvement
@@ -220,6 +273,13 @@ try {
                     ':barcode' => $barcode,
                 ]);
                 $tonerId = $pdo->lastInsertId();
+                
+                // Générer et sauvegarder le QR Code
+                $qrPath = generateQRCode($barcode, $tonerId, 'toner');
+                if ($qrPath) {
+                    $stmt = $pdo->prepare("UPDATE toner_catalog SET qr_code_path = :qr_path WHERE id = :id");
+                    $stmt->execute([':qr_path' => $qrPath, ':id' => $tonerId]);
+                }
             }
 
             // 2) mouvement
@@ -321,6 +381,13 @@ try {
                     ':barcode'    => $barcode,
                 ]);
                 $lcdId = $pdo->lastInsertId();
+                
+                // Générer et sauvegarder le QR Code
+                $qrPath = generateQRCode($barcode, $lcdId, 'lcd');
+                if ($qrPath) {
+                    $stmt = $pdo->prepare("UPDATE lcd_catalog SET qr_code_path = :qr_path WHERE id = :id");
+                    $stmt->execute([':qr_path' => $qrPath, ':id' => $lcdId]);
+                }
             }
 
             // 2) mouvement
@@ -436,6 +503,13 @@ try {
                     ':barcode'   => $barcode,
                 ]);
                 $pcId = $pdo->lastInsertId();
+                
+                // Générer et sauvegarder le QR Code
+                $qrPath = generateQRCode($barcode, $pcId, 'pc');
+                if ($qrPath) {
+                    $stmt = $pdo->prepare("UPDATE pc_catalog SET qr_code_path = :qr_path WHERE id = :id");
+                    $stmt->execute([':qr_path' => $qrPath, ':id' => $pcId]);
+                }
             }
 
             // 2) mouvement
