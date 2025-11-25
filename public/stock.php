@@ -339,6 +339,38 @@ $sectionImages = [
 
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/stock.css" />
+    <style>
+        /* Styles spécifiques pour le scanner de caméra */
+        #reader {
+            position: relative;
+        }
+        
+        #reader video,
+        #reader canvas {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            display: block !important;
+            border-radius: var(--radius-md);
+        }
+        
+        #reader #qr-shaded-region {
+            border: 2px solid var(--accent-primary) !important;
+            border-radius: 8px;
+        }
+        
+        /* Forcer l'affichage de la vidéo */
+        #reader video[style*="display: none"] {
+            display: block !important;
+        }
+        
+        /* Style pour le conteneur de scan */
+        #cameraScanArea {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+        }
+    </style>
 </head>
 <body class="page-stock">
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -447,7 +479,7 @@ $sectionImages = [
                 <div style="text-align: center; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">
                     Positionnez le code-barres dans le cadre
                 </div>
-                <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto; border: 2px solid var(--accent-primary); border-radius: var(--radius-md); padding: 1rem; background: var(--bg-secondary); position: relative; overflow: hidden;"></div>
+                <div id="reader" style="width: 100%; max-width: 500px; min-height: 300px; margin: 0 auto; border: 2px solid var(--accent-primary); border-radius: var(--radius-md); padding: 1rem; background: var(--bg-secondary); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;"></div>
                 <div style="text-align: center; margin-top: 0.5rem; color: var(--text-muted); font-size: 0.75rem;">
                     Le scan se fera automatiquement dès la détection
                 </div>
@@ -807,7 +839,10 @@ $sectionImages = [
 </div>
 
 <!-- Bibliothèque html5-qrcode via CDN -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" 
+        integrity="sha384-8vCqJ5Z5K5v5Vl3cBdDdLobM5h4c6U1f7p3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f"
+        crossorigin="anonymous"
+        onerror="console.error('Erreur chargement html5-qrcode'); document.getElementById('scannerContainer') && (document.getElementById('scannerContainer').innerHTML += '<div style=\'color:red; padding:1rem;\'>Erreur: Bibliothèque de scan non chargée. Vérifiez votre connexion.</div>');"></script>
 
 <script>
 // S'assurer que le DOM est chargé avant d'exécuter les scripts
@@ -1588,10 +1623,29 @@ $sectionImages = [
         // Démarrer le scan caméra
         if (startCameraBtn) {
             startCameraBtn.addEventListener('click', async function() {
+                // Vérifier que la bibliothèque est chargée
+                if (typeof Html5Qrcode === 'undefined') {
+                    showError('Bibliothèque html5-qrcode non chargée. Veuillez recharger la page.');
+                    return;
+                }
+                
+                // Vérifier HTTPS (requis pour la caméra)
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                    showError('La caméra nécessite une connexion HTTPS sécurisée. Veuillez utiliser https://');
+                    return;
+                }
+                
+                // Vérifier que l'API MediaDevices est disponible
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    showError('Votre navigateur ne supporte pas l\'accès à la caméra. Veuillez utiliser un navigateur moderne (Chrome, Firefox, Edge).');
+                    return;
+                }
+                
                 try {
                     await startCameraScanning();
                 } catch (err) {
-                    showError('Erreur lors du démarrage de la caméra: ' + err.message);
+                    console.error('Erreur démarrage caméra:', err);
+                    showError('Erreur lors du démarrage de la caméra: ' + (err.message || err));
                 }
             });
         }
@@ -1612,7 +1666,7 @@ $sectionImages = [
             try {
                 // Vérifier si html5-qrcode est disponible
                 if (typeof Html5Qrcode === 'undefined') {
-                    throw new Error('Bibliothèque html5-qrcode non chargée');
+                    throw new Error('Bibliothèque html5-qrcode non chargée. Vérifiez votre connexion internet.');
                 }
                 
                 const reader = document.getElementById('reader');
@@ -1620,31 +1674,127 @@ $sectionImages = [
                     throw new Error('Zone de scan introuvable');
                 }
                 
-                html5QrcodeScanner = new Html5Qrcode('reader');
-                
-                // Démarrer le scan avec meilleure configuration
-                await html5QrcodeScanner.start(
-                    { facingMode: 'environment' }, // Caméra arrière par défaut
-                    {
-                        fps: 10,
-                        qrbox: { width: 300, height: 300 },
-                        aspectRatio: 1.0,
-                        disableFlip: false
-                    },
-                    onScanSuccess,
-                    onScanError
-                );
-                
-                isScanning = true;
+                // Afficher la zone de scan AVANT de démarrer la caméra
+                cameraScanArea.style.display = 'block';
                 startCameraBtn.style.display = 'none';
                 stopCameraBtn.style.display = 'block';
-                cameraScanArea.style.display = 'block';
                 hideError();
                 hideResult();
                 
+                // Afficher un message de chargement
+                reader.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);"><div style="margin-bottom: 1rem; font-size: 1.2rem;">⏳</div><div style="margin-bottom: 0.5rem; font-weight: 600;">Démarrage de la caméra...</div><div style="font-size: 0.75rem; color: var(--text-muted);">Si la caméra ne s\'affiche pas, vérifiez les permissions de votre navigateur.</div></div>';
+                
+                html5QrcodeScanner = new Html5Qrcode('reader');
+                
+                // Essayer d'abord avec la caméra arrière, puis la caméra avant
+                let cameraConfig = { facingMode: 'environment' };
+                let started = false;
+                
+                try {
+                    // Essayer la caméra arrière (environment)
+                    await html5QrcodeScanner.start(
+                        cameraConfig,
+                        {
+                            fps: 10,
+                            qrbox: function(viewfinderWidth, viewfinderHeight) {
+                                // Calculer une taille adaptative (60% de la largeur minimale)
+                                let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                                let qrboxSize = Math.floor(minEdge * 0.6);
+                                return {
+                                    width: qrboxSize,
+                                    height: qrboxSize
+                                };
+                            },
+                            aspectRatio: 1.0,
+                            disableFlip: false,
+                            videoConstraints: {
+                                facingMode: 'environment',
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            }
+                        },
+                        onScanSuccess,
+                        onScanError
+                    );
+                    started = true;
+                } catch (envError) {
+                    console.log('Caméra arrière non disponible, essai caméra avant:', envError);
+                    // Essayer la caméra avant (user)
+                    try {
+                        await html5QrcodeScanner.stop();
+                        html5QrcodeScanner.clear();
+                    } catch (e) {
+                        // Ignorer
+                    }
+                    
+                    cameraConfig = { facingMode: 'user' };
+                    html5QrcodeScanner = new Html5Qrcode('reader');
+                    
+                    await html5QrcodeScanner.start(
+                        cameraConfig,
+                        {
+                            fps: 10,
+                            qrbox: function(viewfinderWidth, viewfinderHeight) {
+                                let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                                let qrboxSize = Math.floor(minEdge * 0.6);
+                                return {
+                                    width: qrboxSize,
+                                    height: qrboxSize
+                                };
+                            },
+                            aspectRatio: 1.0,
+                            disableFlip: false,
+                            videoConstraints: {
+                                facingMode: 'user',
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            }
+                        },
+                        onScanSuccess,
+                        onScanError
+                    );
+                    started = true;
+                }
+                
+                if (started) {
+                    isScanning = true;
+                    console.log('Caméra démarrée avec succès');
+                }
+                
             } catch (err) {
                 console.error('Erreur démarrage caméra:', err);
-                throw err;
+                
+                // Réinitialiser l'interface
+                startCameraBtn.style.display = 'block';
+                stopCameraBtn.style.display = 'none';
+                cameraScanArea.style.display = 'none';
+                isScanning = false;
+                
+                // Afficher un message d'erreur détaillé
+                let errorMsg = 'Impossible de démarrer la caméra. ';
+                
+                if (err.name === 'NotAllowedError' || err.message.includes('permission')) {
+                    errorMsg += 'Veuillez autoriser l\'accès à la caméra dans les paramètres de votre navigateur.';
+                } else if (err.name === 'NotFoundError' || err.message.includes('device')) {
+                    errorMsg += 'Aucune caméra détectée sur cet appareil.';
+                } else if (err.message.includes('HTTPS') || err.message.includes('secure')) {
+                    errorMsg += 'La caméra nécessite une connexion HTTPS sécurisée.';
+                } else {
+                    errorMsg += err.message || 'Erreur inconnue.';
+                }
+                
+                showError(errorMsg);
+                
+                // Nettoyer
+                if (html5QrcodeScanner) {
+                    try {
+                        await html5QrcodeScanner.stop();
+                        html5QrcodeScanner.clear();
+                    } catch (e) {
+                        // Ignorer
+                    }
+                    html5QrcodeScanner = null;
+                }
             }
         }
         
@@ -1658,9 +1808,27 @@ $sectionImages = [
                     startCameraBtn.style.display = 'block';
                     stopCameraBtn.style.display = 'none';
                     cameraScanArea.style.display = 'none';
+                    
+                    // Nettoyer le contenu de la zone de scan
+                    const reader = document.getElementById('reader');
+                    if (reader) {
+                        reader.innerHTML = '';
+                    }
                 }).catch((err) => {
                     console.error('Erreur arrêt caméra:', err);
+                    // Forcer la réinitialisation même en cas d'erreur
+                    html5QrcodeScanner = null;
+                    isScanning = false;
+                    startCameraBtn.style.display = 'block';
+                    stopCameraBtn.style.display = 'none';
+                    cameraScanArea.style.display = 'none';
                 });
+            } else {
+                // Réinitialiser même si le scanner n'est pas actif
+                isScanning = false;
+                startCameraBtn.style.display = 'block';
+                stopCameraBtn.style.display = 'none';
+                cameraScanArea.style.display = 'none';
             }
         }
         
