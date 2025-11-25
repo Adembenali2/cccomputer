@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // 1) Connexion DB via ton db.php
-require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/../../includes/db.php';
 
 // Vérifier qu'on a bien un PDO
 if (!isset($GLOBALS['pdo']) || !$GLOBALS['pdo'] instanceof PDO) {
