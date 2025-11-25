@@ -1,8 +1,6 @@
 <?php
 // /public/messagerie.php
-// Chatroom Globale - Interface moderne avec mentions et photos
-// Tous les utilisateurs connectés peuvent discuter ensemble en temps réel
-// Les messages sont automatiquement supprimés après 24h
+// Messagerie - Interface de communication en temps réel
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
@@ -33,7 +31,7 @@ try {
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Chatroom Globale - CCComputer</title>
+    <title>Messagerie - CCComputer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <link rel="stylesheet" href="/assets/css/main.css">
@@ -45,11 +43,7 @@ try {
 
 <main class="page-container">
     <header class="page-header">
-        <h1 class="page-title">💬 Chatroom Globale</h1>
-        <p class="page-sub">
-            Discutez en temps réel avec tous vos collègues connectés. Mentionnez des utilisateurs avec @nom.
-            <br><small style="color: var(--text-secondary);">Les messages sont automatiquement supprimés après 24h.</small>
-        </p>
+        <h1 class="page-title">Messagerie</h1>
     </header>
 
     <?php if (!$tableExists): ?>
@@ -63,7 +57,7 @@ try {
         <!-- Header de la chatroom -->
         <div class="chatroom-header">
             <div>
-                <h2>💬 Chatroom Globale</h2>
+                <h2>Messagerie</h2>
                 <div class="chatroom-status">
                     <span class="chatroom-status-indicator"></span>
                     <span>En ligne</span>
@@ -78,22 +72,13 @@ try {
             </div>
         </div>
         
-        <!-- Zone d'erreur de debug (masquée par défaut) -->
-        <div id="debugErrorPanel" style="display: none; position: fixed; top: 10px; right: 10px; background: #ff4444; color: white; padding: 15px; border-radius: 8px; max-width: 500px; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <strong>🔴 Erreur Debug</strong>
-                <button onclick="document.getElementById('debugErrorPanel').style.display='none'" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer;">✕</button>
-            </div>
-            <div id="debugErrorContent" style="font-family: monospace; font-size: 0.85em; white-space: pre-wrap; max-height: 300px; overflow-y: auto;"></div>
-        </div>
-
         <!-- Barre de saisie (fixe en bas) -->
         <div class="chatroom-input-container">
             <div class="chatroom-input-wrapper">
                 <textarea 
                     id="messageInput" 
                     class="chatroom-input" 
-                    placeholder="Tapez votre message... (Utilisez @ pour mentionner)"
+                    placeholder="Tapez votre message..."
                     rows="1"
                     maxlength="5000"></textarea>
                 <div id="mentionSuggestions" class="chatroom-mention-suggestions"></div>
@@ -331,7 +316,7 @@ function renderMessage(message) {
 function renderMessages(messages, append = false) {
     if (!messages || messages.length === 0) {
         if (!append && loadingIndicator) {
-            loadingIndicator.innerHTML = '<div class="chatroom-empty"><div class="chatroom-empty-icon">💬</div><p>Aucun message pour le moment.<br>Soyez le premier à écrire !</p></div>';
+            loadingIndicator.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
         }
         return;
     }
@@ -367,73 +352,6 @@ function renderMessages(messages, append = false) {
 }
 
 // ============================================
-// Fonction helper pour afficher les erreurs de debug
-// ============================================
-function displayDebugError(error, context, response = null, responseData = null) {
-    console.group('🔴 ERREUR DEBUG - ' + context);
-    console.error('Message:', error.message);
-    console.error('Erreur complète:', error);
-    
-    let debugInfo = `ERREUR: ${context}\n\nMessage: ${error.message}\n`;
-    
-    if (response) {
-        console.error('Status HTTP:', response.status, response.statusText);
-        console.error('URL:', response.url);
-        debugInfo += `\nStatus HTTP: ${response.status} ${response.statusText}\n`;
-        debugInfo += `URL: ${response.url}\n`;
-    }
-    
-    // Utiliser les données de réponse passées en paramètre (si disponibles)
-    if (responseData) {
-        console.error('Réponse JSON:', responseData);
-        debugInfo += `\n=== DÉTAILS DE DÉBOGAGE ===\n`;
-        
-        if (responseData.debug) {
-            console.group('📋 Détails de débogage:');
-            debugInfo += `Message: ${responseData.debug.message || responseData.error || 'N/A'}\n`;
-            debugInfo += `Type: ${responseData.debug.type || 'N/A'}\n`;
-            debugInfo += `Fichier: ${responseData.debug.file || 'N/A'}\n`;
-            debugInfo += `Ligne: ${responseData.debug.line || 'N/A'}\n`;
-            
-            if (responseData.debug.code) {
-                debugInfo += `Code erreur: ${responseData.debug.code}\n`;
-                console.error('Code erreur:', responseData.debug.code);
-            }
-            if (responseData.debug.sql_state) {
-                debugInfo += `SQL State: ${responseData.debug.sql_state}\n`;
-                console.error('SQL State:', responseData.debug.sql_state);
-            }
-            if (responseData.debug.driver_code) {
-                debugInfo += `Driver Code: ${responseData.debug.driver_code}\n`;
-                console.error('Driver Code:', responseData.debug.driver_code);
-            }
-            if (responseData.debug.trace) {
-                console.error('Stack trace:', responseData.debug.trace);
-                debugInfo += `\nStack trace:\n${responseData.debug.trace.slice(0, 5).join('\n')}\n`;
-            }
-            
-            console.error('Message:', responseData.debug.message || responseData.error);
-            console.error('Type:', responseData.debug.type);
-            console.error('Fichier:', responseData.debug.file);
-            console.error('Ligne:', responseData.debug.line);
-            console.groupEnd();
-        } else {
-            debugInfo += `Erreur: ${responseData.error || 'Erreur inconnue'}\n`;
-        }
-    }
-    
-    // Afficher dans le panneau de debug
-    const panel = document.getElementById('debugErrorPanel');
-    const content = document.getElementById('debugErrorContent');
-    if (panel && content) {
-        content.textContent = debugInfo;
-        panel.style.display = 'block';
-    }
-    
-    console.groupEnd();
-}
-
-// ============================================
 // Chargement des messages
 // ============================================
 async function loadMessages(append = false) {
@@ -462,25 +380,11 @@ async function loadMessages(append = false) {
         }
         
         if (!response.ok) {
-            // Passer les données JSON à displayDebugError au lieu de la réponse
-            displayDebugError(new Error(data.error || `HTTP ${response.status}`), 'loadMessages', response, data);
-            
-            // Afficher les détails dans l'interface
-            let errorMsg = data.error || `Erreur HTTP ${response.status}`;
-            if (data.debug) {
-                errorMsg += `\n\nDétails:\n`;
-                errorMsg += `- Message: ${data.debug.message || 'N/A'}\n`;
-                errorMsg += `- Fichier: ${data.debug.file || 'N/A'}\n`;
-                errorMsg += `- Ligne: ${data.debug.line || 'N/A'}\n`;
-                if (data.debug.code) errorMsg += `- Code: ${data.debug.code}\n`;
-                if (data.debug.sql_state) errorMsg += `- SQL State: ${data.debug.sql_state}\n`;
-            }
+            const errorMsg = data.error || `Erreur HTTP ${response.status}`;
+            console.error('Erreur chargement messages:', errorMsg);
             
             if (loadingIndicator) {
-                loadingIndicator.innerHTML = `<div class="chatroom-loading" style="color: red;">
-                    <strong>Erreur de chargement</strong><br>
-                    <small style="font-family: monospace; font-size: 0.8em; white-space: pre-wrap;">${escapeHtml(errorMsg)}</small>
-                </div>`;
+                loadingIndicator.innerHTML = '<div class="chatroom-loading">Erreur de chargement</div>';
             }
             throw new Error(errorMsg);
         }
@@ -492,14 +396,9 @@ async function loadMessages(append = false) {
         }
     } catch (error) {
         console.error('Erreur chargement messages:', error);
-        displayDebugError(error, 'loadMessages');
         
-        if (loadingIndicator && !loadingIndicator.innerHTML.includes('Erreur')) {
-            loadingIndicator.innerHTML = `<div class="chatroom-loading" style="color: red;">
-                <strong>Erreur de chargement</strong><br>
-                <small>${escapeHtml(error.message)}</small><br>
-                <small style="font-size: 0.7em; color: #666;">Vérifiez la console pour plus de détails</small>
-            </div>`;
+        if (loadingIndicator) {
+            loadingIndicator.innerHTML = '<div class="chatroom-loading">Erreur de chargement</div>';
         }
     } finally {
         isLoading = false;
@@ -564,22 +463,8 @@ async function sendMessage() {
         }
         
         if (!response.ok) {
-            // Passer les données JSON à displayDebugError au lieu de la réponse
-            displayDebugError(new Error(data.error || `HTTP ${response.status}`), 'sendMessage', response, data);
-            
-            // Construire un message d'erreur détaillé
-            let errorMsg = data.error || `Erreur HTTP ${response.status}`;
-            if (data.debug) {
-                errorMsg += `\n\nDétails de débogage:\n`;
-                errorMsg += `- Message: ${data.debug.message || 'N/A'}\n`;
-                errorMsg += `- Type: ${data.debug.type || 'N/A'}\n`;
-                errorMsg += `- Fichier: ${data.debug.file || 'N/A'}\n`;
-                errorMsg += `- Ligne: ${data.debug.line || 'N/A'}\n`;
-                if (data.debug.code) errorMsg += `- Code erreur: ${data.debug.code}\n`;
-                if (data.debug.sql_state) errorMsg += `- SQL State: ${data.debug.sql_state}\n`;
-                if (data.debug.driver_code) errorMsg += `- Driver Code: ${data.debug.driver_code}\n`;
-            }
-            
+            const errorMsg = data.error || `Erreur HTTP ${response.status}`;
+            console.error('Erreur envoi message:', errorMsg);
             throw new Error(errorMsg);
         }
         
@@ -591,11 +476,7 @@ async function sendMessage() {
         }
     } catch (error) {
         console.error('Erreur envoi message:', error);
-        displayDebugError(error, 'sendMessage');
-        
-        // Afficher une alerte avec les détails
-        let alertMsg = 'Erreur lors de l\'envoi du message:\n\n' + error.message;
-        alert(alertMsg);
+        alert('Erreur lors de l\'envoi du message');
         messageInput.value = originalMessage;
         adjustTextareaHeight();
     } finally {
