@@ -39,7 +39,17 @@ $options = [
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (PDOException $e) {
-    error_log("DB connection error: " . $e->getMessage());
+    error_log("DB connection error: " . $e->getMessage() . " | DSN: $dsn | User: $user");
+    
+    // Si on est dans un contexte API (jsonResponse existe), lancer une exception
+    // pour que les fichiers API puissent la capturer et renvoyer du JSON
+    if (function_exists('jsonResponse')) {
+        // Stocker l'erreur dans GLOBALS pour le débogage
+        $GLOBALS['db_connection_error'] = $e;
+        throw $e; // L'exception sera capturée par initApi()
+    }
+    
+    // Sinon, comportement par défaut pour les pages normales
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: text/plain; charset=utf-8');

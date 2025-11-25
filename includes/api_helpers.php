@@ -48,10 +48,40 @@ function requireCsrfToken(?string $token = null): void {
  */
 function requirePdoConnection(?PDO $pdo = null): PDO {
     global $pdo;
-    $pdo = $pdo ?? $GLOBALS['pdo'] ?? null;
     
+    // Essayer plusieurs méthodes pour obtenir la connexion PDO
+    if ($pdo instanceof PDO) {
+        return $pdo;
+    }
+    
+    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+        return $GLOBALS['pdo'];
+    }
+    
+    // Si toujours pas de PDO, essayer de le charger depuis db.php
     if (!isset($pdo) || !($pdo instanceof PDO)) {
-        jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
+        try {
+            // Vérifier si db.php a été chargé
+            if (!isset($GLOBALS['pdo'])) {
+                // Essayer de charger db.php si pas déjà fait
+                if (!defined('DB_LOADED')) {
+                    require_once __DIR__ . '/db.php';
+                }
+            }
+            
+            $pdo = $GLOBALS['pdo'] ?? null;
+            
+            if (!isset($pdo) || !($pdo instanceof PDO)) {
+                throw new RuntimeException('La connexion PDO n\'est pas disponible. Vérifiez la configuration de la base de données.');
+            }
+        } catch (Throwable $e) {
+            error_log('requirePdoConnection error: ' . $e->getMessage());
+            jsonResponse([
+                'ok' => false, 
+                'error' => 'Erreur de connexion à la base de données',
+                'debug' => $e->getMessage()
+            ], 500);
+        }
     }
     
     return $pdo;
@@ -65,13 +95,45 @@ function initApi(): void {
     error_reporting(E_ALL);
     ini_set('display_errors', 0);
     ini_set('html_errors', 0);
+    ini_set('log_errors', 1);
+    
+    // Définir les headers JSON en premier
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+    }
     
     try {
         require_once __DIR__ . '/session_config.php';
-        require_once __DIR__ . '/db.php';
     } catch (Throwable $e) {
-        error_log('API init error: ' . $e->getMessage());
-        jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+        error_log('API init error (session_config): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+        jsonResponse([
+            'ok' => false, 
+            'error' => 'Erreur d\'initialisation de la session',
+            'debug' => $e->getMessage()
+        ], 500);
+    }
+    
+    try {
+        require_once __DIR__ . '/db.php';
+        
+        // Vérifier que $pdo a été créé
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            throw new RuntimeException('La connexion PDO n\'a pas été initialisée par db.php');
+        }
+        
+        // Stocker dans GLOBALS pour être sûr
+        $GLOBALS['pdo'] = $pdo;
+        
+    } catch (Throwable $e) {
+        error_log('API init error (db): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+        jsonResponse([
+            'ok' => false, 
+            'error' => 'Erreur de connexion à la base de données',
+            'debug' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ], 500);
     }
     
     // Générer CSRF token si manquant

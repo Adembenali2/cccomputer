@@ -2,11 +2,49 @@
 // API/chatroom_get.php
 // Endpoint pour récupérer les messages de la chatroom globale
 
+// Mode debug temporaire - activer l'affichage des erreurs
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // On garde à 0 pour ne pas polluer la sortie, mais on log tout
+ini_set('log_errors', 1);
+
 require_once __DIR__ . '/../includes/api_helpers.php';
 
-initApi();
-$pdo = requirePdoConnection();
-requireApiAuth();
+try {
+    initApi();
+} catch (Throwable $e) {
+    error_log('chatroom_get.php - Erreur initApi: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur d\'initialisation',
+        'debug' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ], 500);
+}
+
+try {
+    $pdo = requirePdoConnection();
+} catch (Throwable $e) {
+    error_log('chatroom_get.php - Erreur requirePdoConnection: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur de connexion à la base de données',
+        'debug' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ], 500);
+}
+
+try {
+    requireApiAuth();
+} catch (Throwable $e) {
+    error_log('chatroom_get.php - Erreur requireApiAuth: ' . $e->getMessage());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur d\'authentification',
+        'debug' => $e->getMessage()
+    ], 500);
+}
 
 // Vérifier que la requête est en GET
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -30,7 +68,8 @@ try {
         $checkTable = $pdo->query("SHOW TABLES LIKE 'chatroom_messages'");
         $tableExists = $checkTable->rowCount() > 0;
     } catch (PDOException $e) {
-        error_log('chatroom_get.php - Erreur vérification table: ' . $e->getMessage());
+        error_log('chatroom_get.php - Erreur vérification table: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
+        // On continue même si la vérification échoue, on essaiera la requête quand même
     }
 
     if (!$tableExists) {
@@ -85,8 +124,13 @@ try {
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     }
 
-    $stmt->execute();
-    $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $stmt->execute();
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('chatroom_get.php - Erreur exécution requête: ' . $e->getMessage() . ' | Code: ' . $e->getCode() . ' | SQL State: ' . $e->errorInfo[0]);
+        throw $e; // Re-lancer pour être capturé par le catch global
+    }
 
     // Si on récupère depuis un ID, on garde l'ordre chronologique
     // Sinon, on inverse pour avoir les plus anciens en premier
@@ -120,10 +164,15 @@ try {
     // Vérifier s'il y a plus de messages
     $hasMore = false;
     if (count($messages) > 0) {
-        $oldestId = min(array_column($messages, 'id'));
-        $checkMore = $pdo->prepare("SELECT COUNT(*) FROM chatroom_messages WHERE id < :oldest_id");
-        $checkMore->execute([':oldest_id' => $oldestId]);
-        $hasMore = (int)$checkMore->fetchColumn() > 0;
+        try {
+            $oldestId = min(array_column($messages, 'id'));
+            $checkMore = $pdo->prepare("SELECT COUNT(*) FROM chatroom_messages WHERE id < :oldest_id");
+            $checkMore->execute([':oldest_id' => $oldestId]);
+            $hasMore = (int)$checkMore->fetchColumn() > 0;
+        } catch (PDOException $e) {
+            error_log('chatroom_get.php - Erreur vérification has_more: ' . $e->getMessage());
+            // On continue même si cette vérification échoue
+        }
     }
 
     jsonResponse([
@@ -134,10 +183,31 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    error_log('chatroom_get.php - Erreur PDO: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur serveur lors de la récupération des messages'], 500);
-} catch (Exception $e) {
-    error_log('chatroom_get.php - Erreur: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
+    $errorInfo = $e->errorInfo ?? [];
+    error_log('chatroom_get.php - Erreur PDO: ' . $e->getMessage() . ' | Code: ' . $e->getCode() . ' | SQL State: ' . ($errorInfo[0] ?? 'N/A') . ' | Driver Code: ' . ($errorInfo[1] ?? 'N/A'));
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur base de données lors de la récupération des messages',
+        'debug' => [
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'sql_state' => $errorInfo[0] ?? null,
+            'driver_code' => $errorInfo[1] ?? null,
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]
+    ], 500);
+} catch (Throwable $e) {
+    error_log('chatroom_get.php - Erreur: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur serveur',
+        'debug' => [
+            'message' => $e->getMessage(),
+            'type' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]
+    ], 500);
 }
 

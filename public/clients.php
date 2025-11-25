@@ -16,6 +16,22 @@ if (method_exists($pdo, 'setAttribute')) {
 }
 
 /**
+ * Normalise une adresse MAC au format 12 hex sans séparateurs (pour URL)
+ * Retourne null si la MAC n'est pas valide
+ */
+function normalizeMacForUrl(?string $mac): ?string {
+    if (empty($mac)) {
+        return null;
+    }
+    $raw = strtoupper(trim($mac));
+    $hex = preg_replace('~[^0-9A-F]~', '', $raw);
+    if (strlen($hex) !== 12) {
+        return null;
+    }
+    return $hex;
+}
+
+/**
  * Vérifie si une ligne de données a une alerte (relevé manquant ou trop ancien)
  */
 function rowHasAlert(array $row): bool {
@@ -518,7 +534,23 @@ $lastRefreshLabel = date('d/m/Y à H:i');
             $modele . ' ' . $sn . ' ' . $mac
         );
 
-        $rowHref = $macNorm ? '/public/photocopieurs_details.php?mac='.urlencode($macNorm) : '';
+        // Construction de l'URL : utiliser mac_norm si disponible, sinon normaliser MacAddress, sinon utiliser SerialNumber
+        $rowHref = '';
+        if (!empty($macNorm)) {
+            // mac_norm est déjà au format 12 hex sans séparateurs
+            $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($macNorm);
+        } elseif (!empty($mac)) {
+            // Normaliser MacAddress si disponible
+            $normalizedMac = normalizeMacForUrl($mac);
+            if ($normalizedMac) {
+                $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($normalizedMac);
+            }
+        }
+        
+        // Fallback sur SerialNumber si MAC non disponible
+        if (empty($rowHref) && !empty($sn)) {
+            $rowHref = '/public/photocopieurs_details.php?sn=' . urlencode($sn);
+        }
 
         $isAlert = rowHasAlert($r);
 

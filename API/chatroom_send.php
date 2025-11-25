@@ -2,11 +2,49 @@
 // API/chatroom_send.php
 // Endpoint pour envoyer un message dans la chatroom globale
 
+// Mode debug temporaire - activer l'affichage des erreurs
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // On garde à 0 pour ne pas polluer la sortie, mais on log tout
+ini_set('log_errors', 1);
+
 require_once __DIR__ . '/../includes/api_helpers.php';
 
-initApi();
-$pdo = requirePdoConnection();
-requireApiAuth();
+try {
+    initApi();
+} catch (Throwable $e) {
+    error_log('chatroom_send.php - Erreur initApi: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur d\'initialisation',
+        'debug' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ], 500);
+}
+
+try {
+    $pdo = requirePdoConnection();
+} catch (Throwable $e) {
+    error_log('chatroom_send.php - Erreur requirePdoConnection: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur de connexion à la base de données',
+        'debug' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ], 500);
+}
+
+try {
+    requireApiAuth();
+} catch (Throwable $e) {
+    error_log('chatroom_send.php - Erreur requireApiAuth: ' . $e->getMessage());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur d\'authentification',
+        'debug' => $e->getMessage()
+    ], 500);
+}
 
 // Vérifier que la requête est en POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -26,7 +64,16 @@ if (!$data) {
 
 // Vérifier le token CSRF (depuis les données JSON)
 $csrfToken = $data['csrf_token'] ?? '';
-requireCsrfToken($csrfToken);
+try {
+    requireCsrfToken($csrfToken);
+} catch (Throwable $e) {
+    error_log('chatroom_send.php - Erreur CSRF: ' . $e->getMessage());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur de vérification CSRF',
+        'debug' => $e->getMessage()
+    ], 403);
+}
 
 try {
 
@@ -56,7 +103,8 @@ try {
         $checkTable = $pdo->query("SHOW TABLES LIKE 'chatroom_messages'");
         $tableExists = $checkTable->rowCount() > 0;
     } catch (PDOException $e) {
-        error_log('chatroom_send.php - Erreur vérification table: ' . $e->getMessage());
+        error_log('chatroom_send.php - Erreur vérification table: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
+        throw $e; // Re-lancer pour être capturé par le catch global
     }
 
     if (!$tableExists) {
@@ -67,19 +115,29 @@ try {
     $mentionsJson = !empty($mentions) ? json_encode($mentions) : null;
 
     // Insérer le message
-    $stmt = $pdo->prepare("
-        INSERT INTO chatroom_messages (id_user, message, image_path, date_envoi, mentions)
-        VALUES (:id_user, :message, :image_path, NOW(), :mentions)
-    ");
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO chatroom_messages (id_user, message, image_path, date_envoi, mentions)
+            VALUES (:id_user, :message, :image_path, NOW(), :mentions)
+        ");
 
-    $stmt->execute([
-        ':id_user' => $userId,
-        ':message' => $message,
-        ':image_path' => $imagePath,
-        ':mentions' => $mentionsJson
-    ]);
+        $stmt->execute([
+            ':id_user' => $userId,
+            ':message' => $message,
+            ':image_path' => $imagePath,
+            ':mentions' => $mentionsJson
+        ]);
 
-    $messageId = (int)$pdo->lastInsertId();
+        $messageId = (int)$pdo->lastInsertId();
+        
+        if ($messageId <= 0) {
+            throw new Exception('Impossible de récupérer l\'ID du message inséré');
+        }
+    } catch (PDOException $e) {
+        $errorInfo = $e->errorInfo ?? [];
+        error_log('chatroom_send.php - Erreur insertion message: ' . $e->getMessage() . ' | Code: ' . $e->getCode() . ' | SQL State: ' . ($errorInfo[0] ?? 'N/A'));
+        throw $e; // Re-lancer pour être capturé par le catch global
+    }
 
     // Créer les notifications pour les utilisateurs mentionnés
     if (!empty($mentions)) {
@@ -145,24 +203,30 @@ try {
     }
 
     // Récupérer les informations complètes du message pour la réponse
-    $stmt = $pdo->prepare("
-        SELECT 
-            m.id,
-            m.id_user,
-            m.message,
-            m.image_path,
-            m.date_envoi,
-            m.mentions,
-            u.nom,
-            u.prenom,
-            u.Emploi
-        FROM chatroom_messages m
-        INNER JOIN utilisateurs u ON u.id = m.id_user
-        WHERE m.id = :id
-    ");
+    try {
+        $stmt = $pdo->prepare("
+            SELECT 
+                m.id,
+                m.id_user,
+                m.message,
+                m.image_path,
+                m.date_envoi,
+                m.mentions,
+                u.nom,
+                u.prenom,
+                u.Emploi
+            FROM chatroom_messages m
+            INNER JOIN utilisateurs u ON u.id = m.id_user
+            WHERE m.id = :id
+        ");
 
-    $stmt->execute([':id' => $messageId]);
-    $messageData = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->execute([':id' => $messageId]);
+        $messageData = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $errorInfo = $e->errorInfo ?? [];
+        error_log('chatroom_send.php - Erreur récupération message: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
+        throw $e; // Re-lancer pour être capturé par le catch global
+    }
 
     if (!$messageData) {
         jsonResponse(['ok' => false, 'error' => 'Erreur lors de la récupération du message'], 500);
@@ -192,10 +256,31 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    error_log('chatroom_send.php - Erreur PDO: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur serveur lors de l\'envoi du message'], 500);
-} catch (Exception $e) {
-    error_log('chatroom_send.php - Erreur: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
+    $errorInfo = $e->errorInfo ?? [];
+    error_log('chatroom_send.php - Erreur PDO: ' . $e->getMessage() . ' | Code: ' . $e->getCode() . ' | SQL State: ' . ($errorInfo[0] ?? 'N/A') . ' | Driver Code: ' . ($errorInfo[1] ?? 'N/A'));
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur base de données lors de l\'envoi du message',
+        'debug' => [
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'sql_state' => $errorInfo[0] ?? null,
+            'driver_code' => $errorInfo[1] ?? null,
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]
+    ], 500);
+} catch (Throwable $e) {
+    error_log('chatroom_send.php - Erreur: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur serveur',
+        'debug' => [
+            'message' => $e->getMessage(),
+            'type' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]
+    ], 500);
 }
 
