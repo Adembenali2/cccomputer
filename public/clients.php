@@ -536,11 +536,18 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 
         // Construction de l'URL : utiliser mac_norm si disponible, sinon normaliser MacAddress, sinon utiliser SerialNumber
         $rowHref = '';
-        if (!empty($macNorm)) {
-            // mac_norm est déjà au format 12 hex sans séparateurs
-            $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($macNorm);
-        } elseif (!empty($mac)) {
-            // Normaliser MacAddress si disponible
+        
+        // Vérifier que mac_norm est valide (12 hex sans séparateurs) et le convertir en majuscules
+        if (!empty($macNorm) && preg_match('/^[0-9A-F]{12}$/i', $macNorm)) {
+            // mac_norm est déjà au format 12 hex sans séparateurs, convertir en majuscules pour cohérence
+            $macNormUpper = strtoupper(trim($macNorm));
+            if (strlen($macNormUpper) === 12) {
+                $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($macNormUpper);
+            }
+        }
+        
+        // Si mac_norm n'est pas valide, essayer de normaliser MacAddress
+        if (empty($rowHref) && !empty($mac)) {
             $normalizedMac = normalizeMacForUrl($mac);
             if ($normalizedMac) {
                 $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($normalizedMac);

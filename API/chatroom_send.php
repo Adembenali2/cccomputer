@@ -7,7 +7,60 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0); // On garde à 0 pour ne pas polluer la sortie, mais on log tout
 ini_set('log_errors', 1);
 
+// Buffer de sortie pour capturer toute sortie accidentelle
+ob_start();
+
+// Gestionnaire d'erreur fatale (doit être défini AVANT tout require)
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE])) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        error_log('chatroom_send.php FATAL ERROR: ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line']);
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+        }
+        echo json_encode([
+            'ok' => false,
+            'error' => 'Erreur fatale PHP',
+            'debug' => [
+                'message' => $error['message'],
+                'file' => $error['file'],
+                'line' => $error['line'],
+                'type' => $error['type']
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+});
+
 require_once __DIR__ . '/../includes/api_helpers.php';
+
+// Gestionnaire d'exception global pour capturer toutes les exceptions non capturées
+set_exception_handler(function($exception) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log('chatroom_send.php UNCAUGHT EXCEPTION: ' . $exception->getMessage() . ' | Trace: ' . $exception->getTraceAsString());
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+    }
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Exception non capturée',
+        'debug' => [
+            'message' => $exception->getMessage(),
+            'type' => get_class($exception),
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine(),
+            'trace' => explode("\n", $exception->getTraceAsString())
+        ]
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+});
 
 try {
     initApi();

@@ -407,49 +407,62 @@ html, body { max-width: 100%; overflow-x: hidden; }
   letter-spacing: 0.05em;
 }
 
-/* Alignement spécifique pour les en-têtes de colonnes numériques */
-/* Qté en dernière colonne (Couleur, Modèle, Qté) ou (État, Modèle, Qté) */
-.tbl-stock thead th:last-child {
-  text-align: right;
-  padding-right: 1rem;
-}
-
-/* Qté en 3ème colonne (État, Modèle, Qté) */
-.tbl-stock thead tr th:nth-child(3) {
-  text-align: right;
-  padding-right: 1rem;
-}
-
-/* Qté en 1ère colonne (Qté, Modèle, Poids) - tableau Papier */
-.tbl-stock thead tr th:first-child {
-  text-align: right;
-  padding-right: 1rem;
-}
-
-/* Correspondance pour les cellules - alignement parfait */
-.tbl-stock tbody td:first-child.td-metric,
-.tbl-stock tbody td:last-child.td-metric {
-  text-align: right;
-  padding-right: 1rem;
-}
-
-/* Alignement uniforme pour toutes les colonnes */
+/* ===== ALIGNEMENT PARFAIT ENTRE EN-TÊTES ET CELLULES ===== */
+/* Padding uniforme de base pour toutes les colonnes */
 .tbl-stock thead th,
 .tbl-stock tbody td {
   padding-left: 0.75rem;
   padding-right: 0.75rem;
+  box-sizing: border-box;
 }
 
-/* Colonnes numériques alignées à droite avec padding cohérent */
+/* Colonnes de gauche (première colonne) - alignement à gauche */
+.tbl-stock thead th:first-child,
+.tbl-stock tbody td:first-child {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  text-align: left;
+}
+
+/* Colonnes du milieu - alignement à gauche */
+.tbl-stock thead th:nth-child(2),
+.tbl-stock tbody td:nth-child(2) {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  text-align: left;
+}
+
+/* Colonnes de droite (dernière colonne) - alignement à droite pour les numériques */
 .tbl-stock thead th:last-child,
-.tbl-stock tbody td.td-metric {
+.tbl-stock tbody td:last-child {
+  padding-left: 0.75rem;
   padding-right: 1rem;
+  text-align: right;
 }
 
-/* Pour le tableau Papier où Qté est en première colonne */
-.tbl-stock[data-section="papier"] thead th:first-child,
-.tbl-stock tbody td:first-child.td-metric {
+/* Colonnes numériques (Qté) - alignement à droite cohérent */
+.tbl-stock thead th:last-child,
+.tbl-stock tbody td.td-metric,
+.tbl-stock tbody td:last-child.td-metric {
+  text-align: right;
   padding-right: 1rem;
+  padding-left: 0.75rem;
+}
+
+/* Pour le tableau Papier : Qté est en première colonne, alignée à droite */
+.tbl-stock thead tr th:first-child:has-text("Qté"),
+.tbl-stock tbody td:first-child.td-metric {
+  text-align: right;
+  padding-right: 1rem;
+  padding-left: 0.75rem;
+}
+
+/* Colonnes d'état (première colonne pour LCD/PC) - centré */
+.tbl-stock thead th:first-child:has-text("État"),
+.tbl-stock tbody td[data-th="État"] {
+  text-align: center;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
 }
 
 .tbl-stock tbody td {
