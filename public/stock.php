@@ -1912,62 +1912,27 @@ $sectionImages = [
                     await html5QrcodeScanner.start(
                         cameraConfig,
                         {
-                            // FPS très élevé pour détection ultra-rapide
-                            fps: 60,
+                            // FPS optimal pour détection rapide et stable
+                            fps: 10,
                             
-                            // Zone de scan de la taille d'un QR code (compacte et rapide)
-                            qrbox: function(viewfinderWidth, viewfinderHeight) {
-                                // Taille fixe optimale pour QR code (200-250px)
-                                // Pas trop grande, juste la taille du code QR
-                                return {
-                                    width: 250,
-                                    height: 250
-                                };
-                            },
+                            // Zone de scan adaptative - taille QR code
+                            qrbox: { width: 250, height: 250 },
                             
                             // Paramètres de qualité
                             aspectRatio: 1.0,
-                            disableFlip: false,
                             
-                            // Contraintes vidéo optimisées pour scan rapide
+                            // Contraintes vidéo simplifiées pour meilleure compatibilité
                             videoConstraints: {
-                                facingMode: 'environment',
-                                // Résolution moyenne pour performance (assez pour détecter QR)
-                                width: { 
-                                    ideal: 1280,
-                                    min: 640
-                                },
-                                height: { 
-                                    ideal: 720,
-                                    min: 480
-                                },
-                                // Frame rate élevé pour détection rapide
-                                frameRate: { ideal: 60, min: 30, max: 60 },
-                                focusMode: 'continuous',
-                                exposureMode: 'continuous'
-                            },
-                            
-                            // Paramètres de scan avancés pour performance
-                            rememberLastUsedCamera: true,
-                            // Formats de codes-barres supportés (optimisation - si disponible)
-                            formatsToSupport: (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
-                                Html5QrcodeSupportedFormats.EAN_13,
-                                Html5QrcodeSupportedFormats.EAN_8,
-                                Html5QrcodeSupportedFormats.UPC_A,
-                                Html5QrcodeSupportedFormats.UPC_E,
-                                Html5QrcodeSupportedFormats.CODE_128,
-                                Html5QrcodeSupportedFormats.CODE_39,
-                                Html5QrcodeSupportedFormats.QR_CODE
-                            ] : undefined,
-                            // Désactiver le son (optionnel, pour performance)
-                            verbose: false
+                                facingMode: 'environment'
+                            }
                         },
                         onScanSuccess,
                         onScanError
                     );
                     started = true;
+                    console.log('✅ Caméra arrière démarrée avec succès');
                 } catch (envError) {
-                    console.log('Caméra arrière non disponible, essai caméra avant:', envError);
+                    console.warn('⚠️ Caméra arrière non disponible, essai caméra avant:', envError);
                     // Essayer la caméra avant (user) avec qualité professionnelle
                     try {
                         await html5QrcodeScanner.stop();
@@ -1979,63 +1944,36 @@ $sectionImages = [
                     cameraConfig = { facingMode: 'user' };
                     html5QrcodeScanner = new Html5Qrcode('reader');
                     
+                    console.log('📹 Démarrage caméra avant...');
                     await html5QrcodeScanner.start(
                         cameraConfig,
                         {
-                            // FPS très élevé pour détection ultra-rapide
-                            fps: 60,
+                            // FPS optimal pour détection rapide et stable
+                            fps: 10,
                             
-                            // Zone de scan de la taille d'un QR code (compacte)
-                            qrbox: function(viewfinderWidth, viewfinderHeight) {
-                                // Taille fixe optimale pour QR code
-                                return {
-                                    width: 250,
-                                    height: 250
-                                };
-                            },
+                            // Zone de scan adaptative - taille QR code
+                            qrbox: { width: 250, height: 250 },
                             
+                            // Paramètres de qualité
                             aspectRatio: 1.0,
-                            disableFlip: false,
                             
-                            // Contraintes vidéo optimisées pour scan rapide
+                            // Contraintes vidéo simplifiées pour meilleure compatibilité
                             videoConstraints: {
-                                facingMode: 'user',
-                                width: { 
-                                    ideal: 1280,
-                                    min: 640
-                                },
-                                height: { 
-                                    ideal: 720,
-                                    min: 480
-                                },
-                                frameRate: { ideal: 60, min: 30, max: 60 },
-                                focusMode: 'continuous',
-                                exposureMode: 'continuous'
-                            },
-                            
-                            rememberLastUsedCamera: true,
-                            // Formats de codes-barres supportés (optimisation)
-                            formatsToSupport: (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
-                                Html5QrcodeSupportedFormats.EAN_13,
-                                Html5QrcodeSupportedFormats.EAN_8,
-                                Html5QrcodeSupportedFormats.UPC_A,
-                                Html5QrcodeSupportedFormats.UPC_E,
-                                Html5QrcodeSupportedFormats.CODE_128,
-                                Html5QrcodeSupportedFormats.CODE_39,
-                                Html5QrcodeSupportedFormats.QR_CODE
-                            ] : undefined,
-                            // Désactiver le mode verbose pour performance
-                            verbose: false
+                                facingMode: 'user'
+                            }
                         },
                         onScanSuccess,
                         onScanError
                     );
                     started = true;
+                    console.log('✅ Caméra avant démarrée avec succès');
                 }
                 
                 if (started) {
                     isScanning = true;
-                    console.log('Caméra démarrée avec succès');
+                    console.log('🎉 Scanner prêt - Attente de scan QR code...');
+                } else {
+                    console.error('❌ Échec démarrage caméra');
                 }
                 
             } catch (err) {
@@ -2151,15 +2089,20 @@ $sectionImages = [
             // NE PAS arrêter le scan - permettre de scanner plusieurs codes rapidement
         }
         
-        // Callback erreur scan (on ignore les erreurs continues pour performance)
+        // Callback erreur scan
         function onScanError(errorMessage) {
-            // Ignorer les erreurs continues de scan pour ne pas ralentir
-            // Seulement logger les erreurs critiques
-            if (errorMessage && errorMessage.includes('No QR code')) {
-                // Erreur normale, on ignore
-                return;
+            // Logger toutes les erreurs pour debug
+            if (errorMessage) {
+                // Ignorer les erreurs normales (pas de code détecté)
+                if (errorMessage.includes('No QR code') || 
+                    errorMessage.includes('NotFoundException') ||
+                    errorMessage.includes('No MultiFormat Readers')) {
+                    // Erreur normale, on ignore silencieusement
+                    return;
+                }
+                // Logger les autres erreurs pour debug
+                console.warn('⚠️ Erreur scan:', errorMessage);
             }
-            // Autres erreurs peuvent être loggées si nécessaire
         }
         
         // Fonction pour remplir le champ de recherche
