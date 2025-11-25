@@ -36,14 +36,31 @@ $options = [
     PDO::ATTR_EMULATE_PREPARES   => false,
 ];
 
+// Variable pour indiquer que db.php a été chargé
+if (!defined('DB_LOADED')) {
+    define('DB_LOADED', true);
+}
+
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
     
     // IMPORTANT: Stocker dans GLOBALS pour garantir l'accessibilité globale
     $GLOBALS['pdo'] = $pdo;
     
+    // S'assurer aussi que la variable globale classique est définie
+    global $pdo;
+    
+    // Log de succès pour le débogage
+    error_log("DB connection successful: DSN=$dsn, User=$user, PDO stored in GLOBALS");
+    
 } catch (PDOException $e) {
     error_log("DB connection error: " . $e->getMessage() . " | DSN: $dsn | User: $user");
+    
+    // S'assurer que $pdo n'est pas défini en cas d'erreur
+    unset($GLOBALS['pdo']);
+    if (isset($pdo)) {
+        unset($pdo);
+    }
     
     // Si on est dans un contexte API (jsonResponse existe), lancer une exception
     // pour que les fichiers API puissent la capturer et renvoyer du JSON

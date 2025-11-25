@@ -141,30 +141,66 @@ function initApi(): void {
     }
     
     try {
-        require_once __DIR__ . '/db.php';
+        // Vérifier si db.php a déjà été chargé
+        $dbFile = __DIR__ . '/db.php';
+        if (!file_exists($dbFile)) {
+            throw new RuntimeException("Le fichier db.php n'existe pas à: $dbFile");
+        }
+        
+        require_once $dbFile;
+        
+        // Vérifier que db.php a bien été chargé
+        if (!defined('DB_LOADED')) {
+            throw new RuntimeException('db.php a été inclus mais DB_LOADED n\'est pas défini. Vérifiez que db.php définit cette constante.');
+        }
+        
+        // Vérifier si une erreur de connexion a été stockée
+        if (isset($GLOBALS['db_connection_error'])) {
+            $error = $GLOBALS['db_connection_error'];
+            throw new RuntimeException(
+                'Erreur de connexion à la base de données: ' . $error->getMessage(),
+                0,
+                $error
+            );
+        }
         
         // Vérifier que $pdo a été créé - d'abord dans GLOBALS (plus fiable)
         if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
             $pdo = $GLOBALS['pdo'];
+            error_log('initApi: PDO trouvé dans GLOBALS');
         } else {
             // Essayer la variable globale classique
             global $pdo;
-            if (!isset($pdo) || !($pdo instanceof PDO)) {
-                // Vérifier si db.php a défini $pdo mais qu'il n'est pas accessible
-                // Cela peut arriver si db.php est inclus dans un autre scope
+            if (isset($pdo) && $pdo instanceof PDO) {
+                // S'assurer qu'il est aussi dans GLOBALS
+                $GLOBALS['pdo'] = $pdo;
+                error_log('initApi: PDO trouvé dans variable globale, stocké dans GLOBALS');
+            } else {
+                // Diagnostic détaillé
+                $debugInfo = [
+                    'GLOBALS[pdo] existe' => isset($GLOBALS['pdo']),
+                    'GLOBALS[pdo] type' => isset($GLOBALS['pdo']) ? gettype($GLOBALS['pdo']) : 'N/A',
+                    'GLOBALS[pdo] instanceof PDO' => isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO,
+                    'Variable globale $pdo existe' => isset($pdo),
+                    'Variable globale $pdo type' => isset($pdo) ? gettype($pdo) : 'N/A',
+                    'DB_LOADED défini' => defined('DB_LOADED'),
+                    'db_connection_error existe' => isset($GLOBALS['db_connection_error'])
+                ];
+                
+                error_log('initApi: PDO non trouvé. Debug: ' . json_encode($debugInfo));
+                
                 throw new RuntimeException(
                     'La connexion PDO n\'a pas été initialisée par db.php. ' .
-                    'Vérifiez que db.php stocke $pdo dans $GLOBALS[\'pdo\']. ' .
-                    'GLOBALS contient: ' . (isset($GLOBALS['pdo']) ? gettype($GLOBALS['pdo']) : 'non défini')
+                    'Vérifiez la configuration de la base de données et les logs d\'erreur. ' .
+                    'Debug: ' . json_encode($debugInfo)
                 );
             }
-            // S'assurer qu'il est aussi dans GLOBALS
-            $GLOBALS['pdo'] = $pdo;
         }
         
         // Tester la connexion
         try {
             $pdo->query('SELECT 1');
+            error_log('initApi: Test de connexion PDO réussi');
         } catch (PDOException $e) {
             error_log('API init error (db test): ' . $e->getMessage());
             throw new RuntimeException('La connexion PDO existe mais ne fonctionne pas: ' . $e->getMessage(), 0, $e);
