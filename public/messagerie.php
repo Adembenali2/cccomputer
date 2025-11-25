@@ -274,12 +274,14 @@ async function extractMentionIds(mentions) {
 function formatMessageContent(message, mentions = []) {
     let content = escapeHtml(message);
     
-    if (mentions.length > 0) {
-        mentions.forEach(mentionName => {
-            const regex = new RegExp(`@${escapeHtml(mentionName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi');
-            content = content.replace(regex, `<span class="mention">@${escapeHtml(mentionName)}</span>`);
-        });
-    }
+    // Détecter automatiquement toutes les mentions dans le texte (format @nom)
+    // Cette regex détecte @ suivi d'un ou plusieurs caractères (pas d'espaces ni @)
+    const mentionRegex = /@([^\s@]+)/g;
+    
+    // Remplacer toutes les mentions par des spans stylisés
+    content = content.replace(mentionRegex, (match, mentionName) => {
+        return `<span class="mention">@${mentionName}</span>`;
+    });
     
     return content;
 }
