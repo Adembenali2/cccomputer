@@ -117,6 +117,7 @@ try {
             $whereSav[] = "1 = 0"; // Condition toujours fausse pour ne rien retourner
         }
     }
+    // Pour les admins, pas de filtre sur id_technicien (ils voient tous les SAV)
     
     // Exclure les SAV résolus et annulés
     $whereSav[] = "statut NOT IN ('resolu', 'annule')";
@@ -159,6 +160,13 @@ try {
     $stmtSav = $pdo->prepare($sqlSav);
     $stmtSav->execute($paramsSav);
     $savs = $stmtSav->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Debug temporaire
+    if (empty($savs)) {
+        error_log('agenda.php - Aucun SAV trouvé. SQL: ' . $sqlSav);
+        error_log('agenda.php - Paramètres: ' . json_encode($paramsSav));
+        error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isTechnicien: ' . ($isTechnicien ? 'true' : 'false') . ', currentUserId: ' . $currentUserId);
+    }
 } catch (PDOException $e) {
     error_log('agenda.php - Erreur récupération SAV: ' . $e->getMessage());
 }
@@ -186,6 +194,7 @@ try {
             $whereLiv[] = "1 = 0"; // Condition toujours fausse pour ne rien retourner
         }
     }
+    // Pour les admins, pas de filtre sur id_livreur (ils voient toutes les livraisons)
     
     // Exclure les livraisons livrées et annulées
     $whereLiv[] = "statut NOT IN ('livree', 'annulee')";
@@ -215,6 +224,13 @@ try {
     $stmtLiv = $pdo->prepare($sqlLiv);
     $stmtLiv->execute($paramsLiv);
     $livraisons = $stmtLiv->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Debug temporaire
+    if (empty($livraisons)) {
+        error_log('agenda.php - Aucune livraison trouvée. SQL: ' . $sqlLiv);
+        error_log('agenda.php - Paramètres: ' . json_encode($paramsLiv));
+        error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isLivreur: ' . ($isLivreur ? 'true' : 'false') . ', currentUserId: ' . $currentUserId);
+    }
 } catch (PDOException $e) {
     error_log('agenda.php - Erreur récupération livraisons: ' . $e->getMessage());
 }
@@ -246,6 +262,32 @@ ksort($agendaByDate);
 // Statistiques
 $totalSavs = count($savs);
 $totalLivraisons = count($livraisons);
+
+// Debug : Vérifier s'il y a des SAV/livraisons dans la base (pour diagnostic)
+$debugInfo = [];
+if (empty($savs) && empty($livraisons)) {
+    try {
+        // Compter tous les SAV non résolus/annulés
+        $stmtDebug = $pdo->query("SELECT COUNT(*) as total FROM sav WHERE statut NOT IN ('resolu', 'annule')");
+        $debugInfo['total_savs_db'] = $stmtDebug->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+        
+        // Compter toutes les livraisons non livrées/annulées
+        $stmtDebug = $pdo->query("SELECT COUNT(*) as total FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
+        $debugInfo['total_livraisons_db'] = $stmtDebug->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+        
+        // Vérifier les dates des SAV
+        $stmtDebug = $pdo->query("SELECT MIN(date_ouverture) as min_date, MAX(date_ouverture) as max_date FROM sav WHERE statut NOT IN ('resolu', 'annule')");
+        $datesSav = $stmtDebug->fetch(PDO::FETCH_ASSOC);
+        $debugInfo['sav_dates'] = $datesSav;
+        
+        // Vérifier les dates des livraisons
+        $stmtDebug = $pdo->query("SELECT MIN(date_prevue) as min_date, MAX(date_prevue) as max_date FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
+        $datesLiv = $stmtDebug->fetch(PDO::FETCH_ASSOC);
+        $debugInfo['livraison_dates'] = $datesLiv;
+    } catch (PDOException $e) {
+        error_log('agenda.php - Erreur debug: ' . $e->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -412,7 +454,42 @@ $totalLivraisons = count($livraisons);
             <div class="agenda-container">
                 <?php if (empty($agendaByDate)): ?>
                     <div class="agenda-empty">
-                        <p>Aucun SAV ou livraison prévu pour cette période.</p>
+                        <p><strong>Aucun SAV ou livraison prévu pour cette période.</strong></p>
+                        <p style="margin-top: 1rem; color: #6b7280; font-size: 0.9rem;">
+                            Période sélectionnée : 
+                            <?php if ($viewMode === 'day'): ?>
+                                <?= h(date('d/m/Y', strtotime($filterDate))) ?>
+                            <?php elseif ($viewMode === 'week'): ?>
+                                Semaine du <?= h(date('d/m/Y', strtotime($startDate))) ?> au <?= h(date('d/m/Y', strtotime($endDate))) ?>
+                            <?php else: ?>
+                                Mois de <?= h(date('F Y', strtotime($filterDate))) ?>
+                            <?php endif; ?>
+                        </p>
+                        <p style="margin-top: 0.5rem; color: #6b7280; font-size: 0.9rem;">
+                            Suggestions :
+                            <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                                <li>Essayez de changer la date ou la période (jour/semaine/mois)</li>
+                                <li>Vérifiez que les SAV/livraisons ne sont pas tous résolus/annulés</li>
+                                <?php if (!$isAdmin): ?>
+                                    <li>Vérifiez que vous avez des SAV/livraisons assignés à votre compte</li>
+                                <?php endif; ?>
+                            </ul>
+                        </p>
+                        <?php if (!empty($debugInfo)): ?>
+                            <div style="margin-top: 1rem; padding: 1rem; background: #f3f4f6; border-radius: 4px; font-size: 0.85rem;">
+                                <strong>Informations de diagnostic :</strong>
+                                <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                                    <li>SAV dans la base (non résolus/annulés) : <?= h((string)($debugInfo['total_savs_db'] ?? 0)) ?></li>
+                                    <li>Livraisons dans la base (non livrées/annulées) : <?= h((string)($debugInfo['total_livraisons_db'] ?? 0)) ?></li>
+                                    <?php if (!empty($debugInfo['sav_dates'])): ?>
+                                        <li>Dates SAV : du <?= h($debugInfo['sav_dates']['min_date'] ?? 'N/A') ?> au <?= h($debugInfo['sav_dates']['max_date'] ?? 'N/A') ?></li>
+                                    <?php endif; ?>
+                                    <?php if (!empty($debugInfo['livraison_dates'])): ?>
+                                        <li>Dates livraisons : du <?= h($debugInfo['livraison_dates']['min_date'] ?? 'N/A') ?> au <?= h($debugInfo['livraison_dates']['max_date'] ?? 'N/A') ?></li>
+                                    <?php endif; ?>
+                                </ul>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php else: ?>
                     <?php foreach ($agendaByDate as $date => $items): ?>

@@ -46,6 +46,9 @@ try {
         SELECT 
             id,
             'papier' as type,
+            marque,
+            modele,
+            poids,
             CONCAT(marque, ' ', modele) as nom,
             CONCAT('Papier ', marque, ' ', modele, ' - Poids: ', poids) as description,
             barcode
@@ -74,6 +77,9 @@ try {
             SELECT 
                 id,
                 'toner' as type,
+                marque,
+                modele,
+                couleur,
                 CONCAT(marque, ' ', modele) as nom,
                 CONCAT('Toner ', marque, ' ', modele, ' - Couleur: ', couleur) as description,
                 barcode
@@ -102,6 +108,11 @@ try {
                 SELECT 
                     id,
                     'lcd' as type,
+                    marque,
+                    modele,
+                    reference,
+                    taille,
+                    resolution,
                     CONCAT(marque, ' ', modele) as nom,
                     CONCAT('LCD ', marque, ' ', modele, ' - ', taille, '\" - ', resolution) as description,
                     barcode
@@ -130,6 +141,11 @@ try {
                     SELECT 
                         id,
                         'pc' as type,
+                        marque,
+                        modele,
+                        reference,
+                        cpu,
+                        ram,
                         CONCAT(marque, ' ', modele) as nom,
                         CONCAT('PC ', marque, ' ', modele, ' - CPU: ', cpu, ' - RAM: ', ram) as description,
                         barcode

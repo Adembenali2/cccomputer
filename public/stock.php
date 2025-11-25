@@ -385,6 +385,7 @@ $sectionImages = [
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
             z-index: 100;
+            text-decoration: none;
         }
         
         .camera-fixed-btn:hover {
@@ -894,10 +895,9 @@ $sectionImages = [
         
         <!-- Contenu principal -->
         <main class="stock-main-content">
-            <!-- Bouton caméra fixe à gauche -->
-            <button 
-                type="button" 
-                id="toggleScannerMain" 
+            <!-- Bouton caméra fixe à gauche - Redirige vers la page scanner -->
+            <a 
+                href="/public/scan_barcode.php" 
                 class="camera-fixed-btn"
                 aria-label="Ouvrir le scanner">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -906,7 +906,7 @@ $sectionImages = [
                     <path d="M18 7L16 5L14 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M18 7L16 9L14 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-            </button>
+            </a>
 
             <!-- Grille Masonry 2 colonnes -->
             <div id="stockMasonry" class="stock-masonry">
