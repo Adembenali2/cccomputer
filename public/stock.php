@@ -340,6 +340,122 @@ $sectionImages = [
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/stock.css" />
     <style>
+        /* ===== REFONTE VISUELLE COMPLÈTE - STOCK PAGE ===== */
+        
+        /* Header moderne avec bouton caméra */
+        .stock-header {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        
+        .camera-icon-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+        }
+        
+        .camera-icon-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .camera-icon-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .camera-icon-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+        
+        .header-content {
+            flex: 1;
+        }
+        
+        .stock-header .page-title {
+            color: white;
+            margin: 0 0 0.5rem 0;
+            font-size: 2rem;
+            font-weight: 700;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .stock-header .page-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            margin: 0;
+            font-size: 1rem;
+        }
+        
+        /* Boutons modernisés */
+        .btn-modern {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.75rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            text-decoration: none;
+        }
+        
+        .btn-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        
+        .btn-modern:active {
+            transform: translateY(0);
+        }
+        
+        .btn-modern svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        
+        .btn-print {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+        }
+        
+        .btn-print:hover {
+            box-shadow: 0 8px 25px rgba(245, 87, 108, 0.5);
+            background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+        }
+        
+        /* Section scanner repositionnée */
+        #scannerSection {
+            margin-bottom: 2rem;
+            background: var(--bg-primary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+        
         /* Styles spécifiques pour le scanner de caméra - Taille compacte QR code */
         #reader {
             position: relative;
@@ -414,17 +530,198 @@ $sectionImages = [
             backface-visibility: hidden;
             -webkit-backface-visibility: hidden;
         }
+        
+        /* ===== TABLEAUX STYLE DASHBOARD PROFESSIONNEL ===== */
+        .table-wrapper {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+        
+        .tbl-stock {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: white;
+        }
+        
+        .tbl-stock thead {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+        
+        .tbl-stock th {
+            padding: 1.25rem 1.5rem;
+            text-align: left;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #495057;
+            border-bottom: 2px solid #e9ecef;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .tbl-stock tbody tr {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-bottom: 1px solid #f1f3f5;
+        }
+        
+        .tbl-stock tbody tr:hover {
+            background: linear-gradient(90deg, #f8f9ff 0%, #ffffff 100%);
+            transform: translateX(2px);
+            box-shadow: -4px 0 0 0 #667eea;
+            cursor: pointer;
+        }
+        
+        .tbl-stock tbody tr:last-child {
+            border-bottom: none;
+        }
+        
+        .tbl-stock td {
+            padding: 1.25rem 1.5rem;
+            font-size: 0.95rem;
+            color: #212529;
+            vertical-align: middle;
+        }
+        
+        .tbl-stock .col-number {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .tbl-stock .col-text {
+            text-align: left;
+        }
+        
+        .tbl-stock .col-state {
+            text-align: center;
+        }
+        
+        .tbl-stock .td-metric {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .tbl-stock .td-metric.is-zero {
+            color: #dc3545;
+        }
+        
+        .tbl-stock .col-empty {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        /* Sections de cartes modernisées */
+        .card-section {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .card-section:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 8px 32px rgba(0, 0, 0, 0.06);
+            transform: translateY(-2px);
+        }
+        
+        .section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f1f3f5;
+        }
+        
+        .head-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .section-title {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #212529;
+        }
+        
+        .head-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        /* Boutons dans les sections */
+        .btn-modern.btn-add {
+            font-size: 0.95rem;
+            padding: 0.75rem 1.5rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .stock-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            
+            .camera-icon-btn {
+                width: 48px;
+                height: 48px;
+            }
+            
+            .stock-header .page-title {
+                font-size: 1.5rem;
+            }
+            
+            .tbl-stock th,
+            .tbl-stock td {
+                padding: 0.875rem 1rem;
+                font-size: 0.875rem;
+            }
+            
+            .btn-modern {
+                padding: 0.75rem 1.25rem;
+                font-size: 0.9rem;
+            }
+        }
     </style>
 </head>
 <body class="page-stock">
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
 <div class="page-container">
-    <!-- En-tête de page -->
-    <div class="page-header">
-        <h1 class="page-title">Gestion du Stock</h1>
-        <p class="page-subtitle">Vue d'ensemble complète de votre inventaire — disposition <strong>dynamique</strong> selon le contenu</p>
-    </div>
+    <!-- Header moderne avec bouton caméra -->
+    <header class="stock-header">
+        <button 
+            type="button" 
+            id="toggleScanner" 
+            class="camera-icon-btn"
+            aria-label="Ouvrir/Fermer le scanner">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 12.88V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V5C22 3.89543 21.1046 3 20 3H4C2.89543 3 2 3.89543 2 5V11.12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M18 7L16 5L14 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M18 7L16 9L14 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+        <div class="header-content">
+            <h1 class="page-title">Gestion du Stock</h1>
+            <p class="page-subtitle">Vue d'ensemble complète de votre inventaire — disposition <strong>dynamique</strong> selon le contenu</p>
+        </div>
+    </header>
 
     <!-- Messages flash -->
     <?php if ($flash && isset($flash['type'])): ?>
@@ -485,21 +782,8 @@ $sectionImages = [
         <span class="search-results-count" id="searchResultsCount" style="display: none;" aria-live="polite"></span>
     </div>
 
-    <!-- Section Scanner Code-Barres -->
-    <section class="barcode-scanner-section" style="margin-bottom: 1.5rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem; box-shadow: var(--shadow-sm);">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">
-                📷 Scanner Code-Barres
-            </h3>
-            <button 
-                type="button" 
-                id="toggleScanner" 
-                class="btn btn-primary btn-sm"
-                aria-label="Ouvrir/Fermer le scanner">
-                Ouvrir Scanner
-            </button>
-        </div>
-        
+    <!-- Section Scanner Code-Barres (masquée par défaut, contrôlée par le bouton header) -->
+    <section class="barcode-scanner-section" id="scannerSection" style="display: none;">
         <div id="scannerContainer" style="display: none;">
             <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
                 <button 
@@ -628,10 +912,13 @@ $sectionImages = [
                 <div class="head-right">
                     <button 
                         type="button" 
-                        class="btn btn-primary btn-sm btn-add" 
+                        class="btn-modern btn-add" 
                         data-add-type="papier"
                         aria-label="Ajouter du papier">
-                        <span aria-hidden="true">+</span> Ajouter papier
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>Ajouter papier</span>
                     </button>
                 </div>
             </div>
@@ -693,10 +980,13 @@ $sectionImages = [
                 <div class="head-right">
                     <button 
                         type="button" 
-                        class="btn btn-primary btn-sm btn-add" 
+                        class="btn-modern btn-add" 
                         data-add-type="lcd"
                         aria-label="Ajouter un écran LCD">
-                        <span aria-hidden="true">+</span> Ajouter LCD
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>Ajouter LCD</span>
                     </button>
                 </div>
             </div>
@@ -756,10 +1046,13 @@ $sectionImages = [
                 <div class="head-right">
                     <button 
                         type="button" 
-                        class="btn btn-primary btn-sm btn-add" 
+                        class="btn-modern btn-add" 
                         data-add-type="pc"
                         aria-label="Ajouter un PC">
-                        <span aria-hidden="true">+</span> Ajouter PC
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>Ajouter PC</span>
                     </button>
                 </div>
             </div>
@@ -1765,9 +2058,13 @@ $sectionImages = [
         // Toggle scanner container
         if (toggleBtn && scannerContainer) {
             toggleBtn.addEventListener('click', function() {
-                const isVisible = scannerContainer.style.display !== 'none';
+                const scannerSection = document.getElementById('scannerSection');
+                const isVisible = scannerSection ? scannerSection.style.display !== 'none' : false;
+                
+                if (scannerSection) {
+                    scannerSection.style.display = isVisible ? 'none' : 'block';
+                }
                 scannerContainer.style.display = isVisible ? 'none' : 'block';
-                toggleBtn.textContent = isVisible ? 'Ouvrir Scanner' : 'Fermer Scanner';
                 
                 if (!isVisible && isScanning) {
                     stopScanning();
