@@ -457,7 +457,7 @@ $sectionImages = [
         </div>
         
         <div id="scannerContainer" style="display: none;">
-            <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
                 <button 
                     type="button" 
                     id="startCameraScan" 
@@ -472,6 +472,12 @@ $sectionImages = [
                     style="flex: 1; display: none;">
                     ⏹️ Arrêter Scanner
                 </button>
+                <div id="libraryStatus" style="font-size: 0.75rem; color: var(--text-muted); padding: 0.5rem; min-width: 200px;">
+                    <span id="libraryStatusText">⏳ Chargement de la bibliothèque...</span>
+                    <div id="libraryHelp" style="display: none; margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-muted);">
+                        Si le chargement échoue, rechargez la page (F5)
+                    </div>
+                </div>
             </div>
             
             <!-- Zone de prévisualisation vidéo caméra -->
@@ -838,11 +844,116 @@ $sectionImages = [
     </div>
 </div>
 
-<!-- Bibliothèque html5-qrcode via CDN -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" 
-        integrity="sha384-8vCqJ5Z5K5v5Vl3cBdDdLobM5h4c6U1f7p3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f"
-        crossorigin="anonymous"
-        onerror="console.error('Erreur chargement html5-qrcode'); document.getElementById('scannerContainer') && (document.getElementById('scannerContainer').innerHTML += '<div style=\'color:red; padding:1rem;\'>Erreur: Bibliothèque de scan non chargée. Vérifiez votre connexion.</div>');"></script>
+<!-- Bibliothèque html5-qrcode via CDN avec fallback -->
+<script>
+(function() {
+    'use strict';
+    
+    // Fonction pour charger la bibliothèque html5-qrcode
+    function loadHtml5Qrcode() {
+        return new Promise(function(resolve, reject) {
+            // Vérifier si déjà chargé
+            if (typeof Html5Qrcode !== 'undefined') {
+                console.log('html5-qrcode déjà chargé');
+                resolve();
+                return;
+            }
+            
+            // Liste des CDN à essayer
+            const cdnUrls = [
+                'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+                'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'
+            ];
+            
+            let currentIndex = 0;
+            
+            function tryLoadCDN(index) {
+                if (index >= cdnUrls.length) {
+                    const errorMsg = 'Impossible de charger html5-qrcode depuis tous les CDN. Vérifiez votre connexion internet.';
+                    console.error(errorMsg);
+                    reject(new Error(errorMsg));
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = cdnUrls[index];
+                script.async = true;
+                script.crossOrigin = 'anonymous';
+                
+                script.onload = function() {
+                    // Attendre que la bibliothèque s'initialise (augmenter le délai)
+                    let attempts = 0;
+                    const maxAttempts = 20; // 2 secondes max
+                    
+                    const checkLibrary = setInterval(function() {
+                        attempts++;
+                        if (typeof Html5Qrcode !== 'undefined') {
+                            clearInterval(checkLibrary);
+                            console.log('✓ html5-qrcode chargé depuis:', cdnUrls[index]);
+                            resolve();
+                        } else if (attempts >= maxAttempts) {
+                            clearInterval(checkLibrary);
+                            // Essayer le CDN suivant
+                            console.warn('Timeout: Html5Qrcode non défini après chargement, essai CDN suivant...');
+                            tryLoadCDN(index + 1);
+                        }
+                    }, 100);
+                };
+                
+                script.onerror = function() {
+                    console.warn('✗ Échec chargement depuis:', cdnUrls[index]);
+                    // Essayer le CDN suivant
+                    tryLoadCDN(index + 1);
+                };
+                
+                document.head.appendChild(script);
+            }
+            
+            tryLoadCDN(0);
+        });
+    }
+    
+    // Charger la bibliothèque au chargement de la page
+    window.html5QrcodeLoaded = loadHtml5Qrcode();
+    
+    // Mettre à jour le statut de chargement
+    window.html5QrcodeLoaded.then(function() {
+        console.log('✓ Bibliothèque html5-qrcode chargée avec succès');
+        window.html5QrcodeReady = true;
+        // Mettre à jour l'indicateur visuel
+        setTimeout(function() {
+            const statusEl = document.getElementById('libraryStatusText');
+            if (statusEl) {
+                statusEl.textContent = '✓ Bibliothèque prête';
+                statusEl.style.color = '#16a34a';
+            }
+        }, 100);
+    }).catch(function(err) {
+        console.error('Erreur chargement html5-qrcode:', err);
+        window.html5QrcodeLoadError = true;
+        window.html5QrcodeReady = false;
+        // Mettre à jour l'indicateur visuel
+        setTimeout(function() {
+            const statusEl = document.getElementById('libraryStatusText');
+            if (statusEl) {
+                statusEl.textContent = '✗ Erreur de chargement - Rechargez la page';
+                statusEl.style.color = '#dc2626';
+            }
+        }, 100);
+        
+        // Afficher l'aide si erreur après 5 secondes
+        setTimeout(function() {
+            if (typeof Html5Qrcode === 'undefined' && !window.html5QrcodeReady) {
+                const helpEl = document.getElementById('libraryHelp');
+                if (helpEl) {
+                    helpEl.style.display = 'block';
+                }
+            }
+        }, 5000);
+    });
+})();
+</script>
 
 <script>
 // S'assurer que le DOM est chargé avant d'exécuter les scripts
@@ -1623,29 +1734,91 @@ $sectionImages = [
         // Démarrer le scan caméra
         if (startCameraBtn) {
             startCameraBtn.addEventListener('click', async function() {
-                // Vérifier que la bibliothèque est chargée
-                if (typeof Html5Qrcode === 'undefined') {
-                    showError('Bibliothèque html5-qrcode non chargée. Veuillez recharger la page.');
-                    return;
-                }
-                
-                // Vérifier HTTPS (requis pour la caméra)
-                if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                    showError('La caméra nécessite une connexion HTTPS sécurisée. Veuillez utiliser https://');
-                    return;
-                }
-                
-                // Vérifier que l'API MediaDevices est disponible
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    showError('Votre navigateur ne supporte pas l\'accès à la caméra. Veuillez utiliser un navigateur moderne (Chrome, Firefox, Edge).');
-                    return;
-                }
+                // Désactiver le bouton pendant le chargement
+                const originalText = startCameraBtn.textContent;
+                startCameraBtn.disabled = true;
+                startCameraBtn.textContent = '⏳ Chargement de la bibliothèque...';
+                hideError();
                 
                 try {
+                    // Attendre que la bibliothèque soit chargée avec timeout
+                    let libraryReady = false;
+                    
+                    if (window.html5QrcodeLoaded) {
+                        try {
+                            // Attendre la promesse avec timeout
+                            await Promise.race([
+                                window.html5QrcodeLoaded,
+                                new Promise(function(_, reject) {
+                                    setTimeout(function() {
+                                        reject(new Error('Timeout: La bibliothèque prend trop de temps à charger'));
+                                    }, 10000); // 10 secondes max
+                                })
+                            ]);
+                            libraryReady = true;
+                        } catch (promiseErr) {
+                            console.warn('Erreur promesse html5QrcodeLoaded:', promiseErr);
+                            // Continuer avec la vérification directe
+                        }
+                    }
+                    
+                    // Vérification directe avec plusieurs tentatives
+                    if (!libraryReady) {
+                        startCameraBtn.textContent = '⏳ Vérification de la bibliothèque...';
+                        
+                        for (let i = 0; i < 30; i++) {
+                            if (typeof Html5Qrcode !== 'undefined') {
+                                libraryReady = true;
+                                console.log('Bibliothèque détectée après', i * 100, 'ms');
+                                break;
+                            }
+                            await new Promise(function(resolve) {
+                                setTimeout(resolve, 100);
+                            });
+                        }
+                    }
+                    
+                    // Vérification finale
+                    if (typeof Html5Qrcode === 'undefined') {
+                        const errorDetails = [
+                            'Bibliothèque html5-qrcode non disponible.',
+                            '',
+                            'Causes possibles:',
+                            '• Problème de connexion internet',
+                            '• Bloqueur de scripts/CDN',
+                            '• CDN inaccessible',
+                            '',
+                            'Solutions:',
+                            '1. Rechargez la page (F5 ou Ctrl+R)',
+                            '2. Vérifiez votre connexion internet',
+                            '3. Désactivez temporairement les bloqueurs de publicités',
+                            '4. Vérifiez la console du navigateur (F12) pour plus de détails'
+                        ].join('\n');
+                        console.error(errorDetails);
+                        throw new Error('Bibliothèque html5-qrcode non disponible. Veuillez recharger la page (F5) ou vérifier votre connexion internet.');
+                    }
+                    
+                    startCameraBtn.textContent = '⏳ Démarrage de la caméra...';
+                    
+                    // Vérifier HTTPS (requis pour la caméra)
+                    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                        throw new Error('La caméra nécessite une connexion HTTPS sécurisée. Veuillez utiliser https://');
+                    }
+                    
+                    // Vérifier que l'API MediaDevices est disponible
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('Votre navigateur ne supporte pas l\'accès à la caméra. Veuillez utiliser un navigateur moderne (Chrome, Firefox, Edge).');
+                    }
+                    
                     await startCameraScanning();
+                    
                 } catch (err) {
                     console.error('Erreur démarrage caméra:', err);
-                    showError('Erreur lors du démarrage de la caméra: ' + (err.message || err));
+                    showError('Erreur: ' + (err.message || err));
+                } finally {
+                    // Réactiver le bouton
+                    startCameraBtn.disabled = false;
+                    startCameraBtn.textContent = originalText;
                 }
             });
         }
