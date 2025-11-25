@@ -292,9 +292,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         if ($idClient <= 0) {
             $flash = ['type' => 'error', 'msg' => "Veuillez sélectionner un client."];
             $shouldOpenAttachModal = true;
-        } elseif ($macInput === '' && $snInput === '') {
-            $flash = ['type' => 'error', 'msg' => "Adresse MAC ou numéro de série requis."];
-            $shouldOpenAttachModal = true;
         } else {
             try {
                 $pdo->beginTransaction();
@@ -309,56 +306,71 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     }
                 }
                 
-                // Vérifier si le photocopieur existe déjà
-                $sqlCheck = "SELECT id FROM photocopieurs_clients WHERE ";
-                $paramsCheck = [];
-                if ($macNorm) {
-                    $sqlCheck .= "mac_norm = :mac_norm";
-                    $paramsCheck[':mac_norm'] = $macNorm;
-                } elseif ($snInput) {
-                    $sqlCheck .= "SerialNumber = :sn";
-                    $paramsCheck[':sn'] = $snInput;
+                // Vérifier qu'on a au moins un identifiant valide
+                if (!$macNorm && $snInput === '') {
+                    $flash = ['type' => 'error', 'msg' => "Adresse MAC ou numéro de série valide requis."];
+                    $shouldOpenAttachModal = true;
+                    $pdo->rollBack();
                 } else {
-                    throw new Exception("Aucun identifiant valide");
-                }
-                
-                $stmtCheck = $pdo->prepare($sqlCheck);
-                $stmtCheck->execute($paramsCheck);
-                $existing = $stmtCheck->fetch(PDO::FETCH_ASSOC);
-                
-                if ($existing) {
-                    // Mise à jour si existe déjà
-                    $sqlUpdate = "UPDATE photocopieurs_clients SET id_client = :id_client";
-                    $paramsUpdate = [':id_client' => $idClient];
-                    if ($macColon) {
-                        $sqlUpdate .= ", MacAddress = :mac_address";
-                        $paramsUpdate[':mac_address'] = $macColon;
-                    }
-                    if ($snInput) {
-                        $sqlUpdate .= ", SerialNumber = :sn";
-                        $paramsUpdate[':sn'] = $snInput;
-                    }
-                    $sqlUpdate .= " WHERE id = :id";
-                    $paramsUpdate[':id'] = $existing['id'];
+                    $existing = null;
                     
-                    $pdo->prepare($sqlUpdate)->execute($paramsUpdate);
-                } else {
-                    // Insertion si nouveau
-                    $sqlInsert = "INSERT INTO photocopieurs_clients (id_client, MacAddress, SerialNumber) VALUES (:id_client, :mac_address, :sn)";
-                    $pdo->prepare($sqlInsert)->execute([
-                        ':id_client' => $idClient,
-                        ':mac_address' => $macColon ?: null,
-                        ':sn' => $snInput ?: null,
-                    ]);
+                    // Vérifier si le photocopieur existe déjà (par MAC ou SN)
+                    if ($macNorm) {
+                        $sqlCheck = "SELECT id FROM photocopieurs_clients WHERE mac_norm = :mac_norm LIMIT 1";
+                        $stmtCheck = $pdo->prepare($sqlCheck);
+                        $stmtCheck->execute([':mac_norm' => $macNorm]);
+                        $existing = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+                    }
+                    
+                    // Si pas trouvé par MAC, chercher par SerialNumber
+                    if (!$existing && $snInput !== '') {
+                        $sqlCheck = "SELECT id FROM photocopieurs_clients WHERE SerialNumber = :sn LIMIT 1";
+                        $stmtCheck = $pdo->prepare($sqlCheck);
+                        $stmtCheck->execute([':sn' => $snInput]);
+                        $existing = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+                    }
+                    
+                    if ($existing) {
+                        // Mise à jour si existe déjà
+                        $sqlUpdate = "UPDATE photocopieurs_clients SET id_client = :id_client";
+                        $paramsUpdate = [':id_client' => $idClient];
+                        if ($macColon) {
+                            $sqlUpdate .= ", MacAddress = :mac_address";
+                            $paramsUpdate[':mac_address'] = $macColon;
+                        }
+                        if ($snInput !== '') {
+                            $sqlUpdate .= ", SerialNumber = :sn";
+                            $paramsUpdate[':sn'] = $snInput;
+                        }
+                        $sqlUpdate .= " WHERE id = :id";
+                        $paramsUpdate[':id'] = $existing['id'];
+                        
+                        $pdo->prepare($sqlUpdate)->execute($paramsUpdate);
+                    } else {
+                        // Insertion si nouveau
+                        $sqlInsert = "INSERT INTO photocopieurs_clients (id_client, MacAddress, SerialNumber) VALUES (:id_client, :mac_address, :sn)";
+                        $pdo->prepare($sqlInsert)->execute([
+                            ':id_client' => $idClient,
+                            ':mac_address' => $macColon ?: null,
+                            ':sn' => $snInput ?: null,
+                        ]);
+                    }
+                    
+                    $userId = currentUserId();
+                    $details = "Photocopieur attribué: MAC=" . ($macNorm ?? 'N/A') . ", SN=" . ($snInput ?: 'N/A') . " → Client #" . $idClient;
+                    enregistrerAction($pdo, $userId, 'photocopieur_attribue', $details);
+                    $pdo->commit();
+                    
+                    header('Location: /public/clients.php?attached=1');
+                    exit;
                 }
-                
-                $userId = currentUserId();
-                $details = "Photocopieur attribué: MAC=" . ($macNorm ?? 'N/A') . ", SN=" . ($snInput ?: 'N/A') . " → Client #" . $idClient;
-                enregistrerAction($pdo, $userId, 'photocopieur_attribue', $details);
-                $pdo->commit();
-                
-                header('Location: /public/clients.php?attached=1');
-                exit;
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                error_log('clients.php attach_photocopieur error: ' . $e->getMessage());
+                $flash = ['type' => 'error', 'msg' => "Erreur: " . $e->getMessage()];
+                $shouldOpenAttachModal = true;
             } catch (PDOException $e) {
                 $pdo->rollBack();
                 error_log('clients.php attach_photocopieur error: ' . $e->getMessage());
