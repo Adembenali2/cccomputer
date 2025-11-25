@@ -83,21 +83,47 @@ try {
 // Récupérer les SAV
 $savs = [];
 try {
+    // Date du jour pour inclure les SAV en cours
+    $today = date('Y-m-d');
+    // Calculer une date de début pour inclure les SAV en cours (7 jours avant la période ou début de la période, selon le plus récent)
+    $dateObjMin = new DateTime($startDate);
+    $dateObjMin->modify('-7 days');
+    $minDateForOngoing = $dateObjMin->format('Y-m-d');
+    // Utiliser la date la plus récente entre (startDate - 7 jours) et aujourd'hui - 30 jours pour éviter de remonter trop loin
+    $dateObjLimit = new DateTime();
+    $dateObjLimit->modify('-30 days');
+    $limitDate = $dateObjLimit->format('Y-m-d');
+    $actualMinDate = max($minDateForOngoing, $limitDate);
+    
     if ($hasDateIntervention) {
-        $whereSav = ["(s.date_ouverture BETWEEN :start_date AND :end_date OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue BETWEEN :start_date2 AND :end_date2))"];
+        // Inclure les SAV dans la période OU les SAV en cours (non résolus) depuis une date raisonnable jusqu'à la fin de la période
+        $whereSav = [
+            "(s.date_ouverture BETWEEN :start_date AND :end_date 
+              OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue BETWEEN :start_date2 AND :end_date2)
+              OR (s.date_ouverture >= :min_ongoing_date AND s.date_ouverture <= :end_date AND s.statut IN ('ouvert', 'en_cours'))
+              OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue >= :min_ongoing_date2 AND s.date_intervention_prevue <= :end_date3 AND s.statut IN ('ouvert', 'en_cours')))"
+        ];
         $paramsSav = [
             ':start_date' => $startDate,
             ':end_date' => $endDate,
             ':start_date2' => $startDate,
-            ':end_date2' => $endDate
+            ':end_date2' => $endDate,
+            ':min_ongoing_date' => $actualMinDate,
+            ':min_ongoing_date2' => $actualMinDate,
+            ':end_date3' => $endDate
         ];
         $dateOrderBy = "COALESCE(s.date_intervention_prevue, s.date_ouverture)";
         $selectDateIntervention = "s.date_intervention_prevue,";
     } else {
-        $whereSav = ["s.date_ouverture BETWEEN :start_date AND :end_date"];
+        // Inclure les SAV dans la période OU les SAV en cours (non résolus) depuis une date raisonnable jusqu'à la fin de la période
+        $whereSav = [
+            "(s.date_ouverture BETWEEN :start_date AND :end_date 
+              OR (s.date_ouverture >= :min_ongoing_date AND s.date_ouverture <= :end_date AND s.statut IN ('ouvert', 'en_cours')))"
+        ];
         $paramsSav = [
             ':start_date' => $startDate,
-            ':end_date' => $endDate
+            ':end_date' => $endDate,
+            ':min_ongoing_date' => $actualMinDate
         ];
         $dateOrderBy = "s.date_ouverture";
         $selectDateIntervention = "";
@@ -105,6 +131,7 @@ try {
     
     // Filtrer par technicien si spécifié
     if ($filterUser) {
+        // Filtrer par technicien spécifique
         $whereSav[] = "s.id_technicien = :tech_id";
         $paramsSav[':tech_id'] = $filterUser;
     } elseif (!$isAdmin) {
@@ -119,7 +146,7 @@ try {
     }
     // Pour les admins, pas de filtre sur id_technicien (ils voient tous les SAV)
     
-    // Exclure les SAV résolus et annulés
+    // Exclure les SAV résolus et annulés (déjà géré dans la condition de date pour les en cours)
     $whereSav[] = "s.statut NOT IN ('resolu', 'annule')";
     
     // Vérifier si type_panne existe
@@ -175,14 +202,29 @@ try {
 // Récupérer les livraisons
 $livraisons = [];
 try {
-    $whereLiv = ["l.date_prevue BETWEEN :start_date AND :end_date"];
+    // Calculer une date de début pour inclure les livraisons en cours
+    $dateObjMinLiv = new DateTime($startDate);
+    $dateObjMinLiv->modify('-7 days');
+    $minDateForOngoingLiv = $dateObjMinLiv->format('Y-m-d');
+    $dateObjLimitLiv = new DateTime();
+    $dateObjLimitLiv->modify('-30 days');
+    $limitDateLiv = $dateObjLimitLiv->format('Y-m-d');
+    $actualMinDateLiv = max($minDateForOngoingLiv, $limitDateLiv);
+    
+    // Inclure les livraisons dans la période OU les livraisons en cours depuis une date raisonnable jusqu'à la fin de la période
+    $whereLiv = [
+        "(l.date_prevue BETWEEN :start_date AND :end_date 
+          OR (l.date_prevue >= :min_ongoing_date AND l.date_prevue <= :end_date AND l.statut IN ('planifiee', 'en_cours')))"
+    ];
     $paramsLiv = [
         ':start_date' => $startDate,
-        ':end_date' => $endDate
+        ':end_date' => $endDate,
+        ':min_ongoing_date' => $actualMinDateLiv
     ];
     
     // Filtrer par livreur si spécifié
     if ($filterUser) {
+        // Filtrer par livreur spécifique
         $whereLiv[] = "l.id_livreur = :livreur_id";
         $paramsLiv[':livreur_id'] = $filterUser;
     } elseif (!$isAdmin) {
@@ -197,7 +239,7 @@ try {
     }
     // Pour les admins, pas de filtre sur id_livreur (ils voient toutes les livraisons)
     
-    // Exclure les livraisons livrées et annulées
+    // Exclure les livraisons livrées et annulées (déjà géré dans la condition de date pour les en cours)
     $whereLiv[] = "l.statut NOT IN ('livree', 'annulee')";
     
     $sqlLiv = "
