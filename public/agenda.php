@@ -165,7 +165,8 @@ try {
     if (empty($savs)) {
         error_log('agenda.php - Aucun SAV trouvé. SQL: ' . $sqlSav);
         error_log('agenda.php - Paramètres: ' . json_encode($paramsSav));
-        error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isTechnicien: ' . ($isTechnicien ? 'true' : 'false') . ', currentUserId: ' . $currentUserId);
+        error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isTechnicien: ' . ($isTechnicien ? 'true' : 'false') . ', currentUserId: ' . $currentUserId . ', currentUserRole: ' . ($currentUserRole ?? 'null'));
+        error_log('agenda.php - Période: ' . $startDate . ' à ' . $endDate);
     }
 } catch (PDOException $e) {
     error_log('agenda.php - Erreur récupération SAV: ' . $e->getMessage());
@@ -229,7 +230,8 @@ try {
     if (empty($livraisons)) {
         error_log('agenda.php - Aucune livraison trouvée. SQL: ' . $sqlLiv);
         error_log('agenda.php - Paramètres: ' . json_encode($paramsLiv));
-        error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isLivreur: ' . ($isLivreur ? 'true' : 'false') . ', currentUserId: ' . $currentUserId);
+        error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isLivreur: ' . ($isLivreur ? 'true' : 'false') . ', currentUserId: ' . $currentUserId . ', currentUserRole: ' . ($currentUserRole ?? 'null'));
+        error_log('agenda.php - Période: ' . $startDate . ' à ' . $endDate);
     }
 } catch (PDOException $e) {
     error_log('agenda.php - Erreur récupération livraisons: ' . $e->getMessage());
@@ -284,6 +286,26 @@ if (empty($savs) && empty($livraisons)) {
         $stmtDebug = $pdo->query("SELECT MIN(date_prevue) as min_date, MAX(date_prevue) as max_date FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
         $datesLiv = $stmtDebug->fetch(PDO::FETCH_ASSOC);
         $debugInfo['livraison_dates'] = $datesLiv;
+        
+        // Vérifier les SAV dans la période avec détails
+        $stmtDebug = $pdo->prepare("
+            SELECT id, reference, date_ouverture, id_technicien, statut 
+            FROM sav 
+            WHERE statut NOT IN ('resolu', 'annule') 
+            AND date_ouverture BETWEEN :start_date AND :end_date
+        ");
+        $stmtDebug->execute([':start_date' => $startDate, ':end_date' => $endDate]);
+        $debugInfo['savs_in_period'] = $stmtDebug->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Informations sur l'utilisateur
+        $debugInfo['user_info'] = [
+            'isAdmin' => $isAdmin,
+            'isTechnicien' => $isTechnicien,
+            'isLivreur' => $isLivreur,
+            'currentUserId' => $currentUserId,
+            'currentUserRole' => $currentUserRole,
+            'filterUser' => $filterUser
+        ];
     } catch (PDOException $e) {
         error_log('agenda.php - Erreur debug: ' . $e->getMessage());
     }
@@ -486,6 +508,27 @@ if (empty($savs) && empty($livraisons)) {
                                     <?php endif; ?>
                                     <?php if (!empty($debugInfo['livraison_dates'])): ?>
                                         <li>Dates livraisons : du <?= h($debugInfo['livraison_dates']['min_date'] ?? 'N/A') ?> au <?= h($debugInfo['livraison_dates']['max_date'] ?? 'N/A') ?></li>
+                                    <?php endif; ?>
+                                    <?php if (!empty($debugInfo['savs_in_period'])): ?>
+                                        <li>SAV dans la période (<?= count($debugInfo['savs_in_period']) ?>) :
+                                            <ul style="margin-top: 0.3rem; padding-left: 1.5rem;">
+                                                <?php foreach ($debugInfo['savs_in_period'] as $savDebug): ?>
+                                                    <li>
+                                                        <?= h($savDebug['reference']) ?> - 
+                                                        Date: <?= h($savDebug['date_ouverture']) ?> - 
+                                                        Technicien: <?= $savDebug['id_technicien'] ? h((string)$savDebug['id_technicien']) : 'Non assigné' ?> - 
+                                                        Statut: <?= h($savDebug['statut']) ?>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </li>
+                                    <?php endif; ?>
+                                    <?php if (!empty($debugInfo['user_info'])): ?>
+                                        <li>Votre rôle : <?= h($debugInfo['user_info']['currentUserRole'] ?? 'Non défini') ?> 
+                                            (Admin: <?= $debugInfo['user_info']['isAdmin'] ? 'Oui' : 'Non' ?>, 
+                                            Technicien: <?= $debugInfo['user_info']['isTechnicien'] ? 'Oui' : 'Non' ?>, 
+                                            Livreur: <?= $debugInfo['user_info']['isLivreur'] ? 'Oui' : 'Non' ?>)
+                                        </li>
                                     <?php endif; ?>
                                 </ul>
                             </div>

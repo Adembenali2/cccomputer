@@ -27,79 +27,53 @@ function h($str): string {
     <title>Scanner Code-Barres - CCComputer</title>
     
     <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/stock.css" />
     
     <style>
-        * {
+        /* Style comme stock.php */
+        .page-header {
+            margin-bottom: 1.25rem;
+        }
+        
+        .page-title {
             margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--text-primary);
         }
         
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            color: #1f2937;
-        }
-        
-        .scan-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-            gap: 2rem;
-        }
-        
-        .scan-header {
-            text-align: center;
-            color: white;
-            margin-bottom: 1rem;
-        }
-        
-        .scan-header h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-        }
-        
-        .scan-header p {
-            font-size: 1rem;
-            opacity: 0.9;
+        .page-sub {
+            margin: 0.5rem 0 0 0;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
         }
         
         .scanner-wrapper {
-            background: white;
-            border-radius: 20px;
-            padding: 2rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 1.5rem;
         }
         
         .scanner-controls {
             display: flex;
-            gap: 1rem;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
             flex-wrap: wrap;
         }
         
         .btn {
             flex: 1;
             min-width: 150px;
-            padding: 0.875rem 1.5rem;
-            border: none;
-            border-radius: 12px;
-            font-size: 1rem;
-            font-weight: 600;
+            padding: 0.55rem 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.9rem;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -107,24 +81,23 @@ function h($str): string {
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            background: var(--bg-primary);
+            color: var(--text-primary);
         }
         
         .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            background: var(--bg-secondary);
+            border-color: var(--accent-primary);
         }
         
         .btn-secondary {
-            background: #f3f4f6;
-            color: #374151;
-            border: 1px solid #e5e7eb;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
         }
         
         .btn-secondary:hover:not(:disabled) {
-            background: #e5e7eb;
+            background: var(--bg-secondary);
         }
         
         .btn:disabled {
@@ -198,13 +171,12 @@ function h($str): string {
         
         /* Résultat du scan */
         .product-result {
-            background: white;
-            border-radius: 20px;
-            padding: 2rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 100%;
-            margin-top: 2rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            margin-top: 1.5rem;
             animation: slideIn 0.5s ease-out;
         }
         
@@ -284,46 +256,35 @@ function h($str): string {
         }
         
         .btn-back {
-            position: fixed;
-            top: 1rem;
-            left: 1rem;
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 12px;
-            text-decoration: none;
-            font-weight: 600;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            transition: all 0.3s ease;
-            z-index: 100;
+            padding: 0.55rem 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            margin-bottom: 1rem;
         }
         
         .btn-back:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
+            background: var(--bg-secondary);
+            border-color: var(--accent-primary);
         }
         
         .btn-back svg {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
         }
         
         @media (max-width: 768px) {
-            .scan-container {
-                padding: 1rem;
-            }
-            
             .scanner-wrapper,
             .product-result {
-                padding: 1.5rem;
-            }
-            
-            .scan-header h1 {
-                font-size: 1.5rem;
+                padding: 1rem;
             }
             
             #reader {
@@ -332,7 +293,18 @@ function h($str): string {
         }
     </style>
 </head>
-<body>
+<body class="page-stock">
+<?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+
+<div class="page-container">
+    <!-- Header simple comme stock.php -->
+    <div class="page-header">
+        <h2 class="page-title">Scanner Code-Barres</h2>
+        <p class="page-sub">
+            Positionnez le code-barres ou QR code dans le cadre pour scanner
+        </p>
+    </div>
+    
     <a href="/public/stock.php" class="btn-back">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
@@ -340,13 +312,7 @@ function h($str): string {
         Retour au stock
     </a>
     
-    <div class="scan-container">
-        <div class="scan-header">
-            <h1>📷 Scanner Code-Barres</h1>
-            <p>Positionnez le code-barres ou QR code dans le cadre</p>
-        </div>
-        
-        <div class="scanner-wrapper">
+    <div class="scanner-wrapper">
             <div class="scanner-controls">
                 <button id="startCameraScan" class="btn btn-primary">
                     📹 Démarrer la caméra
@@ -361,16 +327,18 @@ function h($str): string {
             <div id="statusMessage" class="status-message" style="display: none;"></div>
         </div>
         
-        <div id="productResult" class="product-result" style="display: none;">
-            <div class="product-result-header">
-                <h2>Produit trouvé</h2>
-                <span id="productTypeBadge" class="product-type-badge"></span>
-            </div>
-            <div class="product-info" id="productInfo">
-                <!-- Rempli dynamiquement -->
-            </div>
+    </div>
+    
+    <div id="productResult" class="product-result" style="display: none;">
+        <div class="product-result-header">
+            <h2>Produit trouvé</h2>
+            <span id="productTypeBadge" class="product-type-badge"></span>
+        </div>
+        <div class="product-info" id="productInfo">
+            <!-- Rempli dynamiquement -->
         </div>
     </div>
+</div><!-- /.page-container -->
     
     <!-- Chargement de la bibliothèque html5-qrcode -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -546,10 +514,7 @@ function h($str): string {
                 // Afficher les détails du produit
                 displayProductDetails(data.product, data.type);
                 
-                // Arrêter le scanner après un scan réussi
-                setTimeout(() => {
-                    stopScanning();
-                }, 500);
+                // NE PAS arrêter le scanner - permettre de scanner plusieurs codes rapidement
                 
             } catch (error) {
                 console.error('Erreur récupération produit:', error);
