@@ -409,6 +409,69 @@ $sectionImages = [
         <span class="search-results-count" id="searchResultsCount" style="display: none;" aria-live="polite"></span>
     </div>
 
+    <!-- Section Scanner Code-Barres -->
+    <section class="barcode-scanner-section" style="margin-bottom: 1.5rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem; box-shadow: var(--shadow-sm);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">
+                📷 Scanner Code-Barres
+            </h3>
+            <button 
+                type="button" 
+                id="toggleScanner" 
+                class="btn btn-primary btn-sm"
+                aria-label="Ouvrir/Fermer le scanner">
+                Ouvrir Scanner
+            </button>
+        </div>
+        
+        <div id="scannerContainer" style="display: none;">
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <button 
+                    type="button" 
+                    id="startCameraScan" 
+                    class="btn btn-primary"
+                    style="flex: 1;">
+                    📹 Scanner avec Caméra
+                </button>
+                <button 
+                    type="button" 
+                    id="stopCameraScan" 
+                    class="btn btn-secondary"
+                    style="flex: 1; display: none;">
+                    ⏹️ Arrêter Scanner
+                </button>
+            </div>
+            
+            <!-- Zone de scan caméra -->
+            <div id="cameraScanArea" style="display: none; margin-bottom: 1rem;">
+                <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto; border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 1rem; background: var(--bg-secondary);"></div>
+            </div>
+            
+            <!-- Zone d'upload fichier -->
+            <div style="margin-bottom: 1rem; padding: 1rem; border: 2px dashed var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary);">
+                <label for="barcodeFileInput" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-primary);">
+                    📁 Ou télécharger une image de code-barres :
+                </label>
+                <input 
+                    type="file" 
+                    id="barcodeFileInput" 
+                    accept="image/*"
+                    style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary);"
+                    aria-label="Télécharger une image de code-barres" />
+            </div>
+            
+            <!-- Zone de résultat -->
+            <div id="scanResult" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <div id="scanResultContent"></div>
+            </div>
+            
+            <!-- Messages d'erreur -->
+            <div id="scanError" style="display: none; margin-top: 1rem; padding: 1rem; background: #fee2e2; color: #991b1b; border-radius: var(--radius-md); border: 1px solid #fecaca;">
+                <strong>Erreur :</strong> <span id="scanErrorText"></span>
+            </div>
+        </div>
+    </section>
+
     <!-- Grille Masonry 2 colonnes -->
     <div id="stockMasonry" class="stock-masonry">
         
@@ -722,6 +785,33 @@ $sectionImages = [
         </form>
     </div>
 </div>
+
+<!-- ===== Modale résultats scan code-barres ===== -->
+<div id="barcodeResultOverlay" class="modal-overlay" aria-hidden="true" role="presentation"></div>
+<div 
+    id="barcodeResultModal" 
+    class="modal" 
+    role="dialog" 
+    aria-modal="true" 
+    aria-labelledby="barcodeResultTitle" 
+    style="display:none;">
+    <div class="modal-header">
+        <h3 id="barcodeResultTitle">Résultat du Scan</h3>
+        <button 
+            type="button" 
+            id="barcodeResultClose" 
+            class="icon-btn icon-btn--close" 
+            aria-label="Fermer la modale">
+            ×
+        </button>
+    </div>
+    <div class="modal-body">
+        <div id="barcodeResultContent" class="detail-grid"></div>
+    </div>
+</div>
+
+<!-- Bibliothèque html5-qrcode via CDN -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
 <script>
 // S'assurer que le DOM est chargé avant d'exécuter les scripts
@@ -1435,6 +1525,319 @@ $sectionImages = [
         }
     }
 })();
+
+    /* ===== Scanner Code-Barres ===== */
+    (function() {
+        'use strict';
+        
+        let html5QrcodeScanner = null;
+        let isScanning = false;
+        
+        const toggleBtn = document.getElementById('toggleScanner');
+        const scannerContainer = document.getElementById('scannerContainer');
+        const startCameraBtn = document.getElementById('startCameraScan');
+        const stopCameraBtn = document.getElementById('stopCameraScan');
+        const cameraScanArea = document.getElementById('cameraScanArea');
+        const fileInput = document.getElementById('barcodeFileInput');
+        const scanResult = document.getElementById('scanResult');
+        const scanResultContent = document.getElementById('scanResultContent');
+        const scanError = document.getElementById('scanError');
+        const scanErrorText = document.getElementById('scanErrorText');
+        const barcodeResultModal = document.getElementById('barcodeResultModal');
+        const barcodeResultOverlay = document.getElementById('barcodeResultOverlay');
+        const barcodeResultClose = document.getElementById('barcodeResultClose');
+        const barcodeResultContent = document.getElementById('barcodeResultContent');
+        const barcodeResultTitle = document.getElementById('barcodeResultTitle');
+        
+        // Toggle scanner container
+        if (toggleBtn && scannerContainer) {
+            toggleBtn.addEventListener('click', function() {
+                const isVisible = scannerContainer.style.display !== 'none';
+                scannerContainer.style.display = isVisible ? 'none' : 'block';
+                toggleBtn.textContent = isVisible ? 'Ouvrir Scanner' : 'Fermer Scanner';
+                
+                if (!isVisible && isScanning) {
+                    stopScanning();
+                }
+            });
+        }
+        
+        // Démarrer le scan caméra
+        if (startCameraBtn) {
+            startCameraBtn.addEventListener('click', async function() {
+                try {
+                    await startCameraScanning();
+                } catch (err) {
+                    showError('Erreur lors du démarrage de la caméra: ' + err.message);
+                }
+            });
+        }
+        
+        // Arrêter le scan caméra
+        if (stopCameraBtn) {
+            stopCameraBtn.addEventListener('click', function() {
+                stopScanning();
+            });
+        }
+        
+        // Upload fichier
+        if (fileInput) {
+            fileInput.addEventListener('change', async function(e) {
+                const file = e.target.files[0];
+                if (!file) {
+                    return;
+                }
+                
+                try {
+                    await scanFile(file);
+                } catch (err) {
+                    showError('Erreur lors du scan du fichier: ' + err.message);
+                }
+            });
+        }
+        
+        // Fonction pour démarrer le scan caméra
+        async function startCameraScanning() {
+            if (isScanning) {
+                return;
+            }
+            
+            try {
+                // Vérifier si html5-qrcode est disponible
+                if (typeof Html5Qrcode === 'undefined') {
+                    throw new Error('Bibliothèque html5-qrcode non chargée');
+                }
+                
+                const reader = document.getElementById('reader');
+                if (!reader) {
+                    throw new Error('Zone de scan introuvable');
+                }
+                
+                html5QrcodeScanner = new Html5Qrcode('reader');
+                
+                // Démarrer le scan
+                await html5QrcodeScanner.start(
+                    { facingMode: 'environment' }, // Caméra arrière par défaut
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 }
+                    },
+                    onScanSuccess,
+                    onScanError
+                );
+                
+                isScanning = true;
+                startCameraBtn.style.display = 'none';
+                stopCameraBtn.style.display = 'block';
+                cameraScanArea.style.display = 'block';
+                hideError();
+                hideResult();
+                
+            } catch (err) {
+                console.error('Erreur démarrage caméra:', err);
+                throw err;
+            }
+        }
+        
+        // Fonction pour arrêter le scan
+        function stopScanning() {
+            if (html5QrcodeScanner && isScanning) {
+                html5QrcodeScanner.stop().then(() => {
+                    html5QrcodeScanner.clear();
+                    html5QrcodeScanner = null;
+                    isScanning = false;
+                    startCameraBtn.style.display = 'block';
+                    stopCameraBtn.style.display = 'none';
+                    cameraScanArea.style.display = 'none';
+                }).catch((err) => {
+                    console.error('Erreur arrêt caméra:', err);
+                });
+            }
+        }
+        
+        // Callback succès scan
+        function onScanSuccess(decodedText, decodedResult) {
+            if (decodedText) {
+                stopScanning();
+                processBarcode(decodedText);
+            }
+        }
+        
+        // Callback erreur scan (on ignore les erreurs continues)
+        function onScanError(errorMessage) {
+            // Ignorer les erreurs continues de scan
+        }
+        
+        // Fonction pour scanner un fichier
+        async function scanFile(file) {
+            if (typeof Html5Qrcode === 'undefined') {
+                throw new Error('Bibliothèque html5-qrcode non chargée');
+            }
+            
+            try {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const imageData = e.target.result;
+                        const html5QrCode = new Html5Qrcode();
+                        
+                        const decodedText = await html5QrCode.scanFile(imageData, true);
+                        if (decodedText) {
+                            processBarcode(decodedText);
+                        } else {
+                            showError('Aucun code-barres détecté dans l\'image');
+                        }
+                    } catch (err) {
+                        if (err.message.includes('No QR code')) {
+                            showError('Aucun code-barres détecté dans l\'image');
+                        } else {
+                            throw err;
+                        }
+                    }
+                };
+                reader.readAsDataURL(file);
+            } catch (err) {
+                console.error('Erreur scan fichier:', err);
+                throw err;
+            }
+        }
+        
+        // Fonction pour traiter le code-barres scanné
+        async function processBarcode(barcode) {
+            hideError();
+            hideResult();
+            
+            // Afficher un message de chargement
+            showResult('<p style="text-align: center; color: var(--text-secondary);">Recherche du produit...</p>');
+            
+            try {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+                
+                const response = await fetch(`/API/get_product_by_barcode.php?barcode=${encodeURIComponent(barcode)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok || !data.ok) {
+                    showError(data.error || 'Produit non trouvé');
+                    hideResult();
+                    return;
+                }
+                
+                // Afficher les résultats dans la modal
+                displayBarcodeResult(data.product, data.type, barcode);
+                
+            } catch (err) {
+                console.error('Erreur récupération produit:', err);
+                showError('Erreur lors de la récupération du produit: ' + err.message);
+                hideResult();
+            }
+        }
+        
+        // Fonction pour afficher les résultats dans la modal
+        function displayBarcodeResult(product, type, barcode) {
+            if (!barcodeResultContent || !barcodeResultTitle) {
+                return;
+            }
+            
+            barcodeResultContent.innerHTML = '';
+            
+            // Titre
+            barcodeResultTitle.textContent = 'Résultat du Scan - ' + (product.nom || 'Produit');
+            
+            // Ajouter les champs
+            addFieldToGrid(barcodeResultContent, 'Code-Barres', barcode);
+            addFieldToGrid(barcodeResultContent, 'Type', type.toUpperCase());
+            addFieldToGrid(barcodeResultContent, 'Nom', product.nom || '—');
+            addFieldToGrid(barcodeResultContent, 'Description', product.description || '—');
+            addFieldToGrid(barcodeResultContent, 'Quantité en Stock', (product.qty_stock || 0).toString());
+            
+            // Ouvrir la modal
+            if (barcodeResultModal && barcodeResultOverlay) {
+                barcodeResultModal.style.display = 'block';
+                barcodeResultOverlay.style.display = 'block';
+                barcodeResultOverlay.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
+            }
+        }
+        
+        // Fonction helper pour ajouter un champ à la grille
+        function addFieldToGrid(grid, label, value) {
+            const card = document.createElement('div');
+            card.className = 'field-card';
+            
+            const lbl = document.createElement('div');
+            lbl.className = 'lbl';
+            lbl.textContent = label;
+            
+            const val = document.createElement('div');
+            val.className = 'val';
+            val.textContent = value || '—';
+            
+            card.appendChild(lbl);
+            card.appendChild(val);
+            grid.appendChild(card);
+        }
+        
+        // Fonctions helper pour afficher/masquer les messages
+        function showResult(html) {
+            if (scanResult && scanResultContent) {
+                scanResultContent.innerHTML = html;
+                scanResult.style.display = 'block';
+            }
+        }
+        
+        function hideResult() {
+            if (scanResult) {
+                scanResult.style.display = 'none';
+            }
+        }
+        
+        function showError(message) {
+            if (scanError && scanErrorText) {
+                scanErrorText.textContent = message;
+                scanError.style.display = 'block';
+            }
+        }
+        
+        function hideError() {
+            if (scanError) {
+                scanError.style.display = 'none';
+            }
+        }
+        
+        // Fermer la modal de résultats
+        if (barcodeResultClose) {
+            barcodeResultClose.addEventListener('click', function() {
+                closeBarcodeModal();
+            });
+        }
+        
+        if (barcodeResultOverlay) {
+            barcodeResultOverlay.addEventListener('click', function() {
+                closeBarcodeModal();
+            });
+        }
+        
+        function closeBarcodeModal() {
+            if (barcodeResultModal && barcodeResultOverlay) {
+                barcodeResultModal.style.display = 'none';
+                barcodeResultOverlay.style.display = 'none';
+                barcodeResultOverlay.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('modal-open');
+            }
+        }
+        
+        // Nettoyer à la fermeture de la page
+        window.addEventListener('beforeunload', function() {
+            stopScanning();
+        });
+    })();
 </script>
 </body>
 </html>

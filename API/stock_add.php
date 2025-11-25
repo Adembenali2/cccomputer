@@ -17,6 +17,50 @@ function logStockAction(PDO $pdo, string $action, string $details): void {
     }
 }
 
+/**
+ * Génère un code-barres unique pour un produit
+ * Format: TYPE-YYYYMMDD-HHMMSS-XXXX (ex: PAP-20241201-143022-0001)
+ * 
+ * @param PDO $pdo Connexion à la base de données
+ * @param string $type Type de produit (papier, toner, lcd, pc)
+ * @param string $table Nom de la table (paper_catalog, toner_catalog, etc.)
+ * @return string Code-barres unique
+ */
+function generateBarcode(PDO $pdo, string $type, string $table): string {
+    // Validation des noms de tables autorisés (sécurité)
+    $allowedTables = ['paper_catalog', 'toner_catalog', 'lcd_catalog', 'pc_catalog'];
+    if (!in_array($table, $allowedTables, true)) {
+        throw new InvalidArgumentException('Table non autorisée: ' . $table);
+    }
+    
+    $prefix = strtoupper(substr($type, 0, 3));
+    $date = date('Ymd');
+    $time = date('His');
+    
+    // Générer un numéro séquentiel unique pour cette seconde
+    // Utilisation de backticks pour échapper le nom de table
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) FROM `{$table}` 
+        WHERE barcode LIKE :pattern
+    ");
+    $pattern = "{$prefix}-{$date}-{$time}-%";
+    $stmt->execute([':pattern' => $pattern]);
+    $count = (int)$stmt->fetchColumn();
+    
+    $sequence = str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+    $barcode = "{$prefix}-{$date}-{$time}-{$sequence}";
+    
+    // Vérifier l'unicité (double vérification)
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$table}` WHERE barcode = :barcode");
+    $stmt->execute([':barcode' => $barcode]);
+    if ($stmt->fetchColumn() > 0) {
+        // Si collision, ajouter un suffixe aléatoire
+        $barcode = "{$prefix}-{$date}-{$time}-{$sequence}-" . substr(md5(uniqid()), 0, 4);
+    }
+    
+    return $barcode;
+}
+
 // Vérifier l'authentification sans redirection HTML
 if (empty($_SESSION['user_id'])) {
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
@@ -92,14 +136,18 @@ try {
             $paperId = $stmt->fetchColumn();
 
             if (!$paperId) {
+                // Générer un code-barres unique
+                $barcode = generateBarcode($pdo, 'papier', 'paper_catalog');
+                
                 $stmt = $pdo->prepare("
-                    INSERT INTO paper_catalog (marque, modele, poids)
-                    VALUES (:marque, :modele, :poids)
+                    INSERT INTO paper_catalog (marque, modele, poids, barcode)
+                    VALUES (:marque, :modele, :poids, :barcode)
                 ");
                 $stmt->execute([
                     ':marque' => $marque,
                     ':modele' => $modele,
                     ':poids'  => $poids,
+                    ':barcode' => $barcode,
                 ]);
                 $paperId = $pdo->lastInsertId();
             }
@@ -158,14 +206,18 @@ try {
             $tonerId = $stmt->fetchColumn();
 
             if (!$tonerId) {
+                // Générer un code-barres unique
+                $barcode = generateBarcode($pdo, 'toner', 'toner_catalog');
+                
                 $stmt = $pdo->prepare("
-                    INSERT INTO toner_catalog (marque, modele, couleur)
-                    VALUES (:marque, :modele, :couleur)
+                    INSERT INTO toner_catalog (marque, modele, couleur, barcode)
+                    VALUES (:marque, :modele, :couleur, :barcode)
                 ");
                 $stmt->execute([
                     ':marque'  => $marque,
                     ':modele'  => $modele,
                     ':couleur' => $couleur,
+                    ':barcode' => $barcode,
                 ]);
                 $tonerId = $pdo->lastInsertId();
             }
@@ -250,9 +302,12 @@ try {
                     ':id'         => $lcdId,
                 ]);
             } else {
+                // Générer un code-barres unique
+                $barcode = generateBarcode($pdo, 'lcd', 'lcd_catalog');
+                
                 $stmt = $pdo->prepare("
-                    INSERT INTO lcd_catalog (marque, reference, etat, modele, taille, resolution, connectique, prix)
-                    VALUES (:marque, :reference, :etat, :modele, :taille, :resolution, :connectique, :prix)
+                    INSERT INTO lcd_catalog (marque, reference, etat, modele, taille, resolution, connectique, prix, barcode)
+                    VALUES (:marque, :reference, :etat, :modele, :taille, :resolution, :connectique, :prix, :barcode)
                 ");
                 $stmt->execute([
                     ':marque'     => $marque,
@@ -263,6 +318,7 @@ try {
                     ':resolution' => $resolution,
                     ':connectique'=> $connectique,
                     ':prix'       => $prix,
+                    ':barcode'    => $barcode,
                 ]);
                 $lcdId = $pdo->lastInsertId();
             }
@@ -357,9 +413,12 @@ try {
                     ':id'        => $pcId,
                 ]);
             } else {
+                // Générer un code-barres unique
+                $barcode = generateBarcode($pdo, 'pc', 'pc_catalog');
+                
                 $stmt = $pdo->prepare("
-                    INSERT INTO pc_catalog (etat, reference, marque, modele, cpu, ram, stockage, os, gpu, reseau, ports, prix)
-                    VALUES (:etat, :reference, :marque, :modele, :cpu, :ram, :stockage, :os, :gpu, :reseau, :ports, :prix)
+                    INSERT INTO pc_catalog (etat, reference, marque, modele, cpu, ram, stockage, os, gpu, reseau, ports, prix, barcode)
+                    VALUES (:etat, :reference, :marque, :modele, :cpu, :ram, :stockage, :os, :gpu, :reseau, :ports, :prix, :barcode)
                 ");
                 $stmt->execute([
                     ':etat'      => $etat,
@@ -374,6 +433,7 @@ try {
                     ':reseau'    => $reseau ?: null,
                     ':ports'     => $ports ?: null,
                     ':prix'      => $prix,
+                    ':barcode'   => $barcode,
                 ]);
                 $pcId = $pdo->lastInsertId();
             }
