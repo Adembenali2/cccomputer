@@ -279,6 +279,118 @@ if (($_GET['added'] ?? '') === '1') {
     $flash = ['type' => 'success', 'msg' => "Client ajouté avec succès."];
 }
 
+// Traitement POST : attribution d'un photocopieur à un client
+$shouldOpenAttachModal = false;
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'attach_photocopieur') {
+    try {
+        assertValidCsrf($_POST['csrf_token'] ?? '');
+        
+        $idClient = (int)($_POST['id_client'] ?? 0);
+        $macInput = trim($_POST['mac_address'] ?? '');
+        $snInput = trim($_POST['serial_number'] ?? '');
+        
+        if ($idClient <= 0) {
+            $flash = ['type' => 'error', 'msg' => "Veuillez sélectionner un client."];
+            $shouldOpenAttachModal = true;
+        } elseif ($macInput === '' && $snInput === '') {
+            $flash = ['type' => 'error', 'msg' => "Adresse MAC ou numéro de série requis."];
+            $shouldOpenAttachModal = true;
+        } else {
+            try {
+                $pdo->beginTransaction();
+                
+                // Normaliser la MAC si fournie
+                $macNorm = null;
+                $macColon = null;
+                if ($macInput !== '') {
+                    $macNorm = normalizeMacForUrl($macInput);
+                    if ($macNorm) {
+                        $macColon = implode(':', str_split($macNorm, 2));
+                    }
+                }
+                
+                // Vérifier si le photocopieur existe déjà
+                $sqlCheck = "SELECT id FROM photocopieurs_clients WHERE ";
+                $paramsCheck = [];
+                if ($macNorm) {
+                    $sqlCheck .= "mac_norm = :mac_norm";
+                    $paramsCheck[':mac_norm'] = $macNorm;
+                } elseif ($snInput) {
+                    $sqlCheck .= "SerialNumber = :sn";
+                    $paramsCheck[':sn'] = $snInput;
+                } else {
+                    throw new Exception("Aucun identifiant valide");
+                }
+                
+                $stmtCheck = $pdo->prepare($sqlCheck);
+                $stmtCheck->execute($paramsCheck);
+                $existing = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+                
+                if ($existing) {
+                    // Mise à jour si existe déjà
+                    $sqlUpdate = "UPDATE photocopieurs_clients SET id_client = :id_client";
+                    $paramsUpdate = [':id_client' => $idClient];
+                    if ($macColon) {
+                        $sqlUpdate .= ", MacAddress = :mac_address";
+                        $paramsUpdate[':mac_address'] = $macColon;
+                    }
+                    if ($snInput) {
+                        $sqlUpdate .= ", SerialNumber = :sn";
+                        $paramsUpdate[':sn'] = $snInput;
+                    }
+                    $sqlUpdate .= " WHERE id = :id";
+                    $paramsUpdate[':id'] = $existing['id'];
+                    
+                    $pdo->prepare($sqlUpdate)->execute($paramsUpdate);
+                } else {
+                    // Insertion si nouveau
+                    $sqlInsert = "INSERT INTO photocopieurs_clients (id_client, MacAddress, SerialNumber) VALUES (:id_client, :mac_address, :sn)";
+                    $pdo->prepare($sqlInsert)->execute([
+                        ':id_client' => $idClient,
+                        ':mac_address' => $macColon ?: null,
+                        ':sn' => $snInput ?: null,
+                    ]);
+                }
+                
+                $userId = currentUserId();
+                $details = "Photocopieur attribué: MAC=" . ($macNorm ?? 'N/A') . ", SN=" . ($snInput ?: 'N/A') . " → Client #" . $idClient;
+                enregistrerAction($pdo, $userId, 'photocopieur_attribue', $details);
+                $pdo->commit();
+                
+                header('Location: /public/clients.php?attached=1');
+                exit;
+            } catch (PDOException $e) {
+                $pdo->rollBack();
+                error_log('clients.php attach_photocopieur error: ' . $e->getMessage());
+                $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible d'attribuer le photocopieur."];
+                $shouldOpenAttachModal = true;
+            }
+        }
+    } catch (RuntimeException $csrfEx) {
+        $flash = ['type' => 'error', 'msg' => $csrfEx->getMessage()];
+        $shouldOpenAttachModal = true;
+    }
+}
+
+if (($_GET['attached'] ?? '') === '1') {
+    $flash = ['type' => 'success', 'msg' => "Photocopieur attribué avec succès."];
+}
+
+// Récupération de la liste des clients pour le select
+$clientsList = [];
+try {
+    $stmtClients = $pdo->prepare("
+        SELECT id, numero_client, raison_sociale, nom_dirigeant, prenom_dirigeant
+        FROM clients
+        ORDER BY raison_sociale ASC
+        LIMIT 500
+    ");
+    $stmtClients->execute();
+    $clientsList = $stmtClients->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log('clients.php clients list error: ' . $e->getMessage());
+}
+
 // Détermination de la vue (assigned ou unassigned)
 $view = ($_GET['view'] ?? 'assigned');
 $view = ($view === 'unassigned') ? 'unassigned' : 'assigned';
@@ -537,40 +649,49 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         // Construction de l'URL : utiliser mac_norm si disponible, sinon normaliser MacAddress, sinon utiliser SerialNumber
         $rowHref = '';
         
-        // Nettoyer et valider mac_norm (12 hex sans séparateurs)
-        $macNormClean = trim($macNorm ?? '');
-        if (!empty($macNormClean) && preg_match('/^[0-9A-F]{12}$/i', $macNormClean)) {
-            // mac_norm est déjà au format 12 hex sans séparateurs, convertir en majuscules pour cohérence
+        // Nettoyer les valeurs
+        $macNormClean = trim((string)($macNorm ?? ''));
+        $macClean = trim((string)($mac ?? ''));
+        $snClean = trim((string)($sn ?? ''));
+        
+        // Priorité 1 : Utiliser mac_norm si valide (12 hex sans séparateurs)
+        if ($macNormClean !== '' && preg_match('/^[0-9A-F]{12}$/i', $macNormClean)) {
             $macNormUpper = strtoupper($macNormClean);
             $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($macNormUpper);
         }
-        
-        // Si mac_norm n'est pas valide, essayer de normaliser MacAddress
-        if (empty($rowHref) && !empty($mac)) {
-            $normalizedMac = normalizeMacForUrl($mac);
-            if ($normalizedMac) {
+        // Priorité 2 : Normaliser MacAddress si mac_norm n'est pas valide
+        elseif ($macClean !== '') {
+            $normalizedMac = normalizeMacForUrl($macClean);
+            if ($normalizedMac !== null && $normalizedMac !== '') {
                 $rowHref = '/public/photocopieurs_details.php?mac=' . urlencode($normalizedMac);
             }
         }
         
-        // Fallback sur SerialNumber si MAC non disponible
-        if (empty($rowHref) && !empty($sn)) {
-            $rowHref = '/public/photocopieurs_details.php?sn=' . urlencode($sn);
+        // Priorité 3 : Fallback sur SerialNumber si aucune MAC valide
+        if ($rowHref === '' && $snClean !== '') {
+            $rowHref = '/public/photocopieurs_details.php?sn=' . urlencode($snClean);
         }
 
         $isAlert = rowHasAlert($r);
+        $isUnassigned = empty($r['client_id']);
 
         $rowClasses = [];
-        if ($rowHref) {
-            $rowClasses[] = 'is-clickable';
-        }
+        // Toutes les lignes sont cliquables (soit pour redirection, soit pour modale)
+        $rowClasses[] = 'is-clickable';
         if ($isAlert) {
             $rowClasses[] = 'row-alert';
         }
         $rowClassAttr = $rowClasses ? ' class="'.h(implode(' ', $rowClasses)).'"' : '';
-        $rowHrefAttr = $rowHref ? ' data-href="'.h($rowHref).'"' : '';
+        $rowHrefAttr = ($rowHref && !$isUnassigned) ? ' data-href="'.h($rowHref).'"' : '';
       ?>
-        <tr data-search="<?= h($searchText) ?>"<?= $rowHrefAttr ?><?= $rowClassAttr ?>>
+        <tr data-search="<?= h($searchText) ?>"
+            <?= $rowHrefAttr ?>
+            <?= $rowClassAttr ?>
+            <?= $isUnassigned ? ' data-unassigned="1"' : '' ?>
+            data-mac-norm="<?= h($macNormClean) ?>"
+            data-mac-address="<?= h($macClean) ?>"
+            data-serial-number="<?= h($snClean) ?>"
+            data-model="<?= h($modele) ?>">
           <td data-th="Client">
             <div class="client-cell">
               <div class="client-raison"><?= h($raison) ?></div>
@@ -701,12 +822,63 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   </form>
 </div>
 
+<!-- ===== Popup "Attribuer un photocopieur" ===== -->
+<div id="attachModalOverlay" class="popup-overlay" aria-hidden="true"></div>
+<div id="attachModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="attachModalTitle" style="display:none;">
+  <div class="modal-header">
+    <h3 id="attachModalTitle">Attribuer un photocopieur à un client</h3>
+    <button type="button" id="btnCloseAttachModal" class="icon-btn icon-btn--close" aria-label="Fermer"><span aria-hidden="true">×</span></button>
+  </div>
+
+  <?php if ($flash['type'] && $shouldOpenAttachModal): ?>
+    <div class="flash <?= $flash['type']==='success' ? 'flash-success' : 'flash-error' ?>" style="margin-bottom:0.75rem;">
+      <?= h($flash['msg']) ?>
+    </div>
+  <?php endif; ?>
+
+  <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form" novalidate>
+      <input type="hidden" name="action" value="attach_photocopieur">
+      <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+      <input type="hidden" name="mac_address" id="attachMacAddress" value="<?= h($_POST['mac_address'] ?? '') ?>">
+      <input type="hidden" name="serial_number" id="attachSerialNumber" value="<?= h($_POST['serial_number'] ?? '') ?>">
+
+      <div class="card-like">
+        <div class="subsection-title">Informations photocopieur</div>
+        <div id="attachDeviceInfo" style="padding: 0.75rem; background: var(--bg-elevated); border-radius: 4px; margin-bottom: 1rem;">
+          <div><strong>Modèle:</strong> <span id="attachModel">—</span></div>
+          <div><strong>N° de série:</strong> <span id="attachSN">—</span></div>
+          <div><strong>Adresse MAC:</strong> <span id="attachMAC">—</span></div>
+        </div>
+
+        <div class="subsection-title">Sélectionner un client</div>
+        <label for="attachClientSelect">Client*</label>
+        <select name="id_client" id="attachClientSelect" required style="width:100%; padding:0.5rem;">
+          <option value="">— Choisir un client —</option>
+          <?php foreach ($clientsList as $client): ?>
+            <option value="<?= h((string)$client['id']) ?>" <?= (isset($_POST['id_client']) && (int)$_POST['id_client'] === (int)$client['id']) ? 'selected' : '' ?>>
+              <?= h($client['numero_client'] ?? '') ?> — <?= h($client['raison_sociale'] ?? '') ?>
+              <?php if (!empty($client['nom_dirigeant']) || !empty($client['prenom_dirigeant'])): ?>
+                (<?= h(trim(($client['nom_dirigeant'] ?? '') . ' ' . ($client['prenom_dirigeant'] ?? ''))) ?>)
+              <?php endif; ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+    <div class="modal-actions">
+      <div class="modal-hint">* obligatoire — Le photocopieur sera attribué au client sélectionné</div>
+      <button type="submit" class="fiche-action-btn">Valider l'attribution</button>
+    </div>
+  </form>
+</div>
+
 <!-- JS -->
 <script src="/assets/js/clients.js"></script>
 
 <script>
   // Ouverture auto si erreurs validation
   window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode($shouldOpenModal) ?>;
+  window.__ATTACH_MODAL_INIT_OPEN__ = <?= json_encode($shouldOpenAttachModal) ?>;
 
   (function(){
     const overlay = document.getElementById('clientModalOverlay');
@@ -740,18 +912,102 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     if (window.__CLIENT_MODAL_INIT_OPEN__) {
       openModal();
     }
+    if (window.__ATTACH_MODAL_INIT_OPEN__) {
+      // Si on a des données POST, les utiliser directement
+      const macAddress = document.getElementById('attachMacAddress').value;
+      const serialNumber = document.getElementById('attachSerialNumber').value;
+      
+      if (macAddress || serialNumber) {
+        // Remplir les informations depuis les champs cachés
+        document.getElementById('attachSN').textContent = serialNumber || '—';
+        document.getElementById('attachMAC').textContent = macAddress || '—';
+        
+        // Ouvrir la modale
+        document.body.classList.add('modal-open');
+        attachModalOverlay.setAttribute('aria-hidden', 'false');
+        attachModalOverlay.style.display = 'block';
+        attachModal.style.display = 'block';
+      } else {
+        // Sinon, trouver la première ligne non attribuée
+        const firstUnassigned = document.querySelector('table#tbl tbody tr[data-unassigned="1"]');
+        if (firstUnassigned) {
+          openAttachModal(firstUnassigned);
+        }
+      }
+    }
+
+    // Gestion de la modale d'attribution
+    const attachModalOverlay = document.getElementById('attachModalOverlay');
+    const attachModal = document.getElementById('attachModal');
+    const btnCloseAttachModal = document.getElementById('btnCloseAttachModal');
+
+    function openAttachModal(tr) {
+      const macNorm = tr.getAttribute('data-mac-norm') || '';
+      const macAddress = tr.getAttribute('data-mac-address') || '';
+      const serialNumber = tr.getAttribute('data-serial-number') || '';
+      const model = tr.getAttribute('data-model') || '—';
+
+      // Remplir les champs cachés
+      document.getElementById('attachMacAddress').value = macAddress;
+      document.getElementById('attachSerialNumber').value = serialNumber;
+
+      // Afficher les informations
+      document.getElementById('attachModel').textContent = model;
+      document.getElementById('attachSN').textContent = serialNumber || '—';
+      document.getElementById('attachMAC').textContent = macAddress || macNorm || '—';
+
+      // Réinitialiser le select
+      document.getElementById('attachClientSelect').value = '';
+
+      // Ouvrir la modale
+      document.body.classList.add('modal-open');
+      attachModalOverlay.setAttribute('aria-hidden', 'false');
+      attachModalOverlay.style.display = 'block';
+      attachModal.style.display = 'block';
+    }
+
+    function closeAttachModal() {
+      document.body.classList.remove('modal-open');
+      attachModalOverlay.setAttribute('aria-hidden', 'true');
+      attachModalOverlay.style.display = 'none';
+      attachModal.style.display = 'none';
+    }
+
+    if (btnCloseAttachModal) {
+      btnCloseAttachModal.addEventListener('click', closeAttachModal);
+    }
+    if (attachModalOverlay) {
+      attachModalOverlay.addEventListener('click', closeAttachModal);
+    }
 
     // Lignes cliquables
-    const rows = document.querySelectorAll('table#tbl tbody tr.is-clickable[data-href]');
+    const rows = document.querySelectorAll('table#tbl tbody tr.is-clickable');
     rows.forEach(tr => {
       tr.style.cursor = 'pointer';
       tr.addEventListener('click', (e) => {
-        if (window.getSelection && String(window.getSelection())) {
+        // Ne pas déclencher si l'utilisateur sélectionne du texte
+        if (window.getSelection && String(window.getSelection()).trim()) {
           return;
         }
-        const href = tr.getAttribute('data-href');
-        if (href) {
-          window.location.assign(href);
+
+        // Vérifier si c'est un photocopieur non attribué
+        const isUnassigned = tr.getAttribute('data-unassigned') === '1';
+        
+        if (isUnassigned) {
+          // Ouvrir la modale d'attribution
+          openAttachModal(tr);
+        } else {
+          // Rediriger vers la page de détails
+          const href = tr.getAttribute('data-href');
+          if (href && href.trim() !== '') {
+            try {
+              window.location.assign(href);
+            } catch (err) {
+              console.error('Erreur lors de la redirection:', err, 'URL:', href);
+            }
+          } else {
+            console.warn('Ligne cliquable sans href valide:', tr);
+          }
         }
       });
     });

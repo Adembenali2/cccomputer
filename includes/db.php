@@ -38,6 +38,10 @@ $options = [
 
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
+    
+    // IMPORTANT: Stocker dans GLOBALS pour garantir l'accessibilité globale
+    $GLOBALS['pdo'] = $pdo;
+    
 } catch (PDOException $e) {
     error_log("DB connection error: " . $e->getMessage() . " | DSN: $dsn | User: $user");
     

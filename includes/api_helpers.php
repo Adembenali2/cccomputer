@@ -47,50 +47,65 @@ function requireCsrfToken(?string $token = null): void {
  * Vérifie que la connexion PDO existe
  */
 function requirePdoConnection(?PDO $pdo = null): PDO {
-    global $pdo;
-    
-    // Essayer plusieurs méthodes pour obtenir la connexion PDO
-    if ($pdo instanceof PDO) {
-        return $pdo;
-    }
-    
+    // Priorité 1: Vérifier GLOBALS (le plus fiable)
     if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
         return $GLOBALS['pdo'];
     }
     
-    // Si toujours pas de PDO, essayer de le charger depuis db.php
-    if (!isset($pdo) || !($pdo instanceof PDO)) {
-        try {
-            // Vérifier si db.php a été chargé
-            if (!isset($GLOBALS['pdo'])) {
-                // Essayer de charger db.php si pas déjà fait
-                if (!defined('DB_LOADED')) {
-                    require_once __DIR__ . '/db.php';
-                }
-            }
-            
-            $pdo = $GLOBALS['pdo'] ?? null;
-            
-            if (!isset($pdo) || !($pdo instanceof PDO)) {
-                throw new RuntimeException('La connexion PDO n\'est pas disponible. Vérifiez la configuration de la base de données.');
-            }
-        } catch (Throwable $e) {
-            error_log('requirePdoConnection error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-            jsonResponse([
-                'ok' => false, 
-                'error' => 'Erreur de connexion à la base de données',
-                'debug' => [
-                    'message' => $e->getMessage(),
-                    'type' => get_class($e),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'trace' => explode("\n", $e->getTraceAsString())
-                ]
-            ], 500);
-        }
+    // Priorité 2: Vérifier le paramètre passé
+    if ($pdo instanceof PDO) {
+        // S'assurer qu'il est aussi dans GLOBALS
+        $GLOBALS['pdo'] = $pdo;
+        return $pdo;
     }
     
-    return $pdo;
+    // Priorité 3: Vérifier la variable globale classique
+    global $pdo;
+    if (isset($pdo) && $pdo instanceof PDO) {
+        // S'assurer qu'il est aussi dans GLOBALS
+        $GLOBALS['pdo'] = $pdo;
+        return $pdo;
+    }
+    
+    // Si toujours pas de PDO, essayer de le charger depuis db.php
+    try {
+        // Vérifier si db.php a été chargé
+        if (!isset($GLOBALS['pdo'])) {
+            // Essayer de charger db.php si pas déjà fait
+            if (!defined('DB_LOADED')) {
+                require_once __DIR__ . '/db.php';
+                // Après le require, vérifier à nouveau GLOBALS
+                if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+                    return $GLOBALS['pdo'];
+                }
+            }
+        }
+        
+        // Dernière vérification
+        if (!isset($GLOBALS['pdo']) || !($GLOBALS['pdo'] instanceof PDO)) {
+            throw new RuntimeException(
+                'La connexion PDO n\'est pas disponible. ' .
+                'db.php a été chargé mais $pdo n\'est pas dans $GLOBALS. ' .
+                'Vérifiez la configuration de la base de données.'
+            );
+        }
+        
+        return $GLOBALS['pdo'];
+        
+    } catch (Throwable $e) {
+        error_log('requirePdoConnection error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+        jsonResponse([
+            'ok' => false, 
+            'error' => 'Erreur de connexion à la base de données',
+            'debug' => [
+                'message' => $e->getMessage(),
+                'type' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => explode("\n", $e->getTraceAsString())
+            ]
+        ], 500);
+    }
 }
 
 /**
@@ -128,19 +143,24 @@ function initApi(): void {
     try {
         require_once __DIR__ . '/db.php';
         
-        // Vérifier que $pdo a été créé
-        global $pdo;
-        if (!isset($pdo) || !($pdo instanceof PDO)) {
-            // Vérifier dans GLOBALS aussi
-            if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
-                $pdo = $GLOBALS['pdo'];
-            } else {
-                throw new RuntimeException('La connexion PDO n\'a pas été initialisée par db.php. Vérifiez la configuration de la base de données.');
+        // Vérifier que $pdo a été créé - d'abord dans GLOBALS (plus fiable)
+        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+            $pdo = $GLOBALS['pdo'];
+        } else {
+            // Essayer la variable globale classique
+            global $pdo;
+            if (!isset($pdo) || !($pdo instanceof PDO)) {
+                // Vérifier si db.php a défini $pdo mais qu'il n'est pas accessible
+                // Cela peut arriver si db.php est inclus dans un autre scope
+                throw new RuntimeException(
+                    'La connexion PDO n\'a pas été initialisée par db.php. ' .
+                    'Vérifiez que db.php stocke $pdo dans $GLOBALS[\'pdo\']. ' .
+                    'GLOBALS contient: ' . (isset($GLOBALS['pdo']) ? gettype($GLOBALS['pdo']) : 'non défini')
+                );
             }
+            // S'assurer qu'il est aussi dans GLOBALS
+            $GLOBALS['pdo'] = $pdo;
         }
-        
-        // Stocker dans GLOBALS pour être sûr
-        $GLOBALS['pdo'] = $pdo;
         
         // Tester la connexion
         try {
