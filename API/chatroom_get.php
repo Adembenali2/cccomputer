@@ -161,7 +161,26 @@ try {
         ]);
     }
 
-    // Construire la requête selon les paramètres
+    // Vérifier si la colonne image_path existe
+    $hasImagePath = false;
+    try {
+        $checkColumn = $pdo->query("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'chatroom_messages' 
+            AND COLUMN_NAME = 'image_path'
+        ");
+        $hasImagePath = (int)$checkColumn->fetchColumn() > 0;
+    } catch (PDOException $e) {
+        error_log('chatroom_get.php - Erreur vérification colonne image_path: ' . $e->getMessage());
+        // Par défaut, on assume que la colonne n'existe pas pour éviter les erreurs
+        $hasImagePath = false;
+    }
+
+    // Construire la requête selon les paramètres et la présence de image_path
+    $imagePathSelect = $hasImagePath ? 'm.image_path,' : 'NULL as image_path,';
+    
     if ($sinceId > 0) {
         // Récupérer uniquement les nouveaux messages (depuis le dernier ID)
         $stmt = $pdo->prepare("
@@ -169,7 +188,7 @@ try {
                 m.id,
                 m.id_user,
                 m.message,
-                m.image_path,
+                $imagePathSelect
                 m.date_envoi,
                 m.mentions,
                 u.nom,
@@ -190,7 +209,7 @@ try {
                 m.id,
                 m.id_user,
                 m.message,
-                m.image_path,
+                $imagePathSelect
                 m.date_envoi,
                 m.mentions,
                 u.nom,
@@ -231,7 +250,7 @@ try {
             'id' => (int)$msg['id'],
             'id_user' => (int)$msg['id_user'],
             'message' => $msg['message'],
-            'image_path' => $msg['image_path'],
+            'image_path' => isset($msg['image_path']) ? $msg['image_path'] : null,
             'date_envoi' => $msg['date_envoi'],
             'user_nom' => $msg['nom'],
             'user_prenom' => $msg['prenom'],
