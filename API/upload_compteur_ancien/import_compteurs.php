@@ -19,6 +19,12 @@ $pdo = $GLOBALS['pdo'];
 // 2) URL source : ta page IONOS
 $sourceUrl = 'https://cccomputer.fr/test_compteur.php';
 
+// Initialiser les compteurs dès le début (avant tout traitement)
+$inserted = 0;
+$skipped = 0;
+$ok = 1; // Par défaut OK
+$errorMessage = null;
+
 // --- helper pour log (affichage dans le navigateur ou CLI) ---
 function logLine(string $msg): void {
     $isCli = php_sapi_name() === 'cli';
@@ -36,30 +42,33 @@ logLine("🔁 Récupération de la page : $sourceUrl");
 
 $html = @file_get_contents($sourceUrl);
 if ($html === false) {
-    if (!headers_sent()) {
-        http_response_code(500);
-    }
-    logLine("❌ Impossible de récupérer la page (file_get_contents a échoué).");
-    exit(1);
+    $errorMessage = "Impossible de récupérer la page (file_get_contents a échoué)";
+    logLine("❌ $errorMessage");
+    $ok = 0; // Erreur
+    goto log_import_run;
 }
 
 // 4) Parsing HTML avec DOM + XPath
-libxml_use_internal_errors(true);
-$dom = new DOMDocument();
-$dom->loadHTML($html);
-libxml_clear_errors();
+try {
+    libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $dom->loadHTML($html);
+    libxml_clear_errors();
 
-$xpath = new DOMXPath($dom);
+    $xpath = new DOMXPath($dom);
 
-// Initialiser les compteurs dès le début
-$inserted = 0;
-$skipped = 0;
-
-// On suppose : un tableau principal avec les lignes de compteurs
-$table = $xpath->query('//table')->item(0);
-if (!$table) {
-    logLine("⚠️ Aucun tableau <table> trouvé dans la page. Rien à importer.");
-    // On continue pour créer quand même une entrée dans import_run
+    // On suppose : un tableau principal avec les lignes de compteurs
+    $table = $xpath->query('//table')->item(0);
+    if (!$table) {
+        logLine("⚠️ Aucun tableau <table> trouvé dans la page. Rien à importer.");
+        // On continue pour créer quand même une entrée dans import_run
+        $rowsArray = [];
+        goto log_import_run;
+    }
+} catch (Throwable $e) {
+    $errorMessage = "Erreur lors du parsing HTML : " . $e->getMessage();
+    logLine("❌ $errorMessage");
+    $ok = 0;
     $rowsArray = [];
     goto log_import_run;
 }
@@ -255,6 +264,8 @@ foreach ($rowsArray as $row) {
         $inserted++;
     } catch (Throwable $e) {
         logLine("⚠️ Erreur insertion (MAC=$mac, TS=$timestamp) : " . $e->getMessage());
+        // On continue, mais on note qu'il y a eu une erreur
+        // On ne met pas $ok = 0 ici car d'autres insertions peuvent réussir
         continue;
     }
 }
@@ -283,16 +294,19 @@ try {
     
     $totalProcessed = $inserted + $skipped;
     // ok=1 si pas d'erreur (même s'il n'y a rien à importer, c'est OK)
-    // ok=0 seulement en cas d'erreur réelle (tentative d'insertion qui a échoué)
-    $ok = 1; // Par défaut OK
+    // ok=0 seulement en cas d'erreur réelle (tentative d'insertion qui a échoué, ou erreur de récupération)
     
-    $msg = json_encode([
+    $msgData = [
         'source' => 'ancien_import',
         'processed' => $totalProcessed,
         'inserted' => $inserted,
         'skipped' => $skipped,
         'url' => $sourceUrl
-    ], JSON_UNESCAPED_UNICODE);
+    ];
+    if ($errorMessage !== null) {
+        $msgData['error'] = $errorMessage;
+    }
+    $msg = json_encode($msgData, JSON_UNESCAPED_UNICODE);
     
     $stmtLog = $pdo->prepare("
         INSERT INTO import_run (ran_at, imported, skipped, ok, msg)

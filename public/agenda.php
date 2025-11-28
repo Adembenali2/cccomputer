@@ -161,6 +161,8 @@ try {
     $sqlSav = "
         SELECT 
             s.id,
+            s.id_client,
+            s.id_technicien,
             s.reference,
             s.description,
             s.date_ouverture,
@@ -260,6 +262,8 @@ try {
     $sqlLiv = "
         SELECT 
             l.id,
+            l.id_client,
+            l.id_livreur,
             l.reference,
             l.objet,
             l.date_prevue,
@@ -294,29 +298,168 @@ try {
     error_log('agenda.php - Erreur récupération livraisons: ' . $e->getMessage());
 }
 
-// Grouper par date
+// Grouper par date, puis par utilisateur, puis par client
 $agendaByDate = [];
 
+// Fonction pour obtenir l'ID utilisateur d'un SAV
+function getSavUserId($sav) {
+    return isset($sav['id_technicien']) ? (int)$sav['id_technicien'] : null;
+}
+
+// Fonction pour obtenir l'ID utilisateur d'une livraison
+function getLivUserId($liv) {
+    return isset($liv['id_livreur']) ? (int)$liv['id_livreur'] : null;
+}
+
+// Fonction pour obtenir l'ID client d'un SAV
+function getSavClientId($sav) {
+    return isset($sav['id_client']) ? (int)$sav['id_client'] : null;
+}
+
+// Fonction pour obtenir l'ID client d'une livraison
+function getLivClientId($liv) {
+    return isset($liv['id_client']) ? (int)$liv['id_client'] : null;
+}
+
+// Fonction pour obtenir le nom complet de l'utilisateur
+function getUserFullName($user) {
+    return trim(($user['prenom'] ?? '') . ' ' . ($user['nom'] ?? ''));
+}
+
+// Grouper les SAV par date, utilisateur et client
 foreach ($savs as $sav) {
     $date = ($hasDateIntervention && !empty($sav['date_intervention_prevue'])) 
         ? $sav['date_intervention_prevue'] 
         : $sav['date_ouverture'];
+    
     if (!isset($agendaByDate[$date])) {
-        $agendaByDate[$date] = ['savs' => [], 'livraisons' => []];
+        $agendaByDate[$date] = ['users' => []];
     }
-    $agendaByDate[$date]['savs'][] = $sav;
+    
+    $userId = getSavUserId($sav);
+    $userKey = $userId ? 'user_' . $userId : 'user_unassigned';
+    $userName = $userId ? trim(($sav['technicien_prenom'] ?? '') . ' ' . ($sav['technicien_nom'] ?? '')) : 'Non assigné';
+    
+    if (!isset($agendaByDate[$date]['users'][$userKey])) {
+        $agendaByDate[$date]['users'][$userKey] = [
+            'id' => $userId,
+            'name' => $userName,
+            'role' => $sav['technicien_role'] ?? 'Technicien',
+            'clients' => []
+        ];
+    }
+    
+    $clientId = getSavClientId($sav);
+    $clientKey = $clientId ? 'client_' . $clientId : 'client_unknown';
+    $clientName = $sav['client_nom'] ?? 'Client inconnu';
+    
+    if (!isset($agendaByDate[$date]['users'][$userKey]['clients'][$clientKey])) {
+        $agendaByDate[$date]['users'][$userKey]['clients'][$clientKey] = [
+            'id' => $clientId,
+            'name' => $clientName,
+            'savs' => [],
+            'livraisons' => []
+        ];
+    }
+    
+    $agendaByDate[$date]['users'][$userKey]['clients'][$clientKey]['savs'][] = $sav;
 }
 
+// Grouper les livraisons par date, utilisateur et client
 foreach ($livraisons as $liv) {
     $date = $liv['date_prevue'];
+    
     if (!isset($agendaByDate[$date])) {
-        $agendaByDate[$date] = ['savs' => [], 'livraisons' => []];
+        $agendaByDate[$date] = ['users' => []];
     }
-    $agendaByDate[$date]['livraisons'][] = $liv;
+    
+    $userId = getLivUserId($liv);
+    $userKey = $userId ? 'user_' . $userId : 'user_unassigned';
+    $userName = $userId ? trim(($liv['livreur_prenom'] ?? '') . ' ' . ($liv['livreur_nom'] ?? '')) : 'Non assigné';
+    
+    if (!isset($agendaByDate[$date]['users'][$userKey])) {
+        $agendaByDate[$date]['users'][$userKey] = [
+            'id' => $userId,
+            'name' => $userName,
+            'role' => $liv['livreur_role'] ?? 'Livreur',
+            'clients' => []
+        ];
+    }
+    
+    $clientId = getLivClientId($liv);
+    $clientKey = $clientId ? 'client_' . $clientId : 'client_unknown';
+    $clientName = $liv['client_nom'] ?? 'Client inconnu';
+    
+    if (!isset($agendaByDate[$date]['users'][$userKey]['clients'][$clientKey])) {
+        $agendaByDate[$date]['users'][$userKey]['clients'][$clientKey] = [
+            'id' => $clientId,
+            'name' => $clientName,
+            'savs' => [],
+            'livraisons' => []
+        ];
+    }
+    
+    $agendaByDate[$date]['users'][$userKey]['clients'][$clientKey]['livraisons'][] = $liv;
 }
 
 // Trier les dates
 ksort($agendaByDate);
+
+// Fusionner les utilisateurs qui ont le même ID mais des rôles différents
+// et trier les utilisateurs et clients dans chaque date
+foreach ($agendaByDate as $date => &$dateData) {
+    // Fusionner les utilisateurs avec le même ID
+    $mergedUsers = [];
+    foreach ($dateData['users'] as $userKey => $userData) {
+        $userId = $userData['id'];
+        if ($userId === null) {
+            // Utilisateurs non assignés : garder séparés par type
+            $mergedUsers[$userKey] = $userData;
+        } else {
+            $key = 'user_' . $userId;
+            if (!isset($mergedUsers[$key])) {
+                $mergedUsers[$key] = $userData;
+            } else {
+                // Fusionner les clients
+                foreach ($userData['clients'] as $clientKey => $clientData) {
+                    if (!isset($mergedUsers[$key]['clients'][$clientKey])) {
+                        $mergedUsers[$key]['clients'][$clientKey] = $clientData;
+                    } else {
+                        // Fusionner les SAV et livraisons
+                        $mergedUsers[$key]['clients'][$clientKey]['savs'] = array_merge(
+                            $mergedUsers[$key]['clients'][$clientKey]['savs'] ?? [],
+                            $clientData['savs'] ?? []
+                        );
+                        $mergedUsers[$key]['clients'][$clientKey]['livraisons'] = array_merge(
+                            $mergedUsers[$key]['clients'][$clientKey]['livraisons'] ?? [],
+                            $clientData['livraisons'] ?? []
+                        );
+                    }
+                }
+                // Mettre à jour le rôle si nécessaire (afficher les deux rôles)
+                if ($mergedUsers[$key]['role'] !== $userData['role']) {
+                    $mergedUsers[$key]['role'] = $mergedUsers[$key]['role'] . ' / ' . $userData['role'];
+                }
+            }
+        }
+    }
+    $dateData['users'] = $mergedUsers;
+    
+    // Trier les utilisateurs : assignés d'abord, puis non assignés
+    uasort($dateData['users'], function($a, $b) {
+        if ($a['id'] === null && $b['id'] !== null) return 1;
+        if ($a['id'] !== null && $b['id'] === null) return -1;
+        return strcmp($a['name'], $b['name']);
+    });
+    
+    // Trier les clients dans chaque utilisateur
+    foreach ($dateData['users'] as &$userData) {
+        uasort($userData['clients'], function($a, $b) {
+            return strcmp($a['name'], $b['name']);
+        });
+    }
+}
+unset($dateData);
 
 // Statistiques
 $totalSavs = count($savs);
@@ -592,145 +735,208 @@ if (empty($savs) && empty($livraisons)) {
                         <?php endif; ?>
                     </div>
                 <?php else: ?>
-                    <?php foreach ($agendaByDate as $date => $items): ?>
+                    <?php 
+                    // Calculer le total de tâches pour chaque date
+                    function countTasksForDate($dateData) {
+                        $total = 0;
+                        foreach ($dateData['users'] as $userData) {
+                            foreach ($userData['clients'] as $clientData) {
+                                $total += count($clientData['savs'] ?? []);
+                                $total += count($clientData['livraisons'] ?? []);
+                            }
+                        }
+                        return $total;
+                    }
+                    
+                    // Labels et couleurs
+                    $prioriteColors = [
+                        'urgente' => '#ef4444',
+                        'haute' => '#f97316',
+                        'normale' => '#16a34a',
+                        'basse' => '#6b7280'
+                    ];
+                    $prioriteLabels = [
+                        'urgente' => 'Urgente',
+                        'haute' => 'Haute',
+                        'normale' => 'Normale',
+                        'basse' => 'Basse'
+                    ];
+                    $statutLabels = [
+                        'ouvert' => 'Ouvert',
+                        'en_cours' => 'En cours',
+                        'resolu' => 'Résolu',
+                        'annule' => 'Annulé',
+                        'planifiee' => 'Planifiée',
+                        'livree' => 'Livrée',
+                        'annulee' => 'Annulée'
+                    ];
+                    $statutColors = [
+                        'planifiee' => '#6b7280',
+                        'en_cours' => '#3b82f6',
+                        'livree' => '#16a34a',
+                        'annulee' => '#ef4444',
+                        'ouvert' => '#6b7280',
+                        'resolu' => '#16a34a',
+                        'annule' => '#ef4444'
+                    ];
+                    $typePanneLabels = [
+                        'logiciel' => 'Logiciel',
+                        'materiel' => 'Matériel',
+                        'piece_rechangeable' => 'Pièce rechangeable'
+                    ];
+                    
+                    // Noms de jours en français
+                    $joursFr = [
+                        'Monday' => 'Lundi',
+                        'Tuesday' => 'Mardi',
+                        'Wednesday' => 'Mercredi',
+                        'Thursday' => 'Jeudi',
+                        'Friday' => 'Vendredi',
+                        'Saturday' => 'Samedi',
+                        'Sunday' => 'Dimanche'
+                    ];
+                    ?>
+                    <?php foreach ($agendaByDate as $date => $dateData): ?>
+                        <?php 
+                        $totalTasks = countTasksForDate($dateData);
+                        $jourEn = date('l', strtotime($date));
+                        $jourFr = $joursFr[$jourEn] ?? $jourEn;
+                        ?>
                         <div class="agenda-day">
                             <div class="agenda-day-header">
                                 <h3 class="agenda-day-title">
-                                    <?= h(date('l d/m/Y', strtotime($date))) ?>
+                                    <?= h($jourFr . ' ' . date('d/m/Y', strtotime($date))) ?>
                                     <?php if ($date === date('Y-m-d')): ?>
                                         <span class="badge" style="margin-left: 0.5rem; background: #3b82f6;">Aujourd'hui</span>
                                     <?php endif; ?>
                                 </h3>
                                 <div class="agenda-day-count">
-                                    <?= count($items['savs']) ?> SAV, <?= count($items['livraisons']) ?> livraison(s)
+                                    <?= $totalTasks ?> tâche(s)
                                 </div>
                             </div>
 
                             <div class="agenda-day-content">
-                                <!-- SAV -->
-                                <?php if (!empty($items['savs'])): ?>
-                                    <div class="agenda-section">
-                                        <h4 class="agenda-section-title">🔧 SAV (<?= count($items['savs']) ?>)</h4>
-                                        <div class="agenda-items">
-                                            <?php foreach ($items['savs'] as $sav): ?>
-                                                <?php
-                                                $prioriteColors = [
-                                                    'urgente' => '#ef4444',
-                                                    'haute' => '#f97316',
-                                                    'normale' => '#16a34a',
-                                                    'basse' => '#6b7280'
-                                                ];
-                                                $prioriteLabels = [
-                                                    'urgente' => 'Urgente',
-                                                    'haute' => 'Haute',
-                                                    'normale' => 'Normale',
-                                                    'basse' => 'Basse'
-                                                ];
-                                                $statutLabels = [
-                                                    'ouvert' => 'Ouvert',
-                                                    'en_cours' => 'En cours',
-                                                    'resolu' => 'Résolu',
-                                                    'annule' => 'Annulé'
-                                                ];
-                                                $typePanneLabels = [
-                                                    'logiciel' => 'Logiciel',
-                                                    'materiel' => 'Matériel',
-                                                    'piece_rechangeable' => 'Pièce rechangeable'
-                                                ];
-                                                $priorite = $sav['priorite'] ?? 'normale';
-                                                $technicienNom = trim(($sav['technicien_prenom'] ?? '') . ' ' . ($sav['technicien_nom'] ?? ''));
-                                                $clientAdresse = trim(($sav['client_adresse'] ?? '') . ' ' . ($sav['client_code_postal'] ?? '') . ' ' . ($sav['client_ville'] ?? ''));
-                                                ?>
-                                                <div class="agenda-item agenda-item-sav" 
-                                                     data-sav-id="<?= (int)$sav['id'] ?>"
-                                                     onclick="window.location.href='/public/sav.php?ref=<?= urlencode($sav['reference']) ?>'">
-                                                    <div class="agenda-item-header">
-                                                        <div class="agenda-item-title">
-                                                            <strong><?= h($sav['reference']) ?></strong>
-                                                            <?php if ($sav['type_panne']): ?>
-                                                                <span class="agenda-item-badge" style="background: #6366f1;">
-                                                                    <?= h($typePanneLabels[$sav['type_panne']] ?? $sav['type_panne']) ?>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                        <span class="agenda-item-priority" style="background: <?= h($prioriteColors[$priorite] ?? '#6b7280') ?>;">
-                                                            <?= h($prioriteLabels[$priorite] ?? $priorite) ?>
-                                                        </span>
-                                                    </div>
-                                                    <div class="agenda-item-body">
-                                                        <div class="agenda-item-description">
-                                                            <?= h(mb_substr($sav['description'], 0, 100)) ?><?= mb_strlen($sav['description']) > 100 ? '...' : '' ?>
-                                                        </div>
-                                                        <div class="agenda-item-meta">
-                                                            <span>👤 <?= h($sav['client_nom'] ?? 'N/A') ?></span>
-                                                            <?php if ($clientAdresse): ?>
-                                                                <span>📍 <?= h($clientAdresse) ?></span>
-                                                            <?php endif; ?>
-                                                            <?php if ($technicienNom): ?>
-                                                                <span>🔧 <?= h($technicienNom) ?></span>
-                                                            <?php endif; ?>
-                                                            <span>📊 <?= h($statutLabels[$sav['statut']] ?? $sav['statut']) ?></span>
-                                                        </div>
+                                <?php if (empty($dateData['users'])): ?>
+                                    <p style="color: var(--text-secondary); text-align: center; padding: 1rem;">
+                                        Aucune tâche prévue pour ce jour.
+                                    </p>
+                                <?php else: ?>
+                                    <?php foreach ($dateData['users'] as $userKey => $userData): ?>
+                                        <div class="agenda-user-group">
+                                            <div class="agenda-user-header">
+                                                <div class="agenda-user-info">
+                                                    <span class="agenda-user-icon"><?= $userData['role'] === 'Livreur' ? '🚚' : '🔧' ?></span>
+                                                    <div>
+                                                        <strong class="agenda-user-name"><?= h($userData['name']) ?></strong>
+                                                        <span class="agenda-user-role"><?= h($userData['role']) ?></span>
                                                     </div>
                                                 </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
+                                                <?php 
+                                                $userTotalTasks = 0;
+                                                foreach ($userData['clients'] as $clientData) {
+                                                    $userTotalTasks += count($clientData['savs'] ?? []);
+                                                    $userTotalTasks += count($clientData['livraisons'] ?? []);
+                                                }
+                                                ?>
+                                                <span class="agenda-user-count"><?= $userTotalTasks ?> tâche(s)</span>
+                                            </div>
 
-                                <!-- Livraisons -->
-                                <?php if (!empty($items['livraisons'])): ?>
-                                    <div class="agenda-section">
-                                        <h4 class="agenda-section-title">📦 Livraisons (<?= count($items['livraisons']) ?>)</h4>
-                                        <div class="agenda-items">
-                                            <?php foreach ($items['livraisons'] as $liv): ?>
-                                                <?php
-                                                $statutColors = [
-                                                    'planifiee' => '#6b7280',
-                                                    'en_cours' => '#3b82f6',
-                                                    'livree' => '#16a34a',
-                                                    'annulee' => '#ef4444'
-                                                ];
-                                                $statutLabels = [
-                                                    'planifiee' => 'Planifiée',
-                                                    'en_cours' => 'En cours',
-                                                    'livree' => 'Livrée',
-                                                    'annulee' => 'Annulée'
-                                                ];
-                                                $livreurNom = trim(($liv['livreur_prenom'] ?? '') . ' ' . ($liv['livreur_nom'] ?? ''));
-                                                $clientAdresse = trim(($liv['client_ville'] ?? '') . ' ' . ($liv['client_code_postal'] ?? ''));
-                                                ?>
-                                                <div class="agenda-item agenda-item-livraison" 
-                                                     data-livraison-id="<?= (int)$liv['id'] ?>"
-                                                     onclick="window.location.href='/public/livraison.php?ref=<?= urlencode($liv['reference']) ?>'">
-                                                    <div class="agenda-item-header">
-                                                        <div class="agenda-item-title">
-                                                            <strong><?= h($liv['reference']) ?></strong>
+                                            <div class="agenda-user-clients">
+                                                <?php foreach ($userData['clients'] as $clientKey => $clientData): ?>
+                                                    <?php 
+                                                    $clientTotalTasks = count($clientData['savs'] ?? []) + count($clientData['livraisons'] ?? []);
+                                                    if ($clientTotalTasks === 0) continue;
+                                                    ?>
+                                                    <div class="agenda-client-group">
+                                                        <div class="agenda-client-header">
+                                                            <span class="agenda-client-icon">👤</span>
+                                                            <strong class="agenda-client-name"><?= h($clientData['name']) ?></strong>
+                                                            <span class="agenda-client-count"><?= $clientTotalTasks ?> tâche(s)</span>
                                                         </div>
-                                                        <span class="agenda-item-status" style="background: <?= h($statutColors[$liv['statut']] ?? '#6b7280') ?>;">
-                                                            <?= h($statutLabels[$liv['statut']] ?? $liv['statut']) ?>
-                                                        </span>
-                                                    </div>
-                                                    <div class="agenda-item-body">
-                                                        <div class="agenda-item-description">
-                                                            <?= h($liv['objet'] ?? '') ?>
-                                                        </div>
-                                                        <div class="agenda-item-meta">
-                                                            <span>👤 <?= h($liv['client_nom'] ?? 'N/A') ?></span>
-                                                            <?php if ($liv['adresse_livraison']): ?>
-                                                                <span>📍 <?= h($liv['adresse_livraison']) ?></span>
-                                                            <?php elseif ($clientAdresse): ?>
-                                                                <span>📍 <?= h($clientAdresse) ?></span>
+
+                                                        <div class="agenda-client-tasks">
+                                                            <!-- SAV du client -->
+                                                            <?php if (!empty($clientData['savs'])): ?>
+                                                                <?php foreach ($clientData['savs'] as $sav): ?>
+                                                                    <?php
+                                                                    $priorite = $sav['priorite'] ?? 'normale';
+                                                                    $clientAdresse = trim(($sav['client_adresse'] ?? '') . ' ' . ($sav['client_code_postal'] ?? '') . ' ' . ($sav['client_ville'] ?? ''));
+                                                                    ?>
+                                                                    <div class="agenda-item agenda-item-sav" 
+                                                                         data-sav-id="<?= (int)$sav['id'] ?>"
+                                                                         onclick="window.location.href='/public/sav.php?ref=<?= urlencode($sav['reference']) ?>'">
+                                                                        <div class="agenda-item-header">
+                                                                            <div class="agenda-item-title">
+                                                                                <span class="agenda-item-type-icon">🔧</span>
+                                                                                <strong><?= h($sav['reference']) ?></strong>
+                                                                                <?php if (!empty($sav['type_panne'])): ?>
+                                                                                    <span class="agenda-item-badge" style="background: #6366f1;">
+                                                                                        <?= h($typePanneLabels[$sav['type_panne']] ?? $sav['type_panne']) ?>
+                                                                                    </span>
+                                                                                <?php endif; ?>
+                                                                            </div>
+                                                                            <span class="agenda-item-priority" style="background: <?= h($prioriteColors[$priorite] ?? '#6b7280') ?>;">
+                                                                                <?= h($prioriteLabels[$priorite] ?? $priorite) ?>
+                                                                            </span>
+                                                                        </div>
+                                                                        <div class="agenda-item-body">
+                                                                            <div class="agenda-item-description">
+                                                                                <?= h(mb_substr($sav['description'], 0, 120)) ?><?= mb_strlen($sav['description']) > 120 ? '...' : '' ?>
+                                                                            </div>
+                                                                            <div class="agenda-item-meta">
+                                                                                <?php if ($clientAdresse): ?>
+                                                                                    <span>📍 <?= h($clientAdresse) ?></span>
+                                                                                <?php endif; ?>
+                                                                                <span>📊 <?= h($statutLabels[$sav['statut']] ?? $sav['statut']) ?></span>
+                                                                                <?php if ($hasDateIntervention && !empty($sav['date_intervention_prevue'])): ?>
+                                                                                    <span>📅 <?= h(date('d/m/Y', strtotime($sav['date_intervention_prevue']))) ?></span>
+                                                                                <?php endif; ?>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                <?php endforeach; ?>
                                                             <?php endif; ?>
-                                                            <?php if ($livreurNom): ?>
-                                                                <span>🚚 <?= h($livreurNom) ?></span>
+
+                                                            <!-- Livraisons du client -->
+                                                            <?php if (!empty($clientData['livraisons'])): ?>
+                                                                <?php foreach ($clientData['livraisons'] as $liv): ?>
+                                                                    <?php
+                                                                    $clientAdresse = trim(($liv['client_ville'] ?? '') . ' ' . ($liv['client_code_postal'] ?? ''));
+                                                                    ?>
+                                                                    <div class="agenda-item agenda-item-livraison" 
+                                                                         data-livraison-id="<?= (int)$liv['id'] ?>"
+                                                                         onclick="window.location.href='/public/livraison.php?ref=<?= urlencode($liv['reference']) ?>'">
+                                                                        <div class="agenda-item-header">
+                                                                            <div class="agenda-item-title">
+                                                                                <span class="agenda-item-type-icon">📦</span>
+                                                                                <strong><?= h($liv['reference']) ?></strong>
+                                                                            </div>
+                                                                            <span class="agenda-item-status" style="background: <?= h($statutColors[$liv['statut']] ?? '#6b7280') ?>;">
+                                                                                <?= h($statutLabels[$liv['statut']] ?? $liv['statut']) ?>
+                                                                            </span>
+                                                                        </div>
+                                                                        <div class="agenda-item-body">
+                                                                            <div class="agenda-item-description">
+                                                                                <?= h($liv['objet'] ?? '') ?>
+                                                                            </div>
+                                                                            <div class="agenda-item-meta">
+                                                                                <?php if ($liv['adresse_livraison']): ?>
+                                                                                    <span>📍 <?= h($liv['adresse_livraison']) ?></span>
+                                                                                <?php elseif ($clientAdresse): ?>
+                                                                                    <span>📍 <?= h($clientAdresse) ?></span>
+                                                                                <?php endif; ?>
+                                                                                <span>📅 <?= h(date('d/m/Y', strtotime($liv['date_prevue']))) ?></span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                <?php endforeach; ?>
                                                             <?php endif; ?>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            <?php endforeach; ?>
+                                                <?php endforeach; ?>
+                                            </div>
                                         </div>
-                                    </div>
+                                    <?php endforeach; ?>
                                 <?php endif; ?>
                             </div>
                         </div>

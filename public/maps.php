@@ -4,13 +4,19 @@
 
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('maps', ['Admin', 'Dirigeant']);
-// Temporairement désactivé pour les tests
-// require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/db.php';
 
 // La fonction h() est définie dans includes/helpers.php
 
-// Nombre de clients de test
-$totalClients = 6;
+// Récupérer le nombre réel de clients depuis la base de données
+try {
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM clients WHERE adresse IS NOT NULL AND adresse != '' AND code_postal IS NOT NULL AND code_postal != '' AND ville IS NOT NULL AND ville != ''");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $totalClients = (int)($result['total'] ?? 0);
+} catch (PDOException $e) {
+    error_log('maps.php: Error getting client count: ' . $e->getMessage());
+    $totalClients = 0;
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -172,101 +178,75 @@ $totalClients = 6;
 // Configuration
 // ==================
 
-// Clients de test par défaut (pour les tests sans base de données)
-const demoClients = [
-    {
-        id: 1,
-        name: "Client Alpha",
-        code: "CL-001",
-        address: "10 Rue de Paris, 69001 Lyon",
-        adresse: "10 Rue de Paris",
-        code_postal: "69001",
-        ville: "Lyon",
-        lat: 45.764043,
-        lng: 4.835659,
-        telephone: "04 12 34 56 78",
-        email: "alpha@example.com",
-        basePriority: 1
-    },
-    {
-        id: 2,
-        name: "Client Bravo",
-        code: "CL-002",
-        address: "25 Avenue de la République, 69100 Villeurbanne",
-        adresse: "25 Avenue de la République",
-        code_postal: "69100",
-        ville: "Villeurbanne",
-        lat: 45.7700,
-        lng: 4.8800,
-        telephone: "04 23 45 67 89",
-        email: "bravo@example.com",
-        basePriority: 2
-    },
-    {
-        id: 3,
-        name: "Client Charlie",
-        code: "CL-003",
-        address: "5 Rue Victor Hugo, 69200 Vénissieux",
-        adresse: "5 Rue Victor Hugo",
-        code_postal: "69200",
-        ville: "Vénissieux",
-        lat: 45.6970,
-        lng: 4.8850,
-        telephone: "04 34 56 78 90",
-        email: "charlie@example.com",
-        basePriority: 1
-    },
-    {
-        id: 4,
-        name: "Client Delta",
-        code: "CL-004",
-        address: "50 Rue Garibaldi, 69003 Lyon",
-        adresse: "50 Rue Garibaldi",
-        code_postal: "69003",
-        ville: "Lyon",
-        lat: 45.7510,
-        lng: 4.8500,
-        telephone: "04 45 67 89 01",
-        email: "delta@example.com",
-        basePriority: 3
-    },
-    {
-        id: 5,
-        name: "Client Echo",
-        code: "CL-005",
-        address: "12 Rue du Lac, 69150 Décines",
-        adresse: "12 Rue du Lac",
-        code_postal: "69150",
-        ville: "Décines",
-        lat: 45.7680,
-        lng: 4.9600,
-        telephone: "04 56 78 90 12",
-        email: "echo@example.com",
-        basePriority: 1
-    },
-    {
-        id: 6,
-        name: "Client Foxtrot",
-        code: "CL-006",
-        address: "2 Rue Nationale, 69600 Oullins",
-        adresse: "2 Rue Nationale",
-        code_postal: "69600",
-        ville: "Oullins",
-        lat: 45.7160,
-        lng: 4.8060,
-        telephone: "04 67 89 01 23",
-        email: "foxtrot@example.com",
-        basePriority: 2
-    }
-];
-
 // Cache des clients chargés (avec coordonnées géocodées)
 const clientsCache = new Map(); // id -> {id, name, code, address, lat, lng, basePriority}
 
-// Initialiser le cache avec les clients de test
-demoClients.forEach(client => {
-    clientsCache.set(client.id, client);
-});
+// Charger tous les clients depuis la base de données au démarrage
+let clientsLoaded = false;
+async function loadAllClients() {
+    if (clientsLoaded) return;
+    
+    try {
+        const response = await fetch('/API/maps_get_all_clients.php');
+        const data = await response.json();
+        
+        if (data.ok && data.clients) {
+            // Géocoder les clients par lots pour éviter de surcharger le service
+            const batchSize = 5; // Géocoder 5 clients à la fois
+            const totalClients = data.clients.length;
+            let processed = 0;
+            
+            routeMessageEl.textContent = `Chargement de ${totalClients} client(s) et géocodage des adresses en cours…`;
+            routeMessageEl.className = 'maps-message hint';
+            
+            for (let i = 0; i < data.clients.length; i += batchSize) {
+                const batch = data.clients.slice(i, i + batchSize);
+                
+                // Géocoder chaque client du lot en parallèle
+                const geocodePromises = batch.map(async (client) => {
+                    const clientWithCoords = await loadClientWithGeocode(client);
+                    if (clientWithCoords && clientWithCoords.lat && clientWithCoords.lng) {
+                        addClientToMap(clientWithCoords, false); // false = ne pas ajuster la vue à chaque ajout
+                        return true;
+                    }
+                    return false;
+                });
+                
+                await Promise.all(geocodePromises);
+                processed += batch.length;
+                
+                // Mettre à jour le message de progression
+                routeMessageEl.textContent = `Géocodage en cours : ${processed}/${totalClients} client(s) traités…`;
+                
+                // Attendre un peu entre les lots pour respecter la limite de Nominatim (1 req/sec)
+                if (i + batchSize < data.clients.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1200)); // 1.2 secondes entre les lots
+                }
+            }
+            
+            // Ajuster la vue pour inclure tous les clients chargés
+            const allCoords = Array.from(clientsCache.values())
+                .filter(c => c.lat && c.lng)
+                .map(c => [c.lat, c.lng]);
+            
+            if (allCoords.length > 0) {
+                const bounds = L.latLngBounds(allCoords);
+                map.fitBounds(bounds, { padding: [40, 40] });
+            }
+            
+            routeMessageEl.textContent = `${processed} client(s) chargé(s) et affiché(s) sur la carte.`;
+            routeMessageEl.className = 'maps-message success';
+            clientsLoaded = true;
+        } else {
+            routeMessageEl.textContent = "Erreur lors du chargement des clients : " + (data.error || 'Erreur inconnue');
+            routeMessageEl.className = 'maps-message alert';
+        }
+    } catch (err) {
+        console.error('Erreur chargement clients:', err);
+        routeMessageEl.textContent = "Erreur lors du chargement des clients : " + err.message;
+        routeMessageEl.className = 'maps-message alert';
+    }
+}
 
 // ==================
 // Variables globales
@@ -324,14 +304,12 @@ function createPriorityIcon(priority) {
     });
 }
 
-// Initialiser la carte sur les clients de test
-const clientsLatLng = demoClients.map(c => [c.lat, c.lng]);
-if (clientsLatLng.length) {
-    const bounds = L.latLngBounds(clientsLatLng);
-    map.fitBounds(bounds, { padding: [40, 40] });
-} else {
-    map.setView([46.5, 2.0], 6);
-}
+// Initialiser la carte sur la France par défaut
+// Les clients seront chargés et la vue ajustée automatiquement
+map.setView([46.5, 2.0], 6);
+
+// Charger tous les clients au démarrage
+loadAllClients();
 
 // Fonction pour géocoder une adresse
 async function geocodeAddress(address) {
@@ -574,8 +552,7 @@ async function addClientToRoute(client) {
         return;
     }
 
-    // En mode test, les clients ont déjà des coordonnées
-    // Si pas de coordonnées, essayer de géocoder (pour compatibilité future)
+    // Si pas de coordonnées, géocoder l'adresse
     if (!client.lat || !client.lng) {
         routeMessageEl.textContent = "Géocodage de l'adresse en cours…";
         routeMessageEl.className = 'maps-message hint';
@@ -622,17 +599,24 @@ async function addClientToRoute(client) {
     }
 }
 
-// Recherche de clients (mode test - sans base de données)
+// Recherche de clients depuis la base de données
 let searchTimeout = null;
-function searchClients(query) {
-    query = query.trim().toLowerCase();
+async function searchClients(query) {
+    query = query.trim();
     if (!query || query.length < 2) return [];
     
-    // Recherche dans les clients de test
-    return demoClients.filter(c => {
-        const haystack = (c.name + ' ' + c.code + ' ' + c.address + ' ' + c.adresse + ' ' + c.ville).toLowerCase();
-        return haystack.includes(query);
-    }).slice(0, 20);
+    try {
+        const response = await fetch(`/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=20`);
+        const data = await response.json();
+        
+        if (data.ok && data.clients) {
+            return data.clients;
+        }
+        return [];
+    } catch (err) {
+        console.error('Erreur recherche clients:', err);
+        return [];
+    }
 }
 
 clientSearchInput.addEventListener('input', () => {
@@ -654,8 +638,8 @@ clientSearchInput.addEventListener('input', () => {
     clientResultsEl.style.display = 'block';
     
     // Debounce de 300ms
-    searchTimeout = setTimeout(() => {
-        const results = searchClients(q);
+    searchTimeout = setTimeout(async () => {
+        const results = await searchClients(q);
         clientResultsEl.innerHTML = '';
         
         if (!results.length) {
@@ -677,7 +661,7 @@ clientSearchInput.addEventListener('input', () => {
                 `<strong>${escapeHtml(client.name)}</strong>` +
                 `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>`;
             item.addEventListener('click', () => {
-                // Ajouter le client à la route (déjà avec coordonnées, pas besoin de géocoder)
+                // Ajouter le client à la route (géocodage si nécessaire)
                 addClientToRoute(client);
             });
             clientResultsEl.appendChild(item);
