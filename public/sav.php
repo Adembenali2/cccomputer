@@ -278,10 +278,31 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
 // Récupération des SAV depuis la base (pour l'affichage)
 // ============================================================================
 try {
+    // Sélection explicite de toutes les colonnes selon le schéma railway.sql
+    // Évite les problèmes si le schéma change et améliore la lisibilité
     $sql = "
         SELECT
-            s.*,
+            s.id,
+            s.id_client,
+            s.mac_norm,
+            s.id_technicien,
+            s.reference,
+            s.description,
+            s.date_ouverture,
+            s.date_intervention_prevue,
+            s.temps_intervention_estime,
+            s.temps_intervention_reel,
+            s.cout_intervention,
+            s.date_fermeture,
+            s.satisfaction_client,
+            s.commentaire_client,
+            s.statut,
+            s.priorite,
+            s.type_panne,
+            s.commentaire,
             s.notes_techniques AS commentaire_technicien,
+            s.created_at,
+            s.updated_at,
             c.raison_sociale AS client_nom,
             u.nom    AS technicien_nom,
             u.prenom AS technicien_prenom

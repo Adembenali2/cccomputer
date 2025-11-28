@@ -21,8 +21,25 @@ if ($email === '' || $pass === '') {
     exit;
 }
 
-// Récup utilisateur
-$stmt = $pdo->prepare("SELECT * FROM utilisateurs WHERE Email = :email LIMIT 1");
+// Récup utilisateur - sélection explicite selon le schéma railway.sql
+$stmt = $pdo->prepare("
+    SELECT 
+        id,
+        Email,
+        password,
+        nom,
+        prenom,
+        telephone,
+        Emploi,
+        statut,
+        date_debut,
+        date_creation,
+        date_modification,
+        last_activity
+    FROM utilisateurs 
+    WHERE Email = :email 
+    LIMIT 1
+");
 $stmt->execute(['email' => $email]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 

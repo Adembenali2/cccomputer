@@ -250,16 +250,16 @@ foreach ($rowsArray as $row) {
     // 6.b Insertion en base
     try {
         $stmtInsert->execute([
-            $timestamp,              // Timestamp
-            $mac ?: null,           // MacAddress
-            $etat ?: null,          // Status
-            $tonerK,                // TonerBlack
-            $tonerC,                // TonerCyan
-            $tonerM,                // TonerMagenta
-            $tonerY,                // TonerYellow
-            $totalPages ?: null,    // TotalPages
-            $totalCouleur ?: null,  // TotalColor
-            $totalNB ?: null,       // TotalBW
+            $timestamp,              // 1. Timestamp
+            $mac ?: null,            // 2. MacAddress
+            $etat ?: null,           // 3. Status
+            $tonerK,                 // 4. TonerBlack
+            $tonerC,                 // 5. TonerCyan
+            $tonerM,                 // 6. TonerMagenta
+            $tonerY,                 // 7. TonerYellow
+            $totalPages ?: null,     // 8. TotalPages
+            $totalCouleur ?: null,   // 9. TotalColor
+            $totalNB ?: null,        // 10. TotalBW
         ]);
         $inserted++;
     } catch (Throwable $e) {
