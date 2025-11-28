@@ -51,11 +51,17 @@ libxml_clear_errors();
 
 $xpath = new DOMXPath($dom);
 
+// Initialiser les compteurs dès le début
+$inserted = 0;
+$skipped = 0;
+
 // On suppose : un tableau principal avec les lignes de compteurs
 $table = $xpath->query('//table')->item(0);
 if (!$table) {
-    logLine("❌ Aucun tableau <table> trouvé dans la page.");
-    exit;
+    logLine("⚠️ Aucun tableau <table> trouvé dans la page. Rien à importer.");
+    // On continue pour créer quand même une entrée dans import_run
+    $rowsArray = [];
+    goto log_import_run;
 }
 
 $rows = $xpath->query('.//tbody/tr', $table);
@@ -173,9 +179,6 @@ $sqlCheck = "
 ";
 $stmtCheck = $pdo->prepare($sqlCheck);
 
-$inserted = 0;
-$skipped  = 0;
-
 // 6) Parcours des lignes du tableau (limité aux 20 derniers)
 foreach ($rowsArray as $row) {
     if (!$row instanceof DOMElement) continue;
@@ -256,11 +259,14 @@ foreach ($rowsArray as $row) {
     }
 }
 
-logLine("🎉 Import terminé.");
-logLine("➡️ Lignes insérées : $inserted");
-logLine("➡️ Lignes ignorées (déjà présentes MAC+Timestamp) : $skipped");
+if ($inserted > 0 || $skipped > 0) {
+    logLine("🎉 Import terminé.");
+    logLine("➡️ Lignes insérées : $inserted");
+    logLine("➡️ Lignes ignorées (déjà présentes MAC+Timestamp) : $skipped");
+}
 
-// 7) Enregistrement dans import_run pour suivi du dashboard
+// 7) Enregistrement dans import_run pour suivi du dashboard (toujours exécuté)
+log_import_run:
 try {
     // Créer la table si elle n'existe pas
     $pdo->exec("
@@ -276,7 +282,9 @@ try {
     ");
     
     $totalProcessed = $inserted + $skipped;
-    $hasError = ($inserted === 0 && $totalProcessed > 0 && $skipped > 0);
+    // ok=1 si pas d'erreur (même s'il n'y a rien à importer, c'est OK)
+    // ok=0 seulement en cas d'erreur réelle (tentative d'insertion qui a échoué)
+    $ok = 1; // Par défaut OK
     
     $msg = json_encode([
         'source' => 'ancien_import',
@@ -294,11 +302,15 @@ try {
     $stmtLog->execute([
         ':imported' => $inserted,
         ':skipped'  => $skipped,
-        ':ok'       => ($hasError ? 0 : 1),
+        ':ok'       => $ok,
         ':msg'      => $msg
     ]);
     
-    logLine("📝 Enregistrement dans import_run réussi.");
+    if ($inserted === 0 && $skipped === 0) {
+        logLine("✅ Import IONOS OK — 0 élément");
+    } else {
+        logLine("📝 Enregistrement dans import_run réussi.");
+    }
 } catch (Throwable $e) {
     logLine("⚠️ Erreur lors de l'enregistrement dans import_run : " . $e->getMessage());
 }

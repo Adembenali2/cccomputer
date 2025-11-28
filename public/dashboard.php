@@ -1681,21 +1681,21 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const d = await r.json();
 
                 if (!d || !d.has_run) {
-                    setState('none', 'Import Ancien : —');
+                    setState('none', 'Import IONOS : —');
                     return;
                 }
 
                 const files = (d.summary && d.summary.files) ? d.summary.files : null;
 
                 if (d.ok === 1) {
-                    const label = `Import Ancien OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    const label = `Import IONOS OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
                     setState('ok', label, files);
                 } else {
-                    const label = `Import Ancien KO — ${d.ran_at}`;
+                    const label = `Import IONOS KO — ${d.ran_at}`;
                     setState('fail', label, files);
                 }
             } catch(e){
-                setState('fail', 'Import Ancien : erreur de lecture');
+                setState('fail', 'Import IONOS : erreur de lecture');
             }
         }
 
