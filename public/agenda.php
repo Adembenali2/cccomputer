@@ -197,6 +197,65 @@ try {
     $stmtSav->execute($paramsSav);
     $savs = $stmtSav->fetchAll(PDO::FETCH_ASSOC);
     
+    // Si la requête principale ne retourne rien, utiliser une requête simplifiée basée sur celle du diagnostic
+    // mais avec tous les champs nécessaires pour l'affichage
+    if (empty($savs)) {
+        error_log('agenda.php - Requête principale vide, utilisation de la requête simplifiée (style diagnostic)');
+        
+        // Requête simplifiée basée sur celle du diagnostic qui fonctionne
+        $sqlSavSimple = "
+            SELECT 
+                s.id,
+                s.id_client,
+                s.id_technicien,
+                s.reference,
+                s.description,
+                s.date_ouverture,
+                {$selectDateIntervention}
+                s.statut,
+                s.priorite,
+                {$selectTypePanne}
+                c.raison_sociale AS client_nom,
+                c.adresse AS client_adresse,
+                c.ville AS client_ville,
+                c.code_postal AS client_code_postal,
+                u.nom AS technicien_nom,
+                u.prenom AS technicien_prenom,
+                u.Emploi AS technicien_role
+            FROM sav s
+            LEFT JOIN clients c ON c.id = s.id_client
+            LEFT JOIN utilisateurs u ON u.id = s.id_technicien
+            WHERE s.statut NOT IN ('resolu', 'annule')
+            AND s.date_ouverture BETWEEN :start_date AND :end_date
+        ";
+        
+        // Ajouter le filtre technicien si nécessaire
+        if ($filterUser) {
+            $sqlSavSimple .= " AND s.id_technicien = :tech_id";
+        }
+        
+        $sqlSavSimple .= " ORDER BY s.date_ouverture ASC, s.priorite DESC";
+        
+        $paramsSavSimple = [
+            ':start_date' => $startDate,
+            ':end_date' => $endDate
+        ];
+        
+        if ($filterUser) {
+            $paramsSavSimple[':tech_id'] = $filterUser;
+        }
+        
+        $stmtSavSimple = $pdo->prepare($sqlSavSimple);
+        $stmtSavSimple->execute($paramsSavSimple);
+        $savs = $stmtSavSimple->fetchAll(PDO::FETCH_ASSOC);
+        
+        error_log('agenda.php - Requête simplifiée retourne ' . count($savs) . ' SAV');
+    }
+    
+    // Sauvegarder les données APRÈS la requête simplifiée (si elle a été utilisée)
+    // Cette sauvegarde sera utilisée plus tard si $savs est modifié
+    $savsAfterQuery = $savs;
+    
     // Debug temporaire
     if (empty($savs)) {
         error_log('agenda.php - Aucun SAV trouvé après exécution');
@@ -292,6 +351,61 @@ try {
     $stmtLiv->execute($paramsLiv);
     $livraisons = $stmtLiv->fetchAll(PDO::FETCH_ASSOC);
     
+    // Si la requête principale ne retourne rien, utiliser une requête simplifiée
+    if (empty($livraisons)) {
+        error_log('agenda.php - Requête livraisons principale vide, utilisation de la requête simplifiée');
+        
+        // Requête simplifiée pour les livraisons
+        $sqlLivSimple = "
+            SELECT 
+                l.id,
+                l.id_client,
+                l.id_livreur,
+                l.reference,
+                l.objet,
+                l.date_prevue,
+                l.date_reelle,
+                l.statut,
+                l.adresse_livraison,
+                c.raison_sociale AS client_nom,
+                c.ville AS client_ville,
+                c.code_postal AS client_code_postal,
+                u.nom AS livreur_nom,
+                u.prenom AS livreur_prenom,
+                u.Emploi AS livreur_role
+            FROM livraisons l
+            LEFT JOIN clients c ON c.id = l.id_client
+            LEFT JOIN utilisateurs u ON u.id = l.id_livreur
+            WHERE l.statut NOT IN ('livree', 'annulee')
+            AND l.date_prevue BETWEEN :start_date AND :end_date
+        ";
+        
+        // Ajouter le filtre livreur si nécessaire
+        if ($filterUser) {
+            $sqlLivSimple .= " AND l.id_livreur = :livreur_id";
+        }
+        
+        $sqlLivSimple .= " ORDER BY l.date_prevue ASC, l.id ASC";
+        
+        $paramsLivSimple = [
+            ':start_date' => $startDate,
+            ':end_date' => $endDate
+        ];
+        
+        if ($filterUser) {
+            $paramsLivSimple[':livreur_id'] = $filterUser;
+        }
+        
+        $stmtLivSimple = $pdo->prepare($sqlLivSimple);
+        $stmtLivSimple->execute($paramsLivSimple);
+        $livraisons = $stmtLivSimple->fetchAll(PDO::FETCH_ASSOC);
+        
+        error_log('agenda.php - Requête livraisons simplifiée retourne ' . count($livraisons) . ' livraisons');
+    }
+    
+    // Sauvegarder les données APRÈS la requête simplifiée (si elle a été utilisée)
+    $livraisonsAfterQuery = $livraisons;
+    
     // Debug temporaire
     if (empty($livraisons)) {
         error_log('agenda.php - Aucune livraison trouvée. SQL: ' . $sqlLiv);
@@ -303,10 +417,10 @@ try {
     error_log('agenda.php - Erreur récupération livraisons: ' . $e->getMessage());
 }
 
-// Sauvegarder les données AVANT toute manipulation pour éviter toute modification
-// (même si fetchAll() retourne un tableau normal, on sauvegarde par sécurité)
-$savsBackup = $savs;
-$livraisonsBackup = $livraisons;
+// Sauvegarder les données APRÈS les requêtes (y compris les requêtes simplifiées)
+// Utiliser les variables sauvegardées si elles existent, sinon utiliser les originaux
+$savsBackup = isset($savsAfterQuery) ? $savsAfterQuery : $savs;
+$livraisonsBackup = isset($livraisonsAfterQuery) ? $livraisonsAfterQuery : $livraisons;
 
 // Grouper par date, puis par utilisateur, puis par client
 $agendaByDate = [];
