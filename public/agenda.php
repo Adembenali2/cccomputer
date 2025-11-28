@@ -535,8 +535,7 @@ if (empty($savs) && empty($livraisons)) {
     <header class="page-header">
         <h1 class="page-title">Agenda</h1>
         <p class="page-sub">
-            Visualisez tous les SAV et livraisons prévus par jour pour chaque utilisateur.<br>
-            <strong><?= h((string)$totalSavs) ?> SAV</strong> et <strong><?= h((string)$totalLivraisons) ?> livraison(s)</strong> sur la période sélectionnée.
+            Visualisez tous les SAV et livraisons prévus par jour pour chaque utilisateur avec leurs détails complets.
         </p>
     </header>
 
@@ -631,21 +630,21 @@ if (empty($savs) && empty($livraisons)) {
                 </div>
             </div>
 
-            <!-- Statistiques -->
+            <!-- Statistiques - Style maps.php -->
             <div style="margin-top: 1rem;">
                 <div class="section-title">Statistiques</div>
-                <div class="agenda-stats">
-                    <div class="agenda-stat-item">
-                        <span class="agenda-stat-label">SAV</span>
-                        <span class="agenda-stat-value"><?= h((string)$totalSavs) ?></span>
+                <div class="maps-stats">
+                    <div class="maps-stat">
+                        <span class="maps-stat-label">SAV</span>
+                        <span class="maps-stat-value"><?= h((string)$totalSavs) ?></span>
                     </div>
-                    <div class="agenda-stat-item">
-                        <span class="agenda-stat-label">Livraisons</span>
-                        <span class="agenda-stat-value"><?= h((string)$totalLivraisons) ?></span>
+                    <div class="maps-stat">
+                        <span class="maps-stat-label">Livraisons</span>
+                        <span class="maps-stat-value"><?= h((string)$totalLivraisons) ?></span>
                     </div>
-                    <div class="agenda-stat-item">
-                        <span class="agenda-stat-label">Total</span>
-                        <span class="agenda-stat-value"><?= h((string)($totalSavs + $totalLivraisons)) ?></span>
+                    <div class="maps-stat">
+                        <span class="maps-stat-label">Total</span>
+                        <span class="maps-stat-value"><?= h((string)($totalSavs + $totalLivraisons)) ?></span>
                     </div>
                 </div>
             </div>
@@ -663,6 +662,9 @@ if (empty($savs) && empty($livraisons)) {
                     <?php else: ?>
                         <?= h(date('F Y', strtotime($filterDate))) ?>
                     <?php endif; ?>
+                    <span style="margin-left: 0.5rem; color: var(--text-secondary);">
+                        (<?= h((string)$totalSavs) ?> SAV, <?= h((string)$totalLivraisons) ?> livraison(s))
+                    </span>
                 </div>
                 <div class="map-toolbar-right">
                     <span class="badge">Vue : <?= $viewMode === 'day' ? 'Jour' : ($viewMode === 'week' ? 'Semaine' : 'Mois') ?></span>
@@ -678,11 +680,11 @@ if (empty($savs) && empty($livraisons)) {
                 </div>
             </div>
 
-            <div class="agenda-container">
+            <div class="agenda-container" style="padding: 1rem; max-height: calc(100vh - 200px); overflow-y: auto;">
                 <?php if (empty($agendaByDate)): ?>
-                    <div class="agenda-empty">
+                    <div class="agenda-empty" style="padding: 3rem 2rem; text-align: center; background: var(--bg-primary); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
                         <p><strong>Aucun SAV ou livraison prévu pour cette période.</strong></p>
-                        <p style="margin-top: 1rem; color: #6b7280; font-size: 0.9rem;">
+                        <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
                             Période sélectionnée : 
                             <?php if ($viewMode === 'day'): ?>
                                 <?= h(date('d/m/Y', strtotime($filterDate))) ?>
@@ -692,9 +694,9 @@ if (empty($savs) && empty($livraisons)) {
                                 Mois de <?= h(date('F Y', strtotime($filterDate))) ?>
                             <?php endif; ?>
                         </p>
-                        <p style="margin-top: 0.5rem; color: #6b7280; font-size: 0.9rem;">
+                        <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
                             Suggestions :
-                            <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <ul style="margin-top: 0.5rem; padding-left: 1.5rem; text-align: left; display: inline-block;">
                                 <li>Essayez de changer la date ou la période (jour/semaine/mois)</li>
                                 <li>Vérifiez que les SAV/livraisons ne sont pas tous résolus/annulés</li>
                                 <?php if (!$isAdmin): ?>
@@ -859,79 +861,84 @@ if (empty($savs) && empty($livraisons)) {
                                                             <span class="agenda-client-count"><?= $clientTotalTasks ?> tâche(s)</span>
                                                         </div>
 
-                                                        <div class="agenda-client-tasks">
-                                                            <!-- SAV du client -->
+                                                        <div class="selected-clients" style="max-height: none; padding: 0.5rem;">
+                                                            <!-- SAV du client - Style maps.php -->
                                                             <?php if (!empty($clientData['savs'])): ?>
                                                                 <?php foreach ($clientData['savs'] as $sav): ?>
                                                                     <?php
                                                                     $priorite = $sav['priorite'] ?? 'normale';
                                                                     $clientAdresse = trim(($sav['client_adresse'] ?? '') . ' ' . ($sav['client_code_postal'] ?? '') . ' ' . ($sav['client_ville'] ?? ''));
+                                                                    $clientName = $sav['client_nom'] ?? 'Client inconnu';
+                                                                    $description = mb_substr($sav['description'] ?? '', 0, 100);
+                                                                    if (mb_strlen($sav['description'] ?? '') > 100) $description .= '...';
                                                                     ?>
-                                                                    <div class="agenda-item agenda-item-sav" 
+                                                                    <div class="selected-client-chip" 
                                                                          data-sav-id="<?= (int)$sav['id'] ?>"
-                                                                         onclick="window.location.href='/public/sav.php?ref=<?= urlencode($sav['reference']) ?>'">
-                                                                        <div class="agenda-item-header">
-                                                                            <div class="agenda-item-title">
-                                                                                <span class="agenda-item-type-icon">🔧</span>
-                                                                                <strong><?= h($sav['reference']) ?></strong>
-                                                                                <?php if (!empty($sav['type_panne'])): ?>
-                                                                                    <span class="agenda-item-badge" style="background: #6366f1;">
-                                                                                        <?= h($typePanneLabels[$sav['type_panne']] ?? $sav['type_panne']) ?>
-                                                                                    </span>
+                                                                         onclick="window.location.href='/public/sav.php?ref=<?= urlencode($sav['reference']) ?>'"
+                                                                         style="border-left: 4px solid <?= h($prioriteColors[$priorite] ?? '#6b7280') ?>;">
+                                                                        <div class="selected-client-main">
+                                                                            <strong>🔧 <?= h($sav['reference']) ?> — <?= h($clientName) ?></strong>
+                                                                            <span>
+                                                                                <?= h($description) ?>
+                                                                                <?php if ($clientAdresse): ?>
+                                                                                    • <?= h($clientAdresse) ?>
                                                                                 <?php endif; ?>
-                                                                            </div>
-                                                                            <span class="agenda-item-priority" style="background: <?= h($prioriteColors[$priorite] ?? '#6b7280') ?>;">
+                                                                                <?php if (!empty($sav['type_panne'])): ?>
+                                                                                    • Type: <?= h($typePanneLabels[$sav['type_panne']] ?? $sav['type_panne']) ?>
+                                                                                <?php endif; ?>
+                                                                            </span>
+                                                                            <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.2rem; display: block;">
+                                                                                Statut: <?= h($statutLabels[$sav['statut']] ?? $sav['statut']) ?>
+                                                                                <?php if ($hasDateIntervention && !empty($sav['date_intervention_prevue'])): ?>
+                                                                                    • Intervention: <?= h(date('d/m/Y', strtotime($sav['date_intervention_prevue']))) ?>
+                                                                                <?php else: ?>
+                                                                                    • Ouverture: <?= h(date('d/m/Y', strtotime($sav['date_ouverture']))) ?>
+                                                                                <?php endif; ?>
+                                                                            </small>
+                                                                        </div>
+                                                                        <div class="selected-client-controls">
+                                                                            <span class="badge" style="background: <?= h($prioriteColors[$priorite] ?? '#6b7280') ?>; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
                                                                                 <?= h($prioriteLabels[$priorite] ?? $priorite) ?>
                                                                             </span>
-                                                                        </div>
-                                                                        <div class="agenda-item-body">
-                                                                            <div class="agenda-item-description">
-                                                                                <?= h(mb_substr($sav['description'], 0, 120)) ?><?= mb_strlen($sav['description']) > 120 ? '...' : '' ?>
-                                                                            </div>
-                                                                            <div class="agenda-item-meta">
-                                                                                <?php if ($clientAdresse): ?>
-                                                                                    <span>📍 <?= h($clientAdresse) ?></span>
-                                                                                <?php endif; ?>
-                                                                                <span>📊 <?= h($statutLabels[$sav['statut']] ?? $sav['statut']) ?></span>
-                                                                                <?php if ($hasDateIntervention && !empty($sav['date_intervention_prevue'])): ?>
-                                                                                    <span>📅 <?= h(date('d/m/Y', strtotime($sav['date_intervention_prevue']))) ?></span>
-                                                                                <?php endif; ?>
-                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 <?php endforeach; ?>
                                                             <?php endif; ?>
 
-                                                            <!-- Livraisons du client -->
+                                                            <!-- Livraisons du client - Style maps.php -->
                                                             <?php if (!empty($clientData['livraisons'])): ?>
                                                                 <?php foreach ($clientData['livraisons'] as $liv): ?>
                                                                     <?php
                                                                     $clientAdresse = trim(($liv['client_ville'] ?? '') . ' ' . ($liv['client_code_postal'] ?? ''));
+                                                                    $clientName = $liv['client_nom'] ?? 'Client inconnu';
+                                                                    $adresseLivraison = $liv['adresse_livraison'] ?? $clientAdresse;
+                                                                    $objet = mb_substr($liv['objet'] ?? '', 0, 100);
+                                                                    if (mb_strlen($liv['objet'] ?? '') > 100) $objet .= '...';
                                                                     ?>
-                                                                    <div class="agenda-item agenda-item-livraison" 
+                                                                    <div class="selected-client-chip" 
                                                                          data-livraison-id="<?= (int)$liv['id'] ?>"
-                                                                         onclick="window.location.href='/public/livraison.php?ref=<?= urlencode($liv['reference']) ?>'">
-                                                                        <div class="agenda-item-header">
-                                                                            <div class="agenda-item-title">
-                                                                                <span class="agenda-item-type-icon">📦</span>
-                                                                                <strong><?= h($liv['reference']) ?></strong>
-                                                                            </div>
-                                                                            <span class="agenda-item-status" style="background: <?= h($statutColors[$liv['statut']] ?? '#6b7280') ?>;">
+                                                                         onclick="window.location.href='/public/livraison.php?ref=<?= urlencode($liv['reference']) ?>'"
+                                                                         style="border-left: 4px solid <?= h($statutColors[$liv['statut']] ?? '#6b7280') ?>;">
+                                                                        <div class="selected-client-main">
+                                                                            <strong>📦 <?= h($liv['reference']) ?> — <?= h($clientName) ?></strong>
+                                                                            <span>
+                                                                                <?= h($objet) ?>
+                                                                                <?php if ($adresseLivraison): ?>
+                                                                                    • <?= h($adresseLivraison) ?>
+                                                                                <?php endif; ?>
+                                                                            </span>
+                                                                            <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.2rem; display: block;">
+                                                                                Statut: <?= h($statutLabels[$liv['statut']] ?? $liv['statut']) ?>
+                                                                                • Date prévue: <?= h(date('d/m/Y', strtotime($liv['date_prevue']))) ?>
+                                                                                <?php if (!empty($liv['date_reelle'])): ?>
+                                                                                    • Date réelle: <?= h(date('d/m/Y', strtotime($liv['date_reelle']))) ?>
+                                                                                <?php endif; ?>
+                                                                            </small>
+                                                                        </div>
+                                                                        <div class="selected-client-controls">
+                                                                            <span class="badge" style="background: <?= h($statutColors[$liv['statut']] ?? '#6b7280') ?>; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
                                                                                 <?= h($statutLabels[$liv['statut']] ?? $liv['statut']) ?>
                                                                             </span>
-                                                                        </div>
-                                                                        <div class="agenda-item-body">
-                                                                            <div class="agenda-item-description">
-                                                                                <?= h($liv['objet'] ?? '') ?>
-                                                                            </div>
-                                                                            <div class="agenda-item-meta">
-                                                                                <?php if ($liv['adresse_livraison']): ?>
-                                                                                    <span>📍 <?= h($liv['adresse_livraison']) ?></span>
-                                                                                <?php elseif ($clientAdresse): ?>
-                                                                                    <span>📍 <?= h($clientAdresse) ?></span>
-                                                                                <?php endif; ?>
-                                                                                <span>📅 <?= h(date('d/m/Y', strtotime($liv['date_prevue']))) ?></span>
-                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 <?php endforeach; ?>
