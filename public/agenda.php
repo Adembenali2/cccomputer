@@ -697,7 +697,75 @@ if (empty($savs) && empty($livraisons)) {
                     error_log('agenda.php - DEBUG AVANT AFFICHAGE: $savs vide, $savsBackup count=' . count($savsBackup));
                     error_log('agenda.php - DEBUG AVANT AFFICHAGE: $livraisons vide, $livraisonsBackup count=' . count($livraisonsBackup));
                 }
+                
+                // Construire $allItems pour le debug
+                $allItemsDebug = [];
+                foreach ($savsToDisplay as $sav) {
+                    $date = ($hasDateIntervention && !empty($sav['date_intervention_prevue'])) 
+                        ? $sav['date_intervention_prevue'] 
+                        : $sav['date_ouverture'];
+                    $allItemsDebug[] = [
+                        'type' => 'sav',
+                        'date' => $date,
+                        'data' => $sav
+                    ];
+                }
+                foreach ($livraisonsToDisplay as $liv) {
+                    $allItemsDebug[] = [
+                        'type' => 'livraison',
+                        'date' => $liv['date_prevue'],
+                        'data' => $liv
+                    ];
+                }
                 ?>
+                
+                <!-- BLOC DE DEBUG TEMPORAIRE - À RETIRER APRÈS DIAGNOSTIC -->
+                <div style="background: #dc2626; color: white; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.9rem; overflow-x: auto;">
+                    <h3 style="color: white; margin-top: 0; margin-bottom: 1rem; font-size: 1.2rem; font-weight: bold;">🔍 DEBUG TEMPORAIRE - VARIABLES DE LA BOUCLE PRINCIPALE</h3>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <strong style="color: #fbbf24;">$savsToDisplay :</strong>
+                        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; margin-top: 0.5rem; border-radius: 4px; overflow-x: auto;">
+                            <strong>Nombre d'éléments :</strong> <?= count($savsToDisplay) ?><br>
+                            <strong>Contenu brut :</strong><br>
+                            <pre style="margin: 0.5rem 0 0 0; white-space: pre-wrap; word-wrap: break-word;"><?= htmlspecialchars(print_r($savsToDisplay, true)) ?></pre>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <strong style="color: #fbbf24;">$livraisonsToDisplay :</strong>
+                        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; margin-top: 0.5rem; border-radius: 4px; overflow-x: auto;">
+                            <strong>Nombre d'éléments :</strong> <?= count($livraisonsToDisplay) ?><br>
+                            <strong>Contenu brut :</strong><br>
+                            <pre style="margin: 0.5rem 0 0 0; white-space: pre-wrap; word-wrap: break-word;"><?= htmlspecialchars(print_r($livraisonsToDisplay, true)) ?></pre>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <strong style="color: #fbbf24;">$allItems (construit pour l'affichage) :</strong>
+                        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; margin-top: 0.5rem; border-radius: 4px; overflow-x: auto;">
+                            <strong>Nombre d'éléments :</strong> <?= count($allItemsDebug) ?><br>
+                            <strong>Contenu brut :</strong><br>
+                            <pre style="margin: 0.5rem 0 0 0; white-space: pre-wrap; word-wrap: break-word;"><?= htmlspecialchars(print_r($allItemsDebug, true)) ?></pre>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <strong style="color: #fbbf24;">Variables originales (pour comparaison) :</strong>
+                        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; margin-top: 0.5rem; border-radius: 4px;">
+                            <strong>$savs count :</strong> <?= count($savs) ?> | 
+                            <strong>$savsBackup count :</strong> <?= count($savsBackup) ?><br>
+                            <strong>$livraisons count :</strong> <?= count($livraisons) ?> | 
+                            <strong>$livraisonsBackup count :</strong> <?= count($livraisonsBackup) ?>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 4px; margin-top: 1rem;">
+                        <strong>⚠️ Ce bloc de debug est temporaire et doit être retiré après diagnostic.</strong>
+                    </div>
+                </div>
+                <!-- FIN DU BLOC DE DEBUG -->
+                
                 <?php if (empty($savsToDisplay) && empty($livraisonsToDisplay)): ?>
                     <div class="agenda-empty" style="padding: 3rem 2rem; text-align: center; background: var(--bg-primary); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
                         <p><strong>Aucun SAV ou livraison prévu pour cette période.</strong></p>
@@ -840,7 +908,16 @@ if (empty($savs) && empty($livraisons)) {
                     ?>
                     
                     <div class="selected-clients" style="max-height: none; padding: 0;">
+                        <?php 
+                        // Debug : Compteurs pour la boucle d'affichage
+                        $debugItemsProcessed = 0;
+                        $debugItemsIgnored = 0;
+                        ?>
                         <?php foreach ($allItems as $item): ?>
+                            <?php 
+                            $debugItemsProcessed++;
+                            // Si un item est ignoré par une condition, on le log
+                            ?>
                             <?php if ($item['type'] === 'sav'): ?>
                                 <?php
                                 $sav = $item['data'];
@@ -884,6 +961,11 @@ if (empty($savs) && empty($livraisons)) {
                                 </div>
                             <?php else: ?>
                                 <?php
+                                // Si ce n'est ni SAV ni livraison, c'est un problème
+                                if ($item['type'] !== 'livraison') {
+                                    $debugItemsIgnored++;
+                                    echo '<!-- DEBUG: Ligne ignorée - Type inconnu: ' . htmlspecialchars($item['type'] ?? 'NULL') . ' - ID: ' . (isset($item['data']['id']) ? htmlspecialchars((string)$item['data']['id']) : 'N/A') . ' -->';
+                                }
                                 $liv = $item['data'];
                                 $clientAdresse = trim(($liv['client_ville'] ?? '') . ' ' . ($liv['client_code_postal'] ?? ''));
                                 $clientName = $liv['client_nom'] ?? 'Client inconnu';
@@ -922,6 +1004,16 @@ if (empty($savs) && empty($livraisons)) {
                                 </div>
                             <?php endif; ?>
                         <?php endforeach; ?>
+                        
+                        <!-- DEBUG: Résumé de la boucle d'affichage -->
+                        <?php if ($debugItemsProcessed > 0 || $debugItemsIgnored > 0): ?>
+                            <div style="background: rgba(220, 38, 38, 0.2); border: 2px solid #dc2626; padding: 0.75rem; margin-top: 1rem; border-radius: 4px; font-size: 0.85rem; color: #dc2626;">
+                                <strong>DEBUG Boucle d'affichage :</strong><br>
+                                Items traités dans la boucle : <?= $debugItemsProcessed ?><br>
+                                Items ignorés (type inconnu) : <?= $debugItemsIgnored ?><br>
+                                Total items dans $allItems : <?= count($allItems) ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>
