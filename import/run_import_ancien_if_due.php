@@ -50,7 +50,7 @@ try {
     $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
     
     $php = PHP_BINARY ?: 'php';
-    $cmd = escapeshellcmd($php) . ' ' . escapeshellarg(__DIR__ . '/../API/upload_compteur_ancien/import_compteurs.php');
+    $cmd = escapeshellcmd($php) . ' ' . escapeshellarg(__DIR__ . '/import_ancien_http.php');
     $desc = [
       1 => ['pipe', 'w'],
       2 => ['pipe', 'w'],
