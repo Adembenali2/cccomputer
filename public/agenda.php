@@ -83,73 +83,6 @@ try {
 // Récupérer les SAV
 $savs = [];
 try {
-    // Calculer une date de début pour inclure les SAV en cours (7 jours avant la période ou maximum 30 jours en arrière)
-    $dateObjMin = new DateTime($startDate);
-    $dateObjMin->modify('-7 days');
-    $minDateForOngoing = $dateObjMin->format('Y-m-d');
-    $dateObjLimit = new DateTime();
-    $dateObjLimit->modify('-30 days');
-    $limitDate = $dateObjLimit->format('Y-m-d');
-    $actualMinDate = max($minDateForOngoing, $limitDate);
-    
-    // Calculer une date limite pour inclure les SAV en cours (90 jours en arrière maximum)
-    $dateObjLimit = new DateTime($startDate);
-    $dateObjLimit->modify('-90 days');
-    $maxOngoingDate = $dateObjLimit->format('Y-m-d');
-    
-    if ($hasDateIntervention) {
-        // Inclure les SAV :
-        // 1. Date d'ouverture dans la période
-        // 2. Date d'intervention prévue dans la période
-        // 3. SAV non résolus/annulés ouverts avant ou pendant la période (dans les 90 derniers jours)
-        // Note: Le filtre sur statut NOT IN ('resolu', 'annule') est appliqué plus tard
-        $whereSav = [
-            "((s.date_ouverture BETWEEN :start_date AND :end_date)
-              OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue BETWEEN :start_date2 AND :end_date2)
-              OR (s.date_ouverture >= :max_ongoing_date AND s.date_ouverture <= :end_date)
-              OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue >= :max_ongoing_date2 AND s.date_intervention_prevue <= :end_date3))"
-        ];
-        $paramsSav = [
-            ':start_date' => $startDate,
-            ':end_date' => $endDate,
-            ':start_date2' => $startDate,
-            ':end_date2' => $endDate,
-            ':max_ongoing_date' => $maxOngoingDate,
-            ':max_ongoing_date2' => $maxOngoingDate,
-            ':end_date3' => $endDate
-        ];
-        $dateOrderBy = "COALESCE(s.date_intervention_prevue, s.date_ouverture)";
-        $selectDateIntervention = "s.date_intervention_prevue,";
-    } else {
-        // Inclure les SAV :
-        // 1. Date d'ouverture dans la période
-        // 2. SAV non résolus/annulés ouverts avant ou pendant la période (dans les 90 derniers jours)
-        // Note: Le filtre sur statut NOT IN ('resolu', 'annule') est appliqué plus tard
-        $whereSav = [
-            "(s.date_ouverture BETWEEN :start_date AND :end_date
-              OR (s.date_ouverture >= :max_ongoing_date AND s.date_ouverture <= :end_date))"
-        ];
-        $paramsSav = [
-            ':start_date' => $startDate,
-            ':end_date' => $endDate,
-            ':max_ongoing_date' => $maxOngoingDate
-        ];
-        $dateOrderBy = "s.date_ouverture";
-        $selectDateIntervention = "";
-    }
-    
-    // Filtrer par technicien si spécifié dans le filtre utilisateur
-    // Sinon, afficher TOUS les SAV pour TOUS les utilisateurs
-    if ($filterUser) {
-        // Filtrer par technicien spécifique si un utilisateur est sélectionné
-        $whereSav[] = "s.id_technicien = :tech_id";
-        $paramsSav[':tech_id'] = $filterUser;
-    }
-    // Sinon, pas de filtre : on affiche tous les SAV pour tous les utilisateurs
-    
-    // Exclure les SAV résolus et annulés (déjà géré dans la condition de date pour les en cours)
-    $whereSav[] = "s.statut NOT IN ('resolu', 'annule')";
-    
     // Vérifier si type_panne existe
     $hasTypePanne = false;
     try {
@@ -160,7 +93,10 @@ try {
     }
     
     $selectTypePanne = $hasTypePanne ? "s.type_panne," : "";
+    $selectDateIntervention = $hasDateIntervention ? "s.date_intervention_prevue," : "";
     
+    // Utiliser la requête simple qui fonctionne (basée sur celle du diagnostic)
+    // mais avec tous les champs nécessaires pour l'affichage
     $sqlSav = "
         SELECT 
             s.id,
@@ -183,77 +119,28 @@ try {
         FROM sav s
         LEFT JOIN clients c ON c.id = s.id_client
         LEFT JOIN utilisateurs u ON u.id = s.id_technicien
-        WHERE " . implode(' AND ', $whereSav) . "
-        ORDER BY {$dateOrderBy} ASC, s.priorite DESC
+        WHERE s.statut NOT IN ('resolu', 'annule')
+        AND s.date_ouverture BETWEEN :start_date AND :end_date
     ";
     
-    // Debug : Afficher la requête SQL et les paramètres
-    error_log('agenda.php - SQL SAV: ' . $sqlSav);
-    error_log('agenda.php - Paramètres SAV: ' . json_encode($paramsSav));
-    error_log('agenda.php - Période: ' . $startDate . ' à ' . $endDate);
-    error_log('agenda.php - hasDateIntervention: ' . ($hasDateIntervention ? 'true' : 'false'));
+    $paramsSav = [
+        ':start_date' => $startDate,
+        ':end_date' => $endDate
+    ];
+    
+    // Filtrer par technicien si spécifié dans le filtre utilisateur
+    if ($filterUser) {
+        $sqlSav .= " AND s.id_technicien = :tech_id";
+        $paramsSav[':tech_id'] = $filterUser;
+    }
+    
+    $sqlSav .= " ORDER BY s.date_ouverture ASC, s.priorite DESC";
     
     $stmtSav = $pdo->prepare($sqlSav);
     $stmtSav->execute($paramsSav);
     $savs = $stmtSav->fetchAll(PDO::FETCH_ASSOC);
     
-    // Si la requête principale ne retourne rien, utiliser une requête simplifiée basée sur celle du diagnostic
-    // mais avec tous les champs nécessaires pour l'affichage
-    if (empty($savs)) {
-        error_log('agenda.php - Requête principale vide, utilisation de la requête simplifiée (style diagnostic)');
-        
-        // Requête simplifiée basée sur celle du diagnostic qui fonctionne
-        $sqlSavSimple = "
-            SELECT 
-                s.id,
-                s.id_client,
-                s.id_technicien,
-                s.reference,
-                s.description,
-                s.date_ouverture,
-                {$selectDateIntervention}
-                s.statut,
-                s.priorite,
-                {$selectTypePanne}
-                c.raison_sociale AS client_nom,
-                c.adresse AS client_adresse,
-                c.ville AS client_ville,
-                c.code_postal AS client_code_postal,
-                u.nom AS technicien_nom,
-                u.prenom AS technicien_prenom,
-                u.Emploi AS technicien_role
-            FROM sav s
-            LEFT JOIN clients c ON c.id = s.id_client
-            LEFT JOIN utilisateurs u ON u.id = s.id_technicien
-            WHERE s.statut NOT IN ('resolu', 'annule')
-            AND s.date_ouverture BETWEEN :start_date AND :end_date
-        ";
-        
-        // Ajouter le filtre technicien si nécessaire
-        if ($filterUser) {
-            $sqlSavSimple .= " AND s.id_technicien = :tech_id";
-        }
-        
-        $sqlSavSimple .= " ORDER BY s.date_ouverture ASC, s.priorite DESC";
-        
-        $paramsSavSimple = [
-            ':start_date' => $startDate,
-            ':end_date' => $endDate
-        ];
-        
-        if ($filterUser) {
-            $paramsSavSimple[':tech_id'] = $filterUser;
-        }
-        
-        $stmtSavSimple = $pdo->prepare($sqlSavSimple);
-        $stmtSavSimple->execute($paramsSavSimple);
-        $savs = $stmtSavSimple->fetchAll(PDO::FETCH_ASSOC);
-        
-        error_log('agenda.php - Requête simplifiée retourne ' . count($savs) . ' SAV');
-    }
-    
-    // Sauvegarder les données APRÈS la requête simplifiée (si elle a été utilisée)
-    // Cette sauvegarde sera utilisée plus tard si $savs est modifié
+    // Sauvegarder les données
     $savsAfterQuery = $savs;
     
     // Debug temporaire
@@ -294,35 +181,7 @@ try {
 // Récupérer les livraisons
 $livraisons = [];
 try {
-    // Calculer une date limite pour inclure les livraisons en cours (90 jours en arrière maximum)
-    $dateObjLimitLiv = new DateTime($startDate);
-    $dateObjLimitLiv->modify('-90 days');
-    $maxOngoingDateLiv = $dateObjLimitLiv->format('Y-m-d');
-    
-    // Inclure les livraisons dans la période OU les livraisons non livrées/annulées dans les 90 derniers jours
-    // Note: Le filtre sur statut NOT IN ('livree', 'annulee') est appliqué plus tard
-    $whereLiv = [
-        "(l.date_prevue BETWEEN :start_date AND :end_date 
-          OR (l.date_prevue >= :max_ongoing_date AND l.date_prevue <= :end_date))"
-    ];
-    $paramsLiv = [
-        ':start_date' => $startDate,
-        ':end_date' => $endDate,
-        ':max_ongoing_date' => $maxOngoingDateLiv
-    ];
-    
-    // Filtrer par livreur si spécifié dans le filtre utilisateur
-    // Sinon, afficher TOUTES les livraisons pour TOUS les utilisateurs
-    if ($filterUser) {
-        // Filtrer par livreur spécifique si un utilisateur est sélectionné
-        $whereLiv[] = "l.id_livreur = :livreur_id";
-        $paramsLiv[':livreur_id'] = $filterUser;
-    }
-    // Sinon, pas de filtre : on affiche toutes les livraisons pour tous les utilisateurs
-    
-    // Exclure les livraisons livrées et annulées (déjà géré dans la condition de date pour les en cours)
-    $whereLiv[] = "l.statut NOT IN ('livree', 'annulee')";
-    
+    // Utiliser une requête simple qui fonctionne (similaire à celle du diagnostic)
     $sqlLiv = "
         SELECT 
             l.id,
@@ -343,76 +202,29 @@ try {
         FROM livraisons l
         LEFT JOIN clients c ON c.id = l.id_client
         LEFT JOIN utilisateurs u ON u.id = l.id_livreur
-        WHERE " . implode(' AND ', $whereLiv) . "
-        ORDER BY l.date_prevue ASC, l.id ASC
+        WHERE l.statut NOT IN ('livree', 'annulee')
+        AND l.date_prevue BETWEEN :start_date AND :end_date
     ";
+    
+    $paramsLiv = [
+        ':start_date' => $startDate,
+        ':end_date' => $endDate
+    ];
+    
+    // Filtrer par livreur si spécifié dans le filtre utilisateur
+    if ($filterUser) {
+        $sqlLiv .= " AND l.id_livreur = :livreur_id";
+        $paramsLiv[':livreur_id'] = $filterUser;
+    }
+    
+    $sqlLiv .= " ORDER BY l.date_prevue ASC, l.id ASC";
     
     $stmtLiv = $pdo->prepare($sqlLiv);
     $stmtLiv->execute($paramsLiv);
     $livraisons = $stmtLiv->fetchAll(PDO::FETCH_ASSOC);
     
-    // Si la requête principale ne retourne rien, utiliser une requête simplifiée
-    if (empty($livraisons)) {
-        error_log('agenda.php - Requête livraisons principale vide, utilisation de la requête simplifiée');
-        
-        // Requête simplifiée pour les livraisons
-        $sqlLivSimple = "
-            SELECT 
-                l.id,
-                l.id_client,
-                l.id_livreur,
-                l.reference,
-                l.objet,
-                l.date_prevue,
-                l.date_reelle,
-                l.statut,
-                l.adresse_livraison,
-                c.raison_sociale AS client_nom,
-                c.ville AS client_ville,
-                c.code_postal AS client_code_postal,
-                u.nom AS livreur_nom,
-                u.prenom AS livreur_prenom,
-                u.Emploi AS livreur_role
-            FROM livraisons l
-            LEFT JOIN clients c ON c.id = l.id_client
-            LEFT JOIN utilisateurs u ON u.id = l.id_livreur
-            WHERE l.statut NOT IN ('livree', 'annulee')
-            AND l.date_prevue BETWEEN :start_date AND :end_date
-        ";
-        
-        // Ajouter le filtre livreur si nécessaire
-        if ($filterUser) {
-            $sqlLivSimple .= " AND l.id_livreur = :livreur_id";
-        }
-        
-        $sqlLivSimple .= " ORDER BY l.date_prevue ASC, l.id ASC";
-        
-        $paramsLivSimple = [
-            ':start_date' => $startDate,
-            ':end_date' => $endDate
-        ];
-        
-        if ($filterUser) {
-            $paramsLivSimple[':livreur_id'] = $filterUser;
-        }
-        
-        $stmtLivSimple = $pdo->prepare($sqlLivSimple);
-        $stmtLivSimple->execute($paramsLivSimple);
-        $livraisons = $stmtLivSimple->fetchAll(PDO::FETCH_ASSOC);
-        
-        error_log('agenda.php - Requête livraisons simplifiée retourne ' . count($livraisons) . ' livraisons');
-    }
-    
-    // Sauvegarder les données APRÈS la requête simplifiée (si elle a été utilisée)
+    // Sauvegarder les données
     $livraisonsAfterQuery = $livraisons;
-    
-    // Debug temporaire
-    if (empty($livraisons)) {
-        error_log('agenda.php - Aucune livraison trouvée. SQL: ' . $sqlLiv);
-        error_log('agenda.php - Paramètres: ' . json_encode($paramsLiv));
-        error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isLivreur: ' . ($isLivreur ? 'true' : 'false') . ', currentUserId: ' . $currentUserId . ', currentUserRole: ' . ($currentUserRole ?? 'null'));
-        error_log('agenda.php - Période: ' . $startDate . ' à ' . $endDate);
-    }
 } catch (PDOException $e) {
     error_log('agenda.php - Erreur récupération livraisons: ' . $e->getMessage());
 }
@@ -806,79 +618,7 @@ if (empty($savs) && empty($livraisons)) {
                 $savsToDisplay = !empty($savs) ? $savs : $savsBackup;
                 $livraisonsToDisplay = !empty($livraisons) ? $livraisons : $livraisonsBackup;
                 
-                // Debug temporaire - à retirer après diagnostic
-                if (empty($savsToDisplay) && empty($livraisonsToDisplay)) {
-                    error_log('agenda.php - DEBUG AVANT AFFICHAGE: $savs vide, $savsBackup count=' . count($savsBackup));
-                    error_log('agenda.php - DEBUG AVANT AFFICHAGE: $livraisons vide, $livraisonsBackup count=' . count($livraisonsBackup));
-                }
-                
-                // Construire $allItems pour le debug
-                $allItemsDebug = [];
-                foreach ($savsToDisplay as $sav) {
-                    $date = ($hasDateIntervention && !empty($sav['date_intervention_prevue'])) 
-                        ? $sav['date_intervention_prevue'] 
-                        : $sav['date_ouverture'];
-                    $allItemsDebug[] = [
-                        'type' => 'sav',
-                        'date' => $date,
-                        'data' => $sav
-                    ];
-                }
-                foreach ($livraisonsToDisplay as $liv) {
-                    $allItemsDebug[] = [
-                        'type' => 'livraison',
-                        'date' => $liv['date_prevue'],
-                        'data' => $liv
-                    ];
-                }
                 ?>
-                
-                <!-- BLOC DE DEBUG TEMPORAIRE - À RETIRER APRÈS DIAGNOSTIC -->
-                <div style="background: #dc2626; color: white; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.9rem; overflow-x: auto;">
-                    <h3 style="color: white; margin-top: 0; margin-bottom: 1rem; font-size: 1.2rem; font-weight: bold;">🔍 DEBUG TEMPORAIRE - VARIABLES DE LA BOUCLE PRINCIPALE</h3>
-                    
-                    <div style="margin-bottom: 1.5rem;">
-                        <strong style="color: #fbbf24;">$savsToDisplay :</strong>
-                        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; margin-top: 0.5rem; border-radius: 4px; overflow-x: auto;">
-                            <strong>Nombre d'éléments :</strong> <?= count($savsToDisplay) ?><br>
-                            <strong>Contenu brut :</strong><br>
-                            <pre style="margin: 0.5rem 0 0 0; white-space: pre-wrap; word-wrap: break-word;"><?= htmlspecialchars(print_r($savsToDisplay, true)) ?></pre>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 1.5rem;">
-                        <strong style="color: #fbbf24;">$livraisonsToDisplay :</strong>
-                        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; margin-top: 0.5rem; border-radius: 4px; overflow-x: auto;">
-                            <strong>Nombre d'éléments :</strong> <?= count($livraisonsToDisplay) ?><br>
-                            <strong>Contenu brut :</strong><br>
-                            <pre style="margin: 0.5rem 0 0 0; white-space: pre-wrap; word-wrap: break-word;"><?= htmlspecialchars(print_r($livraisonsToDisplay, true)) ?></pre>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 1.5rem;">
-                        <strong style="color: #fbbf24;">$allItems (construit pour l'affichage) :</strong>
-                        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; margin-top: 0.5rem; border-radius: 4px; overflow-x: auto;">
-                            <strong>Nombre d'éléments :</strong> <?= count($allItemsDebug) ?><br>
-                            <strong>Contenu brut :</strong><br>
-                            <pre style="margin: 0.5rem 0 0 0; white-space: pre-wrap; word-wrap: break-word;"><?= htmlspecialchars(print_r($allItemsDebug, true)) ?></pre>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 1.5rem;">
-                        <strong style="color: #fbbf24;">Variables originales (pour comparaison) :</strong>
-                        <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; margin-top: 0.5rem; border-radius: 4px;">
-                            <strong>$savs count :</strong> <?= count($savs) ?> | 
-                            <strong>$savsBackup count :</strong> <?= count($savsBackup) ?><br>
-                            <strong>$livraisons count :</strong> <?= count($livraisons) ?> | 
-                            <strong>$livraisonsBackup count :</strong> <?= count($livraisonsBackup) ?>
-                        </div>
-                    </div>
-                    
-                    <div style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 4px; margin-top: 1rem;">
-                        <strong>⚠️ Ce bloc de debug est temporaire et doit être retiré après diagnostic.</strong>
-                    </div>
-                </div>
-                <!-- FIN DU BLOC DE DEBUG -->
                 
                 <?php if (empty($savsToDisplay) && empty($livraisonsToDisplay)): ?>
                     <div class="agenda-empty" style="padding: 3rem 2rem; text-align: center; background: var(--bg-primary); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
@@ -1022,16 +762,7 @@ if (empty($savs) && empty($livraisons)) {
                     ?>
                     
                     <div class="selected-clients" style="max-height: none; padding: 0;">
-                        <?php 
-                        // Debug : Compteurs pour la boucle d'affichage
-                        $debugItemsProcessed = 0;
-                        $debugItemsIgnored = 0;
-                        ?>
                         <?php foreach ($allItems as $item): ?>
-                            <?php 
-                            $debugItemsProcessed++;
-                            // Si un item est ignoré par une condition, on le log
-                            ?>
                             <?php if ($item['type'] === 'sav'): ?>
                                 <?php
                                 $sav = $item['data'];
@@ -1075,11 +806,6 @@ if (empty($savs) && empty($livraisons)) {
                                 </div>
                             <?php else: ?>
                                 <?php
-                                // Si ce n'est ni SAV ni livraison, c'est un problème
-                                if ($item['type'] !== 'livraison') {
-                                    $debugItemsIgnored++;
-                                    echo '<!-- DEBUG: Ligne ignorée - Type inconnu: ' . htmlspecialchars($item['type'] ?? 'NULL') . ' - ID: ' . (isset($item['data']['id']) ? htmlspecialchars((string)$item['data']['id']) : 'N/A') . ' -->';
-                                }
                                 $liv = $item['data'];
                                 $clientAdresse = trim(($liv['client_ville'] ?? '') . ' ' . ($liv['client_code_postal'] ?? ''));
                                 $clientName = $liv['client_nom'] ?? 'Client inconnu';
@@ -1118,16 +844,6 @@ if (empty($savs) && empty($livraisons)) {
                                 </div>
                             <?php endif; ?>
                         <?php endforeach; ?>
-                        
-                        <!-- DEBUG: Résumé de la boucle d'affichage -->
-                        <?php if ($debugItemsProcessed > 0 || $debugItemsIgnored > 0): ?>
-                            <div style="background: rgba(220, 38, 38, 0.2); border: 2px solid #dc2626; padding: 0.75rem; margin-top: 1rem; border-radius: 4px; font-size: 0.85rem; color: #dc2626;">
-                                <strong>DEBUG Boucle d'affichage :</strong><br>
-                                Items traités dans la boucle : <?= $debugItemsProcessed ?><br>
-                                Items ignorés (type inconnu) : <?= $debugItemsIgnored ?><br>
-                                Total items dans $allItems : <?= count($allItems) ?>
-                            </div>
-                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>
