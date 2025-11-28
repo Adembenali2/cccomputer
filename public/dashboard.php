@@ -141,10 +141,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     <span class="ico run" id="impIco">⏳</span>
                     <span class="txt" id="impTxt">Import SFTP : vérification…</span>
                 </div>
-                <div class="import-badge" id="importBadgeIonos" aria-live="polite" title="État du dernier import Ionos">
-                    <span class="ico run" id="impIcoIonos">⏳</span>
-                    <span class="txt" id="impTxtIonos">Import Ionos : vérification…</span>
-                </div>
             </div>
         </div>
 
@@ -1624,89 +1620,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         tick();        // premier run
         refresh();     // premier badge
         setInterval(tick, 20000); // toutes les 20s
-    })();
-
-    // --- Import auto silencieux Ionos + badge (tick 2 min, batch 20) ---
-    (function(){
-        const IONOS_URL  = '/import/run_import_ionos_if_due.php';
-
-        const badge = document.getElementById('importBadgeIonos');
-        const ico   = document.getElementById('impIcoIonos');
-        const txt   = document.getElementById('impTxtIonos');
-
-        function setState(state, label, titleFiles) {
-            ico.classList.remove('ok','run','fail');
-
-            if (state === 'ok') {
-                ico.textContent = '✓';
-                ico.classList.add('ok');
-            } else if (state === 'run') {
-                ico.textContent = '⏳';
-                ico.classList.add('run');
-            } else if (state === 'fail') {
-                ico.textContent = '!';
-                ico.classList.add('fail');
-            } else {
-                ico.textContent = '⏳';
-                ico.classList.add('run');
-            }
-
-            if (label) txt.textContent = label;
-            if (titleFiles && Array.isArray(titleFiles) && titleFiles.length) {
-                badge.title = 'Fichiers ajoutés : ' + titleFiles.join(', ');
-            }
-        }
-
-        async function callJSON(url){
-            try{
-                const res = await fetch(url, {method:'POST', credentials:'same-origin'});
-                const text = await res.text();
-                let data = null;
-                try { data = text ? JSON.parse(text) : null; } catch(e){}
-                if(!res.ok){
-                    console.error(`[IMPORT IONOS] ${url} → ${res.status} ${res.statusText}`, data || text);
-                    return { ok:false, status:res.status, body:(data||text) };
-                }
-                return { ok:true, status:res.status, body:data };
-            }catch(err){
-                console.error(`[IMPORT IONOS] ${url} → fetch failed`, err);
-                return { ok:false, error:String(err) };
-            }
-        }
-
-        async function refresh(){
-            try{
-                const r = await fetch('/import/last_import_ionos.php', {credentials:'same-origin'});
-                if (!r.ok) throw new Error('HTTP '+r.status);
-                const d = await r.json();
-
-                if (!d || !d.has_run) {
-                    setState('none', 'Import Ionos : —');
-                    return;
-                }
-
-                const files = (d.summary && d.summary.files) ? d.summary.files : null;
-
-                if (d.ok === 1) {
-                    const label = `Import Ionos OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
-                    setState('ok', label, files);
-                } else {
-                    const label = `Import Ionos KO — ${d.ran_at}`;
-                    setState('fail', label, files);
-                }
-            } catch(e){
-                setState('fail', 'Import Ionos : erreur de lecture');
-            }
-        }
-
-        async function tick(){
-            await callJSON(IONOS_URL); // déclenche l'import Ionos (toutes les 2 min si due)
-            setTimeout(refresh, 1500);
-        }
-
-        tick();        // premier run
-        refresh();     // premier badge
-        setInterval(tick, 120000); // toutes les 2 minutes (120000 ms)
     })();
 
     </script>
