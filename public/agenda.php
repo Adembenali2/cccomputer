@@ -138,22 +138,14 @@ try {
         $selectDateIntervention = "";
     }
     
-    // Filtrer par technicien si spécifié
+    // Filtrer par technicien si spécifié dans le filtre utilisateur
+    // Sinon, afficher TOUS les SAV pour TOUS les utilisateurs
     if ($filterUser) {
-        // Filtrer par technicien spécifique
+        // Filtrer par technicien spécifique si un utilisateur est sélectionné
         $whereSav[] = "s.id_technicien = :tech_id";
         $paramsSav[':tech_id'] = $filterUser;
-    } elseif (!$isAdmin) {
-        // Si technicien, afficher uniquement les SAV assignés à l'utilisateur
-        if ($isTechnicien) {
-            $whereSav[] = "s.id_technicien = :current_user_id";
-            $paramsSav[':current_user_id'] = $currentUserId;
-        } else {
-            // Si pas technicien, ne pas afficher de SAV
-            $whereSav[] = "1 = 0"; // Condition toujours fausse pour ne rien retourner
-        }
     }
-    // Pour les admins, pas de filtre sur id_technicien (ils voient tous les SAV)
+    // Sinon, pas de filtre : on affiche tous les SAV pour tous les utilisateurs
     
     // Exclure les SAV résolus et annulés (déjà géré dans la condition de date pour les en cours)
     $whereSav[] = "s.statut NOT IN ('resolu', 'annule')";
@@ -243,42 +235,31 @@ try {
 // Récupérer les livraisons
 $livraisons = [];
 try {
-    // Calculer une date de début pour inclure les livraisons en cours
-    $dateObjMinLiv = new DateTime($startDate);
-    $dateObjMinLiv->modify('-7 days');
-    $minDateForOngoingLiv = $dateObjMinLiv->format('Y-m-d');
-    $dateObjLimitLiv = new DateTime();
-    $dateObjLimitLiv->modify('-30 days');
-    $limitDateLiv = $dateObjLimitLiv->format('Y-m-d');
-    $actualMinDateLiv = max($minDateForOngoingLiv, $limitDateLiv);
+    // Calculer une date limite pour inclure les livraisons en cours (90 jours en arrière maximum)
+    $dateObjLimitLiv = new DateTime($startDate);
+    $dateObjLimitLiv->modify('-90 days');
+    $maxOngoingDateLiv = $dateObjLimitLiv->format('Y-m-d');
     
-    // Inclure les livraisons dans la période OU les livraisons en cours depuis une date raisonnable jusqu'à la fin de la période
+    // Inclure les livraisons dans la période OU les livraisons non livrées/annulées dans les 90 derniers jours
+    // Note: Le filtre sur statut NOT IN ('livree', 'annulee') est appliqué plus tard
     $whereLiv = [
         "(l.date_prevue BETWEEN :start_date AND :end_date 
-          OR (l.date_prevue >= :min_ongoing_date AND l.date_prevue <= :end_date AND l.statut IN ('planifiee', 'en_cours')))"
+          OR (l.date_prevue >= :max_ongoing_date AND l.date_prevue <= :end_date))"
     ];
     $paramsLiv = [
         ':start_date' => $startDate,
         ':end_date' => $endDate,
-        ':min_ongoing_date' => $actualMinDateLiv
+        ':max_ongoing_date' => $maxOngoingDateLiv
     ];
     
-    // Filtrer par livreur si spécifié
+    // Filtrer par livreur si spécifié dans le filtre utilisateur
+    // Sinon, afficher TOUTES les livraisons pour TOUS les utilisateurs
     if ($filterUser) {
-        // Filtrer par livreur spécifique
+        // Filtrer par livreur spécifique si un utilisateur est sélectionné
         $whereLiv[] = "l.id_livreur = :livreur_id";
         $paramsLiv[':livreur_id'] = $filterUser;
-    } elseif (!$isAdmin) {
-        // Si livreur, afficher uniquement les livraisons assignées à l'utilisateur
-        if ($isLivreur) {
-            $whereLiv[] = "l.id_livreur = :current_user_id";
-            $paramsLiv[':current_user_id'] = $currentUserId;
-        } else {
-            // Si pas livreur, ne pas afficher de livraisons
-            $whereLiv[] = "1 = 0"; // Condition toujours fausse pour ne rien retourner
-        }
     }
-    // Pour les admins, pas de filtre sur id_livreur (ils voient toutes les livraisons)
+    // Sinon, pas de filtre : on affiche toutes les livraisons pour tous les utilisateurs
     
     // Exclure les livraisons livrées et annulées (déjà géré dans la condition de date pour les en cours)
     $whereLiv[] = "l.statut NOT IN ('livree', 'annulee')";

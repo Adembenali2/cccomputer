@@ -75,6 +75,7 @@ try {
     $limitInt = (int)$limit;
     
     // Requête SQL optimisée - recherche dans tous les champs pertinents directement en SQL
+    // Note: PDO ne permet pas de réutiliser le même paramètre nommé, donc on utilise des placeholders positionnels
     $sql = "
         SELECT 
             id,
@@ -91,27 +92,27 @@ try {
             email
         FROM clients
         WHERE 
-            raison_sociale LIKE :q
-            OR numero_client LIKE :q
-            OR nom_dirigeant LIKE :q
-            OR prenom_dirigeant LIKE :q
-            OR adresse LIKE :q
-            OR ville LIKE :q
-            OR code_postal LIKE :q
-            OR adresse_livraison LIKE :q
-            OR CONCAT(COALESCE(nom_dirigeant, ''), ' ', COALESCE(prenom_dirigeant, '')) LIKE :q
-            OR CONCAT(COALESCE(prenom_dirigeant, ''), ' ', COALESCE(nom_dirigeant, '')) LIKE :q
-            OR CONCAT(COALESCE(adresse, ''), ' ', COALESCE(code_postal, ''), ' ', COALESCE(ville, '')) LIKE :q
+            raison_sociale LIKE ?
+            OR numero_client LIKE ?
+            OR nom_dirigeant LIKE ?
+            OR prenom_dirigeant LIKE ?
+            OR adresse LIKE ?
+            OR ville LIKE ?
+            OR code_postal LIKE ?
+            OR adresse_livraison LIKE ?
+            OR CONCAT(COALESCE(nom_dirigeant, ''), ' ', COALESCE(prenom_dirigeant, '')) LIKE ?
+            OR CONCAT(COALESCE(prenom_dirigeant, ''), ' ', COALESCE(nom_dirigeant, '')) LIKE ?
+            OR CONCAT(COALESCE(adresse, ''), ' ', COALESCE(code_postal, ''), ' ', COALESCE(ville, '')) LIKE ?
         ORDER BY 
             CASE 
-                WHEN raison_sociale LIKE :q_exact THEN 1
-                WHEN numero_client LIKE :q_exact THEN 2
-                WHEN raison_sociale LIKE :q THEN 3
-                WHEN numero_client LIKE :q THEN 4
+                WHEN raison_sociale LIKE ? THEN 1
+                WHEN numero_client LIKE ? THEN 2
+                WHEN raison_sociale LIKE ? THEN 3
+                WHEN numero_client LIKE ? THEN 4
                 ELSE 5
             END,
             raison_sociale ASC
-        LIMIT :limit
+        LIMIT ?
     ";
     
     $stmt = $pdo->prepare($sql);
@@ -122,11 +123,28 @@ try {
     }
     
     $searchTermExact = $query . '%'; // Pour la recherche qui commence par la requête (priorité)
-    $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
-    $stmt->bindValue(':q_exact', $searchTermExact, PDO::PARAM_STR);
-    $stmt->bindValue(':limit', $limitInt, PDO::PARAM_INT);
     
-    $execResult = $stmt->execute();
+    // Bind tous les paramètres : 12 pour WHERE + 4 pour ORDER BY + 1 pour LIMIT = 17 paramètres
+    $params = [
+        $searchTerm,  // WHERE raison_sociale
+        $searchTerm,  // WHERE numero_client
+        $searchTerm,  // WHERE nom_dirigeant
+        $searchTerm,  // WHERE prenom_dirigeant
+        $searchTerm,  // WHERE adresse
+        $searchTerm,  // WHERE ville
+        $searchTerm,  // WHERE code_postal
+        $searchTerm,  // WHERE adresse_livraison
+        $searchTerm,  // WHERE CONCAT nom+prenom
+        $searchTerm,  // WHERE CONCAT prenom+nom
+        $searchTerm,  // WHERE CONCAT adresse complète
+        $searchTermExact,  // ORDER BY raison_sociale exact
+        $searchTermExact,  // ORDER BY numero_client exact
+        $searchTerm,  // ORDER BY raison_sociale
+        $searchTerm,  // ORDER BY numero_client
+        $limitInt     // LIMIT
+    ];
+    
+    $execResult = $stmt->execute($params);
     if (!$execResult) {
         $errorInfo = $stmt->errorInfo();
         error_log('maps_search_clients.php execute error: ' . json_encode($errorInfo));
