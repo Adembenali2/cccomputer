@@ -67,14 +67,14 @@ try {
 }
 
 try {
-    // Recherche dans raison_sociale, nom_dirigeant, prenom_dirigeant, numero_client, adresse, ville, code_postal
+    // Recherche dans tous les champs pertinents : raison_sociale, nom_dirigeant, prenom_dirigeant, numero_client, adresse, ville, code_postal, adresse_livraison
     $searchTerm = '%' . $query . '%';
     
     // S'assurer que $limit est un entier valide
     $limit = max(1, min((int)$limit, 50));
     $limitInt = (int)$limit;
     
-    // Requête SQL très simple - récupérer plus de résultats puis filtrer en PHP
+    // Requête SQL optimisée - recherche dans tous les champs pertinents directement en SQL
     $sql = "
         SELECT 
             id,
@@ -93,8 +93,25 @@ try {
         WHERE 
             raison_sociale LIKE :q
             OR numero_client LIKE :q
-        ORDER BY raison_sociale ASC
-        LIMIT 100
+            OR nom_dirigeant LIKE :q
+            OR prenom_dirigeant LIKE :q
+            OR adresse LIKE :q
+            OR ville LIKE :q
+            OR code_postal LIKE :q
+            OR adresse_livraison LIKE :q
+            OR CONCAT(COALESCE(nom_dirigeant, ''), ' ', COALESCE(prenom_dirigeant, '')) LIKE :q
+            OR CONCAT(COALESCE(prenom_dirigeant, ''), ' ', COALESCE(nom_dirigeant, '')) LIKE :q
+            OR CONCAT(COALESCE(adresse, ''), ' ', COALESCE(code_postal, ''), ' ', COALESCE(ville, '')) LIKE :q
+        ORDER BY 
+            CASE 
+                WHEN raison_sociale LIKE :q_exact THEN 1
+                WHEN numero_client LIKE :q_exact THEN 2
+                WHEN raison_sociale LIKE :q THEN 3
+                WHEN numero_client LIKE :q THEN 4
+                ELSE 5
+            END,
+            raison_sociale ASC
+        LIMIT :limit
     ";
     
     $stmt = $pdo->prepare($sql);
@@ -104,7 +121,10 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Erreur de préparation SQL'], 500);
     }
     
+    $searchTermExact = $query . '%'; // Pour la recherche qui commence par la requête (priorité)
     $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':q_exact', $searchTermExact, PDO::PARAM_STR);
+    $stmt->bindValue(':limit', $limitInt, PDO::PARAM_INT);
     
     $execResult = $stmt->execute();
     if (!$execResult) {
@@ -113,66 +133,7 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Erreur d\'exécution SQL'], 500);
     }
     
-    $allClients = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Filtrer les résultats en PHP pour inclure nom, prénom, adresse, etc.
-    $clients = [];
-    $queryLower = mb_strtolower($query, 'UTF-8');
-    
-    foreach ($allClients as $c) {
-        $match = false;
-        
-        // Raison sociale
-        if (stripos($c['raison_sociale'] ?? '', $query) !== false) {
-            $match = true;
-        }
-        // Numéro client
-        elseif (stripos($c['numero_client'] ?? '', $query) !== false) {
-            $match = true;
-        }
-        // Nom dirigeant
-        elseif (!empty($c['nom_dirigeant']) && stripos($c['nom_dirigeant'], $query) !== false) {
-            $match = true;
-        }
-        // Prénom dirigeant
-        elseif (!empty($c['prenom_dirigeant']) && stripos($c['prenom_dirigeant'], $query) !== false) {
-            $match = true;
-        }
-        // Nom + Prénom
-        elseif (!empty($c['nom_dirigeant']) && !empty($c['prenom_dirigeant'])) {
-            $nomComplet = trim($c['nom_dirigeant'] . ' ' . $c['prenom_dirigeant']);
-            $prenomNom = trim($c['prenom_dirigeant'] . ' ' . $c['nom_dirigeant']);
-            if (stripos($nomComplet, $query) !== false || stripos($prenomNom, $query) !== false) {
-                $match = true;
-            }
-        }
-        // Adresse
-        elseif (!empty($c['adresse']) && stripos($c['adresse'], $query) !== false) {
-            $match = true;
-        }
-        // Ville
-        elseif (!empty($c['ville']) && stripos($c['ville'], $query) !== false) {
-            $match = true;
-        }
-        // Code postal
-        elseif (!empty($c['code_postal']) && stripos($c['code_postal'], $query) !== false) {
-            $match = true;
-        }
-        // Adresse complète
-        elseif (!empty($c['adresse']) && !empty($c['code_postal']) && !empty($c['ville'])) {
-            $adresseComplete = trim($c['adresse'] . ' ' . $c['code_postal'] . ' ' . $c['ville']);
-            if (stripos($adresseComplete, $query) !== false) {
-                $match = true;
-            }
-        }
-        
-        if ($match) {
-            $clients[] = $c;
-            if (count($clients) >= $limitInt) {
-                break;
-            }
-        }
-    }
+    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Formater les résultats - Utiliser exactement les données de la base de données
     $formatted = [];

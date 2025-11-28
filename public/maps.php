@@ -652,11 +652,21 @@ clientSearchInput.addEventListener('input', () => {
             const displayAddress = client.address || 
                 `${client.adresse || ''} ${client.code_postal || ''} ${client.ville || ''}`.trim();
             
+            // Construire les informations supplémentaires
+            let extraInfo = [];
+            if (client.dirigeant_complet) {
+                extraInfo.push(`Dirigeant: ${escapeHtml(client.dirigeant_complet)}`);
+            }
+            if (client.telephone) {
+                extraInfo.push(`Tel: ${escapeHtml(client.telephone)}`);
+            }
+            
             const item = document.createElement('div');
             item.className = 'client-result-item';
             item.innerHTML =
                 `<strong>${escapeHtml(client.name)}</strong>` +
-                `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>`;
+                `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>` +
+                (extraInfo.length > 0 ? `<small>${extraInfo.join(' • ')}</small>` : '');
             item.addEventListener('click', () => {
                 // Ajouter le client à la route (géocodage si nécessaire)
                 addClientToRoute(client);
