@@ -1,6 +1,7 @@
 <?php
 // import_compteurs.php
 // Import depuis URL HTML table vers Railway compteur_relevee_ancien
+// Basé sur import_ancien_données.php - 20 compteurs par exécution, commence par les anciens
 declare(strict_types=1);
 
 // 1) Connexion DB Railway (destination) via db.php
@@ -27,8 +28,7 @@ $inserted = 0;
 $skipped = 0;
 $ok = 1; // Par défaut OK
 $errorMessage = null;
-$totalRows = 0;
-$batchSize = 100; // Maximum rows per run
+$MAX_INSERT = 20; // Maximum 20 relevés par exécution
 
 // --- helper pour log (affichage dans le navigateur ou CLI) ---
 function logLine(string $msg): void {
@@ -46,39 +46,35 @@ function logLine(string $msg): void {
     error_log("IMPORT_ANCIEN: $msgWithTime");
 }
 
-// 2) Créer/assurer la table app_kv pour le cursor
-logLine("🔧 Étape 3: Vérification de la table app_kv");
+// 2) Vérifier la table compteur_relevee_ancien
+logLine("🔧 Étape 3: Vérification de la table compteur_relevee_ancien");
 try {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS app_kv (
-            k VARCHAR(64) PRIMARY KEY,
-            v TEXT NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    logLine("✅ Table app_kv vérifiée");
+    $pdo->query("SELECT 1 FROM compteur_relevee_ancien LIMIT 1");
+    logLine("✅ Table compteur_relevee_ancien accessible");
 } catch (Throwable $e) {
-    logLine("⚠️ Erreur lors de la création de app_kv : " . $e->getMessage());
+    $errorMessage = "La table compteur_relevee_ancien n'existe pas ou est inaccessible : " . $e->getMessage();
+    logLine("❌ ERREUR: $errorMessage");
+    $ok = 0;
+    goto log_import_run;
 }
 
-// 3) Récupérer le cursor (dernière position traitée)
-logLine("🔧 Étape 4: Récupération du cursor");
-$cursorKey = 'ancien_import_cursor';
-$cursorValue = null;
-
+// 3) Récupérer le dernier Timestamp en base (pour ne prendre que les plus récents)
+logLine("🔧 Étape 4: Récupération du dernier Timestamp");
+$lastTimestamp = null;
 try {
-    $stmt = $pdo->prepare("SELECT v FROM app_kv WHERE k = ? LIMIT 1");
-    $stmt->execute([$cursorKey]);
-    $cursorValue = $stmt->fetchColumn();
-    if ($cursorValue !== false && $cursorValue !== null) {
-        logLine("✅ Cursor trouvé: " . $cursorValue);
+    $stmtLast = $pdo->query("SELECT MAX(Timestamp) AS max_ts FROM compteur_relevee_ancien");
+    $rowLast  = $stmtLast->fetch(PDO::FETCH_ASSOC);
+    if ($rowLast && $rowLast['max_ts'] !== null) {
+        $lastTimestamp = $rowLast['max_ts'];
+        logLine("ℹ️ Dernier Timestamp déjà en base : " . $lastTimestamp);
     } else {
-        logLine("ℹ️ Aucun cursor trouvé, démarrage depuis le début");
+        logLine("ℹ️ Aucune donnée existante en base, import complet possible.");
     }
 } catch (Throwable $e) {
-    logLine("⚠️ Erreur lors de la récupération du cursor : " . $e->getMessage());
+    logLine("⚠️ Impossible de récupérer le dernier Timestamp : " . $e->getMessage());
 }
 
-// 4) Télécharger et parser le HTML depuis l'URL
+// 4) Télécharger le HTML depuis l'URL
 logLine("🔧 Étape 5: Téléchargement depuis l'URL");
 $url = 'https://cccomputer.fr/test_compteur.php';
 
@@ -103,139 +99,148 @@ try {
     goto log_import_run;
 }
 
-// 5) Parser le HTML table
+// 5) Parser le HTML table (même logique que import_ancien_données.php)
 logLine("🔧 Étape 6: Parsing du HTML");
-$rows = [];
+$rowsData = [];
 
 try {
     // Utiliser DOMDocument pour parser le HTML
     libxml_use_internal_errors(true);
     $dom = new DOMDocument();
-    @$dom->loadHTML('<?xml encoding="UTF-8">' . $html);
+    @$dom->loadHTML($html);
     libxml_clear_errors();
     
     $xpath = new DOMXPath($dom);
     
-    // Chercher toutes les tables
-    $tables = $xpath->query('//table');
-    if ($tables->length === 0) {
-        throw new Exception("Aucune table trouvée dans le HTML");
+    // On prend le premier tableau
+    $table = $xpath->query('//table')->item(0);
+    if (!$table) {
+        throw new Exception("Aucun tableau <table> trouvé dans la page.");
     }
     
-    logLine("✅ " . $tables->length . " table(s) trouvée(s)");
-    
-    // Prendre la première table (ou chercher la bonne)
-    $table = $tables->item(0);
-    $tableRows = $xpath->query('.//tr', $table);
-    
-    if ($tableRows->length === 0) {
-        throw new Exception("Aucune ligne trouvée dans la table");
+    // On essaie d'abord tbody/tr, sinon directement tr
+    $rows = $xpath->query('.//tbody/tr', $table);
+    if ($rows->length === 0) {
+        $rows = $xpath->query('.//tr', $table);
     }
     
-    logLine("✅ " . $tableRows->length . " ligne(s) trouvée(s) dans la table");
+    logLine("✅ Nombre de lignes trouvées : " . $rows->length);
     
-    // Extraire les en-têtes (première ligne)
-    $headers = [];
-    $firstRow = $tableRows->item(0);
-    $headerCells = $xpath->query('.//th | .//td', $firstRow);
-    foreach ($headerCells as $cell) {
-        $headers[] = trim($cell->textContent);
-    }
+    // Helpers pour lire les cellules
+    $getCellText = function (?DOMNode $td): string {
+        if (!$td) {
+            return '';
+        }
+        return trim($td->textContent ?? '');
+    };
     
-    logLine("✅ En-têtes détectés: " . implode(', ', array_slice($headers, 0, 10)) . (count($headers) > 10 ? '...' : ''));
-    
-    // Normaliser les noms de colonnes (case-insensitive, avec mapping)
-    $headerMap = [];
-    $fieldMapping = [
-        'timestamp' => 'Timestamp',
-        'date' => 'Timestamp',
-        'datetime' => 'Timestamp',
-        'ipaddress' => 'IpAddress',
-        'ip' => 'IpAddress',
-        'nom' => 'Nom',
-        'name' => 'Nom',
-        'model' => 'Model',
-        'modele' => 'Model',
-        'serialnumber' => 'SerialNumber',
-        'serial' => 'SerialNumber',
-        'macaddress' => 'MacAddress',
-        'mac' => 'MacAddress',
-        'status' => 'Status',
-        'etat' => 'Status',
-        'tonerblack' => 'TonerBlack',
-        'toner_noir' => 'TonerBlack',
-        'tonercyan' => 'TonerCyan',
-        'toner_cyan' => 'TonerCyan',
-        'tonermagenta' => 'TonerMagenta',
-        'toner_magenta' => 'TonerMagenta',
-        'toneryellow' => 'TonerYellow',
-        'toner_jaune' => 'TonerYellow',
-        'totalpages' => 'TotalPages',
-        'total_pages' => 'TotalPages',
-        'faxpages' => 'FaxPages',
-        'copiedpages' => 'CopiedPages',
-        'printedpages' => 'PrintedPages',
-        'bwcopies' => 'BWCopies',
-        'colorcopies' => 'ColorCopies',
-        'monocopies' => 'MonoCopies',
-        'bichromecopies' => 'BichromeCopies',
-        'bwprinted' => 'BWPrinted',
-        'bichromeprinted' => 'BichromePrinted',
-        'monoprinted' => 'MonoPrinted',
-        'colorprinted' => 'ColorPrinted',
-        'totalcolor' => 'TotalColor',
-        'total_couleur' => 'TotalColor',
-        'totalbw' => 'TotalBW',
-        'total_nb' => 'TotalBW',
-        'totalnb' => 'TotalBW',
-    ];
-    
-    foreach ($headers as $idx => $header) {
-        $normalized = strtolower(trim($header));
-        if (isset($fieldMapping[$normalized])) {
-            $headerMap[$idx] = $fieldMapping[$normalized];
+    /**
+     * Extrait une valeur de toner (int) depuis la cellule :
+     *  - cherche <div class="toner">80%</div> si présent
+     *  - sinon, cherche un nombre dans tout le texte
+     *  - retourne null si rien
+     */
+    $extractTonerValue = function (DOMXPath $xpath, DOMNode $td): ?int {
+        $tonerDiv = $xpath->query('.//div[contains(@class, "toner")]', $td)->item(0);
+        if ($tonerDiv) {
+            $txt = trim($tonerDiv->textContent ?? '');
         } else {
-            // Essayer de trouver une correspondance partielle
-            foreach ($fieldMapping as $key => $value) {
-                if (strpos($normalized, $key) !== false) {
-                    $headerMap[$idx] = $value;
-                    break;
-                }
-            }
+            $txt = trim($td->textContent ?? '');
         }
+        if ($txt === '') {
+            return null;
+        }
+        if (preg_match('/-?\d+/', $txt, $m)) {
+            return (int)$m[0];
+        }
+        return null;
+    };
+    
+    // Parcours des lignes HTML -> constitution d'un tableau à insérer
+    foreach ($rows as $row) {
+        if (!$row instanceof DOMElement) {
+            continue;
+        }
+        
+        // Si la ligne contient des <th>, on considère que c'est un header
+        if ($row->getElementsByTagName('th')->length > 0) {
+            continue;
+        }
+        
+        $cells = $row->getElementsByTagName('td');
+        if ($cells->length < 10) {
+            // Pas assez de colonnes, on ignore
+            continue;
+        }
+        
+        // Colonnes attendues (même structure que import_ancien_données.php) :
+        // 0: Ref Client (non utilisé)
+        // 1: MAC
+        // 2: Date (Timestamp)
+        // 3: Total NB
+        // 4: Total Couleur
+        // 5: État
+        // 6: Toner K
+        // 7: Toner C
+        // 8: Toner M
+        // 9: Toner Y
+        
+        $refClient = $getCellText($cells->item(0)); // pour info seulement
+        $mac       = $getCellText($cells->item(1));
+        $tsStr     = $getCellText($cells->item(2));
+        $totalNB   = $getCellText($cells->item(3));
+        $totalClr  = $getCellText($cells->item(4));
+        $status    = $getCellText($cells->item(5));
+        
+        if ($mac === '' || $tsStr === '') {
+            // Ligne incomplète, on ignore
+            continue;
+        }
+        
+        // Si on a déjà un dernier Timestamp, on ne garde que les plus récents
+        if ($lastTimestamp !== null && $tsStr <= $lastTimestamp) {
+            continue;
+        }
+        
+        $totalBW    = is_numeric($totalNB)  ? (int)$totalNB  : 0;
+        $totalColor = is_numeric($totalClr) ? (int)$totalClr : 0;
+        $totalPages = $totalBW + $totalColor;
+        
+        $tk = $extractTonerValue($xpath, $cells->item(6));
+        $tc = $extractTonerValue($xpath, $cells->item(7));
+        $tm = $extractTonerValue($xpath, $cells->item(8));
+        $ty = $extractTonerValue($xpath, $cells->item(9));
+        
+        $rowsData[] = [
+            'mac'         => $mac,
+            'ts'          => $tsStr,
+            'status'      => $status !== '' ? $status : null,
+            'tk'          => $tk,
+            'tc'          => $tc,
+            'tm'          => $tm,
+            'ty'          => $ty,
+            'total_pages' => $totalPages ?: null,
+            'total_color' => $totalColor ?: null,
+            'total_bw'    => $totalBW ?: null,
+        ];
     }
     
-    logLine("✅ Mapping des colonnes: " . count($headerMap) . " colonnes mappées");
+    logLine("ℹ️ Lignes candidates après filtrage sur le dernier Timestamp : " . count($rowsData));
     
-    // Parser les lignes de données (skip header)
-    for ($i = 1; $i < $tableRows->length; $i++) {
-        $row = $tableRows->item($i);
-        $cells = $xpath->query('.//td', $row);
-        
-        if ($cells->length === 0) continue;
-        
-        $data = [];
-        foreach ($headerMap as $colIdx => $fieldName) {
-            if ($colIdx < $cells->length) {
-                $cellValue = trim($cells->item($colIdx)->textContent);
-                $data[$fieldName] = $cellValue !== '' ? $cellValue : null;
-            }
-        }
-        
-        // Vérifier que MacAddress et Timestamp sont présents
-        if (empty($data['MacAddress']) || empty($data['Timestamp'])) {
-            continue; // Skip rows without required fields
-        }
-        
-        $rows[] = $data;
-    }
-    
-    $totalRows = count($rows);
-    logLine("✅ " . $totalRows . " ligne(s) de données parsées");
-    
-    if ($totalRows === 0) {
-        logLine("ℹ️ Aucune ligne de données valide à importer.");
+    if (count($rowsData) === 0) {
+        logLine("ℹ️ Aucun nouveau compteur à importer.");
         goto log_import_run;
+    }
+    
+    // Tri par Timestamp croissant pour insérer dans l'ordre (commence par les anciens)
+    usort($rowsData, static function (array $a, array $b): int {
+        return strcmp($a['ts'], $b['ts']);
+    });
+    
+    // Limitation à MAX_INSERT relevées (20)
+    if (count($rowsData) > $MAX_INSERT) {
+        $rowsData = array_slice($rowsData, 0, $MAX_INSERT);
+        logLine("ℹ️ Limitation à $MAX_INSERT nouvelles relevées pour cette exécution.");
     }
     
 } catch (Throwable $e) {
@@ -247,34 +252,10 @@ try {
     goto log_import_run;
 }
 
-// 6) Appliquer le cursor (skip les lignes déjà traitées)
-$cursorIndex = 0;
-if ($cursorValue !== null && $cursorValue !== false) {
-    $cursorIndex = (int)$cursorValue;
-    if ($cursorIndex > 0) {
-        if ($cursorIndex >= $totalRows) {
-            // Cursor au-delà de la taille actuelle, réinitialiser
-            logLine("ℹ️ Cursor ($cursorIndex) au-delà de la taille actuelle ($totalRows), réinitialisation");
-            $cursorIndex = 0;
-        } else {
-            logLine("🔧 Application du cursor: skip des " . $cursorIndex . " premières lignes");
-            $rows = array_slice($rows, $cursorIndex);
-            logLine("✅ " . count($rows) . " ligne(s) restantes après application du cursor");
-        }
-    }
-}
-
-// Limiter à batchSize lignes
-$rowsToProcess = count($rows);
-if ($rowsToProcess > $batchSize) {
-    logLine("🔧 Limitation à $batchSize lignes (batch processing)");
-    $rows = array_slice($rows, 0, $batchSize);
-}
-
-// 7) Préparation des requêtes pour Railway
+// 6) Préparation des requêtes pour Railway
 logLine("🔧 Étape 7: Préparation des requêtes SQL pour Railway");
 
-// 7.a) Requête pour vérifier les doublons
+// 6.a) Requête pour vérifier les doublons (MAC + Timestamp)
 logLine("🔧 Préparation de la requête de vérification des doublons...");
 $sqlCheck = "
     SELECT id
@@ -286,7 +267,7 @@ $sqlCheck = "
 $stmtCheck = $pdo->prepare($sqlCheck);
 logLine("✅ Requête de vérification préparée");
 
-// 7.b) Requête INSERT
+// 6.b) Requête INSERT
 logLine("🔧 Préparation de la requête INSERT...");
 $sqlInsert = "
     INSERT INTO compteur_relevee_ancien (
@@ -317,164 +298,95 @@ $sqlInsert = "
       TotalBW,
       DateInsertion
     ) VALUES (
-      :ts,          -- Timestamp
-      :ip,          -- IpAddress
-      :nom,         -- Nom
-      :model,       -- Model
-      :serial,      -- SerialNumber
-      :mac,         -- MacAddress
-      :status,      -- Status
-      :toner_k,     -- TonerBlack
-      :toner_c,     -- TonerCyan
-      :toner_m,     -- TonerMagenta
-      :toner_y,     -- TonerYellow
-      :total_pages, -- TotalPages
-      :fax_pages,   -- FaxPages
-      :copied_pages, -- CopiedPages
-      :printed_pages, -- PrintedPages
-      :bw_copies,   -- BWCopies
-      :color_copies, -- ColorCopies
-      :mono_copies, -- MonoCopies
-      :bichrome_copies, -- BichromeCopies
-      :bw_printed,  -- BWPrinted
-      :bichrome_printed, -- BichromePrinted
-      :mono_printed, -- MonoPrinted
-      :color_printed, -- ColorPrinted
-      :total_color, -- TotalColor
-      :total_bw,    -- TotalBW
-      NOW()         -- DateInsertion
+      :ts,
+      NULL,          -- IpAddress
+      NULL,          -- Nom
+      NULL,          -- Model
+      NULL,          -- SerialNumber
+      :mac,          -- MacAddress
+      :status,       -- Status
+      :tk,           -- TonerBlack
+      :tc,           -- TonerCyan
+      :tm,           -- TonerMagenta
+      :ty,           -- TonerYellow
+      :total_pages,  -- TotalPages
+      NULL,          -- FaxPages
+      NULL,          -- CopiedPages
+      NULL,          -- PrintedPages
+      NULL,          -- BWCopies
+      NULL,          -- ColorCopies
+      NULL,          -- MonoCopies
+      NULL,          -- BichromeCopies
+      NULL,          -- BWPrinted
+      NULL,          -- BichromePrinted
+      NULL,          -- MonoPrinted
+      NULL,          -- ColorPrinted
+      :total_color,  -- TotalColor
+      :total_bw,     -- TotalBW
+      NOW()          -- DateInsertion
     )
 ";
 $stmtInsert = $pdo->prepare($sqlInsert);
 logLine("✅ Requête INSERT préparée");
 
-// 8) Helper pour convertir les valeurs
-function parseValue($value, $type = 'string') {
-    if ($value === null || $value === '') {
-        return null;
-    }
-    
-    switch ($type) {
-        case 'int':
-            $v = filter_var($value, FILTER_VALIDATE_INT);
-            return $v !== false ? $v : null;
-        case 'datetime':
-            if (is_numeric($value)) {
-                return date('Y-m-d H:i:s', (int)$value);
-            }
-            $ts = strtotime($value);
-            return $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
-        default:
-            return trim((string)$value);
-    }
-}
+// 7) Insertion en base (max 20 lignes)
+logLine("🔧 Étape 8: Insertion en base (max $MAX_INSERT lignes)");
 
-// 9) Traitement de chaque relevé
-logLine("🔧 Étape 8: Traitement de " . count($rows) . " relevés...");
-
-$currentIndex = $cursorIndex; // Start from cursor position
-
-foreach ($rows as $idx => $r) {
-    $mac = parseValue($r['MacAddress'] ?? null);
-    $timestamp = parseValue($r['Timestamp'] ?? null, 'datetime');
+foreach ($rowsData as $data) {
+    $mac   = $data['mac'];
+    $tsStr = $data['ts'];
     
-    if (empty($mac) || empty($timestamp)) {
-        $skipped++;
-        logLine("⚠️ Ligne ignorée (MAC ou Timestamp vide)");
-        $currentIndex++;
-        continue;
-    }
-    
-    logLine("🔧 Traitement: MAC=$mac, TS=$timestamp");
-    
-    // Vérifier les doublons
+    // Vérifier si déjà présent (MAC + Timestamp)
     try {
         $stmtCheck->execute([
             ':mac' => $mac,
-            ':ts'  => $timestamp,
+            ':ts'  => $tsStr,
         ]);
-        
         $existing = $stmtCheck->fetch();
-        if ($existing) {
-            $skipped++;
-            logLine("⏭️ Déjà présent, ignoré");
-            $currentIndex++;
-            continue;
-        }
     } catch (Throwable $e) {
-        logLine("❌ ERREUR vérification doublon (MAC=$mac, TS=$timestamp) : " . $e->getMessage());
-        $currentIndex++;
+        logLine("⚠️ Erreur lors du SELECT (MAC=$mac, TS=$tsStr) : " . $e->getMessage());
+        continue;
+    }
+    
+    if ($existing) {
+        // Doublon, on saute
+        $skipped++;
         continue;
     }
     
     // Insertion
     try {
         $stmtInsert->execute([
-            ':ts'              => $timestamp,
-            ':ip'              => parseValue($r['IpAddress'] ?? null),
-            ':nom'             => parseValue($r['Nom'] ?? null),
-            ':model'           => parseValue($r['Model'] ?? null),
-            ':serial'          => parseValue($r['SerialNumber'] ?? null),
-            ':mac'             => $mac,
-            ':status'          => parseValue($r['Status'] ?? null),
-            ':toner_k'         => parseValue($r['TonerBlack'] ?? null, 'int'),
-            ':toner_c'         => parseValue($r['TonerCyan'] ?? null, 'int'),
-            ':toner_m'         => parseValue($r['TonerMagenta'] ?? null, 'int'),
-            ':toner_y'         => parseValue($r['TonerYellow'] ?? null, 'int'),
-            ':total_pages'     => parseValue($r['TotalPages'] ?? null, 'int'),
-            ':fax_pages'       => parseValue($r['FaxPages'] ?? null, 'int'),
-            ':copied_pages'    => parseValue($r['CopiedPages'] ?? null, 'int'),
-            ':printed_pages'   => parseValue($r['PrintedPages'] ?? null, 'int'),
-            ':bw_copies'       => parseValue($r['BWCopies'] ?? null, 'int'),
-            ':color_copies'    => parseValue($r['ColorCopies'] ?? null, 'int'),
-            ':mono_copies'     => parseValue($r['MonoCopies'] ?? null, 'int'),
-            ':bichrome_copies' => parseValue($r['BichromeCopies'] ?? null, 'int'),
-            ':bw_printed'      => parseValue($r['BWPrinted'] ?? null, 'int'),
-            ':bichrome_printed' => parseValue($r['BichromePrinted'] ?? null, 'int'),
-            ':mono_printed'     => parseValue($r['MonoPrinted'] ?? null, 'int'),
-            ':color_printed'   => parseValue($r['ColorPrinted'] ?? null, 'int'),
-            ':total_color'     => parseValue($r['TotalColor'] ?? null, 'int'),
-            ':total_bw'        => parseValue($r['TotalBW'] ?? null, 'int'),
+            ':ts'          => $tsStr,
+            ':mac'         => $mac,
+            ':status'      => $data['status'],
+            ':tk'          => $data['tk'],
+            ':tc'          => $data['tc'],
+            ':tm'          => $data['tm'],
+            ':ty'          => $data['ty'],
+            ':total_pages' => $data['total_pages'],
+            ':total_color' => $data['total_color'],
+            ':total_bw'    => $data['total_bw'],
         ]);
         $inserted++;
-        $currentIndex++;
-        logLine("✅ Inséré avec succès (inserted=$inserted)");
+        logLine("✅ Inséré: MAC=$mac, TS=$tsStr (inserted=$inserted)");
     } catch (Throwable $e) {
-        logLine("❌ ERREUR insertion (MAC=$mac, TS=$timestamp) : " . $e->getMessage());
-        logLine("❌ Fichier: " . $e->getFile() . " ligne " . $e->getLine());
-        $currentIndex++;
+        logLine("⚠️ Erreur insertion (MAC=$mac, TS=$tsStr) : " . $e->getMessage());
         continue;
     }
 }
 
 logLine("🔧 Étape 8 terminée: inserted=$inserted, skipped=$skipped");
 
-// 10) Mettre à jour le cursor
-logLine("🔧 Étape 9: Mise à jour du cursor");
-try {
-    // Si on a traité toutes les lignes disponibles, réinitialiser le cursor
-    if ($currentIndex >= $totalRows) {
-        logLine("ℹ️ Toutes les lignes ont été traitées, réinitialisation du cursor");
-        $currentIndex = 0;
-    }
-    
-    $stmtCursor = $pdo->prepare("REPLACE INTO app_kv (k, v) VALUES (?, ?)");
-    $stmtCursor->execute([$cursorKey, (string)$currentIndex]);
-    logLine("✅ Cursor mis à jour: $currentIndex / $totalRows");
-} catch (Throwable $e) {
-    logLine("⚠️ Erreur lors de la mise à jour du cursor : " . $e->getMessage());
-}
-
 if ($inserted > 0 || $skipped > 0) {
     logLine("🎉 Import terminé.");
-    logLine("➡️ Lignes insérées : $inserted");
-    logLine("➡️ Lignes ignorées (déjà présentes MAC+Timestamp) : $skipped");
-    logLine("➡️ Cursor position : $currentIndex / $totalRows");
+    logLine("➡️ Nouvelles lignes insérées : $inserted");
+    logLine("➡️ Lignes ignorées (doublons MAC+Timestamp) : $skipped");
 }
 
-// 11) Enregistrement dans import_run pour suivi du dashboard
+// 8) Enregistrement dans import_run pour suivi du dashboard
 log_import_run:
-logLine("🔧 Étape 10: Enregistrement dans import_run");
+logLine("🔧 Étape 9: Enregistrement dans import_run");
 try {
     // Créer la table si elle n'existe pas
     logLine("🔧 Création/vérification de la table import_run...");
@@ -500,9 +412,8 @@ try {
         'inserted'     => $inserted,
         'skipped'      => $skipped,
         'url'          => $url,
-        'cursor_index' => $currentIndex,
-        'total_rows'   => $totalRows,
-        'remaining'    => max(0, $totalRows - $currentIndex),
+        'last_timestamp' => $lastTimestamp,
+        'max_insert'   => $MAX_INSERT,
     ];
     if ($errorMessage !== null) {
         $msgData['error'] = $errorMessage;
@@ -536,4 +447,3 @@ try {
     logLine("❌ Fichier: " . $e->getFile() . " ligne " . $e->getLine());
     logLine("❌ Trace: " . $e->getTraceAsString());
 }
-
