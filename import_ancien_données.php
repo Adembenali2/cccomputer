@@ -18,7 +18,7 @@ if (!isset($GLOBALS['pdo']) || !$GLOBALS['pdo'] instanceof PDO) {
 $pdo = $GLOBALS['pdo'];
 
 // -----------------------------------------------------------------------------
-// Helpers d'affichage (CL I vs HTTP)
+// Helpers d'affichage (CLI vs HTTP)
 // -----------------------------------------------------------------------------
 function logLine(string $msg): void {
     if (PHP_SAPI === 'cli') {
@@ -112,6 +112,25 @@ try {
     exit(1);
 }
 
+// 🔹 Récupération du dernier Timestamp déjà inséré
+$lastTimestamp = null;
+try {
+    $stmtLast = $pdo->query("SELECT MAX(Timestamp) AS max_ts FROM compteur_relevee_ancien");
+    $rowLast  = $stmtLast->fetch(PDO::FETCH_ASSOC);
+    if ($rowLast && $rowLast['max_ts'] !== null) {
+        $lastTimestamp = $rowLast['max_ts'];
+        logLine("ℹ️ Dernier Timestamp déjà en base : " . $lastTimestamp);
+    } else {
+        logLine("ℹ️ Aucune donnée existante en base, import complet possible.");
+    }
+} catch (Throwable $e) {
+    logLine("⚠️ Impossible de récupérer le dernier Timestamp : " . $e->getMessage());
+    // On continue quand même, comme si lastTimestamp était null
+}
+
+// Limite de nouvelles relevées par exécution
+$MAX_INSERT = 100;
+
 // Requête pour vérifier si la ligne existe (unicité MAC + Timestamp via mac_norm)
 $sqlCheck = "
     SELECT id
@@ -183,11 +202,10 @@ $sqlInsert = "
 $stmtInsert = $pdo->prepare($sqlInsert);
 
 // -----------------------------------------------------------------------------
-// 5) Parcours des lignes et insertion
+// 5) Parcours des lignes HTML -> constitution d'un tableau à insérer
+//    (filtré par dernier Timestamp + limitation à 100)
 // -----------------------------------------------------------------------------
-$inserted = 0;
-$skipped  = 0;
-$errors   = 0;
+$rowsData = [];
 
 // On parcourt toutes les lignes <tr>
 foreach ($rows as $row) {
@@ -230,6 +248,11 @@ foreach ($rows as $row) {
         continue;
     }
 
+    // Si on a déjà un dernier Timestamp, on ne garde que les plus récents
+    if ($lastTimestamp !== null && $tsStr <= $lastTimestamp) {
+        continue;
+    }
+
     $totalBW    = is_numeric($totalNB)  ? (int)$totalNB  : 0;
     $totalColor = is_numeric($totalClr) ? (int)$totalClr : 0;
     $totalPages = $totalBW + $totalColor;
@@ -238,6 +261,44 @@ foreach ($rows as $row) {
     $tc = extractTonerValue($xpath, $cells->item(7));
     $tm = extractTonerValue($xpath, $cells->item(8));
     $ty = extractTonerValue($xpath, $cells->item(9));
+
+    $rowsData[] = [
+        'mac'         => $mac,
+        'ts'          => $tsStr,
+        'status'      => $status !== '' ? $status : null,
+        'tk'          => $tk,
+        'tc'          => $tc,
+        'tm'          => $tm,
+        'ty'          => $ty,
+        'total_pages' => $totalPages ?: null,
+        'total_color' => $totalColor ?: null,
+        'total_bw'    => $totalBW ?: null,
+    ];
+}
+
+logLine("ℹ️ Lignes candidates après filtrage sur le dernier Timestamp : " . count($rowsData));
+
+// Tri par Timestamp croissant pour insérer dans l'ordre
+usort($rowsData, static function (array $a, array $b): int {
+    return strcmp($a['ts'], $b['ts']);
+});
+
+// Limitation à MAX_INSERT relevées
+if (count($rowsData) > $MAX_INSERT) {
+    $rowsData = array_slice($rowsData, 0, $MAX_INSERT);
+    logLine("ℹ️ Limitation à $MAX_INSERT nouvelles relevées pour cette exécution.");
+}
+
+// -----------------------------------------------------------------------------
+// 6) Insertion en base (max 100 lignes)
+// -----------------------------------------------------------------------------
+$inserted = 0;
+$skipped  = 0;
+$errors   = 0;
+
+foreach ($rowsData as $data) {
+    $mac       = $data['mac'];
+    $tsStr     = $data['ts'];
 
     // Vérifier si déjà présent (MAC + Timestamp)
     try {
@@ -263,14 +324,14 @@ foreach ($rows as $row) {
         $stmtInsert->execute([
             ':ts'          => $tsStr,
             ':mac'         => $mac,
-            ':status'      => $status !== '' ? $status : null,
-            ':tk'          => $tk,
-            ':tc'          => $tc,
-            ':tm'          => $tm,
-            ':ty'          => $ty,
-            ':total_pages' => $totalPages ?: null,
-            ':total_color' => $totalColor ?: null,
-            ':total_bw'    => $totalBW ?: null,
+            ':status'      => $data['status'],
+            ':tk'          => $data['tk'],
+            ':tc'          => $data['tc'],
+            ':tm'          => $data['tm'],
+            ':ty'          => $data['ty'],
+            ':total_pages' => $data['total_pages'],
+            ':total_color' => $data['total_color'],
+            ':total_bw'    => $data['total_bw'],
         ]);
         $inserted++;
     } catch (Throwable $e) {
@@ -281,10 +342,10 @@ foreach ($rows as $row) {
 }
 
 // -----------------------------------------------------------------------------
-// 6) Résumé
+// 7) Résumé
 // -----------------------------------------------------------------------------
 logLine("🎉 Import terminé.");
-logLine("➡️ Lignes insérées : $inserted");
+logLine("➡️ Nouvelles lignes insérées : $inserted");
 logLine("➡️ Lignes ignorées (doublons MAC+Timestamp) : $skipped");
 logLine("➡️ Erreurs : $errors");
 
