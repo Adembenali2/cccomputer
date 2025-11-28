@@ -39,12 +39,19 @@ function logLine(string $msg): void {
 // 2) URL source
 $sourceUrl = 'https://cccomputer.fr/test_compteur.php';
 
-// 3) Récupération HTML
+// 3) Récupération HTML avec timeout
 logLine("🔁 Récupération de la page : $sourceUrl");
 
-$html = @file_get_contents($sourceUrl);
+$context = stream_context_create([
+    'http' => [
+        'timeout' => 30, // 30 secondes max
+        'ignore_errors' => true,
+    ]
+]);
+
+$html = @file_get_contents($sourceUrl, false, $context);
 if ($html === false) {
-    $errorMessage = "Impossible de récupérer la page (file_get_contents a échoué)";
+    $errorMessage = "Impossible de récupérer la page (timeout ou erreur réseau)";
     logLine("❌ $errorMessage");
     $ok = 0;
     goto log_import_run;
