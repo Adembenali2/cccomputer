@@ -34,7 +34,7 @@ try {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
     
-    $INTERVAL = 60; // 1 minute en secondes (comme demandé)
+    $INTERVAL = 120; // 2 minutes en secondes (comme demandé)
     $key      = 'ancien_last_run';
     
     $stmt = $pdo->prepare("SELECT v FROM app_kv WHERE k = ? LIMIT 1");

@@ -6,11 +6,11 @@ ini_set('display_errors','1');
 /**
  * /import/import_ancien_http.php
  * - Lit HTML depuis https://cccomputer.fr/test_compteur.php
- * - Traite au plus 20 relevés par run, plus anciens d'abord
- * - Dédup via (mac_norm, Timestamp)
- * - Utilise MAX(Timestamp) pour ne prendre que les plus récents
+ * - Traite au plus 100 relevés par run, en ordre ASC (du plus récent non importé au plus ancien)
+ * - Dédup via (mac_norm, Timestamp) - la combinaison MAC + Time doit être unique
+ * - Reprend depuis le dernier enregistrement importé (MAX(Timestamp))
  * - Journalise dans import_run (source=ancien_import)
- * - Basé sur import_ancien_données.php
+ * - S'exécute automatiquement toutes les 2 minutes
  */
 
 // ---------- ENV MySQL Railway ----------
@@ -37,28 +37,44 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // ---------- Config ----------
 $URL = 'https://cccomputer.fr/test_compteur.php';
-$BATCH = 20; // Maximum 20 relevés par exécution
+$BATCH = 100; // Maximum 100 relevés par exécution
 
 // ---------- Tables ----------
 $pdo->exec("CREATE TABLE IF NOT EXISTS import_run( id INT AUTO_INCREMENT PRIMARY KEY, ran_at DATETIME NOT NULL, imported INT NOT NULL, skipped INT NOT NULL, ok TINYINT(1) NOT NULL, msg TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-// ---------- Récupérer le dernier Timestamp en base ----------
+// ---------- Récupérer le dernier Timestamp importé (pour reprendre depuis le dernier enregistrement) ----------
 $lastTimestamp = null;
 try {
+    // Récupère le timestamp maximum déjà importé pour reprendre après celui-ci
     $stmtLast = $pdo->query("SELECT MAX(Timestamp) AS max_ts FROM compteur_relevee_ancien");
     $rowLast  = $stmtLast->fetch(PDO::FETCH_ASSOC);
     if ($rowLast && $rowLast['max_ts'] !== null) {
         $lastTimestamp = $rowLast['max_ts'];
     }
 } catch (Throwable $e) {
-    // Table peut ne pas exister encore
+    // Table peut ne pas exister encore - on importe tout depuis le début
+    error_log('import_ancien_http: Error getting last timestamp: ' . $e->getMessage());
 }
 
 // ---------- Télécharger HTML ----------
 $html = @file_get_contents($URL, false, stream_context_create([
     'http' => ['timeout' => 30, 'user_agent' => 'Mozilla/5.0 (compatible; ImportBot/1.0)']
 ]));
-if($html === false){ http_response_code(500); exit("Failed to fetch $URL\n"); }
+if($html === false){
+    $errorMsg = json_encode([
+        'source'=>'ancien_import',
+        'processed'=>0,
+        'inserted'=>0,
+        'skipped'=>0,
+        'batch'=>$BATCH,
+        'error'=>'Failed to fetch URL: ' . $URL
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),0,0,0,:m)")
+        ->execute([':m'=>$errorMsg]);
+    http_response_code(500);
+    echo "ERROR ANCIEN Failed to fetch $URL\n";
+    exit(1);
+}
 
 // ---------- Parser HTML (même logique que import_ancien_données.php) ----------
 libxml_use_internal_errors(true);
@@ -68,7 +84,21 @@ libxml_clear_errors();
 $xpath = new DOMXPath($dom);
 
 $table = $xpath->query('//table')->item(0);
-if(!$table){ http_response_code(500); exit("No table found\n"); }
+if(!$table){
+    $errorMsg = json_encode([
+        'source'=>'ancien_import',
+        'processed'=>0,
+        'inserted'=>0,
+        'skipped'=>0,
+        'batch'=>$BATCH,
+        'error'=>'No table found in HTML'
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),0,0,0,:m)")
+        ->execute([':m'=>$errorMsg]);
+    http_response_code(500);
+    echo "ERROR ANCIEN No table found in HTML\n";
+    exit(1);
+}
 
 $rows = $xpath->query('.//tbody/tr', $table);
 if($rows->length === 0){ $rows = $xpath->query('.//tr', $table); }
@@ -103,7 +133,8 @@ foreach($rows as $row){
     
     if($mac === '' || $tsStr === '') continue;
     
-    // Ne garder que les plus récents que le dernier Timestamp
+    // Ne garder que les enregistrements plus récents que le dernier Timestamp importé
+    // Cela permet de reprendre depuis le dernier enregistrement importé
     if($lastTimestamp !== null && $tsStr <= $lastTimestamp) continue;
     
     $totalBW = is_numeric($totalNB) ? (int)$totalNB : 0;
@@ -138,7 +169,8 @@ if($totalCandidates === 0){
     exit(0);
 }
 
-// Tri par Timestamp croissant (anciens en premier)
+// Tri par Timestamp croissant (ASC) - du plus récent non importé au plus ancien
+// Cela garantit qu'on importe dans l'ordre chronologique
 usort($rowsData, fn($a,$b)=>strcmp($a['ts'],$b['ts']));
 
 // Limiter à BATCH
@@ -148,6 +180,7 @@ if(count($rowsData) > $BATCH){
 }
 
 // ---------- Requêtes ----------
+// Vérification d'unicité : la combinaison MAC_ADDRESS + Timestamp doit être unique
 $sqlCheck = "SELECT id FROM compteur_relevee_ancien WHERE mac_norm = REPLACE(UPPER(:mac), ':', '') AND Timestamp <=> :ts LIMIT 1";
 $stmtCheck = $pdo->prepare($sqlCheck);
 
@@ -172,15 +205,18 @@ $stmtInsert = $pdo->prepare($sqlInsert);
 
 // ---------- Insertion ----------
 $pdo->beginTransaction();
-$imported=0; $skipped=0; $added=[];
+$imported=0; $skipped=0; $added=[]; $errors=[];
 try{
     foreach($rowsData as $data){
         $mac = $data['mac'];
         $tsStr = $data['ts'];
         
-        // Vérifier doublon
+        // Vérifier doublon (unicité MAC + Timestamp)
         $stmtCheck->execute([':mac'=>$mac, ':ts'=>$tsStr]);
-        if($stmtCheck->fetch()){ $skipped++; continue; }
+        if($stmtCheck->fetch()){ 
+            $skipped++; 
+            continue; 
+        }
         
         // Insert
         try{
@@ -195,15 +231,32 @@ try{
             $added[] = "$mac@$tsStr";
         }catch(Throwable $e){
             $skipped++;
+            $errors[] = "MAC:$mac TS:$tsStr - " . $e->getMessage();
+            error_log('import_ancien_http: Insert error for ' . $mac . '@' . $tsStr . ': ' . $e->getMessage());
         }
     }
     $pdo->commit();
 }catch(Throwable $e){
     $pdo->rollBack();
-    $imported=0; $skipped=count($rowsData);
+    $imported=0; 
+    $skipped=count($rowsData);
+    $errors[] = "Transaction failed: " . $e->getMessage();
+    error_log('import_ancien_http: Transaction error: ' . $e->getMessage());
 }
 
 // ---------- Journal ----------
+// Déterminer si l'import est réussi (ok=1) ou en erreur (ok=0)
+// Succès si: on a importé au moins un élément, ou s'il n'y avait rien à importer
+$isOk = 1;
+if (count($rowsData) > 0 && $imported === 0) {
+    // On avait des candidats mais rien n'a été importé = erreur
+    $isOk = 0;
+}
+if (count($errors) > 0 && $imported === 0) {
+    // Des erreurs se sont produites et rien n'a été importé = erreur
+    $isOk = 0;
+}
+
 $msg = json_encode([
     'source'=>'ancien_import',
     'processed'=>count($rowsData),
@@ -211,11 +264,23 @@ $msg = json_encode([
     'skipped'=>$skipped,
     'batch'=>$BATCH,
     'remaining_estimate'=>$remaining,
-    'files'=>array_slice($added,0,50)
-], JSON_UNESCAPED_UNICODE);
+    'last_timestamp'=>$lastTimestamp,
+    'files'=>array_slice($added,0,100), // Limiter à 100 pour éviter un JSON trop gros
+    'errors'=>count($errors) > 0 ? array_slice($errors,0,10) : null // Limiter les erreurs affichées
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),:i,:s,:ok,:m)")
-    ->execute([':i'=>$imported, ':s'=>$skipped, ':ok'=>($skipped>0?0:1), ':m'=>$msg]);
+    ->execute([':i'=>$imported, ':s'=>$skipped, ':ok'=>$isOk, ':m'=>$msg]);
 
-echo "OK ANCIEN batch inserted=$imported skipped=$skipped remaining≈$remaining\n";
+// Message de sortie pour le dashboard
+if ($isOk === 1) {
+    if ($imported > 0) {
+        echo "OK ANCIEN batch inserted=$imported skipped=$skipped remaining≈$remaining\n";
+    } else {
+        echo "OK ANCIEN no new data to import\n";
+    }
+} else {
+    $errorDetails = count($errors) > 0 ? ' - ' . implode('; ', array_slice($errors, 0, 3)) : '';
+    echo "ERROR ANCIEN batch inserted=$imported skipped=$skipped errors detected$errorDetails\n";
+}
 
