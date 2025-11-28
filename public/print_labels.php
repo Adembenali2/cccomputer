@@ -230,3 +230,5 @@ if (strpos($qrCodePath, 'http') !== 0 && strpos($qrCodePath, '/') === 0) {
 </body>
 </html>
 
+
+

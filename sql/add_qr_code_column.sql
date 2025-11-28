@@ -22,3 +22,5 @@ ADD COLUMN `qr_code_path` VARCHAR(255) NULL AFTER `barcode`;
 -- Note: Les colonnes sont NULL pour permettre la migration progressive
 -- Les nouveaux produits auront automatiquement un QR Code généré
 
+
+

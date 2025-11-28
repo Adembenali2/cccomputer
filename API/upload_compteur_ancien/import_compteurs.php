@@ -66,6 +66,19 @@ if ($rows->length === 0) {
 
 logLine("✅ Nombre de lignes trouvées : " . $rows->length);
 
+// Limiter à 20 derniers relevés pour éviter de bloquer
+$LIMIT = 20;
+$rowsArray = [];
+foreach ($rows as $row) {
+    $rowsArray[] = $row;
+}
+$totalRows = count($rowsArray);
+// Prendre les 20 dernières lignes (les plus récentes sont généralement en fin de tableau)
+if ($totalRows > $LIMIT) {
+    $rowsArray = array_slice($rowsArray, -$LIMIT);
+    logLine("✅ Limité à {$LIMIT} derniers relevés (sur {$totalRows} au total)");
+}
+
 // helper pour récupérer texte d'une cellule
 function getCellText(DOMNode $td): string {
     return trim($td->textContent ?? '');
@@ -163,8 +176,8 @@ $stmtCheck = $pdo->prepare($sqlCheck);
 $inserted = 0;
 $skipped  = 0;
 
-// 6) Parcours des lignes du tableau
-foreach ($rows as $row) {
+// 6) Parcours des lignes du tableau (limité aux 20 derniers)
+foreach ($rowsArray as $row) {
     if (!$row instanceof DOMElement) continue;
 
     $cells = $row->getElementsByTagName('td');
