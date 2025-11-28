@@ -1,5 +1,6 @@
 <?php
 // import_compteurs.php
+// Import par batch de 100 relevés max depuis le tableau HTML
 declare(strict_types=1);
 
 // 1) Connexion DB via ton db.php
@@ -16,14 +17,18 @@ if (!isset($GLOBALS['pdo']) || !$GLOBALS['pdo'] instanceof PDO) {
 
 $pdo = $GLOBALS['pdo'];
 
-// 2) URL source : ta page IONOS
+// 2) Configuration
 $sourceUrl = 'https://cccomputer.fr/test_compteur.php';
+$BATCH_SIZE = 100; // Maximum de relevés à traiter par exécution
 
 // Initialiser les compteurs dès le début (avant tout traitement)
 $inserted = 0;
 $skipped = 0;
 $ok = 1; // Par défaut OK
 $errorMessage = null;
+$maxProcessedIndex = -1; // Pour le curseur
+$lastCursorIndex = -1; // Pour le curseur
+$totalRows = 0; // Pour les stats
 
 // --- helper pour log (affichage dans le navigateur ou CLI) ---
 function logLine(string $msg): void {
@@ -62,14 +67,14 @@ try {
     if (!$table) {
         logLine("⚠️ Aucun tableau <table> trouvé dans la page. Rien à importer.");
         // On continue pour créer quand même une entrée dans import_run
-        $rowsArray = [];
+        $rowsToProcess = [];
         goto log_import_run;
     }
 } catch (Throwable $e) {
     $errorMessage = "Erreur lors du parsing HTML : " . $e->getMessage();
     logLine("❌ $errorMessage");
     $ok = 0;
-    $rowsArray = [];
+    $rowsToProcess = [];
     goto log_import_run;
 }
 
@@ -81,17 +86,54 @@ if ($rows->length === 0) {
 
 logLine("✅ Nombre de lignes trouvées : " . $rows->length);
 
-// Limiter à 20 derniers relevés pour éviter de bloquer
-$LIMIT = 20;
+// 4.1) Créer la table de curseur si elle n'existe pas
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS app_kv (
+        k VARCHAR(64) PRIMARY KEY,
+        v TEXT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+");
+
+// 4.2) Récupérer le curseur (dernière position traitée)
+// On stocke le dernier index de ligne traitée dans app_kv
+$cursorKey = 'ancien_import_cursor';
+$stmtCursor = $pdo->prepare("SELECT v FROM app_kv WHERE k = ? LIMIT 1");
+$stmtCursor->execute([$cursorKey]);
+$lastCursorIndex = $stmtCursor->fetchColumn();
+$lastCursorIndex = $lastCursorIndex !== false ? (int)$lastCursorIndex : -1;
+
+logLine("📍 Curseur actuel : ligne " . ($lastCursorIndex + 1));
+
+// 4.3) Convertir toutes les lignes en tableau et filtrer celles déjà traitées
 $rowsArray = [];
-foreach ($rows as $row) {
-    $rowsArray[] = $row;
+foreach ($rows as $index => $row) {
+    // Ignorer la première ligne si c'est un header (th)
+    if ($row instanceof DOMElement) {
+        $firstCell = $row->getElementsByTagName('th')->item(0);
+        if ($firstCell) {
+            continue; // C'est un header, on saute
+        }
+    }
+    $rowsArray[] = ['index' => $index, 'row' => $row];
 }
+
 $totalRows = count($rowsArray);
-// Prendre les 20 dernières lignes (les plus récentes sont généralement en fin de tableau)
-if ($totalRows > $LIMIT) {
-    $rowsArray = array_slice($rowsArray, -$LIMIT);
-    logLine("✅ Limité à {$LIMIT} derniers relevés (sur {$totalRows} au total)");
+logLine("📊 Total de lignes de données : $totalRows");
+
+// Filtrer les lignes déjà traitées (celles avec index <= lastCursorIndex)
+$rowsToProcess = array_filter($rowsArray, function($item) use ($lastCursorIndex) {
+    return $item['index'] > $lastCursorIndex;
+});
+
+$rowsToProcess = array_values($rowsToProcess); // Réindexer
+$remainingCount = count($rowsToProcess);
+
+logLine("📋 Lignes restantes à traiter : $remainingCount");
+
+// Limiter au batch size
+if ($remainingCount > $BATCH_SIZE) {
+    $rowsToProcess = array_slice($rowsToProcess, 0, $BATCH_SIZE);
+    logLine("✅ Limité à {$BATCH_SIZE} relevés pour ce batch (sur {$remainingCount} restants)");
 }
 
 // helper pour récupérer texte d'une cellule
@@ -188,13 +230,27 @@ $sqlCheck = "
 ";
 $stmtCheck = $pdo->prepare($sqlCheck);
 
-// 6) Parcours des lignes du tableau (limité aux 20 derniers)
-foreach ($rowsArray as $row) {
-    if (!$row instanceof DOMElement) continue;
+// 6) Parcours des lignes du tableau (batch limité)
+if (empty($rowsToProcess)) {
+    logLine("ℹ️ Aucune ligne à traiter pour ce batch.");
+    goto log_import_run;
+}
+
+$maxProcessedIndex = $lastCursorIndex; // Pour mettre à jour le curseur
+
+foreach ($rowsToProcess as $item) {
+    $row = $item['row'];
+    $rowIndex = $item['index'];
+    
+    if (!$row instanceof DOMElement) {
+        $maxProcessedIndex = max($maxProcessedIndex, $rowIndex);
+        continue;
+    }
 
     $cells = $row->getElementsByTagName('td');
     if ($cells->length < 10) {
-        // pas assez de colonnes, on ignore
+        // pas assez de colonnes, on ignore mais on met à jour le curseur
+        $maxProcessedIndex = max($maxProcessedIndex, $rowIndex);
         continue;
     }
 
@@ -218,7 +274,8 @@ foreach ($rowsArray as $row) {
     $etat = getCellText($cells->item(5));
 
     if ($mac === '' && $tsStr === '') {
-        // ligne vide / bizarre, on saute
+        // ligne vide / bizarre, on saute mais on met à jour le curseur
+        $maxProcessedIndex = max($maxProcessedIndex, $rowIndex);
         continue;
     }
 
@@ -243,7 +300,8 @@ foreach ($rowsArray as $row) {
     $existing = $stmtCheck->fetch();
     if ($existing) {
         $skipped++;
-        logLine("⏭️ Déjà présent, on saute (MAC={$mac}, TS={$timestamp})");
+        // Même si déjà présent, on met à jour le curseur pour ne pas le retraiter
+        $maxProcessedIndex = max($maxProcessedIndex, $rowIndex);
         continue;
     }
 
@@ -262,11 +320,24 @@ foreach ($rowsArray as $row) {
             $totalNB ?: null,        // 10. TotalBW
         ]);
         $inserted++;
+        $maxProcessedIndex = max($maxProcessedIndex, $rowIndex);
     } catch (Throwable $e) {
         logLine("⚠️ Erreur insertion (MAC=$mac, TS=$timestamp) : " . $e->getMessage());
+        // En cas d'erreur, on ne met pas à jour le curseur pour réessayer plus tard
         // On continue, mais on note qu'il y a eu une erreur
         // On ne met pas $ok = 0 ici car d'autres insertions peuvent réussir
         continue;
+    }
+}
+
+// 6.c Mettre à jour le curseur si on a traité des lignes
+if ($maxProcessedIndex > $lastCursorIndex) {
+    try {
+        $stmtUpdateCursor = $pdo->prepare("REPLACE INTO app_kv (k, v) VALUES (?, ?)");
+        $stmtUpdateCursor->execute([$cursorKey, (string)$maxProcessedIndex]);
+        logLine("✅ Curseur mis à jour : ligne " . ($maxProcessedIndex + 1));
+    } catch (Throwable $e) {
+        logLine("⚠️ Erreur lors de la mise à jour du curseur : " . $e->getMessage());
     }
 }
 
@@ -296,12 +367,26 @@ try {
     // ok=1 si pas d'erreur (même s'il n'y a rien à importer, c'est OK)
     // ok=0 seulement en cas d'erreur réelle (tentative d'insertion qui a échoué, ou erreur de récupération)
     
+    // S'assurer que les variables de curseur sont définies
+    if (!isset($maxProcessedIndex)) {
+        $maxProcessedIndex = -1;
+    }
+    if (!isset($lastCursorIndex)) {
+        $lastCursorIndex = -1;
+    }
+    if (!isset($totalRows)) {
+        $totalRows = 0;
+    }
+    
+    $currentCursor = $maxProcessedIndex > $lastCursorIndex ? $maxProcessedIndex : $lastCursorIndex;
     $msgData = [
         'source' => 'ancien_import',
         'processed' => $totalProcessed,
         'inserted' => $inserted,
         'skipped' => $skipped,
-        'url' => $sourceUrl
+        'url' => $sourceUrl,
+        'cursor_index' => $currentCursor,
+        'remaining' => max(0, $totalRows - $currentCursor - 1)
     ];
     if ($errorMessage !== null) {
         $msgData['error'] = $errorMessage;
