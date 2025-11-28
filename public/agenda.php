@@ -303,6 +303,11 @@ try {
     error_log('agenda.php - Erreur récupération livraisons: ' . $e->getMessage());
 }
 
+// Sauvegarder les données AVANT toute manipulation pour éviter toute modification
+// (même si fetchAll() retourne un tableau normal, on sauvegarde par sécurité)
+$savsBackup = $savs;
+$livraisonsBackup = $livraisons;
+
 // Grouper par date, puis par utilisateur, puis par client
 $agendaByDate = [];
 
@@ -681,7 +686,19 @@ if (empty($savs) && empty($livraisons)) {
             </div>
 
             <div class="agenda-container" style="padding: 1rem; max-height: calc(100vh - 200px); overflow-y: auto;">
-                <?php if (empty($savs) && empty($livraisons)): ?>
+                <?php 
+                // Debug : Vérifier l'état des variables avant l'affichage
+                // Utiliser les sauvegardes si les originaux sont vides
+                $savsToDisplay = !empty($savs) ? $savs : $savsBackup;
+                $livraisonsToDisplay = !empty($livraisons) ? $livraisons : $livraisonsBackup;
+                
+                // Debug temporaire - à retirer après diagnostic
+                if (empty($savsToDisplay) && empty($livraisonsToDisplay)) {
+                    error_log('agenda.php - DEBUG AVANT AFFICHAGE: $savs vide, $savsBackup count=' . count($savsBackup));
+                    error_log('agenda.php - DEBUG AVANT AFFICHAGE: $livraisons vide, $livraisonsBackup count=' . count($livraisonsBackup));
+                }
+                ?>
+                <?php if (empty($savsToDisplay) && empty($livraisonsToDisplay)): ?>
                     <div class="agenda-empty" style="padding: 3rem 2rem; text-align: center; background: var(--bg-primary); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
                         <p><strong>Aucun SAV ou livraison prévu pour cette période.</strong></p>
                         <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
@@ -783,8 +800,20 @@ if (empty($savs) && empty($livraisons)) {
                     // Fusionner tous les SAV et livraisons dans un seul tableau pour affichage simple
                     $allItems = [];
                     
+                    // Debug : var_dump pour voir l'état exact des variables avant le foreach
+                    // À retirer après diagnostic
+                    if (empty($savsToDisplay) && !empty($savsBackup)) {
+                        error_log('agenda.php - DEBUG VAR_DUMP $savs (vide): ' . var_export($savs, true));
+                        error_log('agenda.php - DEBUG VAR_DUMP $savsBackup (non vide): ' . var_export($savsBackup, true));
+                    }
+                    if (empty($livraisonsToDisplay) && !empty($livraisonsBackup)) {
+                        error_log('agenda.php - DEBUG VAR_DUMP $livraisons (vide): ' . var_export($livraisons, true));
+                        error_log('agenda.php - DEBUG VAR_DUMP $livraisonsBackup (non vide): ' . var_export($livraisonsBackup, true));
+                    }
+                    error_log('agenda.php - DEBUG: $savsToDisplay count=' . count($savsToDisplay) . ', $livraisonsToDisplay count=' . count($livraisonsToDisplay));
+                    
                     // Ajouter tous les SAV
-                    foreach ($savs as $sav) {
+                    foreach ($savsToDisplay as $sav) {
                         $date = ($hasDateIntervention && !empty($sav['date_intervention_prevue'])) 
                             ? $sav['date_intervention_prevue'] 
                             : $sav['date_ouverture'];
@@ -796,7 +825,7 @@ if (empty($savs) && empty($livraisons)) {
                     }
                     
                     // Ajouter toutes les livraisons
-                    foreach ($livraisons as $liv) {
+                    foreach ($livraisonsToDisplay as $liv) {
                         $allItems[] = [
                             'type' => 'livraison',
                             'date' => $liv['date_prevue'],
