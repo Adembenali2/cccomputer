@@ -92,36 +92,47 @@ try {
     $limitDate = $dateObjLimit->format('Y-m-d');
     $actualMinDate = max($minDateForOngoing, $limitDate);
     
+    // Calculer une date limite pour inclure les SAV en cours (90 jours en arrière maximum)
+    $dateObjLimit = new DateTime($startDate);
+    $dateObjLimit->modify('-90 days');
+    $maxOngoingDate = $dateObjLimit->format('Y-m-d');
+    
     if ($hasDateIntervention) {
-        // Inclure les SAV dans la période OU les SAV en cours jusqu'à la fin de la période
+        // Inclure les SAV :
+        // 1. Date d'ouverture dans la période
+        // 2. Date d'intervention prévue dans la période
+        // 3. SAV non résolus/annulés ouverts avant ou pendant la période (dans les 90 derniers jours)
+        // Note: Le filtre sur statut NOT IN ('resolu', 'annule') est appliqué plus tard
         $whereSav = [
             "((s.date_ouverture BETWEEN :start_date AND :end_date)
               OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue BETWEEN :start_date2 AND :end_date2)
-              OR (s.date_ouverture >= :min_ongoing_date AND s.date_ouverture <= :end_date AND s.statut IN ('ouvert', 'en_cours'))
-              OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue >= :min_ongoing_date2 AND s.date_intervention_prevue <= :end_date3 AND s.statut IN ('ouvert', 'en_cours')))"
+              OR (s.date_ouverture >= :max_ongoing_date AND s.date_ouverture <= :end_date)
+              OR (s.date_intervention_prevue IS NOT NULL AND s.date_intervention_prevue >= :max_ongoing_date2 AND s.date_intervention_prevue <= :end_date3))"
         ];
         $paramsSav = [
             ':start_date' => $startDate,
             ':end_date' => $endDate,
             ':start_date2' => $startDate,
             ':end_date2' => $endDate,
-            ':min_ongoing_date' => $actualMinDate,
-            ':min_ongoing_date2' => $actualMinDate,
+            ':max_ongoing_date' => $maxOngoingDate,
+            ':max_ongoing_date2' => $maxOngoingDate,
             ':end_date3' => $endDate
         ];
         $dateOrderBy = "COALESCE(s.date_intervention_prevue, s.date_ouverture)";
         $selectDateIntervention = "s.date_intervention_prevue,";
     } else {
-        // Inclure les SAV dans la période OU les SAV en cours jusqu'à la fin de la période
-        // Simplification : pour l'instant, on inclut juste ceux dans la période pour déboguer
+        // Inclure les SAV :
+        // 1. Date d'ouverture dans la période
+        // 2. SAV non résolus/annulés ouverts avant ou pendant la période (dans les 90 derniers jours)
+        // Note: Le filtre sur statut NOT IN ('resolu', 'annule') est appliqué plus tard
         $whereSav = [
             "(s.date_ouverture BETWEEN :start_date AND :end_date
-              OR (s.date_ouverture >= :min_ongoing_date AND s.date_ouverture <= :end_date AND s.statut IN ('ouvert', 'en_cours')))"
+              OR (s.date_ouverture >= :max_ongoing_date AND s.date_ouverture <= :end_date))"
         ];
         $paramsSav = [
             ':start_date' => $startDate,
             ':end_date' => $endDate,
-            ':min_ongoing_date' => $actualMinDate
+            ':max_ongoing_date' => $maxOngoingDate
         ];
         $dateOrderBy = "s.date_ouverture";
         $selectDateIntervention = "";
@@ -205,7 +216,20 @@ try {
             $testStmt = $pdo->prepare($testSql);
             $testStmt->execute([':start_date' => $startDate, ':end_date' => $endDate]);
             $testResult = $testStmt->fetch(PDO::FETCH_ASSOC);
-            error_log('agenda.php - Test direct (sans JOIN): ' . ($testResult['cnt'] ?? 0) . ' SAV trouvés');
+            error_log('agenda.php - Test direct (dans période): ' . ($testResult['cnt'] ?? 0) . ' SAV trouvés');
+            
+            // Test avec SAV en cours
+            $testSql2 = "SELECT COUNT(*) as cnt FROM sav WHERE date_ouverture >= :max_ongoing_date AND date_ouverture <= :end_date AND statut NOT IN ('resolu', 'annule')";
+            $testStmt2 = $pdo->prepare($testSql2);
+            $testStmt2->execute([':max_ongoing_date' => $maxOngoingDate, ':end_date' => $endDate]);
+            $testResult2 = $testStmt2->fetch(PDO::FETCH_ASSOC);
+            error_log('agenda.php - Test direct (en cours): ' . ($testResult2['cnt'] ?? 0) . ' SAV trouvés (maxOngoingDate: ' . $maxOngoingDate . ')');
+            
+            // Test tous les SAV non résolus
+            $testSql3 = "SELECT id, reference, date_ouverture, statut, id_technicien FROM sav WHERE statut NOT IN ('resolu', 'annule') ORDER BY date_ouverture DESC LIMIT 5";
+            $testStmt3 = $pdo->query($testSql3);
+            $testResult3 = $testStmt3->fetchAll(PDO::FETCH_ASSOC);
+            error_log('agenda.php - Derniers SAV non résolus: ' . json_encode($testResult3));
         } catch (PDOException $e) {
             error_log('agenda.php - Erreur test direct: ' . $e->getMessage());
         }

@@ -181,6 +181,34 @@ try {
 // Cache des clients chargés (avec coordonnées géocodées)
 const clientsCache = new Map(); // id -> {id, name, code, address, lat, lng, basePriority}
 
+// ==================
+// Variables globales
+// ==================
+
+let map;
+const clientMarkers = {};
+
+const clientSearchInput = document.getElementById('clientSearch');
+const clientResultsEl = document.getElementById('clientResults');
+const selectedClientsContainer = document.getElementById('selectedClients');
+
+let selectedClients = [];     // [{id, priority}]
+let startPoint = null;        // [lat, lng]
+let startMarker = null;
+let pickStartFromMap = false;
+let routeLayer = null;
+let lastOrderedStops = [];    // clients dans l'ordre utilisé pour l'itinéraire
+let lastRouteLegs = [];       // legs OSRM
+
+const startInfoEl = document.getElementById('startInfo');
+const badgeStartEl = document.getElementById('badgeStart');
+const routeMessageEl = document.getElementById('routeMessage');
+const btnShowTurns = document.getElementById('btnShowTurns');
+const routeStepsEl = document.getElementById('routeSteps');
+const routeTurnsEl = document.getElementById('routeTurns');
+const btnGoogle = document.getElementById('btnGoogle');
+const optimizeOrderCheckbox = document.getElementById('optimizeOrder');
+
 // Charger tous les clients depuis la base de données au démarrage
 let clientsLoaded = false;
 async function loadAllClients() {
@@ -249,34 +277,6 @@ async function loadAllClients() {
 }
 
 // ==================
-// Variables globales
-// ==================
-
-let map;
-const clientMarkers = {};
-
-const clientSearchInput = document.getElementById('clientSearch');
-const clientResultsEl = document.getElementById('clientResults');
-const selectedClientsContainer = document.getElementById('selectedClients');
-
-let selectedClients = [];     // [{id, priority}]
-let startPoint = null;        // [lat, lng]
-let startMarker = null;
-let pickStartFromMap = false;
-let routeLayer = null;
-let lastOrderedStops = [];    // clients dans l'ordre utilisé pour l'itinéraire
-let lastRouteLegs = [];       // legs OSRM
-
-const startInfoEl = document.getElementById('startInfo');
-const badgeStartEl = document.getElementById('badgeStart');
-const routeMessageEl = document.getElementById('routeMessage');
-const btnShowTurns = document.getElementById('btnShowTurns');
-const routeStepsEl = document.getElementById('routeSteps');
-const routeTurnsEl = document.getElementById('routeTurns');
-const btnGoogle = document.getElementById('btnGoogle');
-const optimizeOrderCheckbox = document.getElementById('optimizeOrder');
-
-// ==================
 // Initialisation Leaflet
 // ==================
 
@@ -307,9 +307,6 @@ function createPriorityIcon(priority) {
 // Initialiser la carte sur la France par défaut
 // Les clients seront chargés et la vue ajustée automatiquement
 map.setView([46.5, 2.0], 6);
-
-// Charger tous les clients au démarrage
-loadAllClients();
 
 // Fonction pour géocoder une adresse
 async function geocodeAddress(address) {
@@ -1117,10 +1114,13 @@ document.getElementById('btnRoute').addEventListener('click', () => {
         })
         .catch(err => {
             console.error(err);
-            routeMessageEl.textContent = "Erreur lors du calcul de l’itinéraire : " + err.message;
+            routeMessageEl.textContent = "Erreur lors du calcul de l'itinéraire : " + err.message;
             routeMessageEl.className = 'maps-message alert';
         });
 });
+
+// Charger tous les clients au démarrage (après que toutes les fonctions soient définies)
+loadAllClients();
 </script>
 </body>
 </html>
