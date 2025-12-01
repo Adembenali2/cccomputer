@@ -42,9 +42,27 @@ if (empty($dateStart) || empty($dateEnd)) {
 // Normaliser la MAC si fournie
 $macNorm = null;
 if (!empty($macFilter)) {
+    // Nettoyer la MAC : enlever tous les caractères non hexadécimaux
     $macNorm = strtoupper(preg_replace('/[^0-9A-F]/', '', $macFilter));
-    if (strlen($macNorm) !== 12) {
-        jsonResponse(['ok' => false, 'error' => 'Format MAC invalide'], 400);
+    
+    // Si la MAC nettoyée est vide ou invalide, essayer d'autres formats
+    if (empty($macNorm)) {
+        // Si c'est un nombre pur, essayer de le convertir en hexadécimal
+        if (is_numeric($macFilter)) {
+            $macNorm = strtoupper(dechex((int)$macFilter));
+        } else {
+            jsonResponse(['ok' => false, 'error' => 'Format MAC invalide'], 400);
+        }
+    }
+    
+    // Si la MAC fait moins de 12 caractères mais est valide, compléter avec des zéros à gauche
+    if (strlen($macNorm) < 12 && preg_match('/^[0-9A-F]+$/', $macNorm)) {
+        $macNorm = str_pad($macNorm, 12, '0', STR_PAD_LEFT);
+    }
+    
+    // Vérifier que la MAC normalisée fait exactement 12 caractères hexadécimaux
+    if (strlen($macNorm) !== 12 || !preg_match('/^[0-9A-F]{12}$/', $macNorm)) {
+        jsonResponse(['ok' => false, 'error' => 'Format MAC invalide. Format attendu: 12 caractères hexadécimaux (ex: AABBCCDDEEFF ou AA:BB:CC:DD:EE:FF). Reçu: ' . htmlspecialchars($macFilter)], 400);
     }
 }
 

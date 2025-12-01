@@ -254,8 +254,9 @@ $csrfToken = ensureCsrfToken();
                     date_end: dateEnd
                 });
                 
-                if (mac) {
-                    params.append('mac', mac);
+                // Ne passer la MAC que si elle est valide (non vide et format correct)
+                if (mac && mac.trim() !== '') {
+                    params.append('mac', mac.trim());
                 }
                 
                 const response = await fetch('/API/paiements_data.php?' + params.toString());
@@ -428,8 +429,9 @@ $csrfToken = ensureCsrfToken();
         
         // Mettre à jour les statistiques
         function updateStats(data) {
-            const totalBw = !empty(data.bw) ? Math.max(...data.bw) : 0;
-            const totalColor = !empty(data.color) ? Math.max(...data.color) : 0;
+            // Vérifier si les tableaux existent et ne sont pas vides (JavaScript, pas PHP empty())
+            const totalBw = (Array.isArray(data.bw) && data.bw.length > 0) ? Math.max(...data.bw) : 0;
+            const totalColor = (Array.isArray(data.color) && data.color.length > 0) ? Math.max(...data.color) : 0;
             const totalPages = totalBw + totalColor;
             
             document.getElementById('stat-total-bw').textContent = formatNumber(totalBw);
