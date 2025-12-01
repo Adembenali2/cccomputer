@@ -1,5 +1,6 @@
 <?php
 // API pour récupérer les données de consommation de papier (pour la page Paiements)
+// NOUVELLE LOGIQUE : Calcul de la consommation depuis le premier compteur enregistré pour chaque MAC
 require_once __DIR__ . '/../includes/api_helpers.php';
 
 initApi();
@@ -48,14 +49,126 @@ if (!empty($macFilter)) {
 }
 
 try {
-    // Préparer les paramètres de date
+    // ÉTAPE 1 : Trouver le premier compteur (compteur de départ) pour chaque MAC
+    // On cherche dans les deux tables et on prend le plus ancien pour chaque MAC
+    $sqlFirstCounters = "
+        SELECT 
+            mac_norm,
+            MIN(Timestamp) as first_timestamp,
+            (
+                SELECT TotalBW 
+                FROM (
+                    SELECT mac_norm, Timestamp, TotalBW
+                    FROM compteur_relevee
+                    WHERE mac_norm = t.mac_norm AND Timestamp = t.min_ts
+                    UNION ALL
+                    SELECT mac_norm, Timestamp, TotalBW
+                    FROM compteur_relevee_ancien
+                    WHERE mac_norm = t.mac_norm AND Timestamp = t.min_ts
+                    ORDER BY Timestamp ASC
+                    LIMIT 1
+                ) AS first_bw
+            ) as first_bw,
+            (
+                SELECT TotalColor 
+                FROM (
+                    SELECT mac_norm, Timestamp, TotalColor
+                    FROM compteur_relevee
+                    WHERE mac_norm = t.mac_norm AND Timestamp = t.min_ts
+                    UNION ALL
+                    SELECT mac_norm, Timestamp, TotalColor
+                    FROM compteur_relevee_ancien
+                    WHERE mac_norm = t.mac_norm AND Timestamp = t.min_ts
+                    ORDER BY Timestamp ASC
+                    LIMIT 1
+                ) AS first_color
+            ) as first_color
+        FROM (
+            SELECT 
+                mac_norm,
+                MIN(Timestamp) as min_ts
+            FROM (
+                SELECT mac_norm, Timestamp
+                FROM compteur_relevee
+                WHERE mac_norm IS NOT NULL AND mac_norm != ''
+                " . ($macNorm ? "AND mac_norm = :mac_norm_base" : "") . "
+                UNION ALL
+                SELECT mac_norm, Timestamp
+                FROM compteur_relevee_ancien
+                WHERE mac_norm IS NOT NULL AND mac_norm != ''
+                " . ($macNorm ? "AND mac_norm = :mac_norm_base" : "") . "
+            ) AS all_releves
+            GROUP BY mac_norm
+        ) AS t
+        GROUP BY mac_norm
+    ";
+    
+    // Approche simplifiée : récupérer tous les relevés triés, puis trouver le premier par MAC
+    $sqlAllReleves = "
+        SELECT 
+            mac_norm,
+            Timestamp,
+            COALESCE(TotalBW, 0) as TotalBW,
+            COALESCE(TotalColor, 0) as TotalColor,
+            Model,
+            MacAddress
+        FROM (
+            SELECT 
+                mac_norm,
+                Timestamp,
+                TotalBW,
+                TotalColor,
+                Model,
+                MacAddress
+            FROM compteur_relevee
+            WHERE mac_norm IS NOT NULL 
+              AND mac_norm != ''
+              " . ($macNorm ? "AND mac_norm = :mac_norm1" : "") . "
+            
+            UNION ALL
+            
+            SELECT 
+                mac_norm,
+                Timestamp,
+                TotalBW,
+                TotalColor,
+                Model,
+                MacAddress
+            FROM compteur_relevee_ancien
+            WHERE mac_norm IS NOT NULL 
+              AND mac_norm != ''
+              " . ($macNorm ? "AND mac_norm = :mac_norm2" : "") . "
+        ) AS combined
+        ORDER BY mac_norm, Timestamp ASC
+    ";
+    
+    $params = [];
+    if ($macNorm) {
+        $params[':mac_norm1'] = $macNorm;
+        $params[':mac_norm2'] = $macNorm;
+    }
+    
+    $stmt = $pdo->prepare($sqlAllReleves);
+    $stmt->execute($params);
+    $allReleves = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Trouver le premier compteur pour chaque MAC (compteur de départ)
+    $firstCounters = []; // [mac_norm => ['bw' => value, 'color' => value]]
+    foreach ($allReleves as $releve) {
+        $mac = $releve['mac_norm'];
+        if (!isset($firstCounters[$mac])) {
+            $firstCounters[$mac] = [
+                'bw' => (int)($releve['TotalBW'] ?? 0),
+                'color' => (int)($releve['TotalColor'] ?? 0)
+            ];
+        }
+    }
+    
+    // ÉTAPE 2 : Filtrer les relevés dans la période demandée
     $dateStartFull = $dateStart . ' 00:00:00';
     $dateEndFull = $dateEnd . ' 23:59:59';
     
-    // Construire la requête pour récupérer les relevés des deux tables
-    // On utilise UNION ALL pour combiner les deux tables
-    // IMPORTANT: Les deux tables sont compteur_relevee et compteur_relevee_ancien (avec deux 'e')
-    $sql = "
+    $sqlFiltered = "
         SELECT 
             mac_norm,
             Timestamp,
@@ -97,8 +210,7 @@ try {
         ORDER BY mac_norm, Timestamp ASC
     ";
     
-    $stmt = $pdo->prepare($sql);
-    $params = [
+    $paramsFiltered = [
         ':date_start1' => $dateStartFull,
         ':date_end1' => $dateEndFull,
         ':date_start2' => $dateStartFull,
@@ -106,38 +218,16 @@ try {
     ];
     
     if ($macNorm) {
-        $params[':mac_norm1'] = $macNorm;
-        $params[':mac_norm2'] = $macNorm;
+        $paramsFiltered[':mac_norm1'] = $macNorm;
+        $paramsFiltered[':mac_norm2'] = $macNorm;
     }
     
-    $stmt->execute($params);
-    $releves = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmtFiltered = $pdo->prepare($sqlFiltered);
+    $stmtFiltered->execute($paramsFiltered);
+    $releves = $stmtFiltered->fetchAll(PDO::FETCH_ASSOC);
     
-    // Si aucun relevé trouvé, retourner des données vides
-    if (empty($releves)) {
-        jsonResponse([
-            'ok' => true,
-            'data' => [
-                'labels' => [],
-                'bw' => [],
-                'color' => [],
-                'total_bw' => 0,
-                'total_color' => 0
-            ],
-            'photocopieurs' => [],
-            'filters' => [
-                'period' => $period,
-                'mac' => $macFilter,
-                'date_start' => $dateStart,
-                'date_end' => $dateEnd
-            ],
-            'message' => 'Aucun relevé trouvé pour la période sélectionnée'
-        ]);
-    }
-    
-    // Calculer la consommation (différence entre relevés successifs)
+    // ÉTAPE 3 : Calculer la consommation réelle (compteur_actuel - compteur_depart)
     $consumption = []; // Structure: [period_label => ['bw' => total, 'color' => total]]
-    $lastValues = []; // Structure: [mac_norm => ['bw' => value, 'color' => value, 'timestamp' => datetime]]
     
     foreach ($releves as $releve) {
         // Ignorer les relevés sans MAC ou sans timestamp valide
@@ -155,8 +245,16 @@ try {
             continue;
         }
         
-        $bw = (int)($releve['TotalBW'] ?? 0);
-        $color = (int)($releve['TotalColor'] ?? 0);
+        $currentBw = (int)($releve['TotalBW'] ?? 0);
+        $currentColor = (int)($releve['TotalColor'] ?? 0);
+        
+        // Récupérer le compteur de départ pour cette MAC
+        $firstBw = $firstCounters[$mac]['bw'] ?? 0;
+        $firstColor = $firstCounters[$mac]['color'] ?? 0;
+        
+        // Calculer la consommation réelle : compteur_actuel - compteur_depart
+        $consumptionBw = max(0, $currentBw - $firstBw);
+        $consumptionColor = max(0, $currentColor - $firstColor);
         
         // Déterminer la période selon le filtre
         $periodLabel = '';
@@ -172,29 +270,24 @@ try {
                 break;
         }
         
-        // Si on a déjà une valeur précédente pour cette MAC, calculer la différence
-        if (isset($lastValues[$mac])) {
-            $lastBw = $lastValues[$mac]['bw'];
-            $lastColor = $lastValues[$mac]['color'];
-            
-            // Calculer la différence (consommation)
-            $diffBw = max(0, $bw - $lastBw); // Éviter les valeurs négatives
-            $diffColor = max(0, $color - $lastColor);
-            
-            // Ajouter à la consommation de la période
-            if (!isset($consumption[$periodLabel])) {
-                $consumption[$periodLabel] = ['bw' => 0, 'color' => 0];
+        // Pour chaque période, on garde la consommation maximale (le dernier relevé de la période)
+        // Cela évite de compter plusieurs fois la même période
+        if (!isset($consumption[$periodLabel])) {
+            $consumption[$periodLabel] = [
+                'bw' => $consumptionBw,
+                'color' => $consumptionColor,
+                'timestamp' => $timestamp
+            ];
+        } else {
+            // Si on a un relevé plus récent dans la même période, on prend celui-ci
+            if ($timestamp > $consumption[$periodLabel]['timestamp']) {
+                $consumption[$periodLabel] = [
+                    'bw' => $consumptionBw,
+                    'color' => $consumptionColor,
+                    'timestamp' => $timestamp
+                ];
             }
-            $consumption[$periodLabel]['bw'] += $diffBw;
-            $consumption[$periodLabel]['color'] += $diffColor;
         }
-        
-        // Mettre à jour la dernière valeur pour cette MAC
-        $lastValues[$mac] = [
-            'bw' => $bw,
-            'color' => $color,
-            'timestamp' => $timestamp
-        ];
     }
     
     // Trier les périodes chronologiquement
@@ -212,7 +305,6 @@ try {
     }
     
     // Récupérer la liste des photocopieurs pour le filtre
-    // On combine les deux tables pour avoir tous les photocopieurs
     $photocopieurs = [];
     $sqlPhotocopieurs = "
         SELECT DISTINCT
@@ -242,7 +334,6 @@ try {
         $photocopieursRaw = $stmtPhotocopieurs->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
         error_log('paiements_data.php - Erreur récupération photocopieurs: ' . $e->getMessage());
-        // En cas d'erreur, on continue avec une liste vide plutôt que de faire planter l'API
         $photocopieursRaw = [];
     }
     
@@ -265,8 +356,8 @@ try {
             'labels' => $labels,
             'bw' => $bwData,
             'color' => $colorData,
-            'total_bw' => array_sum($bwData),
-            'total_color' => array_sum($colorData)
+            'total_bw' => !empty($bwData) ? max($bwData) : 0, // Consommation totale = maximum atteint
+            'total_color' => !empty($colorData) ? max($colorData) : 0
         ],
         'photocopieurs' => $photocopieurs,
         'filters' => [
@@ -282,18 +373,10 @@ try {
     error_log('paiements_data.php SQL State: ' . ($e->errorInfo[0] ?? 'N/A'));
     error_log('paiements_data.php Error Code: ' . ($e->errorInfo[1] ?? 'N/A'));
     error_log('paiements_data.php Error Message: ' . ($e->errorInfo[2] ?? 'N/A'));
-    error_log('paiements_data.php SQL Query: ' . ($sql ?? 'N/A'));
-    error_log('paiements_data.php Params: ' . json_encode($params ?? []));
-    
-    // Message d'erreur plus détaillé pour le débogage (en production, masquer les détails)
-    $errorMsg = 'Erreur base de données';
-    if (defined('DEBUG_MODE') && DEBUG_MODE) {
-        $errorMsg .= ': ' . $e->getMessage();
-    }
     
     jsonResponse([
         'ok' => false, 
-        'error' => $errorMsg,
+        'error' => 'Erreur base de données',
         'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
             'message' => $e->getMessage(),
             'sql_state' => $e->errorInfo[0] ?? null,
@@ -304,14 +387,9 @@ try {
     error_log('paiements_data.php error: ' . $e->getMessage());
     error_log('paiements_data.php trace: ' . $e->getTraceAsString());
     
-    $errorMsg = 'Erreur serveur';
-    if (defined('DEBUG_MODE') && DEBUG_MODE) {
-        $errorMsg .= ': ' . $e->getMessage();
-    }
-    
     jsonResponse([
         'ok' => false, 
-        'error' => $errorMsg,
+        'error' => 'Erreur serveur',
         'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
             'message' => $e->getMessage(),
             'file' => $e->getFile(),
@@ -319,4 +397,3 @@ try {
         ] : null
     ], 500);
 }
-
