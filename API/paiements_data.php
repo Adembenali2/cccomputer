@@ -48,70 +48,113 @@ if (!empty($macFilter)) {
 }
 
 try {
+    // Préparer les paramètres de date
+    $dateStartFull = $dateStart . ' 00:00:00';
+    $dateEndFull = $dateEnd . ' 23:59:59';
+    
     // Construire la requête pour récupérer les relevés des deux tables
     // On utilise UNION ALL pour combiner les deux tables
+    // IMPORTANT: Les deux tables sont compteur_relevee et compteur_relevee_ancien (avec deux 'e')
     $sql = "
         SELECT 
             mac_norm,
             Timestamp,
-            TotalBW,
-            TotalColor,
+            COALESCE(TotalBW, 0) as TotalBW,
+            COALESCE(TotalColor, 0) as TotalColor,
             Model,
             MacAddress
         FROM (
             SELECT 
                 mac_norm,
                 Timestamp,
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor,
+                TotalBW,
+                TotalColor,
                 Model,
                 MacAddress
             FROM compteur_relevee
             WHERE mac_norm IS NOT NULL 
               AND mac_norm != ''
-              AND Timestamp >= :date_start 
-              AND Timestamp <= :date_end
-              " . ($macNorm ? "AND mac_norm = :mac_norm" : "") . "
+              AND Timestamp >= :date_start1 
+              AND Timestamp <= :date_end1
+              " . ($macNorm ? "AND mac_norm = :mac_norm1" : "") . "
             
             UNION ALL
             
             SELECT 
                 mac_norm,
                 Timestamp,
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor,
+                TotalBW,
+                TotalColor,
                 Model,
                 MacAddress
             FROM compteur_relevee_ancien
             WHERE mac_norm IS NOT NULL 
               AND mac_norm != ''
-              AND Timestamp >= :date_start 
-              AND Timestamp <= :date_end
-              " . ($macNorm ? "AND mac_norm = :mac_norm" : "") . "
+              AND Timestamp >= :date_start2 
+              AND Timestamp <= :date_end2
+              " . ($macNorm ? "AND mac_norm = :mac_norm2" : "") . "
         ) AS combined
         ORDER BY mac_norm, Timestamp ASC
     ";
     
     $stmt = $pdo->prepare($sql);
     $params = [
-        ':date_start' => $dateStart . ' 00:00:00',
-        ':date_end' => $dateEnd . ' 23:59:59'
+        ':date_start1' => $dateStartFull,
+        ':date_end1' => $dateEndFull,
+        ':date_start2' => $dateStartFull,
+        ':date_end2' => $dateEndFull
     ];
     
     if ($macNorm) {
-        $params[':mac_norm'] = $macNorm;
+        $params[':mac_norm1'] = $macNorm;
+        $params[':mac_norm2'] = $macNorm;
     }
     
     $stmt->execute($params);
     $releves = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Si aucun relevé trouvé, retourner des données vides
+    if (empty($releves)) {
+        jsonResponse([
+            'ok' => true,
+            'data' => [
+                'labels' => [],
+                'bw' => [],
+                'color' => [],
+                'total_bw' => 0,
+                'total_color' => 0
+            ],
+            'photocopieurs' => [],
+            'filters' => [
+                'period' => $period,
+                'mac' => $macFilter,
+                'date_start' => $dateStart,
+                'date_end' => $dateEnd
+            ],
+            'message' => 'Aucun relevé trouvé pour la période sélectionnée'
+        ]);
+    }
     
     // Calculer la consommation (différence entre relevés successifs)
     $consumption = []; // Structure: [period_label => ['bw' => total, 'color' => total]]
     $lastValues = []; // Structure: [mac_norm => ['bw' => value, 'color' => value, 'timestamp' => datetime]]
     
     foreach ($releves as $releve) {
+        // Ignorer les relevés sans MAC ou sans timestamp valide
+        if (empty($releve['mac_norm']) || empty($releve['Timestamp'])) {
+            continue;
+        }
+        
         $mac = $releve['mac_norm'];
-        $timestamp = new DateTime($releve['Timestamp']);
+        
+        // Gérer les erreurs de date
+        try {
+            $timestamp = new DateTime($releve['Timestamp']);
+        } catch (Exception $e) {
+            error_log('paiements_data.php - Date invalide pour MAC ' . $mac . ': ' . $releve['Timestamp']);
+            continue;
+        }
+        
         $bw = (int)($releve['TotalBW'] ?? 0);
         $color = (int)($releve['TotalColor'] ?? 0);
         
@@ -169,6 +212,7 @@ try {
     }
     
     // Récupérer la liste des photocopieurs pour le filtre
+    // On combine les deux tables pour avoir tous les photocopieurs
     $photocopieurs = [];
     $sqlPhotocopieurs = "
         SELECT DISTINCT
@@ -179,11 +223,11 @@ try {
             COALESCE(c.raison_sociale, 'Photocopieur non attribué') as client_name,
             pc.id_client
         FROM (
-            SELECT mac_norm, MacAddress, SerialNumber, Model
+            SELECT DISTINCT mac_norm, MacAddress, SerialNumber, Model
             FROM compteur_relevee
             WHERE mac_norm IS NOT NULL AND mac_norm != ''
             UNION
-            SELECT mac_norm, MacAddress, SerialNumber, Model
+            SELECT DISTINCT mac_norm, MacAddress, SerialNumber, Model
             FROM compteur_relevee_ancien
             WHERE mac_norm IS NOT NULL AND mac_norm != ''
         ) AS r
@@ -192,9 +236,15 @@ try {
         ORDER BY client_name, Model, MacAddress
     ";
     
-    $stmtPhotocopieurs = $pdo->prepare($sqlPhotocopieurs);
-    $stmtPhotocopieurs->execute();
-    $photocopieursRaw = $stmtPhotocopieurs->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $stmtPhotocopieurs = $pdo->prepare($sqlPhotocopieurs);
+        $stmtPhotocopieurs->execute();
+        $photocopieursRaw = $stmtPhotocopieurs->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('paiements_data.php - Erreur récupération photocopieurs: ' . $e->getMessage());
+        // En cas d'erreur, on continue avec une liste vide plutôt que de faire planter l'API
+        $photocopieursRaw = [];
+    }
     
     foreach ($photocopieursRaw as $p) {
         $photocopieurs[] = [
@@ -229,9 +279,44 @@ try {
     
 } catch (PDOException $e) {
     error_log('paiements_data.php PDO error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur base de données: ' . $e->getMessage()], 500);
+    error_log('paiements_data.php SQL State: ' . ($e->errorInfo[0] ?? 'N/A'));
+    error_log('paiements_data.php Error Code: ' . ($e->errorInfo[1] ?? 'N/A'));
+    error_log('paiements_data.php Error Message: ' . ($e->errorInfo[2] ?? 'N/A'));
+    error_log('paiements_data.php SQL Query: ' . ($sql ?? 'N/A'));
+    error_log('paiements_data.php Params: ' . json_encode($params ?? []));
+    
+    // Message d'erreur plus détaillé pour le débogage (en production, masquer les détails)
+    $errorMsg = 'Erreur base de données';
+    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+        $errorMsg .= ': ' . $e->getMessage();
+    }
+    
+    jsonResponse([
+        'ok' => false, 
+        'error' => $errorMsg,
+        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
+            'message' => $e->getMessage(),
+            'sql_state' => $e->errorInfo[0] ?? null,
+            'code' => $e->errorInfo[1] ?? null
+        ] : null
+    ], 500);
 } catch (Throwable $e) {
     error_log('paiements_data.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur serveur: ' . $e->getMessage()], 500);
+    error_log('paiements_data.php trace: ' . $e->getTraceAsString());
+    
+    $errorMsg = 'Erreur serveur';
+    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+        $errorMsg .= ': ' . $e->getMessage();
+    }
+    
+    jsonResponse([
+        'ok' => false, 
+        'error' => $errorMsg,
+        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ] : null
+    ], 500);
 }
 
