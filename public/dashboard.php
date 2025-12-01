@@ -159,6 +159,17 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 <p class="card-count"><?= htmlspecialchars($nb_sav_a_traiter, ENT_QUOTES, 'UTF-8') ?></p>
             </div>
 
+            <div class="dash-card" data-href="paiements.php" tabindex="0" role="button" aria-label="Accéder aux paiements">
+                <div class="card-icon paiements" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                        <line x1="1" y1="10" x2="23" y2="10"/>
+                    </svg>
+                </div>
+                <h3 class="card-title">Paiements</h3>
+                <p class="card-count">0</p>
+            </div>
+
             <div class="dash-card" data-href="livraison.php" tabindex="0" role="button" aria-label="Accéder aux livraisons">
                 <div class="card-icon deliveries" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
@@ -325,13 +336,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
                         </svg>
                         SAV
-                    </button>
-                    <button class="cdv-nav-btn" data-tab="paiement" aria-selected="false">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                            <line x1="1" y1="10" x2="23" y2="10"/>
-                        </svg>
-                        Paiements
                     </button>
                 </div>
                 <div class="cdv-main">
@@ -583,84 +587,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         </div>
                     </div>
 
-                    <div class="cdv-tab" data-tab="paiement" style="display:none;">
-                        <div class="cdv-header">
-                            <div class="cdv-title">Gestion des paiements</div>
-                            <div class="cdv-sub">Client : <span id="paiement-client-name">—</span></div>
-                        </div>
-                        
-                        <!-- Liste des paiements existants -->
-                        <div id="paiementListContainer" style="margin-bottom: 1.5rem;">
-                            <h4 style="margin-bottom: 0.5rem;">Paiements existants</h4>
-                            <div id="paiementList" style="max-height: 300px; overflow-y: auto;">
-                                <p class="hint">Chargement...</p>
-                            </div>
-                        </div>
-
-                        <!-- Formulaire de nouveau paiement -->
-                        <div id="paiementFormContainer">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <h4 style="margin: 0;">Nouveau paiement</h4>
-                                <button type="button" id="togglePaiementForm" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">➕ Ajouter</button>
-                            </div>
-                            
-                            <form id="paiementForm" style="display: none;" class="standard-form">
-                                <input type="hidden" id="paiementClientId" name="client_id">
-                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(ensureCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
-                                
-                                <div class="form-row">
-                                    <label>Référence*</label>
-                                    <input type="text" id="paiementReference" name="reference" required 
-                                           placeholder="Ex: PAY-2024-001" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                                </div>
-                                
-                                <div class="form-row">
-                                    <label>Montant*</label>
-                                    <input type="number" id="paiementMontant" name="montant" step="0.01" min="0" required 
-                                           placeholder="0.00" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                                </div>
-                                
-                                <div class="form-row">
-                                    <label>Mode de paiement*</label>
-                                    <select id="paiementMode" name="mode_paiement" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                                        <option value="">-- Sélectionner le mode --</option>
-                                        <option value="espece">Espèces</option>
-                                        <option value="cheque">Chèque</option>
-                                        <option value="virement">Virement</option>
-                                        <option value="paiement_carte">Carte</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <label>Date de paiement*</label>
-                                    <input type="date" id="paiementDate" name="date_paiement" required 
-                                           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                                </div>
-                                
-                                <div class="form-row">
-                                    <label>Statut*</label>
-                                    <select id="paiementStatut" name="statut" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                                        <option value="en_attente">En attente</option>
-                                        <option value="valide">Validé</option>
-                                        <option value="refuse">Refusé</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <label>Description / Notes</label>
-                                    <textarea id="paiementDescription" name="description" rows="3"
-                                              placeholder="Notes supplémentaires sur le paiement..." style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
-                                </div>
-                                
-                                <div id="paiementError" class="error-message" style="display: none; padding: 0.5rem; background: #fee2e2; color: #dc2626; border-radius: 4px; margin-bottom: 1rem;"></div>
-                                
-                                <div class="form-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                                    <button type="submit" class="btn-primary">✅ Enregistrer le paiement</button>
-                                    <button type="button" id="cancelPaiementForm" class="btn-secondary">Annuler</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
