@@ -141,9 +141,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     <span class="ico run" id="impIco">⏳</span>
                     <span class="txt" id="impTxt">Import SFTP : vérification…</span>
                 </div>
-                <div class="import-badge" id="importWebBadge" aria-live="polite" title="État du dernier import Compteurs Web">
+                <div class="import-badge" id="importWebBadge" aria-live="polite" title="État du dernier import IOnos">
                     <span class="ico run" id="impWebIco">⏳</span>
-                    <span class="txt" id="impWebTxt">Import Compteurs (WEB) : vérification…</span>
+                    <span class="txt" id="impWebTxt">import IOnos : vérification…</span>
                 </div>
             </div>
         </div>
@@ -1681,21 +1681,21 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const d = await r.json();
 
                 if (!d || !d.has_run) {
-                    setState('none', 'Import Compteurs (WEB) : —');
+                    setState('none', 'import IOnos : —');
                     return;
                 }
 
                 const files = (d.summary && d.summary.files) ? d.summary.files : null;
 
                 if (d.ok === 1) {
-                    const label = `Import Compteurs (WEB) OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    const label = `import IOnos OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
                     setState('ok', label, files);
                 } else {
-                    const label = `Import Compteurs (WEB) KO — ${d.ran_at}`;
+                    const label = `import IOnos KO — ${d.ran_at}`;
                     setState('fail', label, files);
                 }
             } catch(e){
-                setState('fail', 'Import Compteurs (WEB) : erreur de lecture');
+                setState('fail', 'import IOnos : erreur de lecture');
             }
         }
 
