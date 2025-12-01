@@ -65,12 +65,18 @@ WORKDIR /var/www/html
 COPY composer.json composer.lock* ./
 
 # Installer les dépendances Composer
-# Utiliser install si lock existe, sinon update
-RUN if [ -f composer.lock ]; then \
-        composer install --no-dev --prefer-dist --no-progress --no-interaction --no-scripts; \
+# Stratégie robuste : Essayer install d'abord, si échec (lock désynchronisé), faire update
+# Cela permet de gérer les cas où composer.json a été modifié sans mettre à jour composer.lock
+RUN set -eux; \
+    if [ -f composer.lock ]; then \
+        echo "Lock file found, attempting install..."; \
+        if ! composer install --no-dev --prefer-dist --no-progress --no-interaction --no-scripts; then \
+            echo "Lock file out of sync or install failed, updating..."; \
+            composer update --no-dev --prefer-dist --no-progress --no-interaction --no-scripts; \
+        fi; \
     else \
-        composer update --no-dev --prefer-dist --no-progress --no-interaction --no-scripts || \
-        composer install --no-dev --prefer-dist --no-progress --no-interaction; \
+        echo "No lock file, updating..."; \
+        composer update --no-dev --prefer-dist --no-progress --no-interaction --no-scripts; \
     fi
 
 # Copier le reste du code source
