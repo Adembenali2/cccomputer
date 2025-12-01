@@ -145,7 +145,8 @@ try {
     // Vérifier que la table existe
     $tableExists = false;
     try {
-        $checkTable = $pdo->query("SHOW TABLES LIKE 'chatroom_messages'");
+        $checkTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_messages'");
+        $checkTable->execute();
         $tableExists = $checkTable->rowCount() > 0;
     } catch (PDOException $e) {
         error_log('chatroom_get.php - Erreur vérification table: ' . $e->getMessage() . ' | Code: ' . $e->getCode());

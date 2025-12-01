@@ -61,8 +61,8 @@ if (($user['statut'] ?? 'inactif') !== 'actif') {
 // Rehash si nécessaire
 if (password_needs_rehash($user['password'], PASSWORD_BCRYPT, ['cost' => 10])) {
     $newHash = password_hash($pass, PASSWORD_BCRYPT, ['cost' => 10]);
-    $upd = $pdo->prepare("UPDATE utilisateurs SET password = ? WHERE id = ?");
-    $upd->execute([$newHash, $user['id']]);
+    $upd = $pdo->prepare("UPDATE utilisateurs SET password = :password WHERE id = :id");
+    $upd->execute([':password' => $newHash, ':id' => $user['id']]);
 }
 
 // Écritures session

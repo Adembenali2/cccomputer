@@ -10,7 +10,8 @@ require_once __DIR__ . '/../includes/db.php';
 
 // Récupérer le nombre réel de clients depuis la base de données
 try {
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM clients WHERE adresse IS NOT NULL AND adresse != '' AND code_postal IS NOT NULL AND code_postal != '' AND ville IS NOT NULL AND ville != ''");
+    $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM clients WHERE adresse IS NOT NULL AND adresse != '' AND code_postal IS NOT NULL AND code_postal != '' AND ville IS NOT NULL AND ville != ''");
+    $stmt->execute();
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     $totalClients = (int)($result['total'] ?? 0);
 } catch (PDOException $e) {

@@ -34,8 +34,8 @@ header('Content-Type: text/plain; charset=utf-8');
 
 echo "=== run-import.php start ===\n";
 
-// ➜ ADAPTE LE CHEMIN VERS TON SCRIPT DEBUG (celui avec M1..M6)
-$scriptPath = __DIR__ . '/../api/scripts/upload_compteur.php';
+// ➜ Chemin vers le script d'import SFTP
+$scriptPath = __DIR__ . '/../API/scripts/upload_compteur.php';
 if (!is_file($scriptPath)) {
   echo "❌ Script introuvable: $scriptPath\n";
   exit("=== end ===\n");

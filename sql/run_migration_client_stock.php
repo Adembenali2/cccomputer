@@ -21,15 +21,17 @@ try {
     $added = [];
     
     foreach ($columns as $col) {
-        $check = $pdo->query("
+        $check = $pdo->prepare("
             SELECT COUNT(*) as cnt
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
               AND TABLE_NAME = 'livraisons'
-              AND COLUMN_NAME = '{$col}'
-        ")->fetch(PDO::FETCH_ASSOC);
+              AND COLUMN_NAME = :col
+        ");
+        $check->execute([':col' => $col]);
+        $result = $check->fetch(PDO::FETCH_ASSOC);
         
-        if ((int)$check['cnt'] === 0) {
+        if ((int)$result['cnt'] === 0) {
             echo "   - Ajout de la colonne {$col}...\n";
             
             if ($col === 'product_type') {

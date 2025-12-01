@@ -10,7 +10,8 @@ echo "=== Migration: Ajout du champ last_activity ===\n\n";
 
 try {
     // Vérifier si le champ existe déjà
-    $check = $pdo->query("SHOW COLUMNS FROM utilisateurs LIKE 'last_activity'");
+    $check = $pdo->prepare("SHOW COLUMNS FROM utilisateurs LIKE 'last_activity'");
+    $check->execute();
     if ($check->rowCount() > 0) {
         echo "✓ Le champ 'last_activity' existe déjà.\n";
         exit(0);

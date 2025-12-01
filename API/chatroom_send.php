@@ -179,7 +179,8 @@ try {
     // Vérifier que la table existe
     $tableExists = false;
     try {
-        $checkTable = $pdo->query("SHOW TABLES LIKE 'chatroom_messages'");
+        $checkTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_messages'");
+        $checkTable->execute();
         $tableExists = $checkTable->rowCount() > 0;
     } catch (PDOException $e) {
         error_log('chatroom_send.php - Erreur vérification table: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
@@ -220,7 +221,8 @@ try {
     if (!empty($mentions)) {
         try {
             $notifTableExists = false;
-            $checkNotifTable = $pdo->query("SHOW TABLES LIKE 'chatroom_notifications'");
+            $checkNotifTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_notifications'");
+            $checkNotifTable->execute();
             $notifTableExists = $checkNotifTable->rowCount() > 0;
 
             if ($notifTableExists) {
@@ -247,7 +249,8 @@ try {
     // Sauf pour l'expéditeur et les utilisateurs déjà mentionnés
     try {
         $notifTableExists = false;
-        $checkNotifTable = $pdo->query("SHOW TABLES LIKE 'chatroom_notifications'");
+        $checkNotifTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_notifications'");
+        $checkNotifTable->execute();
         $notifTableExists = $checkNotifTable->rowCount() > 0;
 
         if ($notifTableExists) {

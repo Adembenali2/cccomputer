@@ -25,7 +25,8 @@ try {
     // Vérifier que la table existe
     $tableExists = false;
     try {
-        $checkTable = $pdo->query("SHOW TABLES LIKE 'chatroom_notifications'");
+        $checkTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_notifications'");
+        $checkTable->execute();
         $tableExists = $checkTable->rowCount() > 0;
     } catch (PDOException $e) {
         error_log('chatroom_get_notifications.php - Erreur vérification table: ' . $e->getMessage());

@@ -10,7 +10,8 @@ echo "=== Migration: Création de la table user_permissions ===\n\n";
 
 try {
     // Vérifier si la table existe déjà
-    $check = $pdo->query("SHOW TABLES LIKE 'user_permissions'");
+    $check = $pdo->prepare("SHOW TABLES LIKE 'user_permissions'");
+    $check->execute();
     if ($check->rowCount() > 0) {
         echo "✓ La table 'user_permissions' existe déjà.\n";
         exit(0);

@@ -20,7 +20,8 @@ $currentUserName = trim($currentUserPrenom . ' ' . $currentUserNom);
 // Vérifier si la table existe
 $tableExists = false;
 try {
-    $checkTable = $pdo->query("SHOW TABLES LIKE 'chatroom_messages'");
+    $checkTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_messages'");
+    $checkTable->execute();
     $tableExists = $checkTable->rowCount() > 0;
 } catch (PDOException $e) {
     error_log('messagerie.php - Erreur vérification table: ' . $e->getMessage());

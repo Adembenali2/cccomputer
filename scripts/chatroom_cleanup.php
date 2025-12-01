@@ -9,7 +9,8 @@ require_once __DIR__ . '/../includes/db.php';
 
 try {
     // Vérifier que la table existe
-    $checkTable = $pdo->query("SHOW TABLES LIKE 'chatroom_messages'");
+    $checkTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_messages'");
+    $checkTable->execute();
     if ($checkTable->rowCount() === 0) {
         echo "Table chatroom_messages n'existe pas.\n";
         exit(0);

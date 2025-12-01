@@ -165,7 +165,8 @@ try {
             
             // Test tous les SAV non résolus
             $testSql3 = "SELECT id, reference, date_ouverture, statut, id_technicien FROM sav WHERE statut NOT IN ('resolu', 'annule') ORDER BY date_ouverture DESC LIMIT 5";
-            $testStmt3 = $pdo->query($testSql3);
+            $testStmt3 = $pdo->prepare($testSql3);
+            $testStmt3->execute();
             $testResult3 = $testStmt3->fetchAll(PDO::FETCH_ASSOC);
             error_log('agenda.php - Derniers SAV non résolus: ' . json_encode($testResult3));
         } catch (PDOException $e) {
@@ -406,20 +407,24 @@ $debugInfo = [];
 if (empty($savs) && empty($livraisons)) {
     try {
         // Compter tous les SAV non résolus/annulés
-        $stmtDebug = $pdo->query("SELECT COUNT(*) as total FROM sav WHERE statut NOT IN ('resolu', 'annule')");
+        $stmtDebug = $pdo->prepare("SELECT COUNT(*) as total FROM sav WHERE statut NOT IN ('resolu', 'annule')");
+        $stmtDebug->execute();
         $debugInfo['total_savs_db'] = $stmtDebug->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
         
         // Compter toutes les livraisons non livrées/annulées
-        $stmtDebug = $pdo->query("SELECT COUNT(*) as total FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
+        $stmtDebug = $pdo->prepare("SELECT COUNT(*) as total FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
+        $stmtDebug->execute();
         $debugInfo['total_livraisons_db'] = $stmtDebug->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
         
         // Vérifier les dates des SAV
-        $stmtDebug = $pdo->query("SELECT MIN(date_ouverture) as min_date, MAX(date_ouverture) as max_date FROM sav WHERE statut NOT IN ('resolu', 'annule')");
+        $stmtDebug = $pdo->prepare("SELECT MIN(date_ouverture) as min_date, MAX(date_ouverture) as max_date FROM sav WHERE statut NOT IN ('resolu', 'annule')");
+        $stmtDebug->execute();
         $datesSav = $stmtDebug->fetch(PDO::FETCH_ASSOC);
         $debugInfo['sav_dates'] = $datesSav;
         
         // Vérifier les dates des livraisons
-        $stmtDebug = $pdo->query("SELECT MIN(date_prevue) as min_date, MAX(date_prevue) as max_date FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
+        $stmtDebug = $pdo->prepare("SELECT MIN(date_prevue) as min_date, MAX(date_prevue) as max_date FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
+        $stmtDebug->execute();
         $datesLiv = $stmtDebug->fetch(PDO::FETCH_ASSOC);
         $debugInfo['livraison_dates'] = $datesLiv;
         

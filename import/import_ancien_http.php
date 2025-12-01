@@ -96,7 +96,8 @@ try {
 $lastTimestamp = null;
 try {
     // Récupère le timestamp maximum déjà importé pour reprendre après celui-ci
-    $stmtLast = $pdo->query("SELECT MAX(Timestamp) AS max_ts FROM compteur_relevee_ancien");
+    $stmtLast = $pdo->prepare("SELECT MAX(Timestamp) AS max_ts FROM compteur_relevee_ancien");
+    $stmtLast->execute();
     $rowLast  = $stmtLast->fetch(PDO::FETCH_ASSOC);
     if ($rowLast && $rowLast['max_ts'] !== null) {
         $lastTimestamp = $rowLast['max_ts'];

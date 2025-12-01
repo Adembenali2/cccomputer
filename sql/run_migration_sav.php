@@ -8,12 +8,13 @@ require_once __DIR__ . '/../includes/db.php';
 
 try {
     // Vérifier si la table existe déjà
-    $check = $pdo->query("
+    $check = $pdo->prepare("
         SELECT COUNT(*) 
         FROM information_schema.tables 
         WHERE table_schema = DATABASE() 
         AND table_name = 'sav'
     ");
+    $check->execute();
     
     if ($check->fetchColumn() > 0) {
         echo "La table 'sav' existe déjà.\n";
