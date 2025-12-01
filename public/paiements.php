@@ -33,8 +33,17 @@ $csrfToken = ensureCsrfToken();
     
     <main class="page-container">
         <header class="page-header">
-            <h1 class="page-title">Paiements - Consommation de papier</h1>
-            <p class="page-sub">Visualisation de la consommation cumulée depuis le premier relevé</p>
+            <div class="header-content">
+                <div>
+                    <h1 class="page-title">Paiements - Consommation de papier</h1>
+                    <p class="page-sub">Visualisation de la consommation cumulée depuis le premier relevé</p>
+                </div>
+                <div class="header-actions">
+                    <a href="/public/paiements_dettes.php" class="btn-link">
+                        💰 Dettes clients
+                    </a>
+                </div>
+            </div>
         </header>
         
         <!-- Filtres modernisés (sans boutons) -->
