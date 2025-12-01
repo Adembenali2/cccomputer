@@ -149,16 +149,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         </div>
 
         <div class="dashboard-grid">
-            <div class="dash-card" data-href="/public/sav.php" tabindex="0" role="button" aria-label="Accéder au SAV">
-                <div class="card-icon sav" aria-hidden="true">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
-                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                    </svg>
-                </div>
-                <h3 class="card-title">SAV</h3>
-                <p class="card-count"><?= htmlspecialchars($nb_sav_a_traiter, ENT_QUOTES, 'UTF-8') ?></p>
-            </div>
-
             <div class="dash-card" data-href="paiements.php" tabindex="0" role="button" aria-label="Accéder aux paiements">
                 <div class="card-icon payments" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
@@ -168,6 +158,16 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 </div>
                 <h3 class="card-title">Paiements</h3>
                 <p class="card-count">0</p>
+            </div>
+
+            <div class="dash-card" data-href="/public/sav.php" tabindex="0" role="button" aria-label="Accéder au SAV">
+                <div class="card-icon sav" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                </div>
+                <h3 class="card-title">SAV</h3>
+                <p class="card-count"><?= htmlspecialchars($nb_sav_a_traiter, ENT_QUOTES, 'UTF-8') ?></p>
             </div>
 
             <div class="dash-card" data-href="livraison.php" tabindex="0" role="button" aria-label="Accéder aux livraisons">
