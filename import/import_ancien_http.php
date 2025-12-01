@@ -27,9 +27,11 @@ ini_set('display_errors','1');
  * - $BATCH : Nombre maximum de relevés traités par exécution (par défaut: 100)
  * 
  * EXÉCUTION :
+ * - Exécution automatique toutes les 2 minutes via le dashboard (run_import_web_if_due.php)
  * - Peut être exécuté manuellement : php import/import_ancien_http.php
  * - Peut être planifié via CRON (ex: toutes les 2 minutes)
  * - Utilise les variables d'environnement Railway pour la connexion DB (MYSQLHOST, MYSQLDATABASE, etc.)
+ * - Importe 100 lignes maximum par exécution (configurable via $BATCH)
  * 
  * DONNÉES IMPORTÉES :
  * - Timestamp : Date et heure du relevé

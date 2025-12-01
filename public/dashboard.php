@@ -1706,7 +1706,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
 
         tick();        // premier run
         refresh();     // premier badge
-        setInterval(tick, 20000); // toutes les 20s
+        setInterval(tick, 120000); // toutes les 2 minutes (120 secondes)
     })();
 
     </script>

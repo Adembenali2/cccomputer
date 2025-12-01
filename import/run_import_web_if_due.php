@@ -10,12 +10,16 @@ require_once $projectRoot . '/includes/db.php';
  * Script de déclenchement de l'import WEB_COMPTEUR
  * Similaire à run_import_if_due.php mais pour l'import depuis test_compteur.php
  * 
- * Utilise un système anti-bouclage via app_kv pour éviter les exécutions trop fréquentes
+ * FONCTIONNEMENT :
+ * - Exécution automatique toutes les 2 minutes (120 secondes) depuis le dashboard
+ * - Importe 100 lignes maximum par exécution
+ * - Utilise un système anti-bouclage via app_kv pour éviter les exécutions trop fréquentes
+ * - Les doublons sont évités via la contrainte UNIQUE (mac_norm, Timestamp)
  * 
  * EXÉCUTION :
+ * - Appelé automatiquement depuis le dashboard toutes les 2 minutes
  * - Peut être appelé manuellement via POST/GET
  * - Peut être planifié via CRON
- * - Peut être appelé depuis le dashboard (JavaScript)
  */
 
 // ---------- Table KV pour anti-bouclage ----------
@@ -27,7 +31,8 @@ $pdo->exec("
 ");
 
 // Intervalle minimum entre deux exécutions (en secondes)
-$INTERVAL = (int)(getenv('WEB_IMPORT_INTERVAL_SEC') ?: 120); // Par défaut 2 minutes
+// Par défaut 120 secondes (2 minutes) - comme demandé
+$INTERVAL = (int)(getenv('WEB_IMPORT_INTERVAL_SEC') ?: 120);
 $key      = 'web_compteur_last_run';
 
 // Vérifier si on peut exécuter
