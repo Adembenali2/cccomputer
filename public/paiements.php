@@ -72,16 +72,28 @@ $csrfToken = ensureCsrfToken();
         <!-- Graphique en ligne -->
         <section class="paiements-chart">
             <div class="chart-header">
-                <h2 class="chart-title">Évolution de la consommation</h2>
-                <div class="chart-legend">
-                    <div class="legend-item">
-                        <span class="legend-color legend-bw"></span>
-                        <span class="legend-label">Noir et blanc</span>
+                <div class="chart-header-left">
+                    <h2 class="chart-title">Évolution de la consommation</h2>
+                    <div class="chart-legend">
+                        <div class="legend-item">
+                            <span class="legend-color legend-bw"></span>
+                            <span class="legend-label">Noir et blanc</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color legend-color"></span>
+                            <span class="legend-label">Couleur</span>
+                        </div>
                     </div>
-                    <div class="legend-item">
-                        <span class="legend-color legend-color"></span>
-                        <span class="legend-label">Couleur</span>
-                    </div>
+                </div>
+                <div class="chart-actions">
+                    <button id="btn-export-excel" class="btn-export">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Export Excel
+                    </button>
                 </div>
             </div>
             <div class="chart-container">
@@ -156,6 +168,7 @@ $csrfToken = ensureCsrfToken();
             const photocopieurSelect = document.getElementById('filter-photocopieur');
             const dateStartInput = document.getElementById('filter-date-start');
             const dateEndInput = document.getElementById('filter-date-end');
+            const exportBtn = document.getElementById('btn-export-excel');
             
             // Mise à jour automatique lors des changements
             periodSelect.addEventListener('change', () => {
@@ -166,6 +179,43 @@ $csrfToken = ensureCsrfToken();
             photocopieurSelect.addEventListener('change', loadData);
             dateStartInput.addEventListener('change', loadData);
             dateEndInput.addEventListener('change', loadData);
+            
+            // Export Excel
+            if (exportBtn) {
+                exportBtn.addEventListener('click', exportToExcel);
+            }
+        }
+        
+        // Export vers Excel
+        function exportToExcel() {
+            const period = document.getElementById('filter-period').value;
+            const mac = document.getElementById('filter-photocopieur').value;
+            const dateStart = document.getElementById('filter-date-start').value;
+            const dateEnd = document.getElementById('filter-date-end').value;
+            
+            if (!dateStart || !dateEnd) {
+                showError('Veuillez sélectionner une date de début et une date de fin');
+                return;
+            }
+            
+            if (new Date(dateStart) > new Date(dateEnd)) {
+                showError('La date de début doit être antérieure à la date de fin');
+                return;
+            }
+            
+            // Construire l'URL avec les paramètres
+            const params = new URLSearchParams({
+                period: period,
+                date_start: dateStart,
+                date_end: dateEnd
+            });
+            
+            if (mac && mac.trim() !== '') {
+                params.append('mac', mac.trim());
+            }
+            
+            // Ouvrir l'URL d'export dans une nouvelle fenêtre pour télécharger le fichier
+            window.location.href = '/API/export_paiements_excel.php?' + params.toString();
         }
         
         // Mettre à jour les dates par défaut selon la période
@@ -328,28 +378,28 @@ $csrfToken = ensureCsrfToken();
                         {
                             label: 'Noir et blanc',
                             data: data.bw,
-                            borderColor: 'rgb(0, 0, 0)',
+                            borderColor: 'rgb(0, 0, 0)', // Noir
                             backgroundColor: 'rgba(0, 0, 0, 0.1)',
                             borderWidth: 2,
                             fill: true,
                             tension: 0.4, // Courbe lissée
                             pointRadius: 3,
                             pointHoverRadius: 5,
-                            pointBackgroundColor: 'rgb(0, 0, 0)',
+                            pointBackgroundColor: 'rgb(0, 0, 0)', // Noir
                             pointBorderColor: '#fff',
                             pointBorderWidth: 2
                         },
                         {
                             label: 'Couleur',
                             data: data.color,
-                            borderColor: 'rgb(255, 99, 132)',
-                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            borderColor: 'rgb(220, 38, 38)', // Rouge
+                            backgroundColor: 'rgba(220, 38, 38, 0.1)',
                             borderWidth: 2,
                             fill: true,
                             tension: 0.4, // Courbe lissée
                             pointRadius: 3,
                             pointHoverRadius: 5,
-                            pointBackgroundColor: 'rgb(255, 99, 132)',
+                            pointBackgroundColor: 'rgb(220, 38, 38)', // Rouge
                             pointBorderColor: '#fff',
                             pointBorderWidth: 2
                         }
