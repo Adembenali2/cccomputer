@@ -26,7 +26,14 @@ define('PRIX_COLOR_HT', 0.09);
 define('PRIX_COLOR_TTC', 0.11);
 
 // Calculer la période comptable : du 20 du mois au 20 du mois suivant
-$dateDebut = new DateTime("$year-$month-20");
+try {
+    $dateDebut = new DateTime("$year-$month-20");
+} catch (Exception $e) {
+    error_log('paiements_dettes.php - Erreur date début: ' . $e->getMessage());
+    $dateDebut = new DateTime();
+    $dateDebut->setDate((int)date('Y'), (int)date('m'), 20);
+}
+
 $dateFin = clone $dateDebut;
 $dateFin->modify('+1 month'); // 20 du mois suivant
 
@@ -70,7 +77,10 @@ try {
     // Trouver le premier compteur pour chaque MAC (compteur de départ)
     $firstCounters = [];
     foreach ($allReleves as $releve) {
-        $mac = $releve['mac_norm'];
+        $mac = trim($releve['mac_norm'] ?? '');
+        if (empty($mac)) {
+            continue;
+        }
         if (!isset($firstCounters[$mac])) {
             $firstCounters[$mac] = [
                 'bw' => (int)($releve['TotalBW'] ?? 0),
@@ -127,15 +137,15 @@ try {
     $macPeriodData = [];
     
     foreach ($periodReleves as $releve) {
-        if (empty($releve['mac_norm']) || empty($releve['Timestamp'])) {
+        $mac = trim($releve['mac_norm'] ?? '');
+        if (empty($mac) || empty($releve['Timestamp'])) {
             continue;
         }
-        
-        $mac = $releve['mac_norm'];
         
         try {
             $timestamp = new DateTime($releve['Timestamp']);
         } catch (Exception $e) {
+            error_log('paiements_dettes.php - Erreur parsing timestamp: ' . $e->getMessage());
             continue;
         }
         
@@ -171,27 +181,31 @@ try {
     // Pour chaque MAC qui n'a pas de relevé dans la période
     $allMacs = array_keys($firstCounters);
     foreach ($allMacs as $mac) {
-        if (!isset($macPeriodData[$mac])) {
-            // Chercher le dernier relevé disponible (avant ou dans la période)
-            $sqlLastAvailable = "
-                SELECT 
-                    mac_norm,
-                    Timestamp,
-                    COALESCE(TotalBW, 0) as TotalBW,
-                    COALESCE(TotalColor, 0) as TotalColor
-                FROM (
-                    SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                    FROM compteur_relevee
-                    WHERE mac_norm = :mac AND Timestamp <= :date_end
-                    UNION ALL
-                    SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                    FROM compteur_relevee_ancien
-                    WHERE mac_norm = :mac AND Timestamp <= :date_end
-                ) AS combined
-                ORDER BY Timestamp DESC
-                LIMIT 1
-            ";
-            
+        if (empty($mac) || isset($macPeriodData[$mac])) {
+            continue;
+        }
+        
+        // Chercher le dernier relevé disponible (avant ou dans la période)
+        $sqlLastAvailable = "
+            SELECT 
+                mac_norm,
+                Timestamp,
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor
+            FROM (
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee
+                WHERE mac_norm = :mac AND Timestamp <= :date_end
+                UNION ALL
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac AND Timestamp <= :date_end
+            ) AS combined
+            ORDER BY Timestamp DESC
+            LIMIT 1
+        ";
+        
+        try {
             $stmtLast = $pdo->prepare($sqlLastAvailable);
             $stmtLast->execute([
                 ':mac' => $mac,
@@ -199,7 +213,7 @@ try {
             ]);
             $lastReleve = $stmtLast->fetch(PDO::FETCH_ASSOC);
             
-            if ($lastReleve) {
+            if ($lastReleve && !empty($lastReleve['Timestamp'])) {
                 try {
                     $lastTimestamp = new DateTime($lastReleve['Timestamp']);
                     $macPeriodData[$mac] = [
@@ -215,13 +229,28 @@ try {
                 }
             } else {
                 // Si vraiment aucun relevé, utiliser le compteur de départ
+                if (isset($firstCounters[$mac])) {
+                    $macPeriodData[$mac] = [
+                        'start_bw' => $firstCounters[$mac]['bw'] ?? 0,
+                        'start_color' => $firstCounters[$mac]['color'] ?? 0,
+                        'start_timestamp' => $dateDebut,
+                        'end_bw' => $firstCounters[$mac]['bw'] ?? 0,
+                        'end_color' => $firstCounters[$mac]['color'] ?? 0,
+                        'end_timestamp' => $dateDebut
+                    ];
+                }
+            }
+        } catch (PDOException $e) {
+            error_log('paiements_dettes.php - Erreur SQL pour MAC ' . $mac . ': ' . $e->getMessage());
+            // Continuer avec le compteur de départ si disponible
+            if (isset($firstCounters[$mac])) {
                 $macPeriodData[$mac] = [
                     'start_bw' => $firstCounters[$mac]['bw'] ?? 0,
                     'start_color' => $firstCounters[$mac]['color'] ?? 0,
-                    'start_timestamp' => new DateTime(),
+                    'start_timestamp' => $dateDebut,
                     'end_bw' => $firstCounters[$mac]['bw'] ?? 0,
                     'end_color' => $firstCounters[$mac]['color'] ?? 0,
-                    'end_timestamp' => new DateTime()
+                    'end_timestamp' => $dateDebut
                 ];
             }
         }
@@ -237,8 +266,8 @@ try {
             pc.MacAddress,
             pc.SerialNumber,
             COALESCE(
-                (SELECT Model FROM compteur_relevee WHERE mac_norm = pc.mac_norm ORDER BY Timestamp DESC LIMIT 1),
-                (SELECT Model FROM compteur_relevee_ancien WHERE mac_norm = pc.mac_norm ORDER BY Timestamp DESC LIMIT 1),
+                (SELECT Model FROM compteur_relevee WHERE mac_norm = pc.mac_norm AND Model IS NOT NULL ORDER BY Timestamp DESC LIMIT 1),
+                (SELECT Model FROM compteur_relevee_ancien WHERE mac_norm = pc.mac_norm AND Model IS NOT NULL ORDER BY Timestamp DESC LIMIT 1),
                 'Inconnu'
             ) as Model
         FROM clients c
@@ -256,28 +285,44 @@ try {
     
     foreach ($clientsData as $clientRow) {
         $clientId = $clientRow['client_id'];
-        $mac = $clientRow['mac_norm'];
+        $mac = trim($clientRow['mac_norm'] ?? '');
+        
+        // Ignorer si MAC vide
+        if (empty($mac)) {
+            continue;
+        }
         
         // Initialiser le client si pas encore dans le tableau
         if (!isset($dettes[$clientId])) {
             $dettes[$clientId] = [
                 'client_id' => $clientId,
-                'numero_client' => $clientRow['numero_client'],
-                'raison_sociale' => $clientRow['raison_sociale'],
+                'numero_client' => $clientRow['numero_client'] ?? '',
+                'raison_sociale' => $clientRow['raison_sociale'] ?? '',
                 'photocopieurs' => [],
                 'total_ht' => 0,
                 'total_ttc' => 0
             ];
         }
         
-        // Récupérer les compteurs
-        $firstBw = $firstCounters[$mac]['bw'] ?? 0;
-        $firstColor = $firstCounters[$mac]['color'] ?? 0;
+        // Récupérer les compteurs avec vérifications
+        $firstBw = 0;
+        $firstColor = 0;
+        if (isset($firstCounters[$mac])) {
+            $firstBw = (int)($firstCounters[$mac]['bw'] ?? 0);
+            $firstColor = (int)($firstCounters[$mac]['color'] ?? 0);
+        }
         
-        $startBw = $macPeriodData[$mac]['start_bw'] ?? $firstBw;
-        $startColor = $macPeriodData[$mac]['start_color'] ?? $firstColor;
-        $endBw = $macPeriodData[$mac]['end_bw'] ?? $firstBw;
-        $endColor = $macPeriodData[$mac]['end_color'] ?? $firstColor;
+        $startBw = $firstBw;
+        $startColor = $firstColor;
+        $endBw = $firstBw;
+        $endColor = $firstColor;
+        
+        if (isset($macPeriodData[$mac])) {
+            $startBw = (int)($macPeriodData[$mac]['start_bw'] ?? $firstBw);
+            $startColor = (int)($macPeriodData[$mac]['start_color'] ?? $firstColor);
+            $endBw = (int)($macPeriodData[$mac]['end_bw'] ?? $firstBw);
+            $endColor = (int)($macPeriodData[$mac]['end_color'] ?? $firstColor);
+        }
         
         // Calculer la consommation (depuis le compteur de départ)
         $consumptionBw = max(0, $endBw - $firstBw);
@@ -295,9 +340,9 @@ try {
         // Ajouter le photocopieur au client
         $dettes[$clientId]['photocopieurs'][] = [
             'mac_norm' => $mac,
-            'mac_address' => $clientRow['MacAddress'],
-            'serial' => $clientRow['SerialNumber'],
-            'model' => $clientRow['Model'],
+            'mac_address' => $clientRow['MacAddress'] ?? '',
+            'serial' => $clientRow['SerialNumber'] ?? '',
+            'model' => $clientRow['Model'] ?? 'Inconnu',
             'compteur_depart_bw' => $firstBw,
             'compteur_depart_color' => $firstColor,
             'compteur_debut_bw' => $startBw,
@@ -324,6 +369,7 @@ try {
         $dette['total_ht'] = round($dette['total_ht'], 2);
         $dette['total_ttc'] = round($dette['total_ttc'], 2);
     }
+    unset($dette); // Libérer la référence
     
     // Convertir en tableau indexé
     $dettesArray = array_values($dettes);
@@ -348,17 +394,32 @@ try {
     
 } catch (PDOException $e) {
     error_log('paiements_dettes.php PDO error: ' . $e->getMessage());
+    error_log('paiements_dettes.php SQL State: ' . ($e->errorInfo[0] ?? 'N/A'));
+    error_log('paiements_dettes.php Error Code: ' . ($e->errorInfo[1] ?? 'N/A'));
+    error_log('paiements_dettes.php Error Message: ' . ($e->errorInfo[2] ?? 'N/A'));
+    
     jsonResponse([
         'ok' => false,
         'error' => 'Erreur base de données',
-        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? $e->getMessage() : null
+        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
+            'message' => $e->getMessage(),
+            'sql_state' => $e->errorInfo[0] ?? null,
+            'code' => $e->errorInfo[1] ?? null,
+            'error_info' => $e->errorInfo[2] ?? null
+        ] : null
     ], 500);
 } catch (Throwable $e) {
     error_log('paiements_dettes.php error: ' . $e->getMessage());
+    error_log('paiements_dettes.php trace: ' . $e->getTraceAsString());
+    
     jsonResponse([
         'ok' => false,
         'error' => 'Erreur serveur',
-        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? $e->getMessage() : null
+        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString())
+        ] : null
     ], 500);
 }
-
