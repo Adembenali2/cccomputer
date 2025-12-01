@@ -5,12 +5,51 @@ ini_set('display_errors','1');
 
 /**
  * /import/import_ancien_http.php
- * - Lit HTML depuis https://cccomputer.fr/test_compteur.php
- * - Traite au plus 100 relevés par run, en ordre ASC (du plus récent non importé au plus ancien)
- * - Dédup via (mac_norm, Timestamp) - la combinaison MAC + Time doit être unique
- * - Reprend depuis le dernier enregistrement importé (MAX(Timestamp))
- * - Journalise dans import_run (source=ancien_import)
- * - S'exécute automatiquement toutes les 2 minutes
+ * 
+ * Script d'import des relevés de compteurs depuis une page web externe vers la base Railway.
+ * 
+ * FONCTIONNEMENT :
+ * 1. Récupère le HTML depuis https://cccomputer.fr/test_compteur.php
+ * 2. Parse le tableau HTML pour extraire les données des relevés
+ * 3. Détecte automatiquement les colonnes via l'en-tête de la table (ou utilise un mapping par défaut)
+ * 4. Filtre les enregistrements déjà importés (reprend depuis MAX(Timestamp))
+ * 5. Insère les nouveaux relevés dans compteur_relevee_ancien
+ * 6. Utilise INSERT ... ON DUPLICATE KEY UPDATE pour gérer les doublons via la contrainte UNIQUE (mac_norm, Timestamp)
+ * 7. Journalise les résultats dans import_run
+ * 
+ * CONTRAINTE D'UNICITÉ :
+ * - La table compteur_relevee_ancien a une contrainte UNIQUE sur (mac_norm, Timestamp)
+ * - Cette contrainte garantit qu'un même couple MAC + Timestamp ne peut exister qu'une seule fois
+ * - En cas de doublon, les données sont mises à jour (ON DUPLICATE KEY UPDATE)
+ * 
+ * CONFIGURATION :
+ * - $URL : URL de la page source (par défaut: https://cccomputer.fr/test_compteur.php)
+ * - $BATCH : Nombre maximum de relevés traités par exécution (par défaut: 100)
+ * 
+ * EXÉCUTION :
+ * - Peut être exécuté manuellement : php import/import_ancien_http.php
+ * - Peut être planifié via CRON (ex: toutes les 2 minutes)
+ * - Utilise les variables d'environnement Railway pour la connexion DB (MYSQLHOST, MYSQLDATABASE, etc.)
+ * 
+ * DONNÉES IMPORTÉES :
+ * - Timestamp : Date et heure du relevé
+ * - MacAddress : Adresse MAC du photocopieur
+ * - Model : Modèle du photocopieur (si disponible)
+ * - SerialNumber : Numéro de série (si disponible)
+ * - Nom : Référence client (si disponible)
+ * - Status : État du compteur (si disponible)
+ * - TonerBlack, TonerCyan, TonerMagenta, TonerYellow : Niveaux de toner
+ * - TotalBW, TotalColor, TotalPages : Compteurs d'impression
+ * 
+ * MAINTENANCE :
+ * - Les logs sont écrits dans import_run avec source='WEB_COMPTEUR'
+ * - Les erreurs sont loggées via error_log() et incluses dans le message JSON
+ * - Le script reprend automatiquement depuis le dernier Timestamp importé
+ * 
+ * INTÉGRATION :
+ * - Ce script est appelé via import/run_import_web_if_due.php (similaire à run_import_if_due.php pour SFTP)
+ * - Le dashboard affiche le statut via import/last_import_web.php
+ * - Utilise la même table import_run que l'import SFTP, avec source='WEB_COMPTEUR' pour différencier
  */
 
 // ---------- ENV MySQL Railway ----------
@@ -42,6 +81,15 @@ $BATCH = 100; // Maximum 100 relevés par exécution
 // ---------- Tables ----------
 $pdo->exec("CREATE TABLE IF NOT EXISTS import_run( id INT AUTO_INCREMENT PRIMARY KEY, ran_at DATETIME NOT NULL, imported INT NOT NULL, skipped INT NOT NULL, ok TINYINT(1) NOT NULL, msg TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
+// ---------- S'assurer que la contrainte UNIQUE existe sur (mac_norm, Timestamp) ----------
+// Cette contrainte garantit l'unicité du couple MAC + Timestamp
+try {
+    $pdo->exec("ALTER TABLE `compteur_relevee_ancien` ADD UNIQUE KEY `uniq_mac_ts_ancien` (`mac_norm`,`Timestamp`)");
+} catch (Throwable $e) {
+    // La contrainte existe déjà ou la table n'existe pas encore - c'est OK
+    // On continue normalement
+}
+
 // ---------- Récupérer le dernier Timestamp importé (pour reprendre depuis le dernier enregistrement) ----------
 $lastTimestamp = null;
 try {
@@ -62,7 +110,7 @@ $html = @file_get_contents($URL, false, stream_context_create([
 ]));
 if($html === false){
     $errorMsg = json_encode([
-        'source'=>'ancien_import',
+        'source'=>'WEB_COMPTEUR',
         'processed'=>0,
         'inserted'=>0,
         'skipped'=>0,
@@ -86,7 +134,7 @@ $xpath = new DOMXPath($dom);
 $table = $xpath->query('//table')->item(0);
 if(!$table){
     $errorMsg = json_encode([
-        'source'=>'ancien_import',
+        'source'=>'WEB_COMPTEUR',
         'processed'=>0,
         'inserted'=>0,
         'skipped'=>0,
@@ -116,20 +164,65 @@ $extractTonerValue = function (DOMXPath $xpath, DOMNode $td): ?int {
     return null;
 };
 
+// ---------- Détection automatique des colonnes via l'en-tête de la table ----------
+// On cherche l'en-tête pour mapper les colonnes correctement
+$headerRow = $xpath->query('.//thead/tr | .//tr[th]', $table)->item(0);
+$columnMap = [];
+if($headerRow){
+    $headerCells = $headerRow->getElementsByTagName('th');
+    if($headerCells->length === 0) $headerCells = $headerRow->getElementsByTagName('td');
+    
+    for($i = 0; $i < $headerCells->length; $i++){
+        $headerText = strtolower(trim($headerCells->item($i)->textContent ?? ''));
+        if(strpos($headerText, 'mac') !== false) $columnMap['mac'] = $i;
+        elseif(strpos($headerText, 'date') !== false || strpos($headerText, 'relevé') !== false) $columnMap['date'] = $i;
+        elseif(strpos($headerText, 'ref') !== false && strpos($headerText, 'client') !== false) $columnMap['ref_client'] = $i;
+        elseif(strpos($headerText, 'marque') !== false) $columnMap['marque'] = $i;
+        elseif(strpos($headerText, 'modèle') !== false || strpos($headerText, 'model') !== false) $columnMap['modele'] = $i;
+        elseif(strpos($headerText, 'série') !== false || strpos($headerText, 'serial') !== false) $columnMap['serial'] = $i;
+        elseif(strpos($headerText, 'total nb') !== false || strpos($headerText, 'total bw') !== false) $columnMap['total_nb'] = $i;
+        elseif(strpos($headerText, 'total couleur') !== false || strpos($headerText, 'total color') !== false) $columnMap['total_couleur'] = $i;
+        elseif(strpos($headerText, 'toner k') !== false || strpos($headerText, 'toner black') !== false) $columnMap['toner_k'] = $i;
+        elseif(strpos($headerText, 'toner c') !== false || strpos($headerText, 'toner cyan') !== false) $columnMap['toner_c'] = $i;
+        elseif(strpos($headerText, 'toner m') !== false || strpos($headerText, 'toner magenta') !== false) $columnMap['toner_m'] = $i;
+        elseif(strpos($headerText, 'toner y') !== false || strpos($headerText, 'toner yellow') !== false) $columnMap['toner_y'] = $i;
+        elseif(strpos($headerText, 'état') !== false || strpos($headerText, 'status') !== false) $columnMap['status'] = $i;
+    }
+}
+
+// Fallback: mapping par défaut si la détection automatique échoue
+// Basé sur l'image fournie: ID, Date, Ref Client, Marque, Modèle, MAC, N° série, Total NB, Total Couleur, Compteur mois, Toner K/C/M/Y
+if(empty($columnMap['mac']) || empty($columnMap['date'])){
+    $columnMap = [
+        'mac' => 5,        // Colonne MAC (index 5 d'après l'image)
+        'date' => 1,       // Colonne Date relevé (index 1)
+        'ref_client' => 2, // Colonne Ref Client (index 2)
+        'marque' => 3,     // Colonne Marque (index 3)
+        'modele' => 4,     // Colonne Modèle (index 4)
+        'serial' => 6,     // Colonne N° de série (index 6)
+        'total_nb' => 7,   // Colonne Total NB (index 7)
+        'total_couleur' => 8, // Colonne Total Couleur (index 8)
+        'toner_k' => 10,   // Colonne Toner K (index 10)
+        'toner_c' => 11,   // Colonne Toner C (index 11)
+        'toner_m' => 12,   // Colonne Toner M (index 12)
+        'toner_y' => 13,   // Colonne Toner Y (index 13)
+        'status' => 9,     // Colonne Compteur du mois (index 9) - utilisé comme status
+    ];
+}
+
 $rowsData = [];
 foreach($rows as $row){
     if(!$row instanceof DOMElement) continue;
     if($row->getElementsByTagName('th')->length > 0) continue; // Skip header
     
     $cells = $row->getElementsByTagName('td');
-    if($cells->length < 10) continue;
+    // On a besoin d'au moins les colonnes MAC et Date
+    $minCells = max($columnMap['mac'] ?? 0, $columnMap['date'] ?? 0) + 1;
+    if($cells->length < $minCells) continue;
     
-    // Colonnes: 0=Ref Client, 1=MAC, 2=Date, 3=Total NB, 4=Total Couleur, 5=État, 6-9=Toner K/C/M/Y
-    $mac = $getCellText($cells->item(1));
-    $tsStr = $getCellText($cells->item(2));
-    $totalNB = $getCellText($cells->item(3));
-    $totalClr = $getCellText($cells->item(4));
-    $status = $getCellText($cells->item(5));
+    // Extraction des données selon le mapping détecté
+    $mac = isset($columnMap['mac']) ? $getCellText($cells->item($columnMap['mac'])) : '';
+    $tsStr = isset($columnMap['date']) ? $getCellText($cells->item($columnMap['date'])) : '';
     
     if($mac === '' || $tsStr === '') continue;
     
@@ -137,18 +230,31 @@ foreach($rows as $row){
     // Cela permet de reprendre depuis le dernier enregistrement importé
     if($lastTimestamp !== null && $tsStr <= $lastTimestamp) continue;
     
+    // Extraction des autres colonnes (optionnelles)
+    $refClient = isset($columnMap['ref_client']) ? $getCellText($cells->item($columnMap['ref_client'])) : null;
+    $marque = isset($columnMap['marque']) ? $getCellText($cells->item($columnMap['marque'])) : null;
+    $modele = isset($columnMap['modele']) ? $getCellText($cells->item($columnMap['modele'])) : null;
+    $serial = isset($columnMap['serial']) ? $getCellText($cells->item($columnMap['serial'])) : null;
+    $totalNB = isset($columnMap['total_nb']) ? $getCellText($cells->item($columnMap['total_nb'])) : '';
+    $totalClr = isset($columnMap['total_couleur']) ? $getCellText($cells->item($columnMap['total_couleur'])) : '';
+    $status = isset($columnMap['status']) ? $getCellText($cells->item($columnMap['status'])) : '';
+    
     $totalBW = is_numeric($totalNB) ? (int)$totalNB : 0;
     $totalColor = is_numeric($totalClr) ? (int)$totalClr : 0;
     $totalPages = $totalBW + $totalColor;
     
-    $tk = $extractTonerValue($xpath, $cells->item(6));
-    $tc = $extractTonerValue($xpath, $cells->item(7));
-    $tm = $extractTonerValue($xpath, $cells->item(8));
-    $ty = $extractTonerValue($xpath, $cells->item(9));
+    $tk = isset($columnMap['toner_k']) ? $extractTonerValue($xpath, $cells->item($columnMap['toner_k'])) : null;
+    $tc = isset($columnMap['toner_c']) ? $extractTonerValue($xpath, $cells->item($columnMap['toner_c'])) : null;
+    $tm = isset($columnMap['toner_m']) ? $extractTonerValue($xpath, $cells->item($columnMap['toner_m'])) : null;
+    $ty = isset($columnMap['toner_y']) ? $extractTonerValue($xpath, $cells->item($columnMap['toner_y'])) : null;
     
     $rowsData[] = [
         'mac' => $mac,
         'ts' => $tsStr,
+        'ref_client' => $refClient !== '' ? $refClient : null,
+        'marque' => $marque !== '' ? $marque : null,
+        'modele' => $modele !== '' ? $modele : null,
+        'serial' => $serial !== '' ? $serial : null,
         'status' => $status !== '' ? $status : null,
         'tk' => $tk,
         'tc' => $tc,
@@ -163,7 +269,7 @@ foreach($rows as $row){
 $totalCandidates = count($rowsData);
 
 if($totalCandidates === 0){
-    $msg = json_encode(['source'=>'ancien_import','processed'=>0,'inserted'=>0,'skipped'=>0,'batch'=>$BATCH], JSON_UNESCAPED_UNICODE);
+    $msg = json_encode(['source'=>'WEB_COMPTEUR','processed'=>0,'inserted'=>0,'skipped'=>0,'batch'=>$BATCH], JSON_UNESCAPED_UNICODE);
     $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),0,0,1,:m)")->execute([':m'=>$msg]);
     echo "OK ANCIEN no new data\n";
     exit(0);
@@ -180,10 +286,9 @@ if(count($rowsData) > $BATCH){
 }
 
 // ---------- Requêtes ----------
-// Vérification d'unicité : la combinaison MAC_ADDRESS + Timestamp doit être unique
-$sqlCheck = "SELECT id FROM compteur_relevee_ancien WHERE mac_norm = REPLACE(UPPER(:mac), ':', '') AND Timestamp <=> :ts LIMIT 1";
-$stmtCheck = $pdo->prepare($sqlCheck);
-
+// Utilisation de INSERT ... ON DUPLICATE KEY UPDATE pour gérer automatiquement les doublons
+// La contrainte UNIQUE sur (mac_norm, Timestamp) garantit l'unicité
+// Si un doublon est détecté, on met à jour les données (ou on ignore selon le besoin)
 $sqlInsert = "
     INSERT INTO compteur_relevee_ancien (
       Timestamp, IpAddress, Nom, Model, SerialNumber, MacAddress, Status,
@@ -193,42 +298,71 @@ $sqlInsert = "
       BWPrinted, BichromePrinted, MonoPrinted, ColorPrinted,
       TotalColor, TotalBW, DateInsertion
     ) VALUES (
-      :ts, NULL, NULL, NULL, NULL, :mac, :status,
+      :ts, NULL, :nom, :model, :serial, :mac, :status,
       :tk, :tc, :tm, :ty,
       :total_pages, NULL, NULL, NULL,
       NULL, NULL, NULL, NULL,
       NULL, NULL, NULL, NULL,
       :total_color, :total_bw, NOW()
     )
+    ON DUPLICATE KEY UPDATE
+      Nom = VALUES(Nom),
+      Model = VALUES(Model),
+      SerialNumber = VALUES(SerialNumber),
+      Status = VALUES(Status),
+      TonerBlack = VALUES(TonerBlack),
+      TonerCyan = VALUES(TonerCyan),
+      TonerMagenta = VALUES(TonerMagenta),
+      TonerYellow = VALUES(TonerYellow),
+      TotalPages = VALUES(TotalPages),
+      TotalColor = VALUES(TotalColor),
+      TotalBW = VALUES(TotalBW),
+      DateInsertion = NOW()
 ";
 $stmtInsert = $pdo->prepare($sqlInsert);
 
 // ---------- Insertion ----------
+// Utilisation de la contrainte UNIQUE pour gérer automatiquement les doublons
+// INSERT ... ON DUPLICATE KEY UPDATE met à jour les données si le couple (mac_norm, Timestamp) existe déjà
 $pdo->beginTransaction();
-$imported=0; $skipped=0; $added=[]; $errors=[];
+$imported=0; $skipped=0; $updated=0; $added=[]; $errors=[];
 try{
     foreach($rowsData as $data){
         $mac = $data['mac'];
         $tsStr = $data['ts'];
         
-        // Vérifier doublon (unicité MAC + Timestamp)
-        $stmtCheck->execute([':mac'=>$mac, ':ts'=>$tsStr]);
-        if($stmtCheck->fetch()){ 
-            $skipped++; 
-            continue; 
-        }
-        
-        // Insert
+        // Insert ou Update selon la contrainte UNIQUE
         try{
             $stmtInsert->execute([
-                ':ts'=>$tsStr, ':mac'=>$mac, ':status'=>$data['status'],
-                ':tk'=>$data['tk'], ':tc'=>$data['tc'], ':tm'=>$data['tm'], ':ty'=>$data['ty'],
+                ':ts'=>$tsStr, 
+                ':mac'=>$mac, 
+                ':nom'=>$data['ref_client'] ?? null, // Utilise Ref Client comme Nom
+                ':model'=>$data['modele'] ?? null,
+                ':serial'=>$data['serial'] ?? null,
+                ':status'=>$data['status'],
+                ':tk'=>$data['tk'], 
+                ':tc'=>$data['tc'], 
+                ':tm'=>$data['tm'], 
+                ':ty'=>$data['ty'],
                 ':total_pages'=>$data['total_pages'],
                 ':total_color'=>$data['total_color'],
                 ':total_bw'=>$data['total_bw'],
             ]);
-            $imported++;
-            $added[] = "$mac@$tsStr";
+            
+            // Vérifier si c'était un INSERT (1 ligne affectée) ou un UPDATE (2 lignes affectées)
+            $affectedRows = $stmtInsert->rowCount();
+            if($affectedRows === 1){
+                // Nouvel enregistrement inséré
+                $imported++;
+                $added[] = "$mac@$tsStr";
+            } elseif($affectedRows === 2){
+                // Enregistrement mis à jour (doublon détecté et mis à jour)
+                $updated++;
+                $skipped++; // Compté comme "skipped" car ce n'était pas un nouvel enregistrement
+            } else {
+                // Aucune ligne affectée (cas rare)
+                $skipped++;
+            }
         }catch(Throwable $e){
             $skipped++;
             $errors[] = "MAC:$mac TS:$tsStr - " . $e->getMessage();
@@ -258,9 +392,10 @@ if (count($errors) > 0 && $imported === 0) {
 }
 
 $msg = json_encode([
-    'source'=>'ancien_import',
+    'source'=>'WEB_COMPTEUR',
     'processed'=>count($rowsData),
     'inserted'=>$imported,
+    'updated'=>$updated ?? 0, // Nombre d'enregistrements mis à jour (doublons)
     'skipped'=>$skipped,
     'batch'=>$BATCH,
     'remaining_estimate'=>$remaining,
@@ -275,7 +410,8 @@ $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NO
 // Message de sortie pour le dashboard
 if ($isOk === 1) {
     if ($imported > 0) {
-        echo "OK ANCIEN batch inserted=$imported skipped=$skipped remaining≈$remaining\n";
+        $updateMsg = isset($updated) && $updated > 0 ? " updated=$updated" : "";
+        echo "OK ANCIEN batch inserted=$imported$updateMsg skipped=$skipped remaining≈$remaining\n";
     } else {
         echo "OK ANCIEN no new data to import\n";
     }

@@ -141,6 +141,10 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     <span class="ico run" id="impIco">⏳</span>
                     <span class="txt" id="impTxt">Import SFTP : vérification…</span>
                 </div>
+                <div class="import-badge" id="importWebBadge" aria-live="polite" title="État du dernier import Compteurs Web">
+                    <span class="ico run" id="impWebIco">⏳</span>
+                    <span class="txt" id="impWebTxt">Import Compteurs (WEB) : vérification…</span>
+                </div>
             </div>
         </div>
 
@@ -1614,6 +1618,89 @@ $nbClients = is_array($clients) ? count($clients) : 0;
 
         async function tick(){
             await callJSON(SFTP_URL + '?limit=10'); // on ne déclenche QUE le SFTP
+            setTimeout(refresh, 1500);
+        }
+
+        tick();        // premier run
+        refresh();     // premier badge
+        setInterval(tick, 20000); // toutes les 20s
+    })();
+
+    // --- Import auto silencieux WEB_COMPTEUR + badge (tick 20s) ---
+    (function(){
+        const WEB_URL  = '/import/run_import_web_if_due.php';
+
+        const badge = document.getElementById('importWebBadge');
+        const ico   = document.getElementById('impWebIco');
+        const txt   = document.getElementById('impWebTxt');
+
+        function setState(state, label, titleFiles) {
+            ico.classList.remove('ok','run','fail');
+
+            if (state === 'ok') {
+                ico.textContent = '✓';
+                ico.classList.add('ok');
+            } else if (state === 'run') {
+                ico.textContent = '⏳';
+                ico.classList.add('run');
+            } else if (state === 'fail') {
+                ico.textContent = '!';
+                ico.classList.add('fail');
+            } else {
+                ico.textContent = '⏳';
+                ico.classList.add('run');
+            }
+
+            if (label) txt.textContent = label;
+            if (titleFiles && Array.isArray(titleFiles) && titleFiles.length) {
+                badge.title = 'Relevés ajoutés : ' + titleFiles.join(', ');
+            }
+        }
+
+        async function callJSON(url){
+            try{
+                const res = await fetch(url, {method:'POST', credentials:'same-origin'});
+                const text = await res.text();
+                let data = null;
+                try { data = text ? JSON.parse(text) : null; } catch(e){}
+                if(!res.ok){
+                    console.error(`[IMPORT WEB] ${url} → ${res.status} ${res.statusText}`, data || text);
+                    return { ok:false, status:res.status, body:(data||text) };
+                }
+                return { ok:true, status:res.status, body:data };
+            }catch(err){
+                console.error(`[IMPORT WEB] ${url} → fetch failed`, err);
+                return { ok:false, error:String(err) };
+            }
+        }
+
+        async function refresh(){
+            try{
+                const r = await fetch('/import/last_import_web.php', {credentials:'same-origin'});
+                if (!r.ok) throw new Error('HTTP '+r.status);
+                const d = await r.json();
+
+                if (!d || !d.has_run) {
+                    setState('none', 'Import Compteurs (WEB) : —');
+                    return;
+                }
+
+                const files = (d.summary && d.summary.files) ? d.summary.files : null;
+
+                if (d.ok === 1) {
+                    const label = `Import Compteurs (WEB) OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    setState('ok', label, files);
+                } else {
+                    const label = `Import Compteurs (WEB) KO — ${d.ran_at}`;
+                    setState('fail', label, files);
+                }
+            } catch(e){
+                setState('fail', 'Import Compteurs (WEB) : erreur de lecture');
+            }
+        }
+
+        async function tick(){
+            await callJSON(WEB_URL);
             setTimeout(refresh, 1500);
         }
 

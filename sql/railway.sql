@@ -164,7 +164,8 @@ CREATE TABLE `compteur_relevee_ancien` (
   `mac_norm` char(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci GENERATED ALWAYS AS (replace(upper(`MacAddress`),_utf8mb4':',_utf8mb4'')) STORED,
   PRIMARY KEY (`id`),
   KEY `ix_compteur_date` (`Timestamp`),
-  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`)
+  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`),
+  UNIQUE KEY `uniq_mac_ts_ancien` (`mac_norm`,`Timestamp`)
 ) ENGINE=InnoDB AUTO_INCREMENT=125834 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `historique`;
