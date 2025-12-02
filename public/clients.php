@@ -470,7 +470,7 @@ if ($view === 'unassigned') {
     LIMIT 1000
     ";
 } else {
-    // Attribués uniquement (avec ou sans relevé)
+    // Tous les clients (avec ou sans photocopieur, avec ou sans relevé)
     $sql = "
     WITH v_compteur_unified AS (
       -- Relevés nouveaux (priorité 1)
@@ -494,47 +494,24 @@ if ($view === 'unassigned') {
     v_last AS (
       SELECT *, TIMESTAMPDIFF(HOUR, `Timestamp`, NOW()) AS age_hours
       FROM v_compteur_last WHERE rn = 1
-    ),
-    assigned_with_read AS (
-      SELECT
-        pc.mac_norm,
-        COALESCE(pc.SerialNumber, v.SerialNumber) AS SerialNumber,
-        COALESCE(pc.MacAddress,  v.MacAddress)    AS MacAddress,
-        v.Model, v.Nom,
-        v.`Timestamp` AS last_ts, v.age_hours AS last_age_hours,
-        v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
-        v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
-        v.source AS data_source,
-        c.id AS client_id, c.numero_client, c.raison_sociale,
-        c.nom_dirigeant, c.prenom_dirigeant, c.telephone1
-      FROM photocopieurs_clients pc
-      JOIN clients c      ON c.id = pc.id_client
-      LEFT JOIN v_last v  ON v.mac_norm = pc.mac_norm
-      WHERE pc.id_client IS NOT NULL AND v.mac_norm IS NOT NULL
-    ),
-    assigned_without_read AS (
-      SELECT
-        pc.mac_norm, pc.SerialNumber, pc.MacAddress,
-        NULL AS Model, NULL AS Nom,
-        NULL AS last_ts, NULL AS last_age_hours,
-        NULL AS TonerBlack, NULL AS TonerCyan, NULL AS TonerMagenta, NULL AS TonerYellow,
-        NULL AS TotalBW, NULL AS TotalColor, NULL AS TotalPages, NULL AS Status,
-        NULL AS data_source,
-        c.id AS client_id, c.numero_client, c.raison_sociale,
-        c.nom_dirigeant, c.prenom_dirigeant, c.telephone1
-      FROM photocopieurs_clients pc
-      JOIN clients c     ON c.id = pc.id_client
-      LEFT JOIN v_last v ON v.mac_norm = pc.mac_norm
-      WHERE pc.id_client IS NOT NULL AND v.mac_norm IS NULL
     )
-    SELECT * FROM (
-      SELECT * FROM assigned_with_read
-      UNION ALL
-      SELECT * FROM assigned_without_read
-    ) x
+    SELECT
+      c.id AS client_id, c.numero_client, c.raison_sociale,
+      c.nom_dirigeant, c.prenom_dirigeant, c.telephone1,
+      pc.mac_norm,
+      COALESCE(pc.SerialNumber, v.SerialNumber) AS SerialNumber,
+      COALESCE(pc.MacAddress, v.MacAddress) AS MacAddress,
+      v.Model, v.Nom,
+      v.`Timestamp` AS last_ts, v.age_hours AS last_age_hours,
+      v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
+      v.TotalBW, v.TotalColor, v.TotalPages, v.Status,
+      v.source AS data_source
+    FROM clients c
+    LEFT JOIN photocopieurs_clients pc ON pc.id_client = c.id
+    LEFT JOIN v_last v ON v.mac_norm = pc.mac_norm
     ORDER BY
-      COALESCE(x.raison_sociale, '—') ASC,
-      COALESCE(x.SerialNumber, x.mac_norm) ASC
+      COALESCE(c.raison_sociale, '—') ASC,
+      COALESCE(pc.SerialNumber, pc.mac_norm) ASC
     LIMIT 1000
     ";
 }
@@ -605,9 +582,9 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     </div>
     <?php if ($view !== 'unassigned'): ?>
       <div class="meta-card">
-        <span class="meta-label">Clients couverts</span>
+        <span class="meta-label">Clients</span>
         <strong class="meta-value"><?= h((string)$uniqueClientsCount) ?></strong>
-        <span class="meta-sub">Avec au moins un appareil</span>
+        <span class="meta-sub">Total dans la base</span>
       </div>
     <?php endif; ?>
     <div class="meta-card">
@@ -788,7 +765,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 
     <?php if (!$rows): ?>
       <div style="padding:1rem; color:var(--text-secondary);">
-        <?= $view==='unassigned' ? "Aucun photocopieur non attribué." : "Aucun photocopieur attribué trouvé." ?>
+        <?= $view==='unassigned' ? "Aucun photocopieur non attribué." : "Aucun client trouvé." ?>
       </div>
     <?php endif; ?>
   </div>

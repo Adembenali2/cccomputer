@@ -1,7 +1,7 @@
 <?php
 // /public/paiements.php
 // Page de gestion des paiements avec graphique de consommation de papier
-// NOUVELLE VERSION : Graphique en ligne, filtres automatiques, design modernisé
+// NOUVELLE VERSION : Réorganisation avec statistiques au-dessus, graphique, puis liste des clients avec dettes
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
@@ -78,6 +78,38 @@ $csrfToken = ensureCsrfToken();
             </div>
         </section>
         
+        <!-- Statistiques (déplacées au-dessus du graphique) -->
+        <section class="paiements-stats">
+            <div class="stats-grid">
+                <div class="stat-card stat-bw">
+                    <div class="stat-icon">📄</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Noir et blanc</div>
+                        <div class="stat-value" id="stat-total-bw">0</div>
+                        <div class="stat-unit">pages</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card stat-color">
+                    <div class="stat-icon">🎨</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Couleur</div>
+                        <div class="stat-value" id="stat-total-color">0</div>
+                        <div class="stat-unit">pages</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card stat-total">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total</div>
+                        <div class="stat-value" id="stat-total-pages">0</div>
+                        <div class="stat-unit">pages</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
         <!-- Graphique en ligne -->
         <section class="paiements-chart">
             <div class="chart-header">
@@ -110,35 +142,20 @@ $csrfToken = ensureCsrfToken();
             </div>
         </section>
         
-        <!-- Statistiques -->
-        <section class="paiements-stats">
-            <div class="stats-grid">
-                <div class="stat-card stat-bw">
-                    <div class="stat-icon">📄</div>
-                    <div class="stat-content">
-                        <div class="stat-label">Noir et blanc</div>
-                        <div class="stat-value" id="stat-total-bw">0</div>
-                        <div class="stat-unit">pages</div>
-                    </div>
-                </div>
-                
-                <div class="stat-card stat-color">
-                    <div class="stat-icon">🎨</div>
-                    <div class="stat-content">
-                        <div class="stat-label">Couleur</div>
-                        <div class="stat-value" id="stat-total-color">0</div>
-                        <div class="stat-unit">pages</div>
-                    </div>
-                </div>
-                
-                <div class="stat-card stat-total">
-                    <div class="stat-icon">📊</div>
-                    <div class="stat-content">
-                        <div class="stat-label">Total</div>
-                        <div class="stat-value" id="stat-total-pages">0</div>
-                        <div class="stat-unit">pages</div>
-                    </div>
-                </div>
+        <!-- Section Clients et Dettes -->
+        <section class="paiements-clients">
+            <div class="clients-header">
+                <h2 class="clients-title">Clients et Dettes</h2>
+                <p class="clients-subtitle">Consommation mensuelle, dettes et historique</p>
+            </div>
+            
+            <div class="clients-loading" id="clients-loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Chargement des clients...</p>
+            </div>
+            
+            <div class="clients-list" id="clients-list">
+                <!-- Rempli dynamiquement via JavaScript -->
             </div>
         </section>
     </main>
@@ -155,6 +172,7 @@ $csrfToken = ensureCsrfToken();
             setupEventListeners();
             loadPhotocopieurs();
             loadData();
+            loadClients();
         });
         
         // Initialiser les filtres avec les dates par défaut
@@ -338,6 +356,124 @@ $csrfToken = ensureCsrfToken();
             }
         }
         
+        // Charger la liste des clients avec consommation et dettes
+        async function loadClients() {
+            const loadingEl = document.getElementById('clients-loading');
+            const clientsListEl = document.getElementById('clients-list');
+            
+            loadingEl.style.display = 'block';
+            clientsListEl.innerHTML = '';
+            
+            try {
+                const response = await fetch('/API/paiements_clients.php');
+                const data = await response.json();
+                
+                if (data.ok && data.clients) {
+                    displayClients(data.clients);
+                } else {
+                    clientsListEl.innerHTML = '<div class="error-message">Erreur: ' + (data.error || 'Erreur inconnue') + '</div>';
+                }
+            } catch (error) {
+                console.error('Erreur chargement clients:', error);
+                clientsListEl.innerHTML = '<div class="error-message">Erreur lors du chargement des clients</div>';
+            } finally {
+                loadingEl.style.display = 'none';
+            }
+        }
+        
+        // Afficher les clients
+        function displayClients(clients) {
+            const clientsListEl = document.getElementById('clients-list');
+            
+            if (!clients || clients.length === 0) {
+                clientsListEl.innerHTML = '<div class="no-data">Aucun client trouvé.</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            clients.forEach(client => {
+                const consommationBw = client.consumption_bw || 0;
+                const consommationColor = client.consumption_color || 0;
+                const dette = client.debt || 0;
+                const solde = client.balance || 0;
+                
+                html += `
+                    <div class="client-card">
+                        <div class="client-header">
+                            <div class="client-info">
+                                <h3 class="client-name">${escapeHtml(client.raison_sociale || 'Client sans nom')}</h3>
+                                <p class="client-number">Client #${escapeHtml(client.numero_client || 'N/A')}</p>
+                            </div>
+                            <div class="client-summary">
+                                <div class="summary-item">
+                                    <span class="summary-label">Consommation N&B</span>
+                                    <span class="summary-value">${formatNumber(consommationBw)} pages</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Consommation Couleur</span>
+                                    <span class="summary-value">${formatNumber(consommationColor)} pages</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Dette</span>
+                                    <span class="summary-value summary-debt">${formatMoney(dette)} €</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Solde</span>
+                                    <span class="summary-value ${solde >= 0 ? 'summary-positive' : 'summary-negative'}">${formatMoney(solde)} €</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="client-history">
+                            <h4 class="history-title">Historique</h4>
+                            <div class="history-list" id="history-${client.id}">
+                                ${renderHistory(client.history || [])}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            clientsListEl.innerHTML = html;
+        }
+        
+        // Afficher l'historique
+        function renderHistory(history) {
+            if (!history || history.length === 0) {
+                return '<div class="no-history">Aucun historique disponible</div>';
+            }
+            
+            return history.map(period => {
+                const factureLink = period.facture_url ? 
+                    `<a href="${escapeHtml(period.facture_url)}" target="_blank" class="facture-link">📄 Voir facture</a>` : 
+                    '<span class="facture-link disabled">Facture non disponible</span>';
+                
+                return `
+                    <div class="history-item">
+                        <div class="history-period">
+                            <strong>${escapeHtml(period.period_label || 'Période inconnue')}</strong>
+                            ${factureLink}
+                        </div>
+                        <div class="history-details">
+                            <div class="history-detail">
+                                <span class="detail-label">N&B:</span>
+                                <span class="detail-value">${formatNumber(period.consumption_bw || 0)} pages</span>
+                            </div>
+                            <div class="history-detail">
+                                <span class="detail-label">Couleur:</span>
+                                <span class="detail-value">${formatNumber(period.consumption_color || 0)} pages</span>
+                            </div>
+                            <div class="history-detail">
+                                <span class="detail-label">Dette:</span>
+                                <span class="detail-value">${formatMoney(period.debt || 0)} €</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
         // Afficher une erreur
         function showError(message) {
             // Créer ou mettre à jour un message d'erreur
@@ -502,7 +638,21 @@ $csrfToken = ensureCsrfToken();
         function formatNumber(num) {
             return new Intl.NumberFormat('fr-FR').format(num);
         }
+        
+        // Formater un montant en euros
+        function formatMoney(amount) {
+            return new Intl.NumberFormat('fr-FR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(amount || 0);
+        }
+        
+        // Échapper le HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
     </script>
 </body>
 </html>
-
