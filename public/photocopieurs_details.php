@@ -133,21 +133,33 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
 }
 
 /* ---------- Lecture relevés ---------- */
-// CORRECTION BUG : La MAC est maintenant normalisée AVANT cette section (lignes 36-58)
-// $macParam contient toujours la MAC au format normalisé (12 hex sans séparateurs)
-// Cela garantit que la requête SQL trouve les relevés même si la MAC arrive avec des ':' dans l'URL
+/**
+ * CORRECTION BUG DÉFINITIVE : Recherche robuste des relevés
+ * 
+ * PROBLÈME IDENTIFIÉ :
+ * - Si MacAddress est NULL dans les relevés, mac_norm sera aussi NULL (colonne générée)
+ * - La requête WHERE mac_norm = :mac ne trouve rien si mac_norm est NULL
+ * - Certains relevés anciens peuvent avoir MacAddress NULL mais SerialNumber valide
+ * 
+ * SOLUTION :
+ * - Recherche d'abord par mac_norm (si MAC fournie)
+ * - Si aucun résultat, essayer aussi par SerialNumber (si disponible depuis photocopieurs_clients)
+ * - UNION ALL pour combiner compteur_relevee et compteur_relevee_ancien
+ * - Gérer le cas où mac_norm est NULL en cherchant aussi par SerialNumber
+ */
 try {
   // Sélection explicite des colonnes nécessaires au lieu de SELECT * pour améliorer les performances
   $columns = "id, `Timestamp`, Model, Nom, Status, IpAddress, MacAddress, SerialNumber, 
               TonerBlack, TonerCyan, TonerMagenta, TonerYellow, TotalBW, TotalColor, TotalPages";
   
-  // Utiliser UNION ALL pour combiner les relevés des deux tables (nouveaux et anciens)
-  // Les deux tables ont la même structure et mac_norm est généré de la même manière :
-  // mac_norm = replace(upper(MacAddress),':','') → format 12 hex sans séparateurs
-  // La condition WHERE utilise mac_norm qui correspond exactement au format de $macParam
+  $rows = [];
+  
   if ($useMac) {
-    // Requête optimisée : UNION ALL pour combiner les deux sources
+    // Recherche principale par mac_norm (format normalisé : 12 hex sans séparateurs)
     // IMPORTANT : $macParam est déjà normalisé (12 hex sans séparateurs) grâce à normalizeMac()
+    // La colonne mac_norm est générée comme : replace(upper(MacAddress),':','')
+    // Format attendu : 12 hex en majuscules sans séparateurs (ex: "0026733FC694")
+    // Si MacAddress est NULL, mac_norm sera NULL aussi, donc la condition mac_norm = :mac ne trouvera rien
     $sql = "
       SELECT {$columns}, 'nouveau' AS source
       FROM compteur_relevee 
@@ -160,6 +172,61 @@ try {
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':mac' => $macParam]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Si aucun résultat par MAC, essayer de trouver le SerialNumber associé à cette MAC
+    // Cela gère le cas où les relevés ont MacAddress NULL mais SerialNumber valide
+    // On cherche dans photocopieurs_clients d'abord, puis dans les relevés eux-mêmes
+    if (empty($rows)) {
+      try {
+        $snFromMac = null;
+        
+        // Essayer d'abord dans photocopieurs_clients (photocopieur attribué)
+        $stmtSn = $pdo->prepare("SELECT SerialNumber FROM photocopieurs_clients WHERE mac_norm = :mac AND SerialNumber IS NOT NULL AND SerialNumber != '' LIMIT 1");
+        $stmtSn->execute([':mac' => $macParam]);
+        $snFromMac = $stmtSn->fetchColumn();
+        
+        // Si pas trouvé, chercher dans les relevés (photocopieur non attribué mais avec relevés)
+        if (($snFromMac === false || $snFromMac === null || $snFromMac === '') && !empty($macParam)) {
+          // Chercher un SerialNumber dans les relevés qui ont cette MAC
+          // On normalise MacAddress manuellement pour trouver même si mac_norm est NULL dans certains cas
+          $stmtSn2 = $pdo->prepare("
+            SELECT DISTINCT SerialNumber 
+            FROM (
+              SELECT SerialNumber FROM compteur_relevee 
+              WHERE REPLACE(UPPER(COALESCE(MacAddress, '')), ':', '') = :mac 
+                AND SerialNumber IS NOT NULL AND SerialNumber != ''
+              UNION
+              SELECT SerialNumber FROM compteur_relevee_ancien 
+              WHERE REPLACE(UPPER(COALESCE(MacAddress, '')), ':', '') = :mac 
+                AND SerialNumber IS NOT NULL AND SerialNumber != ''
+            ) AS combined
+            LIMIT 1
+          ");
+          $stmtSn2->execute([':mac' => $macParam]);
+          $snFromMac = $stmtSn2->fetchColumn();
+        }
+        
+        // Si on a trouvé un SerialNumber, rechercher les relevés par SerialNumber
+        if ($snFromMac !== false && $snFromMac !== null && $snFromMac !== '') {
+          $sqlSn = "
+            SELECT {$columns}, 'nouveau' AS source
+            FROM compteur_relevee 
+            WHERE SerialNumber = :sn
+            UNION ALL
+            SELECT {$columns}, 'ancien' AS source
+            FROM compteur_relevee_ancien 
+            WHERE SerialNumber = :sn
+            ORDER BY `Timestamp` DESC, id DESC
+          ";
+          $stmtSn3 = $pdo->prepare($sqlSn);
+          $stmtSn3->execute([':sn' => $snFromMac]);
+          $rows = $stmtSn3->fetchAll(PDO::FETCH_ASSOC);
+        }
+      } catch (PDOException $eSn) {
+        error_log('photocopieurs_details fallback SN search error: '.$eSn->getMessage());
+      }
+    }
   } else {
     // Recherche par numéro de série
     $sql = "
@@ -174,8 +241,8 @@ try {
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':sn' => $snParam]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
   }
-  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
   
   // Debug : logger si aucun résultat trouvé (uniquement en cas de problème)
   if (empty($rows)) {
