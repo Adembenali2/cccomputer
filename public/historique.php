@@ -14,7 +14,6 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
 
 // Constantes
-const HISTORIQUE_PAGE_LIMIT = 200;
 const USER_SEARCH_MAX_CHARS = 80;
 const DEBOUNCE_DELAY_MS = 400;
 const DEBUG_MODE = false; // Mettre à true pour activer les logs de débogage
@@ -141,9 +140,7 @@ if (!empty($whereConditions)) {
     $sql .= ' WHERE ' . implode(' AND ', $whereConditions);
 }
 
-// LIMIT doit être un entier, pas un paramètre nommé (compatibilité PDO)
-$limit = (int)HISTORIQUE_PAGE_LIMIT;
-$sql .= ' ORDER BY h.date_action DESC LIMIT ' . $limit;
+$sql .= ' ORDER BY h.date_action DESC';
 
 if (DEBUG_MODE) {
     error_log('SQL: ' . $sql);
@@ -188,7 +185,6 @@ try {
 
 // ====== Calcul des statistiques ======
 $historiqueCount = count($historique);
-$isLimited = ($historiqueCount === HISTORIQUE_PAGE_LIMIT);
 
 // Comptage des utilisateurs uniques
 $uniqueUsers = [];
@@ -435,7 +431,7 @@ function formatDetails(PDO $pdo, ?string $details): string {
     <header class="page-header">
         <h1 class="page-title">Historique des actions</h1>
         <p class="page-subtitle">
-            Surveillez les opérations clés en temps réel. Les <?= HISTORIQUE_PAGE_LIMIT ?> dernières entrées sont affichées.
+            Surveillez les opérations clés en temps réel. Toutes les entrées sont affichées.
         </p>
     </header>
 
@@ -444,11 +440,6 @@ function formatDetails(PDO $pdo, ?string $details): string {
         <div class="meta-card">
             <span class="meta-label">Entrées listées</span>
             <strong class="meta-value"><?= h((string)$historiqueCount) ?></strong>
-            <?php if ($isLimited): ?>
-                <span class="meta-chip" title="Seulement les dernières entrées sont affichées" aria-label="Limite atteinte">
-                    <span aria-hidden="true">⚠</span> Limite atteinte
-                </span>
-            <?php endif; ?>
         </div>
         <div class="meta-card">
             <span class="meta-label">Utilisateurs impliqués</span>
