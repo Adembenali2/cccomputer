@@ -150,6 +150,73 @@ $csrfToken = ensureCsrfToken();
             </div>
         </section>
         
+        <!-- Section Périodes de Facturation 20→20 -->
+        <section class="paiements-periodes">
+            <div class="periodes-header">
+                <h2 class="periodes-title">Périodes de Facturation (20→20)</h2>
+                <p class="periodes-subtitle">Consommations et dettes par période comptable</p>
+                <div class="periodes-filters">
+                    <div class="filter-group">
+                        <label for="filter-period-month">Mois</label>
+                        <select id="filter-period-month" class="filter-select">
+                            <option value="1">Janvier</option>
+                            <option value="2">Février</option>
+                            <option value="3">Mars</option>
+                            <option value="4">Avril</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Juin</option>
+                            <option value="7">Juillet</option>
+                            <option value="8">Août</option>
+                            <option value="9">Septembre</option>
+                            <option value="10">Octobre</option>
+                            <option value="11">Novembre</option>
+                            <option value="12">Décembre</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-period-year">Année</label>
+                        <input type="number" id="filter-period-year" class="filter-input" min="2020" max="2100" value="<?= date('Y') ?>">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-period-client">Client</label>
+                        <select id="filter-period-client" class="filter-select">
+                            <option value="0">Tous les clients</option>
+                            <!-- Rempli dynamiquement -->
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <button id="btn-load-periodes" class="btn-primary">Charger</button>
+                        <button id="btn-export-periodes" class="btn-export">Export Excel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="periodes-loading" id="periodes-loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Chargement des périodes...</p>
+            </div>
+            
+            <div class="periodes-table-container" id="periodes-table-container">
+                <table class="periodes-table" id="periodes-table">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Période</th>
+                            <th>Conso N&B</th>
+                            <th>Conso Couleur</th>
+                            <th>Montant Total</th>
+                            <th>Statut Paiement</th>
+                            <th>Montant Restant</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="periodes-table-body">
+                        <!-- Rempli dynamiquement -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
         <!-- Section Clients et Dettes -->
         <section class="paiements-clients">
             <div class="clients-header">
@@ -182,6 +249,8 @@ $csrfToken = ensureCsrfToken();
             loadClientsForFilter();
             loadData();
             loadClients();
+            loadPeriodes(); // Charger les périodes par défaut
+            setupPeriodesEventListeners();
         });
         
         // Initialiser les filtres avec les dates par défaut
@@ -320,17 +389,32 @@ $csrfToken = ensureCsrfToken();
                 const data = await response.json();
                 
                 if (data.ok && data.clients) {
+                    // Remplir le filtre principal
                     const select = document.getElementById('filter-client');
                     const firstOption = select.firstElementChild;
                     select.innerHTML = '';
                     select.appendChild(firstOption);
                     
-                    // Ajouter les clients
+                    // Remplir aussi le filtre de la section périodes
+                    const selectPeriodes = document.getElementById('filter-period-client');
+                    const firstOptionPeriodes = selectPeriodes ? selectPeriodes.firstElementChild : null;
+                    if (selectPeriodes) {
+                        selectPeriodes.innerHTML = '';
+                        if (firstOptionPeriodes) {
+                            selectPeriodes.appendChild(firstOptionPeriodes);
+                        }
+                    }
+                    
+                    // Ajouter les clients aux deux filtres
                     data.clients.forEach(client => {
                         const option = document.createElement('option');
                         option.value = client.id;
                         option.textContent = client.raison_sociale || 'Client #' + (client.numero_client || client.id);
-                        select.appendChild(option);
+                        select.appendChild(option.cloneNode(true));
+                        
+                        if (selectPeriodes) {
+                            selectPeriodes.appendChild(option);
+                        }
                     });
                 }
             } catch (error) {
@@ -797,6 +881,155 @@ $csrfToken = ensureCsrfToken();
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+        
+        // ============================================
+        // GESTION DES PÉRIODES DE FACTURATION 20→20
+        // ============================================
+        
+        function setupPeriodesEventListeners() {
+            const btnLoad = document.getElementById('btn-load-periodes');
+            const btnExport = document.getElementById('btn-export-periodes');
+            
+            if (btnLoad) {
+                btnLoad.addEventListener('click', loadPeriodes);
+            }
+            
+            if (btnExport) {
+                btnExport.addEventListener('click', exportPeriodesToExcel);
+            }
+            
+            // Initialiser le mois et l'année avec les valeurs actuelles
+            const today = new Date();
+            const monthSelect = document.getElementById('filter-period-month');
+            const yearInput = document.getElementById('filter-period-year');
+            
+            if (monthSelect) {
+                monthSelect.value = today.getMonth() + 1;
+            }
+            if (yearInput) {
+                yearInput.value = today.getFullYear();
+            }
+        }
+        
+        async function loadPeriodes() {
+            const month = document.getElementById('filter-period-month').value;
+            const year = document.getElementById('filter-period-year').value;
+            const clientId = document.getElementById('filter-period-client').value || 0;
+            
+            const loadingEl = document.getElementById('periodes-loading');
+            const tableBody = document.getElementById('periodes-table-body');
+            
+            loadingEl.style.display = 'block';
+            tableBody.innerHTML = '';
+            
+            try {
+                const params = new URLSearchParams({
+                    month: month,
+                    year: year
+                });
+                
+                if (clientId && clientId !== '0') {
+                    params.append('client_id', clientId);
+                }
+                
+                const response = await fetch('/API/paiements_periodes.php?' + params.toString());
+                const data = await response.json();
+                
+                if (data.ok && data.periodes) {
+                    displayPeriodes(data.periodes);
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="8" class="error-message">Erreur: ' + (data.error || 'Erreur inconnue') + '</td></tr>';
+                }
+            } catch (error) {
+                console.error('Erreur chargement périodes:', error);
+                tableBody.innerHTML = '<tr><td colspan="8" class="error-message">Erreur lors du chargement des périodes</td></tr>';
+            } finally {
+                loadingEl.style.display = 'none';
+            }
+        }
+        
+        function displayPeriodes(periodes) {
+            const tableBody = document.getElementById('periodes-table-body');
+            
+            if (!periodes || periodes.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="8" class="no-data">Aucune période trouvée pour cette période.</td></tr>';
+                return;
+            }
+            
+            let html = '';
+            
+            periodes.forEach(periode => {
+                const statutClass = getStatutClass(periode.statut_paiement);
+                const statutLabel = getStatutLabel(periode.statut_paiement);
+                
+                html += `
+                    <tr>
+                        <td>
+                            <strong>${escapeHtml(periode.raison_sociale || 'Client sans nom')}</strong><br>
+                            <small>${escapeHtml(periode.numero_client || 'N/A')}</small>
+                        </td>
+                        <td>${escapeHtml(periode.period_label || '')}</td>
+                        <td>${formatNumber(periode.consumption_bw || 0)} pages</td>
+                        <td>${formatNumber(periode.consumption_color || 0)} pages</td>
+                        <td><strong>${formatMoney(periode.debt || 0)} €</strong></td>
+                        <td><span class="statut-badge ${statutClass}">${statutLabel}</span></td>
+                        <td>${formatMoney(periode.montant_restant || periode.debt || 0)} €</td>
+                        <td>
+                            <button class="btn-detail" onclick="showPeriodeDetail(${periode.client_id}, '${escapeHtml(periode.period_start)}', '${escapeHtml(periode.period_end)}')">
+                                Détail
+                            </button>
+                            ${periode.facture_url ? 
+                                `<a href="${escapeHtml(periode.facture_url)}" target="_blank" class="btn-facture">Facture</a>` : 
+                                '<span class="btn-facture disabled">Pas de facture</span>'
+                            }
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tableBody.innerHTML = html;
+        }
+        
+        function getStatutClass(statut) {
+            switch(statut) {
+                case 'paye': return 'statut-paye';
+                case 'partiellement_paye': return 'statut-partiel';
+                case 'non_paye': return 'statut-non-paye';
+                default: return 'statut-unknown';
+            }
+        }
+        
+        function getStatutLabel(statut) {
+            switch(statut) {
+                case 'paye': return 'Payé';
+                case 'partiellement_paye': return 'Partiellement payé';
+                case 'non_paye': return 'Non payé';
+                default: return 'Inconnu';
+            }
+        }
+        
+        function showPeriodeDetail(clientId, periodStart, periodEnd) {
+            // TODO: Ouvrir un modal avec le détail de la période (par photocopieur)
+            alert('Détail de la période pour le client #' + clientId + '\nPériode: ' + periodStart + ' → ' + periodEnd);
+        }
+        
+        function exportPeriodesToExcel() {
+            const month = document.getElementById('filter-period-month').value;
+            const year = document.getElementById('filter-period-year').value;
+            const clientId = document.getElementById('filter-period-client').value || 0;
+            
+            const params = new URLSearchParams({
+                month: month,
+                year: year,
+                format: 'excel'
+            });
+            
+            if (clientId && clientId !== '0') {
+                params.append('client_id', clientId);
+            }
+            
+            window.location.href = '/API/paiements_periodes.php?' + params.toString();
         }
     </script>
 </body>
