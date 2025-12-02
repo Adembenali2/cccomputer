@@ -574,11 +574,11 @@ try {
         $pdo->rollBack();
     }
     error_log('stock_add.php PDO error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
     error_log('stock_add.php error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
-    jsonResponse(['ok' => false, 'error' => $e->getMessage()], 400);
+    jsonResponse(['ok' => false, 'error' => 'Erreur lors de l\'ajout du produit'], 400);
 }

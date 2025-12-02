@@ -56,13 +56,13 @@ function getPeriodStartCounter($pdo, $macNorm, DateTime $periodStart) {
             FROM (
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee
-                WHERE mac_norm = :mac 
-                  AND DATE(Timestamp) = :period_date
+                WHERE mac_norm = :mac1 
+                  AND DATE(Timestamp) = :period_date1
                 UNION ALL
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac 
-                  AND DATE(Timestamp) = :period_date
+                WHERE mac_norm = :mac2 
+                  AND DATE(Timestamp) = :period_date2
             ) AS combined
             ORDER BY Timestamp ASC
             LIMIT 1
@@ -71,8 +71,10 @@ function getPeriodStartCounter($pdo, $macNorm, DateTime $periodStart) {
         $stmtAt20 = $pdo->prepare($sqlAt20);
         if ($stmtAt20) {
             $stmtAt20->execute([
-                ':mac' => $macNorm,
-                ':period_date' => $periodStartDate
+                ':mac1' => $macNorm,
+                ':period_date1' => $periodStartDate,
+                ':mac2' => $macNorm,
+                ':period_date2' => $periodStartDate
             ]);
             $resultAt20 = $stmtAt20->fetch(PDO::FETCH_ASSOC);
             
@@ -94,11 +96,11 @@ function getPeriodStartCounter($pdo, $macNorm, DateTime $periodStart) {
             FROM (
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee
-                WHERE mac_norm = :mac AND Timestamp > :period_start_end
+                WHERE mac_norm = :mac1 AND Timestamp > :period_start_end1
                 UNION ALL
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac AND Timestamp > :period_start_end
+                WHERE mac_norm = :mac2 AND Timestamp > :period_start_end2
             ) AS combined
             ORDER BY Timestamp ASC
             LIMIT 1
@@ -107,8 +109,10 @@ function getPeriodStartCounter($pdo, $macNorm, DateTime $periodStart) {
         $stmtAfter = $pdo->prepare($sqlAfter);
         if ($stmtAfter) {
             $stmtAfter->execute([
-                ':mac' => $macNorm,
-                ':period_start_end' => $periodStartEndStr
+                ':mac1' => $macNorm,
+                ':period_start_end1' => $periodStartEndStr,
+                ':mac2' => $macNorm,
+                ':period_start_end2' => $periodStartEndStr
             ]);
             $resultAfter = $stmtAfter->fetch(PDO::FETCH_ASSOC);
             
@@ -130,11 +134,11 @@ function getPeriodStartCounter($pdo, $macNorm, DateTime $periodStart) {
             FROM (
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee
-                WHERE mac_norm = :mac AND Timestamp < :period_start
+                WHERE mac_norm = :mac1 AND Timestamp < :period_start1
                 UNION ALL
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac AND Timestamp < :period_start
+                WHERE mac_norm = :mac2 AND Timestamp < :period_start2
             ) AS combined
             ORDER BY Timestamp DESC
             LIMIT 1
@@ -146,8 +150,10 @@ function getPeriodStartCounter($pdo, $macNorm, DateTime $periodStart) {
         }
         
         $stmtBefore->execute([
-            ':mac' => $macNorm,
-            ':period_start' => $periodStartStr
+            ':mac1' => $macNorm,
+            ':period_start1' => $periodStartStr,
+            ':mac2' => $macNorm,
+            ':period_start2' => $periodStartStr
         ]);
         $resultBefore = $stmtBefore->fetch(PDO::FETCH_ASSOC);
         
@@ -192,13 +198,13 @@ function getPeriodEndCounter($pdo, $macNorm, DateTime $periodEnd) {
             FROM (
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee
-                WHERE mac_norm = :mac 
-                  AND DATE(Timestamp) = :period_date
+                WHERE mac_norm = :mac1 
+                  AND DATE(Timestamp) = :period_date1
                 UNION ALL
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac 
-                  AND DATE(Timestamp) = :period_date
+                WHERE mac_norm = :mac2 
+                  AND DATE(Timestamp) = :period_date2
             ) AS combined
             ORDER BY Timestamp DESC
             LIMIT 1
@@ -207,8 +213,10 @@ function getPeriodEndCounter($pdo, $macNorm, DateTime $periodEnd) {
         $stmtAt20 = $pdo->prepare($sqlAt20);
         if ($stmtAt20) {
             $stmtAt20->execute([
-                ':mac' => $macNorm,
-                ':period_date' => $periodEndDate
+                ':mac1' => $macNorm,
+                ':period_date1' => $periodEndDate,
+                ':mac2' => $macNorm,
+                ':period_date2' => $periodEndDate
             ]);
             $resultAt20 = $stmtAt20->fetch(PDO::FETCH_ASSOC);
             
@@ -230,11 +238,11 @@ function getPeriodEndCounter($pdo, $macNorm, DateTime $periodEnd) {
             FROM (
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee
-                WHERE mac_norm = :mac AND Timestamp <= :period_end
+                WHERE mac_norm = :mac1 AND Timestamp <= :period_end1
                 UNION ALL
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac AND Timestamp <= :period_end
+                WHERE mac_norm = :mac2 AND Timestamp <= :period_end2
             ) AS combined
             ORDER BY Timestamp DESC
             LIMIT 1
@@ -246,7 +254,10 @@ function getPeriodEndCounter($pdo, $macNorm, DateTime $periodEnd) {
         }
         
         $stmt->execute([
-            ':mac' => $macNorm,
+            ':mac1' => $macNorm,
+            ':period_end1' => $periodEndStr,
+            ':mac2' => $macNorm,
+            ':period_end2' => $periodEndStr
             ':period_end' => $periodEndStr
         ]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);

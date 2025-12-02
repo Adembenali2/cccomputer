@@ -15,21 +15,7 @@ if (method_exists($pdo, 'setAttribute')) {
     }
 }
 
-/**
- * Normalise une adresse MAC au format 12 hex sans séparateurs (pour URL)
- * Retourne null si la MAC n'est pas valide
- */
-function normalizeMacForUrl(?string $mac): ?string {
-    if (empty($mac)) {
-        return null;
-    }
-    $raw = strtoupper(trim($mac));
-    $hex = preg_replace('~[^0-9A-F]~', '', $raw);
-    if (strlen($hex) !== 12) {
-        return null;
-    }
-    return $hex;
-}
+// La fonction normalizeMacForUrl() est définie dans includes/helpers.php
 
 /**
  * Vérifie si une ligne de données a une alerte (relevé manquant ou trop ancien)
@@ -650,7 +636,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         $macNorm = $r['mac_norm'] ?? '';
         $nom     = $r['Nom'] ?: '';
         $lastTsRaw = $r['last_ts'] ?? null;
-        $lastTs  = $lastTsRaw ? date('Y-m-d H:i', strtotime($lastTsRaw)) : '—';
+        $lastTs = formatDateTime($lastTsRaw, 'Y-m-d H:i');
         $ageHours = isset($r['last_age_hours']) ? (int)$r['last_age_hours'] : null;
         $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
         $totCol  = is_null($r['TotalColor']) ? '—' : number_format((int)$r['TotalColor'], 0, ',', ' ');

@@ -3,45 +3,15 @@
 require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
 authorize_page('client_fiche', ['Admin', 'Dirigeant']); // Utilise les valeurs exactes de la base de données (ENUM)   
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
 
-const PHONE_PATTERN_CF  = '/^[0-9+\-.\s]{6,}$/';
-const POSTAL_PATTERN_CF = '/^[0-9A-Za-z\-\s]{4,10}$/';
-const SIRET_PATTERN_CF  = '/^[0-9]{14}$/';
 const ALLOWED_DEPOT_CF  = ['espece','cheque','virement','paiement_carte'];
 const ALLOWED_OFFRES_CF = ['packbronze','packargent'];
 const ALLOWED_UPLOAD_EXT = ['pdf','jpg','jpeg','png'];
 
-// La fonction h() est définie dans includes/helpers.php
+// Les fonctions h(), ensureCsrfToken(), assertValidCsrf(), validatePhone(), validatePostalCode(), validateSiret() sont définies dans includes/helpers.php
 function v(?string $k, $default='') { return $_POST[$k] ?? $default; }
-
-function ensure_csrf_token(): string {
-  if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-  }
-  return $_SESSION['csrf_token'];
-}
-
-function assert_csrf_token(string $token): void {
-  if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
-    throw new RuntimeException("Session expirée. Veuillez recharger la page.");
-  }
-}
-
-function validate_phone(?string $phone): bool {
-  if ($phone === null || $phone === '') return true;
-  return (bool)preg_match(PHONE_PATTERN_CF, $phone);
-}
-
-function validate_postal(?string $postal): bool {
-  if ($postal === null || $postal === '') return false;
-  return (bool)preg_match(POSTAL_PATTERN_CF, $postal);
-}
-
-function validate_siret(?string $siret): bool {
-  if ($siret === null || $siret === '') return false;
-  return (bool)preg_match(SIRET_PATTERN_CF, $siret);
-}
 
 // --------- Récup param ----------
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -136,10 +106,10 @@ if (!$client) {
 
 // --------- Enregistrer ----------
 $flash = ['type'=>null,'msg'=>null];
-$csrfToken = ensure_csrf_token();
+$csrfToken = ensureCsrfToken();
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'save_client') {
   try {
-    assert_csrf_token($_POST['csrf_token'] ?? '');
+    assertValidCsrf($_POST['csrf_token'] ?? '');
   } catch (RuntimeException $csrfEx) {
     $flash = ['type'=>'error','msg'=>$csrfEx->getMessage()];
   }
@@ -176,16 +146,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
   if ($data['email'] && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
     $errors[] = "Email invalide.";
   }
-  if (!validate_phone($data['telephone1'])) {
+  if (!validatePhone($data['telephone1'])) {
     $errors[] = "Téléphone principal invalide.";
   }
-  if ($data['telephone2'] && !validate_phone($data['telephone2'])) {
+  if ($data['telephone2'] && !validatePhone($data['telephone2'])) {
     $errors[] = "Téléphone secondaire invalide.";
   }
-  if (!validate_postal($data['code_postal'])) {
+  if (!validatePostalCode($data['code_postal'])) {
     $errors[] = "Code postal invalide.";
   }
-  if (!validate_siret($data['siret'])) {
+  if (!validateSiret($data['siret'])) {
     $errors[] = "Le SIRET doit contenir 14 chiffres.";
   }
 

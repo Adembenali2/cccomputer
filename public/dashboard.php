@@ -5,8 +5,9 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('dashboard', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/helpers.php';
 
-// Les fonctions safeFetchColumn() et safeFetchAll() sont maintenant dans includes/helpers.php
+// Les fonctions safeFetchColumn(), safeFetchAll(), ensureCsrfToken() sont définies dans includes/helpers.php
 
 /** CSRF minimal **/
 // La fonction ensureCsrfToken() est définie dans includes/helpers.php

@@ -279,14 +279,14 @@ try {
     
     jsonResponse([
         'ok' => false,
-        'error' => 'Erreur base de données: ' . htmlspecialchars($e->getMessage()),
-        'debug' => [
+        'error' => 'Erreur base de données',
+        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
             'message' => $e->getMessage(),
             'sql_state' => $e->errorInfo[0] ?? null,
             'code' => $e->errorInfo[1] ?? null,
             'file' => basename($e->getFile()),
             'line' => $e->getLine()
-        ]
+        ] : null
     ], 500);
 } catch (Throwable $e) {
     error_log('paiements_clients.php error: ' . $e->getMessage());
@@ -295,12 +295,12 @@ try {
     
     jsonResponse([
         'ok' => false,
-        'error' => 'Erreur serveur: ' . htmlspecialchars($e->getMessage()),
-        'debug' => [
+        'error' => 'Erreur serveur',
+        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
             'message' => $e->getMessage(),
             'file' => basename($e->getFile()),
             'line' => $e->getLine(),
             'type' => get_class($e)
-        ]
+        ] : null
     ], 500);
 }

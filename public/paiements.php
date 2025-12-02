@@ -598,7 +598,12 @@ $csrfToken = ensureCsrfToken();
         
         // Mettre à jour le graphique (graphique en ligne)
         function updateChart(data) {
-            const ctx = document.getElementById('consumptionChart').getContext('2d');
+            const canvas = document.getElementById('consumptionChart');
+            if (!canvas) {
+                console.error('Canvas consumptionChart introuvable');
+                return;
+            }
+            const ctx = canvas.getContext('2d');
             
             // S'assurer que les données sont bien définies
             if (!data || !data.labels || !data.bw || !data.color) {
@@ -756,13 +761,22 @@ $csrfToken = ensureCsrfToken();
         // Mettre à jour les statistiques
         function updateStats(data) {
             // Vérifier si les tableaux existent et ne sont pas vides (JavaScript, pas PHP empty())
-            const totalBw = (Array.isArray(data.bw) && data.bw.length > 0) ? Math.max(...data.bw) : 0;
-            const totalColor = (Array.isArray(data.color) && data.color.length > 0) ? Math.max(...data.color) : 0;
+            // Utiliser reduce au lieu de Math.max(...array) pour éviter les erreurs avec de grands tableaux
+            const totalBw = (Array.isArray(data.bw) && data.bw.length > 0) 
+                ? data.bw.reduce((max, val) => Math.max(max, val || 0), 0) 
+                : 0;
+            const totalColor = (Array.isArray(data.color) && data.color.length > 0) 
+                ? data.color.reduce((max, val) => Math.max(max, val || 0), 0) 
+                : 0;
             const totalPages = totalBw + totalColor;
             
-            document.getElementById('stat-total-bw').textContent = formatNumber(totalBw);
-            document.getElementById('stat-total-color').textContent = formatNumber(totalColor);
-            document.getElementById('stat-total-pages').textContent = formatNumber(totalPages);
+            const statBwEl = document.getElementById('stat-total-bw');
+            const statColorEl = document.getElementById('stat-total-color');
+            const statPagesEl = document.getElementById('stat-total-pages');
+            
+            if (statBwEl) statBwEl.textContent = formatNumber(totalBw);
+            if (statColorEl) statColorEl.textContent = formatNumber(totalColor);
+            if (statPagesEl) statPagesEl.textContent = formatNumber(totalPages);
         }
         
         // Formater un nombre avec séparateurs

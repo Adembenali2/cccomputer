@@ -176,9 +176,9 @@ try {
     
 } catch (PDOException $e) {
     error_log('messagerie_delete.php SQL error: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
 } catch (Throwable $e) {
     error_log('messagerie_delete.php error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
 }
 

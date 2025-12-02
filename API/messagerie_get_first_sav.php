@@ -38,10 +38,11 @@ try {
         FROM sav s
         LEFT JOIN clients c ON c.id = s.id_client
         ORDER BY s.date_ouverture DESC, s.id DESC
-        LIMIT " . (int)$limit . "
+        LIMIT :limit
     ";
     
     $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
     
     $savs = $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('sav', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
 
 /** PDO en mode exceptions **/
@@ -14,28 +15,7 @@ if (method_exists($pdo, 'setAttribute')) {
 }
 
 /** Helpers **/
-// La fonction h() est définie dans includes/helpers.php
-
-function currentUserId(): ?int {
-    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
-    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
-    return null;
-}
-
-function currentUserRole(): ?string {
-    if (isset($_SESSION['emploi'])) return $_SESSION['emploi'];
-    if (isset($_SESSION['user']['Emploi'])) return $_SESSION['user']['Emploi'];
-    if (isset($_SESSION['user']['emploi'])) return $_SESSION['user']['emploi'];
-    return null;
-}
-
-/** CSRF minimal **/
-// La fonction ensureCsrfToken() est définie dans includes/helpers.php
-function assertValidCsrf(string $token): void {
-    if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
-        throw new RuntimeException("Session expirée. Veuillez recharger la page.");
-    }
-}
+// Les fonctions h(), currentUserId(), currentUserRole(), ensureCsrfToken(), assertValidCsrf() sont définies dans includes/helpers.php
 
 /** Permissions : qui peut éditer un SAV ? **/
 function canEditSav(array $sav): bool {
@@ -558,8 +538,8 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           $ouverture    = $s['date_ouverture'] ?? null;
           $fermeture    = $s['date_fermeture'] ?? null;
 
-          $ouvertureLabel = $ouverture ? date('d/m/Y', strtotime($ouverture)) : '—';
-          $fermetureLabel = $fermeture ? date('d/m/Y', strtotime($fermeture)) : '—';
+          $ouvertureLabel = formatDate($ouverture);
+          $fermetureLabel = formatDate($fermeture);
 
           $technicienNomComplet = trim(
               ($s['technicien_prenom'] ?? '') . ' ' . ($s['technicien_nom'] ?? '')

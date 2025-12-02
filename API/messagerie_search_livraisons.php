@@ -42,13 +42,14 @@ try {
            OR l.objet LIKE :q2
            OR c.raison_sociale LIKE :q3
         ORDER BY l.date_prevue DESC, l.id DESC
-        LIMIT " . (int)$limitInt . "
+        LIMIT :limit
     ";
     
     $stmt = $pdo->prepare($sql);
     $stmt->bindValue(':q1', $searchTerm, PDO::PARAM_STR);
     $stmt->bindValue(':q2', $searchTerm, PDO::PARAM_STR);
     $stmt->bindValue(':q3', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':limit', $limitInt, PDO::PARAM_INT);
     $stmt->execute();
     
     $livraisons = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -67,9 +68,9 @@ try {
 } catch (PDOException $e) {
     error_log('messagerie_search_livraisons.php SQL error: ' . $e->getMessage() . ' | Code: ' . $e->getCode());
     error_log('messagerie_search_livraisons.php SQL: ' . ($sql ?? 'N/A'));
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
 } catch (Throwable $e) {
     error_log('messagerie_search_livraisons.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
 }
 

@@ -12,9 +12,6 @@ $redirectUrl = !empty($_SESSION['user_id'])
     ? '/public/dashboard.php'
     : '/public/login.php';
 
-// (Option robuste : rediriger côté serveur tout de suite. Décommente si tu veux zapper le splash.)
-// header('Location: ' . $redirectUrl, true, 302);
-// exit;
 ?>
 <!DOCTYPE html>
 <html lang="fr">

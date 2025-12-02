@@ -66,18 +66,37 @@ if (!function_exists('validateString')) {
 }
 
 /**
- * Formate une date pour l'affichage
+ * Formate une date pour l'affichage (version robuste avec gestion d'erreurs)
  */
 if (!function_exists('formatDate')) {
     function formatDate(?string $date, string $format = 'd/m/Y'): string {
-        if (!$date) {
+        if (!$date || trim($date) === '') {
             return '—';
         }
         try {
             $dt = new DateTime($date);
             return $dt->format($format);
         } catch (Exception $e) {
-            return $date;
+            error_log('formatDate error: ' . $e->getMessage() . ' | Date: ' . $date);
+            return '—';
+        }
+    }
+}
+
+/**
+ * Formate une date avec heure pour l'affichage
+ */
+if (!function_exists('formatDateTime')) {
+    function formatDateTime(?string $date, string $format = 'd/m/Y H:i'): string {
+        if (!$date || trim($date) === '') {
+            return '—';
+        }
+        try {
+            $dt = new DateTime($date);
+            return $dt->format($format);
+        } catch (Exception $e) {
+            error_log('formatDateTime error: ' . $e->getMessage() . ' | Date: ' . $date);
+            return '—';
         }
     }
 }
@@ -171,6 +190,24 @@ if (!function_exists('currentUserId')) {
 }
 
 /**
+ * Récupère le rôle de l'utilisateur actuel depuis la session
+ */
+if (!function_exists('currentUserRole')) {
+    function currentUserRole(): ?string {
+        if (isset($_SESSION['emploi'])) {
+            return $_SESSION['emploi'];
+        }
+        if (isset($_SESSION['user']['Emploi'])) {
+            return $_SESSION['user']['Emploi'];
+        }
+        if (isset($_SESSION['user']['emploi'])) {
+            return $_SESSION['user']['emploi'];
+        }
+        return null;
+    }
+}
+
+/**
  * Vérifie le token CSRF et lance une exception si invalide
  */
 if (!function_exists('assertValidCsrf')) {
@@ -196,10 +233,14 @@ if (!function_exists('validatePhone')) {
 
 /**
  * Valide un code postal
+ * Accepte les codes postaux avec lettres, chiffres, tirets et espaces (pour gérer les formats internationaux)
  */
 if (!function_exists('validatePostalCode')) {
     function validatePostalCode(string $postal): bool {
-        $pattern = '/^[0-9]{4,10}$/';
+        if (empty($postal)) {
+            return false;
+        }
+        $pattern = '/^[0-9A-Za-z\-\s]{4,10}$/';
         return (bool)preg_match($pattern, $postal);
     }
 }
@@ -247,6 +288,45 @@ if (!function_exists('stateBadge')) {
             return '<span class="state state-na">—</span>';
         }
         return '<span class="state state-' . h($e) . '">' . h($e) . '</span>';
+    }
+}
+
+/**
+ * Normalise une adresse MAC au format 12 hex sans séparateurs
+ * Retourne un tableau avec 'norm' (12 hex) et 'colon' (format avec ':')
+ * Si la MAC n'est pas valide, retourne ['norm' => null, 'colon' => null]
+ * 
+ * @param string|null $mac Adresse MAC brute (peut contenir des séparateurs)
+ * @return array ['norm' => string|null, 'colon' => string|null]
+ */
+if (!function_exists('normalizeMac')) {
+    function normalizeMac(?string $mac): array {
+        if (empty($mac)) {
+            return ['norm' => null, 'colon' => null];
+        }
+        $raw = strtoupper(trim((string)$mac));
+        $hex = preg_replace('~[^0-9A-F]~', '', $raw);
+        if (strlen($hex) !== 12) {
+            return ['norm' => null, 'colon' => null];
+        }
+        return [
+            'norm' => $hex,
+            'colon' => implode(':', str_split($hex, 2))
+        ];
+    }
+}
+
+/**
+ * Normalise une adresse MAC pour utilisation dans les URLs
+ * Retourne la version normalisée (12 hex) ou null si invalide
+ * 
+ * @param string|null $mac Adresse MAC brute
+ * @return string|null MAC normalisée (12 hex) ou null
+ */
+if (!function_exists('normalizeMacForUrl')) {
+    function normalizeMacForUrl(?string $mac): ?string {
+        $result = normalizeMac($mac);
+        return $result['norm'];
     }
 }
 

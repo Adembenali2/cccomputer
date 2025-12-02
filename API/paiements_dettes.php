@@ -195,11 +195,11 @@ try {
             FROM (
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee
-                WHERE mac_norm = :mac AND Timestamp <= :date_end
+                WHERE mac_norm = :mac1 AND Timestamp <= :date_end1
                 UNION ALL
                 SELECT mac_norm, Timestamp, TotalBW, TotalColor
                 FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac AND Timestamp <= :date_end
+                WHERE mac_norm = :mac2 AND Timestamp <= :date_end2
             ) AS combined
             ORDER BY Timestamp DESC
             LIMIT 1
@@ -208,8 +208,10 @@ try {
         try {
             $stmtLast = $pdo->prepare($sqlLastAvailable);
             $stmtLast->execute([
-                ':mac' => $mac,
-                ':date_end' => $dateFinStr
+                ':mac1' => $mac,
+                ':date_end1' => $dateFinStr,
+                ':mac2' => $mac,
+                ':date_end2' => $dateFinStr
             ]);
             $lastReleve = $stmtLast->fetch(PDO::FETCH_ASSOC);
             

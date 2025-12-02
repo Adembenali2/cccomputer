@@ -219,14 +219,6 @@ if (strpos($qrCodePath, 'http') !== 0 && strpos($qrCodePath, '/') === 0) {
         <?php endfor; ?>
     </div>
     
-    <script>
-        // Auto-impression optionnelle (décommenter si souhaité)
-        // window.onload = function() {
-        //     setTimeout(function() {
-        //         window.print();
-        //     }, 500);
-        // };
-    </script>
 </body>
 </html>
 

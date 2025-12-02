@@ -38,10 +38,11 @@ try {
         FROM livraisons l
         LEFT JOIN clients c ON c.id = l.id_client
         ORDER BY l.date_prevue DESC, l.id DESC
-        LIMIT " . (int)$limit . "
+        LIMIT :limit
     ";
     
     $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
     
     $livraisons = $stmt->fetchAll(PDO::FETCH_ASSOC);

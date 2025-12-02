@@ -6,21 +6,9 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('agenda', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/helpers.php';
 
-// La fonction h() est définie dans includes/helpers.php
-
-function currentUserId(): ?int {
-    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
-    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
-    return null;
-}
-
-function currentUserRole(): ?string {
-    if (isset($_SESSION['emploi'])) return $_SESSION['emploi'];
-    if (isset($_SESSION['user']['Emploi'])) return $_SESSION['user']['Emploi'];
-    if (isset($_SESSION['user']['emploi'])) return $_SESSION['user']['emploi'];
-    return null;
-}
+// Les fonctions h(), formatDate(), currentUserId(), currentUserRole() sont définies dans includes/helpers.php
 
 $currentUserId = currentUserId();
 $currentUserRole = currentUserRole();
@@ -592,11 +580,11 @@ if (empty($savs) && empty($livraisons)) {
                 <div class="map-toolbar-left">
                     <strong>Agenda</strong> – 
                     <?php if ($viewMode === 'day'): ?>
-                        <?= h(date('d/m/Y', strtotime($filterDate))) ?>
+                        <?= h(formatDate($filterDate)) ?>
                     <?php elseif ($viewMode === 'week'): ?>
-                        Semaine du <?= h(date('d/m/Y', strtotime($startDate))) ?> au <?= h(date('d/m/Y', strtotime($endDate))) ?>
+                        Semaine du <?= h(formatDate($startDate)) ?> au <?= h(formatDate($endDate)) ?>
                     <?php else: ?>
-                        <?= h(date('F Y', strtotime($filterDate))) ?>
+                        <?= h(formatDate($filterDate, 'F Y')) ?>
                     <?php endif; ?>
                     <span style="margin-left: 0.5rem; color: var(--text-secondary);">
                         (<?= h((string)$totalSavs) ?> SAV, <?= h((string)$totalLivraisons) ?> livraison(s))
@@ -631,11 +619,11 @@ if (empty($savs) && empty($livraisons)) {
                         <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
                             Période sélectionnée : 
                             <?php if ($viewMode === 'day'): ?>
-                                <?= h(date('d/m/Y', strtotime($filterDate))) ?>
+                                <?= h(formatDate($filterDate)) ?>
                             <?php elseif ($viewMode === 'week'): ?>
-                                Semaine du <?= h(date('d/m/Y', strtotime($startDate))) ?> au <?= h(date('d/m/Y', strtotime($endDate))) ?>
+                                Semaine du <?= h(formatDate($startDate)) ?> au <?= h(formatDate($endDate)) ?>
                             <?php else: ?>
-                                Mois de <?= h(date('F Y', strtotime($filterDate))) ?>
+                                Mois de <?= h(formatDate($filterDate, 'F Y')) ?>
                             <?php endif; ?>
                         </p>
                         <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
@@ -727,18 +715,6 @@ if (empty($savs) && empty($livraisons)) {
                     // Fusionner tous les SAV et livraisons dans un seul tableau pour affichage simple
                     $allItems = [];
                     
-                    // Debug : var_dump pour voir l'état exact des variables avant le foreach
-                    // À retirer après diagnostic
-                    if (empty($savsToDisplay) && !empty($savsBackup)) {
-                        error_log('agenda.php - DEBUG VAR_DUMP $savs (vide): ' . var_export($savs, true));
-                        error_log('agenda.php - DEBUG VAR_DUMP $savsBackup (non vide): ' . var_export($savsBackup, true));
-                    }
-                    if (empty($livraisonsToDisplay) && !empty($livraisonsBackup)) {
-                        error_log('agenda.php - DEBUG VAR_DUMP $livraisons (vide): ' . var_export($livraisons, true));
-                        error_log('agenda.php - DEBUG VAR_DUMP $livraisonsBackup (non vide): ' . var_export($livraisonsBackup, true));
-                    }
-                    error_log('agenda.php - DEBUG: $savsToDisplay count=' . count($savsToDisplay) . ', $livraisonsToDisplay count=' . count($livraisonsToDisplay));
-                    
                     // Ajouter tous les SAV
                     foreach ($savsToDisplay as $sav) {
                         $date = ($hasDateIntervention && !empty($sav['date_intervention_prevue'])) 
@@ -776,9 +752,12 @@ if (empty($savs) && empty($livraisons)) {
                                 $clientName = $sav['client_nom'] ?? 'Client inconnu';
                                 $description = mb_substr($sav['description'] ?? '', 0, 150);
                                 if (mb_strlen($sav['description'] ?? '') > 150) $description .= '...';
-                                $dateDisplay = ($hasDateIntervention && !empty($sav['date_intervention_prevue'])) 
-                                    ? date('d/m/Y', strtotime($sav['date_intervention_prevue']))
-                                    : date('d/m/Y', strtotime($sav['date_ouverture']));
+                                $dateDisplay = '—';
+                                if ($hasDateIntervention && !empty($sav['date_intervention_prevue'])) {
+                                    $dateDisplay = formatDate($sav['date_intervention_prevue']);
+                                } elseif (!empty($sav['date_ouverture'])) {
+                                    $dateDisplay = formatDate($sav['date_ouverture']);
+                                }
                                 ?>
                                 <div class="selected-client-chip" 
                                      data-sav-id="<?= (int)$sav['id'] ?>"
@@ -832,9 +811,9 @@ if (empty($savs) && empty($livraisons)) {
                                         </span>
                                         <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.2rem; display: block;">
                                             Statut: <?= h($statutLabels[$liv['statut']] ?? $liv['statut']) ?>
-                                            • Date prévue: <?= h(date('d/m/Y', strtotime($liv['date_prevue']))) ?>
+                                            • Date prévue: <?= h(formatDate($liv['date_prevue'] ?? null)) ?>
                                             <?php if (!empty($liv['date_reelle'])): ?>
-                                                • Date réelle: <?= h(date('d/m/Y', strtotime($liv['date_reelle']))) ?>
+                                                • Date réelle: <?= h(formatDate($liv['date_reelle'])) ?>
                                             <?php endif; ?>
                                             <?php if (!empty($liv['livreur_nom']) || !empty($liv['livreur_prenom'])): ?>
                                                 • Livreur: <?= h(trim(($liv['livreur_prenom'] ?? '') . ' ' . ($liv['livreur_nom'] ?? ''))) ?>

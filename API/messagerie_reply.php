@@ -316,14 +316,13 @@ try {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    $errorMsg = 'Erreur de base de données: ' . $e->getMessage();
     error_log('messagerie_reply.php SQL error: ' . $e->getMessage());
     error_log('messagerie_reply.php SQL error code: ' . $e->getCode());
     error_log('messagerie_reply.php SQL: ' . ($sql ?? 'N/A'));
     error_log('messagerie_reply.php Params: ' . json_encode($params ?? []));
     // En mode développement, on peut retourner plus de détails
     if (defined('DEBUG') && DEBUG) {
-        jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
+        jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8')], 500);
     } else {
         jsonResponse(['ok' => false, 'error' => 'Erreur de base de données. Vérifiez les logs pour plus de détails.'], 500);
     }
@@ -331,12 +330,11 @@ try {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    $errorMsg = 'Erreur inattendue: ' . $e->getMessage();
     error_log('messagerie_reply.php error: ' . $e->getMessage());
     error_log('messagerie_reply.php stack trace: ' . $e->getTraceAsString());
     // En mode développement, on peut retourner plus de détails
     if (defined('DEBUG') && DEBUG) {
-        jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
+        jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8')], 500);
     } else {
         jsonResponse(['ok' => false, 'error' => 'Erreur inattendue. Vérifiez les logs pour plus de détails.'], 500);
     }

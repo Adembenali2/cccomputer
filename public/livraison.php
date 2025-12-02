@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('livraison', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
 
 /** PDO en mode exceptions **/
@@ -14,30 +15,7 @@ if (method_exists($pdo, 'setAttribute')) {
 }
 
 /** Helpers **/
-// La fonction h() est définie dans includes/helpers.php
-
-function currentUserId(): ?int {
-    if (isset($_SESSION['user']['id'])) return (int)$_SESSION['user']['id'];
-    if (isset($_SESSION['user_id']))    return (int)$_SESSION['user_id'];
-    return null;
-}
-
-function currentUserRole(): ?string {
-    // Récupérer le rôle depuis la session (comme défini dans auth.php)
-    if (isset($_SESSION['emploi'])) return $_SESSION['emploi'];
-    // Fallback pour compatibilité
-    if (isset($_SESSION['user']['Emploi'])) return $_SESSION['user']['Emploi'];
-    if (isset($_SESSION['user']['emploi'])) return $_SESSION['user']['emploi'];
-    return null;
-}
-
-/** CSRF minimal (même logique que dans clients.php) **/
-// La fonction ensureCsrfToken() est définie dans includes/helpers.php
-function assertValidCsrf(string $token): void {
-    if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
-        throw new RuntimeException("Session expirée. Veuillez recharger la page.");
-    }
-}
+// Les fonctions h(), currentUserId(), currentUserRole(), ensureCsrfToken(), assertValidCsrf() sont définies dans includes/helpers.php
 
 /** Permissions : qui peut éditer une livraison ? **/
 function canEditDelivery(array $liv): bool {

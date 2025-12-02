@@ -51,23 +51,7 @@ if (isset($_GET['added']) && in_array($_GET['added'], $allowedTypes, true)) {
 // FONCTIONS UTILITAIRES
 // ====================================================================
 
-/**
- * Formate une date pour l'affichage
- */
-function formatTimestamp(?string $timestamp): ?string
-{
-    if (empty($timestamp)) {
-        return null;
-    }
-    
-    try {
-        $dt = new DateTime($timestamp);
-        return $dt->format('Y-m-d H:i:s');
-    } catch (Exception $e) {
-        error_log('Erreur formatage date dans stock.php: ' . $e->getMessage());
-        return (string)$timestamp;
-    }
-}
+// La fonction formatDateTime() est définie dans includes/helpers.php
 
 /**
  * Extrait la marque depuis un modèle
@@ -149,7 +133,7 @@ try {
             'compteur_color' => is_numeric($r['TotalColor']) ? (int)$r['TotalColor'] : null,
             'statut' => $statut,
             'emplacement' => 'dépôt',
-            'last_ts' => formatTimestamp($r['last_ts'] ?? null),
+            'last_ts' => formatDateTime($r['last_ts'] ?? null, 'Y-m-d H:i:s'),
         ];
     }
 } catch (PDOException $e) {

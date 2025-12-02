@@ -237,35 +237,6 @@ function initApi(): void {
 }
 
 /**
- * Valide un ID numérique (version API qui retourne JSON)
- */
-if (!function_exists('validateId')) {
-    function validateId($id, string $name = 'ID'): int {
-        $id = (int)$id;
-        if ($id <= 0) {
-            jsonResponse(['ok' => false, 'error' => "{$name} invalide"], 400);
-        }
-        return $id;
-    }
-}
-
-/**
- * Valide une chaîne non vide (version API qui retourne JSON)
- */
-if (!function_exists('validateString')) {
-    function validateString(string $value, string $name, int $minLength = 1, int $maxLength = 1000): string {
-        $value = trim($value);
-        if (strlen($value) < $minLength) {
-            jsonResponse(['ok' => false, 'error' => "{$name} trop court (min {$minLength} caractères)"], 400);
-        }
-        if (strlen($value) > $maxLength) {
-            jsonResponse(['ok' => false, 'error' => "{$name} trop long (max {$maxLength} caractères)"], 400);
-        }
-        return $value;
-    }
-}
-
-/**
  * Cache simple basé sur fichiers
  */
 function getCache(string $key, int $ttl = 3600): ?array {
