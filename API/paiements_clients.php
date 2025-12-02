@@ -31,38 +31,52 @@ function getBillingPeriod($year, $month) {
  * Trouve le premier compteur de la période de facturation pour une MAC
  */
 function getFirstCounterInPeriod($pdo, $macNorm, DateTime $periodStart) {
-    $sql = "
-        SELECT 
-            COALESCE(TotalBW, 0) as TotalBW,
-            COALESCE(TotalColor, 0) as TotalColor
-        FROM (
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee
-            WHERE mac_norm = :mac AND Timestamp >= :period_start
-            UNION ALL
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee_ancien
-            WHERE mac_norm = :mac AND Timestamp >= :period_start
-        ) AS combined
-        ORDER BY Timestamp ASC
-        LIMIT 1
-    ";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':mac' => $macNorm,
-        ':period_start' => $periodStart->format('Y-m-d H:i:s')
-    ]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$result) {
+    if (empty($macNorm) || !($periodStart instanceof DateTime)) {
         return null;
     }
     
-    return [
-        'bw' => (int)($result['TotalBW'] ?? 0),
-        'color' => (int)($result['TotalColor'] ?? 0)
-    ];
+    try {
+        $sql = "
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor
+            FROM (
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee
+                WHERE mac_norm = :mac AND Timestamp >= :period_start
+                UNION ALL
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac AND Timestamp >= :period_start
+            ) AS combined
+            ORDER BY Timestamp ASC
+            LIMIT 1
+        ";
+        
+        $stmt = $pdo->prepare($sql);
+        if (!$stmt) {
+            error_log('paiements_clients.php - Erreur préparation requête getFirstCounterInPeriod');
+            return null;
+        }
+        
+        $stmt->execute([
+            ':mac' => $macNorm,
+            ':period_start' => $periodStart->format('Y-m-d H:i:s')
+        ]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$result) {
+            return null;
+        }
+        
+        return [
+            'bw' => (int)($result['TotalBW'] ?? 0),
+            'color' => (int)($result['TotalColor'] ?? 0)
+        ];
+    } catch (Exception $e) {
+        error_log('paiements_clients.php - Exception dans getFirstCounterInPeriod: ' . $e->getMessage());
+        return null;
+    }
 }
 
 /**
@@ -71,55 +85,74 @@ function getFirstCounterInPeriod($pdo, $macNorm, DateTime $periodStart) {
  *                       Si false, calcule la consommation cumulée depuis le premier compteur
  */
 function calculateConsumption($pdo, $macNorm, $periodStart, $periodEnd, $firstCounters, $monthly = false) {
-    // Récupérer le relevé au début de la période
-    $sqlStart = "
-        SELECT 
-            COALESCE(TotalBW, 0) as TotalBW,
-            COALESCE(TotalColor, 0) as TotalColor
-        FROM (
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee
-            WHERE mac_norm = :mac AND Timestamp <= :period_start
-            UNION ALL
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee_ancien
-            WHERE mac_norm = :mac AND Timestamp <= :period_start
-        ) AS combined
-        ORDER BY Timestamp DESC
-        LIMIT 1
-    ";
+    if (empty($macNorm) || !($periodStart instanceof DateTime) || !($periodEnd instanceof DateTime)) {
+        return ['bw' => 0, 'color' => 0];
+    }
     
-    // Récupérer le relevé à la fin de la période
-    $sqlEnd = "
-        SELECT 
-            COALESCE(TotalBW, 0) as TotalBW,
-            COALESCE(TotalColor, 0) as TotalColor
-        FROM (
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee
-            WHERE mac_norm = :mac AND Timestamp <= :period_end
-            UNION ALL
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee_ancien
-            WHERE mac_norm = :mac AND Timestamp <= :period_end
-        ) AS combined
-        ORDER BY Timestamp DESC
-        LIMIT 1
-    ";
-    
-    $stmtStart = $pdo->prepare($sqlStart);
-    $stmtStart->execute([
-        ':mac' => $macNorm,
-        ':period_start' => $periodStart->format('Y-m-d H:i:s')
-    ]);
-    $resultStart = $stmtStart->fetch(PDO::FETCH_ASSOC);
-    
-    $stmtEnd = $pdo->prepare($sqlEnd);
-    $stmtEnd->execute([
-        ':mac' => $macNorm,
-        ':period_end' => $periodEnd->format('Y-m-d H:i:s')
-    ]);
-    $resultEnd = $stmtEnd->fetch(PDO::FETCH_ASSOC);
+    try {
+        // Récupérer le relevé au début de la période
+        $sqlStart = "
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor
+            FROM (
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee
+                WHERE mac_norm = :mac AND Timestamp <= :period_start
+                UNION ALL
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac AND Timestamp <= :period_start
+            ) AS combined
+            ORDER BY Timestamp DESC
+            LIMIT 1
+        ";
+        
+        // Récupérer le relevé à la fin de la période
+        $sqlEnd = "
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor
+            FROM (
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee
+                WHERE mac_norm = :mac AND Timestamp <= :period_end
+                UNION ALL
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac AND Timestamp <= :period_end
+            ) AS combined
+            ORDER BY Timestamp DESC
+            LIMIT 1
+        ";
+        
+        $stmtStart = $pdo->prepare($sqlStart);
+        if (!$stmtStart) {
+            error_log('paiements_clients.php - Erreur préparation requête sqlStart');
+            return ['bw' => 0, 'color' => 0];
+        }
+        
+        $stmtStart->execute([
+            ':mac' => $macNorm,
+            ':period_start' => $periodStart->format('Y-m-d H:i:s')
+        ]);
+        $resultStart = $stmtStart->fetch(PDO::FETCH_ASSOC);
+        
+        $stmtEnd = $pdo->prepare($sqlEnd);
+        if (!$stmtEnd) {
+            error_log('paiements_clients.php - Erreur préparation requête sqlEnd');
+            return ['bw' => 0, 'color' => 0];
+        }
+        
+        $stmtEnd->execute([
+            ':mac' => $macNorm,
+            ':period_end' => $periodEnd->format('Y-m-d H:i:s')
+        ]);
+        $resultEnd = $stmtEnd->fetch(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        error_log('paiements_clients.php - Exception dans calculateConsumption: ' . $e->getMessage());
+        return ['bw' => 0, 'color' => 0];
+    }
     
     if (!$resultEnd) {
         return ['bw' => 0, 'color' => 0];
@@ -151,13 +184,20 @@ function calculateConsumption($pdo, $macNorm, $periodStart, $periodEnd, $firstCo
                 LIMIT 1
             ";
             
-            $stmtFirst = $pdo->prepare($sqlFirstInPeriod);
-            $stmtFirst->execute([
-                ':mac' => $macNorm,
-                ':period_start' => $periodStart->format('Y-m-d H:i:s'),
-                ':period_end' => $periodEnd->format('Y-m-d H:i:s')
-            ]);
-            $resultStart = $stmtFirst->fetch(PDO::FETCH_ASSOC);
+            try {
+                $stmtFirst = $pdo->prepare($sqlFirstInPeriod);
+                if ($stmtFirst) {
+                    $stmtFirst->execute([
+                        ':mac' => $macNorm,
+                        ':period_start' => $periodStart->format('Y-m-d H:i:s'),
+                        ':period_end' => $periodEnd->format('Y-m-d H:i:s')
+                    ]);
+                    $resultStart = $stmtFirst->fetch(PDO::FETCH_ASSOC);
+                }
+            } catch (Exception $e) {
+                error_log('paiements_clients.php - Exception dans sqlFirstInPeriod: ' . $e->getMessage());
+                $resultStart = null;
+            }
         }
         
         if (!$resultStart) {
@@ -175,14 +215,21 @@ function calculateConsumption($pdo, $macNorm, $periodStart, $periodEnd, $firstCo
     } else {
         // Consommation cumulée depuis le premier compteur de la période
         // On utilise le premier compteur à partir du début de période (20 du mois)
-        $firstCounter = getFirstCounterInPeriod($pdo, $macNorm, $periodStart);
-        if ($firstCounter === null) {
+        try {
+            $firstCounter = getFirstCounterInPeriod($pdo, $macNorm, $periodStart);
+            if ($firstCounter === null) {
+                // Fallback : utiliser le premier compteur global
+                $firstBw = $firstCounters[$macNorm]['bw'] ?? 0;
+                $firstColor = $firstCounters[$macNorm]['color'] ?? 0;
+            } else {
+                $firstBw = $firstCounter['bw'] ?? 0;
+                $firstColor = $firstCounter['color'] ?? 0;
+            }
+        } catch (Exception $e) {
+            error_log('paiements_clients.php - Exception getFirstCounterInPeriod: ' . $e->getMessage());
             // Fallback : utiliser le premier compteur global
             $firstBw = $firstCounters[$macNorm]['bw'] ?? 0;
             $firstColor = $firstCounters[$macNorm]['color'] ?? 0;
-        } else {
-            $firstBw = $firstCounter['bw'];
-            $firstColor = $firstCounter['color'];
         }
         
         return [
@@ -207,6 +254,11 @@ function calculateDebt($consumptionBw, $consumptionColor) {
 }
 
 try {
+    // Initialiser les variables importantes
+    $firstCounters = [];
+    $photocopieursByClient = [];
+    $clients = [];
+    
     // Récupérer tous les clients
     $sqlClients = "
         SELECT 
@@ -477,14 +529,35 @@ try {
     
 } catch (PDOException $e) {
     error_log('paiements_clients.php PDO error: ' . $e->getMessage());
+    error_log('paiements_clients.php SQL State: ' . ($e->errorInfo[0] ?? 'N/A'));
+    error_log('paiements_clients.php Error Code: ' . ($e->errorInfo[1] ?? 'N/A'));
+    error_log('paiements_clients.php Error Message: ' . ($e->errorInfo[2] ?? 'N/A'));
+    error_log('paiements_clients.php File: ' . $e->getFile() . ' Line: ' . $e->getLine());
+    
     jsonResponse([
         'ok' => false,
-        'error' => 'Erreur base de données'
+        'error' => 'Erreur base de données: ' . htmlspecialchars($e->getMessage()),
+        'debug' => [
+            'message' => $e->getMessage(),
+            'sql_state' => $e->errorInfo[0] ?? null,
+            'code' => $e->errorInfo[1] ?? null,
+            'file' => basename($e->getFile()),
+            'line' => $e->getLine()
+        ]
     ], 500);
 } catch (Throwable $e) {
     error_log('paiements_clients.php error: ' . $e->getMessage());
+    error_log('paiements_clients.php File: ' . $e->getFile() . ' Line: ' . $e->getLine());
+    error_log('paiements_clients.php trace: ' . $e->getTraceAsString());
+    
     jsonResponse([
         'ok' => false,
-        'error' => 'Erreur serveur'
+        'error' => 'Erreur serveur: ' . htmlspecialchars($e->getMessage()),
+        'debug' => [
+            'message' => $e->getMessage(),
+            'file' => basename($e->getFile()),
+            'line' => $e->getLine(),
+            'type' => get_class($e)
+        ]
     ], 500);
 }

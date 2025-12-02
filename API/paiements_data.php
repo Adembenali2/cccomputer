@@ -96,41 +96,60 @@ function getBillingPeriodForDate(DateTime $date) {
  * Trouve le premier compteur de la période de facturation pour une MAC
  */
 function getFirstCounterInPeriod($pdo, $macNorm, DateTime $periodStart) {
-    $sql = "
-        SELECT 
-            COALESCE(TotalBW, 0) as TotalBW,
-            COALESCE(TotalColor, 0) as TotalColor
-        FROM (
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee
-            WHERE mac_norm = :mac AND Timestamp >= :period_start
-            UNION ALL
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee_ancien
-            WHERE mac_norm = :mac AND Timestamp >= :period_start
-        ) AS combined
-        ORDER BY Timestamp ASC
-        LIMIT 1
-    ";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':mac' => $macNorm,
-        ':period_start' => $periodStart->format('Y-m-d H:i:s')
-    ]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$result) {
+    if (empty($macNorm) || !($periodStart instanceof DateTime)) {
         return null;
     }
     
-    return [
-        'bw' => (int)($result['TotalBW'] ?? 0),
-        'color' => (int)($result['TotalColor'] ?? 0)
-    ];
+    try {
+        $sql = "
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor
+            FROM (
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee
+                WHERE mac_norm = :mac AND Timestamp >= :period_start
+                UNION ALL
+                SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac AND Timestamp >= :period_start
+            ) AS combined
+            ORDER BY Timestamp ASC
+            LIMIT 1
+        ";
+        
+        $stmt = $pdo->prepare($sql);
+        if (!$stmt) {
+            error_log('paiements_data.php - Erreur préparation requête getFirstCounterInPeriod');
+            return null;
+        }
+        
+        $stmt->execute([
+            ':mac' => $macNorm,
+            ':period_start' => $periodStart->format('Y-m-d H:i:s')
+        ]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$result) {
+            return null;
+        }
+        
+        return [
+            'bw' => (int)($result['TotalBW'] ?? 0),
+            'color' => (int)($result['TotalColor'] ?? 0)
+        ];
+    } catch (Exception $e) {
+        error_log('paiements_data.php - Exception dans getFirstCounterInPeriod: ' . $e->getMessage());
+        return null;
+    }
 }
 
 try {
+    // Initialiser les variables importantes
+    $firstCounters = [];
+    $releves = [];
+    $consumption = [];
+    
     // ÉTAPE 1 : Trouver le premier compteur (compteur de départ) pour chaque MAC
     // On cherche dans les deux tables et on prend le plus ancien pour chaque MAC
     $sqlFirstCounters = "
@@ -339,20 +358,33 @@ try {
         
         // Récupérer ou mettre en cache le premier compteur de cette période
         if (!isset($periodFirstCountersCache[$periodKey])) {
-            $firstCounter = getFirstCounterInPeriod($pdo, $mac, $billingPeriod['start']);
-            if ($firstCounter === null) {
-                // Si pas de compteur dans la période, utiliser le premier compteur global comme fallback
+            try {
+                $firstCounter = getFirstCounterInPeriod($pdo, $mac, $billingPeriod['start']);
+                if ($firstCounter === null) {
+                    // Si pas de compteur dans la période, utiliser le premier compteur global comme fallback
+                    $periodFirstCountersCache[$periodKey] = [
+                        'bw' => $firstCounters[$mac]['bw'] ?? 0,
+                        'color' => $firstCounters[$mac]['color'] ?? 0
+                    ];
+                } else {
+                    $periodFirstCountersCache[$periodKey] = $firstCounter;
+                }
+            } catch (Exception $e) {
+                error_log('paiements_data.php - Erreur getFirstCounterInPeriod pour MAC ' . $mac . ': ' . $e->getMessage());
+                // En cas d'erreur, utiliser le premier compteur global comme fallback
                 $periodFirstCountersCache[$periodKey] = [
                     'bw' => $firstCounters[$mac]['bw'] ?? 0,
                     'color' => $firstCounters[$mac]['color'] ?? 0
                 ];
-            } else {
-                $periodFirstCountersCache[$periodKey] = $firstCounter;
             }
         }
         
-        $firstBw = $periodFirstCountersCache[$periodKey]['bw'];
-        $firstColor = $periodFirstCountersCache[$periodKey]['color'];
+        if (!isset($periodFirstCountersCache[$periodKey])) {
+            continue; // Ignorer ce relevé si on ne peut pas trouver le compteur de départ
+        }
+        
+        $firstBw = $periodFirstCountersCache[$periodKey]['bw'] ?? 0;
+        $firstColor = $periodFirstCountersCache[$periodKey]['color'] ?? 0;
         
         // Calculer la consommation réelle : compteur_actuel - compteur_depart_de_la_periode
         $consumptionBw = max(0, $currentBw - $firstBw);
@@ -475,27 +507,32 @@ try {
     error_log('paiements_data.php SQL State: ' . ($e->errorInfo[0] ?? 'N/A'));
     error_log('paiements_data.php Error Code: ' . ($e->errorInfo[1] ?? 'N/A'));
     error_log('paiements_data.php Error Message: ' . ($e->errorInfo[2] ?? 'N/A'));
+    error_log('paiements_data.php File: ' . $e->getFile() . ' Line: ' . $e->getLine());
     
     jsonResponse([
         'ok' => false, 
-        'error' => 'Erreur base de données',
-        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
+        'error' => 'Erreur base de données: ' . htmlspecialchars($e->getMessage()),
+        'debug' => [
             'message' => $e->getMessage(),
             'sql_state' => $e->errorInfo[0] ?? null,
-            'code' => $e->errorInfo[1] ?? null
-        ] : null
+            'code' => $e->errorInfo[1] ?? null,
+            'file' => basename($e->getFile()),
+            'line' => $e->getLine()
+        ]
     ], 500);
 } catch (Throwable $e) {
     error_log('paiements_data.php error: ' . $e->getMessage());
+    error_log('paiements_data.php File: ' . $e->getFile() . ' Line: ' . $e->getLine());
     error_log('paiements_data.php trace: ' . $e->getTraceAsString());
     
     jsonResponse([
         'ok' => false, 
-        'error' => 'Erreur serveur',
-        'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
+        'error' => 'Erreur serveur: ' . htmlspecialchars($e->getMessage()),
+        'debug' => [
             'message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine()
-        ] : null
+            'file' => basename($e->getFile()),
+            'line' => $e->getLine(),
+            'type' => get_class($e)
+        ]
     ], 500);
 }
