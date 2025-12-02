@@ -211,47 +211,69 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             }
             
             if (isNoDefaultIdError($e)) {
+                // La table clients n'a pas AUTO_INCREMENT, il faut générer l'ID manuellement
+                // Utiliser une transaction avec SELECT FOR UPDATE pour éviter les race conditions
                 try {
                     $pdo->beginTransaction();
-                    // Utiliser un verrou de table pour éviter les race conditions
-                    // Note: En production, il serait préférable d'utiliser AUTO_INCREMENT
-                    $pdo->exec("LOCK TABLES clients WRITE");
-                    try {
-                        $id = nextClientId($pdo);
-                        $pdo->prepare("
-                            INSERT INTO clients
-                            (id, numero_client, raison_sociale, adresse, code_postal, ville,
-                             adresse_livraison, livraison_identique, siret, numero_tva,
-                             nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
-                             email, parrain, offre)
-                            VALUES
-                            (:id, :numero_client, :raison_sociale, :adresse, :code_postal, :ville,
-                             :adresse_livraison, :livraison_identique, :siret, :numero_tva,
-                             :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
-                             :email, :parrain, :offre)
-                        ")->execute($params + [':id' => $id]);
-                    } finally {
-                        $pdo->exec("UNLOCK TABLES");
-                    }
-
+                    
+                    // Générer l'ID en verrouillant la table avec SELECT FOR UPDATE
+                    // Cela garantit qu'aucun autre processus ne peut lire/modifier pendant la génération
+                    $stmt = $pdo->prepare("SELECT COALESCE(MAX(id),0)+1 FROM clients FOR UPDATE");
+                    $stmt->execute();
+                    $id = (int)$stmt->fetchColumn();
+                    
+                    // Insérer avec l'ID généré
+                    $stmt = $pdo->prepare("
+                        INSERT INTO clients
+                        (id, numero_client, raison_sociale, adresse, code_postal, ville,
+                         adresse_livraison, livraison_identique, siret, numero_tva,
+                         nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
+                         email, parrain, offre)
+                        VALUES
+                        (:id, :numero_client, :raison_sociale, :adresse, :code_postal, :ville,
+                         :adresse_livraison, :livraison_identique, :siret, :numero_tva,
+                         :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
+                         :email, :parrain, :offre)
+                    ");
+                    $stmt->execute($params + [':id' => $id]);
+                    
+                    // Enregistrer l'action dans l'historique
                     $details = "Client créé: ID=" . $id . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
                     enregistrerAction($pdo, currentUserId(), 'client_ajoute', $details);
+                    
                     $pdo->commit();
                     header('Location: /public/clients.php?added=1');
                     exit;
                 } catch (PDOException $eId) {
                     // Rollback uniquement si une transaction est active
                     if ($pdo->inTransaction()) {
-                        $pdo->rollBack();
+                        try {
+                            $pdo->rollBack();
+                        } catch (PDOException $rollbackEx) {
+                            // Ignorer l'erreur de rollback
+                        }
                     }
-                    // S'assurer de déverrouiller la table en cas d'erreur
-                    try {
-                        $pdo->exec("UNLOCK TABLES");
-                    } catch (PDOException $unlockEx) {
-                        // Ignorer l'erreur de déverrouillage si la table n'était pas verrouillée
+                    
+                    // Logger l'erreur avec plus de détails
+                    $errorInfo = $eId->errorInfo ?? [];
+                    $errorCode = $errorInfo[1] ?? 'N/A';
+                    $errorMessage = $eId->getMessage();
+                    
+                    error_log('clients.php INSERT with id error: ' . $errorMessage);
+                    error_log('clients.php Error code: ' . $errorCode . ' | SQL State: ' . ($errorInfo[0] ?? 'N/A'));
+                    if (isset($id)) {
+                        error_log('clients.php Generated ID: ' . $id);
                     }
-                    error_log('clients.php INSERT with id error: ' . $eId->getMessage());
-                    $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client (id requis)."];
+                    
+                    // Message d'erreur plus informatif
+                    $userMessage = "Erreur SQL: impossible de créer le client.";
+                    if ($errorCode === 1062) {
+                        $userMessage = "Erreur: Le numéro client ou l'ID existe déjà.";
+                    } elseif ($errorCode === 1048 || $errorCode === 1364) {
+                        $userMessage = "Erreur: Un champ obligatoire est manquant.";
+                    }
+                    
+                    $flash = ['type' => 'error', 'msg' => $userMessage];
                 }
             } elseif ((int)($e->errorInfo[1] ?? 0) === 1062) {
                 try {
