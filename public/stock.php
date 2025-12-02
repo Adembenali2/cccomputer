@@ -1379,7 +1379,6 @@ $sectionImages = [
     let detailModalOpen = null;
     
     function initStockScripts() {
-        console.log('Initialisation des scripts stock...');
         initFilter();
         initDetailModal();
         initAddModal();
@@ -2200,7 +2199,6 @@ $sectionImages = [
                         for (let i = 0; i < 30; i++) {
                             if (typeof Html5Qrcode !== 'undefined') {
                                 libraryReady = true;
-                                console.log('Bibliothèque détectée après', i * 100, 'ms');
                                 break;
                             }
                             await new Promise(function(resolve) {
@@ -2317,7 +2315,6 @@ $sectionImages = [
                         onScanError
                     );
                     started = true;
-                    console.log('✅ Caméra arrière démarrée avec succès');
                 } catch (envError) {
                     console.warn('⚠️ Caméra arrière non disponible, essai caméra avant:', envError);
                     // Essayer la caméra avant (user) avec qualité professionnelle
@@ -2441,9 +2438,6 @@ $sectionImages = [
         
         // Callback succès scan - Optimisé pour détection ultra-rapide
         function onScanSuccess(decodedText, decodedResult) {
-            // Debug: vérifier que la fonction est appelée
-            console.log('Scan détecté:', decodedText);
-            
             if (!decodedText) {
                 return;
             }
@@ -2478,7 +2472,6 @@ $sectionImages = [
         
         // Callback erreur scan
         function onScanError(errorMessage) {
-            // Logger toutes les erreurs pour debug
             if (errorMessage) {
                 // Ignorer les erreurs normales (pas de code détecté)
                 if (errorMessage.includes('No QR code') || 
@@ -2487,8 +2480,6 @@ $sectionImages = [
                     // Erreur normale, on ignore silencieusement
                     return;
                 }
-                // Logger les autres erreurs pour debug
-                console.warn('⚠️ Erreur scan:', errorMessage);
             }
         }
         

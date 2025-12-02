@@ -182,9 +182,8 @@ try {
     error_log('agenda.php - Erreur récupération livraisons: ' . $e->getMessage());
 }
 
-// Sauvegarder les données APRÈS les requêtes (y compris les requêtes simplifiées)
-// Utiliser les variables sauvegardées si elles existent, sinon utiliser les originaux
-$savsBackup = isset($savsAfterQuery) ? $savsAfterQuery : $savs;
+// Sauvegarder les données APRÈS les requêtes
+$savsBackup = $savs;
 $livraisonsBackup = isset($livraisonsAfterQuery) ? $livraisonsAfterQuery : $livraisons;
 
 // Grouper par date, puis par utilisateur, puis par client
@@ -353,8 +352,6 @@ unset($dateData);
 // Statistiques
 $totalSavs = count($savs);
 $totalLivraisons = count($livraisons);
-
-// Debug : Vérifier s'il y a des SAV/livraisons dans la base (pour diagnostic)
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -522,11 +519,9 @@ $totalLivraisons = count($livraisons);
 
             <div class="agenda-container" style="padding: 1rem; max-height: calc(100vh - 200px); overflow-y: auto;">
                 <?php 
-                // Debug : Vérifier l'état des variables avant l'affichage
                 // Utiliser les sauvegardes si les originaux sont vides
                 $savsToDisplay = !empty($savs) ? $savs : $savsBackup;
                 $livraisonsToDisplay = !empty($livraisons) ? $livraisons : $livraisonsBackup;
-                
                 ?>
                 
                 <?php if (empty($savsToDisplay) && empty($livraisonsToDisplay)): ?>
@@ -552,42 +547,6 @@ $totalLivraisons = count($livraisons);
                                 <?php endif; ?>
                             </ul>
                         </p>
-                        <?php if (!empty($debugInfo)): ?>
-                            <div style="margin-top: 1rem; padding: 1rem; background: #f3f4f6; border-radius: 4px; font-size: 0.85rem;">
-                                <strong>Informations de diagnostic :</strong>
-                                <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
-                                    <li>SAV dans la base (non résolus/annulés) : <?= h((string)($debugInfo['total_savs_db'] ?? 0)) ?></li>
-                                    <li>Livraisons dans la base (non livrées/annulées) : <?= h((string)($debugInfo['total_livraisons_db'] ?? 0)) ?></li>
-                                    <?php if (!empty($debugInfo['sav_dates'])): ?>
-                                        <li>Dates SAV : du <?= h($debugInfo['sav_dates']['min_date'] ?? 'N/A') ?> au <?= h($debugInfo['sav_dates']['max_date'] ?? 'N/A') ?></li>
-                                    <?php endif; ?>
-                                    <?php if (!empty($debugInfo['livraison_dates'])): ?>
-                                        <li>Dates livraisons : du <?= h($debugInfo['livraison_dates']['min_date'] ?? 'N/A') ?> au <?= h($debugInfo['livraison_dates']['max_date'] ?? 'N/A') ?></li>
-                                    <?php endif; ?>
-                                    <?php if (!empty($debugInfo['savs_in_period'])): ?>
-                                        <li>SAV dans la période (<?= count($debugInfo['savs_in_period']) ?>) :
-                                            <ul style="margin-top: 0.3rem; padding-left: 1.5rem;">
-                                                <?php foreach ($debugInfo['savs_in_period'] as $savDebug): ?>
-                                                    <li>
-                                                        <?= h($savDebug['reference']) ?> - 
-                                                        Date: <?= h($savDebug['date_ouverture']) ?> - 
-                                                        Technicien: <?= $savDebug['id_technicien'] ? h((string)$savDebug['id_technicien']) : 'Non assigné' ?> - 
-                                                        Statut: <?= h($savDebug['statut']) ?>
-                                                    </li>
-                                                <?php endforeach; ?>
-                                            </ul>
-                                        </li>
-                                    <?php endif; ?>
-                                    <?php if (!empty($debugInfo['user_info'])): ?>
-                                        <li>Votre rôle : <?= h($debugInfo['user_info']['currentUserRole'] ?? 'Non défini') ?> 
-                                            (Admin: <?= $debugInfo['user_info']['isAdmin'] ? 'Oui' : 'Non' ?>, 
-                                            Technicien: <?= $debugInfo['user_info']['isTechnicien'] ? 'Oui' : 'Non' ?>, 
-                                            Livreur: <?= $debugInfo['user_info']['isLivreur'] ? 'Oui' : 'Non' ?>)
-                                        </li>
-                                    <?php endif; ?>
-                                </ul>
-                            </div>
-                        <?php endif; ?>
                     </div>
                 <?php else: ?>
                     <?php 

@@ -483,7 +483,6 @@ function h($str): string {
             lastScannedCode = decodedText;
             lastScanTime = now;
             
-            console.log('Code scanné:', decodedText);
             showSuccess('Code détecté: ' + decodedText);
             
             // Récupérer les détails du produit

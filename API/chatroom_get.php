@@ -2,9 +2,8 @@
 // API/chatroom_get.php
 // Endpoint pour récupérer les messages de la chatroom globale
 
-// Mode debug temporaire - activer l'affichage des erreurs
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // On garde à 0 pour ne pas polluer la sortie, mais on log tout
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
 // Buffer de sortie pour capturer toute sortie accidentelle
