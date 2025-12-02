@@ -1,7 +1,8 @@
 <?php
 // API pour récupérer les données de consommation de papier (pour la page Paiements)
-// NOUVELLE LOGIQUE : Calcul de la consommation depuis le premier compteur enregistré pour chaque MAC
+// NOUVELLE LOGIQUE : Calcul de la consommation avec compteur de départ = compteur du 20 ou dernier avant
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/includes/paiements_helpers.php';
 
 initApi();
 requireApiAuth();
@@ -66,206 +67,12 @@ if (!empty($macFilter)) {
     }
 }
 
-/**
- * Fonction pour obtenir la période de facturation (20→20) pour une date donnée
- */
-function getBillingPeriodForDate(DateTime $date) {
-    $year = (int)$date->format('Y');
-    $month = (int)$date->format('m');
-    $day = (int)$date->format('d');
-    
-    // Si on est avant le 20, la période commence le 20 du mois précédent
-    if ($day < 20) {
-        $periodStart = new DateTime("$year-$month-20 00:00:00");
-        $periodStart->modify('-1 month');
-        $periodEnd = new DateTime("$year-$month-20 23:59:59");
-    } else {
-        // Sinon, la période commence le 20 du mois courant
-        $periodStart = new DateTime("$year-$month-20 00:00:00");
-        $periodEnd = clone $periodStart;
-        $periodEnd->modify('+1 month');
-    }
-    
-    return [
-        'start' => $periodStart,
-        'end' => $periodEnd
-    ];
-}
-
-/**
- * Trouve le premier compteur de la période de facturation pour une MAC
- */
-function getFirstCounterInPeriod($pdo, $macNorm, DateTime $periodStart) {
-    if (empty($macNorm) || !($periodStart instanceof DateTime)) {
-        return null;
-    }
-    
-    try {
-        $sql = "
-            SELECT 
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor
-            FROM (
-                SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                FROM compteur_relevee
-                WHERE mac_norm = :mac AND Timestamp >= :period_start
-                UNION ALL
-                SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac AND Timestamp >= :period_start
-            ) AS combined
-            ORDER BY Timestamp ASC
-            LIMIT 1
-        ";
-        
-        $stmt = $pdo->prepare($sql);
-        if (!$stmt) {
-            error_log('paiements_data.php - Erreur préparation requête getFirstCounterInPeriod');
-            return null;
-        }
-        
-        $stmt->execute([
-            ':mac' => $macNorm,
-            ':period_start' => $periodStart->format('Y-m-d H:i:s')
-        ]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$result) {
-            return null;
-        }
-        
-        return [
-            'bw' => (int)($result['TotalBW'] ?? 0),
-            'color' => (int)($result['TotalColor'] ?? 0)
-        ];
-    } catch (Exception $e) {
-        error_log('paiements_data.php - Exception dans getFirstCounterInPeriod: ' . $e->getMessage());
-        return null;
-    }
-}
-
 try {
     // Initialiser les variables importantes
-    $firstCounters = [];
     $releves = [];
     $consumption = [];
     
-    // ÉTAPE 1 : Trouver le premier compteur (compteur de départ) pour chaque MAC
-    // On cherche dans les deux tables et on prend le plus ancien pour chaque MAC
-    $sqlFirstCounters = "
-        SELECT 
-            mac_norm,
-            MIN(Timestamp) as first_timestamp,
-            (
-                SELECT TotalBW 
-                FROM (
-                    SELECT mac_norm, Timestamp, TotalBW
-                    FROM compteur_relevee
-                    WHERE mac_norm = t.mac_norm AND Timestamp = t.min_ts
-                    UNION ALL
-                    SELECT mac_norm, Timestamp, TotalBW
-                    FROM compteur_relevee_ancien
-                    WHERE mac_norm = t.mac_norm AND Timestamp = t.min_ts
-                    ORDER BY Timestamp ASC
-                    LIMIT 1
-                ) AS first_bw
-            ) as first_bw,
-            (
-                SELECT TotalColor 
-                FROM (
-                    SELECT mac_norm, Timestamp, TotalColor
-                    FROM compteur_relevee
-                    WHERE mac_norm = t.mac_norm AND Timestamp = t.min_ts
-                    UNION ALL
-                    SELECT mac_norm, Timestamp, TotalColor
-                    FROM compteur_relevee_ancien
-                    WHERE mac_norm = t.mac_norm AND Timestamp = t.min_ts
-                    ORDER BY Timestamp ASC
-                    LIMIT 1
-                ) AS first_color
-            ) as first_color
-        FROM (
-            SELECT 
-                mac_norm,
-                MIN(Timestamp) as min_ts
-            FROM (
-                SELECT mac_norm, Timestamp
-                FROM compteur_relevee
-                WHERE mac_norm IS NOT NULL AND mac_norm != ''
-                " . ($macNorm ? "AND mac_norm = :mac_norm_base" : "") . "
-                UNION ALL
-                SELECT mac_norm, Timestamp
-                FROM compteur_relevee_ancien
-                WHERE mac_norm IS NOT NULL AND mac_norm != ''
-                " . ($macNorm ? "AND mac_norm = :mac_norm_base" : "") . "
-            ) AS all_releves
-            GROUP BY mac_norm
-        ) AS t
-        GROUP BY mac_norm
-    ";
-    
-    // Approche simplifiée : récupérer tous les relevés triés, puis trouver le premier par MAC
-    $sqlAllReleves = "
-        SELECT 
-            mac_norm,
-            Timestamp,
-            COALESCE(TotalBW, 0) as TotalBW,
-            COALESCE(TotalColor, 0) as TotalColor,
-            Model,
-            MacAddress
-        FROM (
-            SELECT 
-                mac_norm,
-                Timestamp,
-                TotalBW,
-                TotalColor,
-                Model,
-                MacAddress
-            FROM compteur_relevee
-            WHERE mac_norm IS NOT NULL 
-              AND mac_norm != ''
-              " . ($macNorm ? "AND mac_norm = :mac_norm1" : "") . "
-            
-            UNION ALL
-            
-            SELECT 
-                mac_norm,
-                Timestamp,
-                TotalBW,
-                TotalColor,
-                Model,
-                MacAddress
-            FROM compteur_relevee_ancien
-            WHERE mac_norm IS NOT NULL 
-              AND mac_norm != ''
-              " . ($macNorm ? "AND mac_norm = :mac_norm2" : "") . "
-        ) AS combined
-        ORDER BY mac_norm, Timestamp ASC
-    ";
-    
-    $params = [];
-    if ($macNorm) {
-        $params[':mac_norm1'] = $macNorm;
-        $params[':mac_norm2'] = $macNorm;
-    }
-    
-    $stmt = $pdo->prepare($sqlAllReleves);
-    $stmt->execute($params);
-    $allReleves = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Trouver le premier compteur pour chaque MAC (compteur de départ)
-    $firstCounters = []; // [mac_norm => ['bw' => value, 'color' => value]]
-    foreach ($allReleves as $releve) {
-        $mac = $releve['mac_norm'];
-        if (!isset($firstCounters[$mac])) {
-            $firstCounters[$mac] = [
-                'bw' => (int)($releve['TotalBW'] ?? 0),
-                'color' => (int)($releve['TotalColor'] ?? 0)
-            ];
-        }
-    }
-    
-    // ÉTAPE 2 : Filtrer les relevés dans la période demandée
+    // ÉTAPE 1 : Filtrer les relevés dans la période demandée
     $dateStartFull = $dateStart . ' 00:00:00';
     $dateEndFull = $dateEnd . ' 23:59:59';
     
@@ -327,101 +134,109 @@ try {
     $stmtFiltered->execute($paramsFiltered);
     $releves = $stmtFiltered->fetchAll(PDO::FETCH_ASSOC);
     
-    // ÉTAPE 3 : Calculer la consommation réelle (compteur_actuel - compteur_depart_de_la_periode)
-    $consumption = []; // Structure: [period_label => ['bw' => total, 'color' => total]]
+    // ÉTAPE 3 : Calculer la consommation réelle selon la logique 20→20
+    // On calcule pour chaque période de facturation (20→20) dans la plage de dates
     
-    // Cache pour les premiers compteurs de période (évite les requêtes multiples)
-    $periodFirstCountersCache = []; // [mac_period_key => ['bw' => value, 'color' => value]]
-    
+    // Récupérer toutes les MAC uniques dans les relevés filtrés
+    $macsInReleves = [];
     foreach ($releves as $releve) {
-        // Ignorer les relevés sans MAC ou sans timestamp valide
-        if (empty($releve['mac_norm']) || empty($releve['Timestamp'])) {
-            continue;
+        if (!empty($releve['mac_norm'])) {
+            $macsInReleves[$releve['mac_norm']] = true;
         }
+    }
+    
+    // Si un filtre MAC est appliqué, ne garder que cette MAC
+    if ($macNorm) {
+        $macsInReleves = [$macNorm => true];
+    }
+    
+    // Récupérer toutes les périodes de facturation (20→20) dans la plage de dates
+    $dateStartObj = new DateTime($dateStart);
+    $dateEndObj = new DateTime($dateEnd);
+    
+    // Ajuster le début à la période de facturation
+    $currentPeriodStart = clone $dateStartObj;
+    $startDay = (int)$currentPeriodStart->format('d');
+    if ($startDay < 20) {
+        $currentPeriodStart->modify('-1 month');
+    }
+    $currentPeriodStart->setDate(
+        (int)$currentPeriodStart->format('Y'),
+        (int)$currentPeriodStart->format('m'),
+        20
+    );
+    $currentPeriodStart->setTime(0, 0, 0);
+    
+    // Calculer la consommation pour chaque période 20→20
+    $consumption = []; // Structure: [period_label => ['bw' => total, 'color' => total]]
+    $periodConsumptionCache = []; // [mac_period_key => data]
+    
+    // Parcourir toutes les périodes de facturation dans la plage
+    while ($currentPeriodStart <= $dateEndObj) {
+        $periodStart = clone $currentPeriodStart;
+        $periodEnd = clone $currentPeriodStart;
+        $periodEnd->modify('+1 month');
         
-        $mac = $releve['mac_norm'];
-        
-        // Gérer les erreurs de date
-        try {
-            $timestamp = new DateTime($releve['Timestamp']);
-        } catch (Exception $e) {
-            error_log('paiements_data.php - Date invalide pour MAC ' . $mac . ': ' . $releve['Timestamp']);
-            continue;
-        }
-        
-        $currentBw = (int)($releve['TotalBW'] ?? 0);
-        $currentColor = (int)($releve['TotalColor'] ?? 0);
-        
-        // Déterminer la période de facturation pour ce relevé (20→20)
-        $billingPeriod = getBillingPeriodForDate($timestamp);
-        $periodKey = $mac . '_' . $billingPeriod['start']->format('Y-m-d');
-        
-        // Récupérer ou mettre en cache le premier compteur de cette période
-        if (!isset($periodFirstCountersCache[$periodKey])) {
-            try {
-                $firstCounter = getFirstCounterInPeriod($pdo, $mac, $billingPeriod['start']);
-                if ($firstCounter === null) {
-                    // Si pas de compteur dans la période, utiliser le premier compteur global comme fallback
-                    $periodFirstCountersCache[$periodKey] = [
-                        'bw' => $firstCounters[$mac]['bw'] ?? 0,
-                        'color' => $firstCounters[$mac]['color'] ?? 0
-                    ];
-                } else {
-                    $periodFirstCountersCache[$periodKey] = $firstCounter;
+        // Pour chaque MAC, calculer la consommation de cette période
+        foreach (array_keys($macsInReleves) as $mac) {
+            if (empty($mac)) {
+                continue;
+            }
+            
+            $periodKey = $mac . '_' . $periodStart->format('Y-m-d');
+            
+            // Mettre en cache pour éviter les requêtes multiples
+            if (!isset($periodConsumptionCache[$periodKey])) {
+                try {
+                    $periodConsumption = calculatePeriodConsumption(
+                        $pdo,
+                        $mac,
+                        $periodStart,
+                        $periodEnd
+                    );
+                    
+                    $periodConsumptionCache[$periodKey] = $periodConsumption;
+                } catch (Exception $e) {
+                    error_log('paiements_data.php - Erreur calculatePeriodConsumption: ' . $e->getMessage());
+                    $periodConsumptionCache[$periodKey] = ['bw' => 0, 'color' => 0];
                 }
-            } catch (Exception $e) {
-                error_log('paiements_data.php - Erreur getFirstCounterInPeriod pour MAC ' . $mac . ': ' . $e->getMessage());
-                // En cas d'erreur, utiliser le premier compteur global comme fallback
-                $periodFirstCountersCache[$periodKey] = [
-                    'bw' => $firstCounters[$mac]['bw'] ?? 0,
-                    'color' => $firstCounters[$mac]['color'] ?? 0
-                ];
             }
-        }
-        
-        if (!isset($periodFirstCountersCache[$periodKey])) {
-            continue; // Ignorer ce relevé si on ne peut pas trouver le compteur de départ
-        }
-        
-        $firstBw = $periodFirstCountersCache[$periodKey]['bw'] ?? 0;
-        $firstColor = $periodFirstCountersCache[$periodKey]['color'] ?? 0;
-        
-        // Calculer la consommation réelle : compteur_actuel - compteur_depart_de_la_periode
-        $consumptionBw = max(0, $currentBw - $firstBw);
-        $consumptionColor = max(0, $currentColor - $firstColor);
-        
-        // Déterminer la période selon le filtre
-        $periodLabel = '';
-        switch ($period) {
-            case 'day':
-                $periodLabel = $timestamp->format('Y-m-d');
-                break;
-            case 'month':
-                $periodLabel = $timestamp->format('Y-m');
-                break;
-            case 'year':
-                $periodLabel = $timestamp->format('Y');
-                break;
-        }
-        
-        // Pour chaque période, on garde la consommation maximale (le dernier relevé de la période)
-        // Cela évite de compter plusieurs fois la même période
-        if (!isset($consumption[$periodLabel])) {
-            $consumption[$periodLabel] = [
-                'bw' => $consumptionBw,
-                'color' => $consumptionColor,
-                'timestamp' => $timestamp
-            ];
-        } else {
-            // Si on a un relevé plus récent dans la même période, on prend celui-ci
-            if ($timestamp > $consumption[$periodLabel]['timestamp']) {
+            
+            $periodData = $periodConsumptionCache[$periodKey] ?? ['bw' => 0, 'color' => 0];
+            
+            // Déterminer le label de période selon le filtre
+            $periodLabel = '';
+            switch ($period) {
+                case 'day':
+                    // Pour les jours, on peut utiliser le jour de début de période ou agréger différemment
+                    $periodLabel = $periodStart->format('Y-m-d');
+                    break;
+                case 'month':
+                    // Pour les mois, utiliser le mois du début de période
+                    $periodLabel = $periodStart->format('Y-m');
+                    break;
+                case 'year':
+                    // Pour les années, utiliser l'année du début de période
+                    $periodLabel = $periodStart->format('Y');
+                    break;
+            }
+            
+            // Agréger les consommations de toutes les MAC pour cette période
+            if (!isset($consumption[$periodLabel])) {
                 $consumption[$periodLabel] = [
-                    'bw' => $consumptionBw,
-                    'color' => $consumptionColor,
-                    'timestamp' => $timestamp
+                    'bw' => 0,
+                    'color' => 0,
+                    'period_start' => $periodStart
                 ];
             }
+            
+            // Additionner les consommations de toutes les MAC
+            $consumption[$periodLabel]['bw'] += $periodData['bw'] ?? 0;
+            $consumption[$periodLabel]['color'] += $periodData['color'] ?? 0;
         }
+        
+        // Passer à la période suivante
+        $currentPeriodStart->modify('+1 month');
     }
     
     // Trier les périodes chronologiquement
@@ -490,8 +305,8 @@ try {
             'labels' => $labels,
             'bw' => $bwData,
             'color' => $colorData,
-            'total_bw' => !empty($bwData) ? max($bwData) : 0, // Consommation totale = maximum atteint
-            'total_color' => !empty($colorData) ? max($colorData) : 0
+            'total_bw' => !empty($bwData) ? array_sum($bwData) : 0, // Consommation totale = somme de toutes les périodes
+            'total_color' => !empty($colorData) ? array_sum($colorData) : 0
         ],
         'photocopieurs' => $photocopieurs,
         'filters' => [

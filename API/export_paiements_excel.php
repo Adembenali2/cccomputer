@@ -1,9 +1,11 @@
 <?php
 // API pour exporter les données de consommation en Excel
+// Affiche toutes les périodes de facturation (20→20) avec compteur départ, fin, consommation et période
 // Note: On n'utilise pas initApi() car on veut générer un fichier Excel, pas du JSON
 
 require_once __DIR__ . '/../includes/session_config.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/includes/paiements_helpers.php';
 
 // Vérifier l'authentification
 if (empty($_SESSION['user_id'])) {
@@ -53,136 +55,18 @@ if (!empty($macFilter)) {
 }
 
 try {
-    $dateStartFull = $dateStart . ' 00:00:00';
-    $dateEndFull = $dateEnd . ' 23:59:59';
+    $dateStartObj = new DateTime($dateStart);
+    $dateEndObj = new DateTime($dateEnd);
     
-    // ÉTAPE 1 : Récupérer tous les relevés pour trouver le premier compteur par MAC
-    $sqlAllReleves = "
-        SELECT 
-            mac_norm,
-            Timestamp,
-            COALESCE(TotalBW, 0) as TotalBW,
-            COALESCE(TotalColor, 0) as TotalColor,
-            Model,
-            MacAddress
-        FROM (
-            SELECT 
-                mac_norm,
-                Timestamp,
-                TotalBW,
-                TotalColor,
-                Model,
-                MacAddress
-            FROM compteur_relevee
-            WHERE mac_norm IS NOT NULL 
-              AND mac_norm != ''
-              " . ($macNorm ? "AND mac_norm = :mac_norm1" : "") . "
-            
-            UNION ALL
-            
-            SELECT 
-                mac_norm,
-                Timestamp,
-                TotalBW,
-                TotalColor,
-                Model,
-                MacAddress
-            FROM compteur_relevee_ancien
-            WHERE mac_norm IS NOT NULL 
-              AND mac_norm != ''
-              " . ($macNorm ? "AND mac_norm = :mac_norm2" : "") . "
-        ) AS combined
-        ORDER BY mac_norm, Timestamp ASC
-    ";
-    
-    $params = [];
-    if ($macNorm) {
-        $params[':mac_norm1'] = $macNorm;
-        $params[':mac_norm2'] = $macNorm;
-    }
-    
-    $stmt = $pdo->prepare($sqlAllReleves);
-    $stmt->execute($params);
-    $allReleves = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Trouver le premier compteur pour chaque MAC (compteur de départ)
-    $firstCounters = [];
-    foreach ($allReleves as $releve) {
-        $mac = $releve['mac_norm'];
-        if (!isset($firstCounters[$mac])) {
-            $firstCounters[$mac] = [
-                'bw' => (int)($releve['TotalBW'] ?? 0),
-                'color' => (int)($releve['TotalColor'] ?? 0)
-            ];
-        }
-    }
-    
-    // ÉTAPE 2 : Récupérer les relevés dans la période filtrée
-    $sqlFiltered = "
-        SELECT 
-            mac_norm,
-            Timestamp,
-            COALESCE(TotalBW, 0) as TotalBW,
-            COALESCE(TotalColor, 0) as TotalColor,
-            Model,
-            MacAddress
-        FROM (
-            SELECT 
-                mac_norm,
-                Timestamp,
-                TotalBW,
-                TotalColor,
-                Model,
-                MacAddress
-            FROM compteur_relevee
-            WHERE mac_norm IS NOT NULL 
-              AND mac_norm != ''
-              AND Timestamp >= :date_start1 
-              AND Timestamp <= :date_end1
-              " . ($macNorm ? "AND mac_norm = :mac_norm1" : "") . "
-            
-            UNION ALL
-            
-            SELECT 
-                mac_norm,
-                Timestamp,
-                TotalBW,
-                TotalColor,
-                Model,
-                MacAddress
-            FROM compteur_relevee_ancien
-            WHERE mac_norm IS NOT NULL 
-              AND mac_norm != ''
-              AND Timestamp >= :date_start2 
-              AND Timestamp <= :date_end2
-              " . ($macNorm ? "AND mac_norm = :mac_norm2" : "") . "
-        ) AS combined
-        ORDER BY mac_norm, Timestamp ASC
-    ";
-    
-    $paramsFiltered = [
-        ':date_start1' => $dateStartFull,
-        ':date_end1' => $dateEndFull,
-        ':date_start2' => $dateStartFull,
-        ':date_end2' => $dateEndFull
-    ];
-    
-    if ($macNorm) {
-        $paramsFiltered[':mac_norm1'] = $macNorm;
-        $paramsFiltered[':mac_norm2'] = $macNorm;
-    }
-    
-    $stmtFiltered = $pdo->prepare($sqlFiltered);
-    $stmtFiltered->execute($paramsFiltered);
-    $releves = $stmtFiltered->fetchAll(PDO::FETCH_ASSOC);
-    
-    // ÉTAPE 3 : Récupérer les informations des photocopieurs (nom, client)
+    // Récupérer les informations des photocopieurs
     $sqlPhotocopieurs = "
         SELECT DISTINCT
             r.mac_norm,
             COALESCE(pc.MacAddress, r.MacAddress) as MacAddress,
             COALESCE(r.Model, 'Inconnu') as Model,
-            COALESCE(c.raison_sociale, 'Photocopieur non attribué') as client_name
+            COALESCE(c.raison_sociale, 'Photocopieur non attribué') as client_name,
+            c.id as client_id,
+            c.numero_client
         FROM (
             SELECT DISTINCT mac_norm, MacAddress, Model
             FROM compteur_relevee
@@ -208,84 +92,100 @@ try {
     }
     $photocopieursInfo = $stmtPhotocopieurs->fetchAll(PDO::FETCH_ASSOC);
     
-    // Créer un tableau associatif pour accéder rapidement aux infos
-    $photocopieursMap = [];
-    foreach ($photocopieursInfo as $p) {
-        $photocopieursMap[$p['mac_norm']] = $p;
+    // Construire un tableau des données par période et par MAC
+    $exportData = []; // Structure: [period_key => [mac => data]]
+    
+    // Générer toutes les périodes de facturation dans la plage de dates
+    $currentPeriod = clone $dateStartObj;
+    
+    // Ajuster à la période de facturation de départ
+    $startDay = (int)$currentPeriod->format('d');
+    if ($startDay < 20) {
+        $currentPeriod->modify('-1 month');
     }
+    $currentPeriod->setDate(
+        (int)$currentPeriod->format('Y'),
+        (int)$currentPeriod->format('m'),
+        20
+    );
+    $currentPeriod->setTime(0, 0, 0);
     
-    // ÉTAPE 4 : Calculer les compteurs début/fin pour chaque MAC
-    $macData = [];
-    
-    foreach ($releves as $releve) {
-        if (empty($releve['mac_norm']) || empty($releve['Timestamp'])) {
-            continue;
-        }
+    // Parcourir toutes les périodes jusqu'à la date de fin
+    while ($currentPeriod <= $dateEndObj) {
+        $periodStart = clone $currentPeriod;
+        $periodEnd = clone $currentPeriod;
+        $periodEnd->modify('+1 month');
         
-        $mac = $releve['mac_norm'];
+        $periodKey = $periodStart->format('Y-m-d') . '_' . $periodEnd->format('Y-m-d');
+        $periodLabel = $periodStart->format('d/m/Y') . ' → ' . $periodEnd->format('d/m/Y');
         
-        if (!isset($macData[$mac])) {
-            $macData[$mac] = [
+        // Pour chaque photocopieur, calculer la consommation de cette période
+        foreach ($photocopieursInfo as $photo) {
+            $mac = $photo['mac_norm'];
+            
+            if (!isset($exportData[$periodKey])) {
+                $exportData[$periodKey] = [];
+            }
+            
+            // Calculer la consommation pour cette période selon la logique 20→20
+            $consumption = calculatePeriodConsumption($pdo, $mac, $periodStart, $periodEnd);
+            
+            if (!$consumption || (($consumption['bw'] ?? 0) == 0 && ($consumption['color'] ?? 0) == 0)) {
+                // Ne pas inclure les périodes sans consommation
+                continue;
+            }
+            
+            $startCounter = $consumption['start_counter'] ?? null;
+            $endCounter = $consumption['end_counter'] ?? null;
+            
+            $exportData[$periodKey][$mac] = [
                 'mac_norm' => $mac,
-                'mac_address' => $releve['MacAddress'] ?? '',
-                'model' => $photocopieursMap[$mac]['Model'] ?? 'Inconnu',
-                'client_name' => $photocopieursMap[$mac]['client_name'] ?? 'Photocopieur non attribué',
-                'first_bw' => $firstCounters[$mac]['bw'] ?? 0,
-                'first_color' => $firstCounters[$mac]['color'] ?? 0,
-                'start_bw' => null,
-                'start_color' => null,
-                'start_timestamp' => null,
-                'end_bw' => null,
-                'end_color' => null,
-                'end_timestamp' => null
+                'mac_address' => $photo['MacAddress'] ?? $mac,
+                'model' => $photo['Model'] ?? 'Inconnu',
+                'client_name' => $photo['client_name'] ?? 'Photocopieur non attribué',
+                'numero_client' => $photo['numero_client'] ?? '',
+                'period_label' => $periodLabel,
+                'period_start' => $periodStart->format('Y-m-d'),
+                'period_end' => $periodEnd->format('Y-m-d'),
+                'counter_start_bw' => $startCounter ? ($startCounter['bw'] ?? 0) : 0,
+                'counter_start_color' => $startCounter ? ($startCounter['color'] ?? 0) : 0,
+                'counter_start_date' => $startCounter && isset($startCounter['timestamp']) ? $startCounter['timestamp']->format('Y-m-d H:i:s') : '',
+                'counter_end_bw' => $endCounter ? ($endCounter['bw'] ?? 0) : 0,
+                'counter_end_color' => $endCounter ? ($endCounter['color'] ?? 0) : 0,
+                'counter_end_date' => $endCounter && isset($endCounter['timestamp']) ? $endCounter['timestamp']->format('Y-m-d H:i:s') : '',
+                'consumption_bw' => $consumption['bw'] ?? 0,
+                'consumption_color' => $consumption['color'] ?? 0
             ];
         }
         
-        $timestamp = new DateTime($releve['Timestamp']);
-        $bw = (int)($releve['TotalBW'] ?? 0);
-        $color = (int)($releve['TotalColor'] ?? 0);
-        
-        // Premier relevé dans la période = compteur début
-        if ($macData[$mac]['start_timestamp'] === null || $timestamp < $macData[$mac]['start_timestamp']) {
-            $macData[$mac]['start_bw'] = $bw;
-            $macData[$mac]['start_color'] = $color;
-            $macData[$mac]['start_timestamp'] = $timestamp;
-        }
-        
-        // Dernier relevé dans la période = compteur fin
-        if ($macData[$mac]['end_timestamp'] === null || $timestamp > $macData[$mac]['end_timestamp']) {
-            $macData[$mac]['end_bw'] = $bw;
-            $macData[$mac]['end_color'] = $color;
-            $macData[$mac]['end_timestamp'] = $timestamp;
-        }
+        // Passer à la période suivante
+        $currentPeriod->modify('+1 month');
     }
     
-    // ÉTAPE 5 : Générer le fichier Excel
-    // Vérifier si PhpSpreadsheet est disponible
+    // Générer le fichier Excel ou CSV
     $usePhpSpreadsheet = class_exists('PhpOffice\PhpSpreadsheet\Spreadsheet');
     
     if ($usePhpSpreadsheet) {
-        // Utiliser PhpSpreadsheet
         require_once __DIR__ . '/../vendor/autoload.php';
         
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         
-        // En-têtes
+        // En-têtes avec toutes les colonnes demandées
         $headers = [
-            'A1' => 'MAC adresse',
-            'B1' => 'Photocopieur',
-            'C1' => 'Compteur départ N&B',
-            'D1' => 'Compteur départ Couleur',
-            'E1' => 'Compteur début N&B',
-            'F1' => 'Compteur début Couleur',
-            'G1' => 'Compteur fin N&B',
-            'H1' => 'Compteur fin Couleur',
-            'I1' => 'Consommation N&B',
-            'J1' => 'Consommation Couleur',
-            'K1' => 'Période sélectionnée',
-            'L1' => 'date_start',
-            'M1' => 'date_end'
+            'A1' => 'Période',
+            'B1' => 'MAC adresse',
+            'C1' => 'Client',
+            'D1' => 'Numéro client',
+            'E1' => 'Photocopieur',
+            'F1' => 'Date compteur départ',
+            'G1' => 'Compteur départ N&B',
+            'H1' => 'Compteur départ Couleur',
+            'I1' => 'Date compteur fin',
+            'J1' => 'Compteur fin N&B',
+            'K1' => 'Compteur fin Couleur',
+            'L1' => 'Consommation N&B',
+            'M1' => 'Consommation Couleur'
         ];
         
         foreach ($headers as $cell => $value) {
@@ -303,26 +203,25 @@ try {
         ];
         $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
         
-        // Données
+        // Données par période
         $row = 2;
-        foreach ($macData as $data) {
-            $consumptionBw = max(0, ($data['end_bw'] ?? 0) - ($data['first_bw'] ?? 0));
-            $consumptionColor = max(0, ($data['end_color'] ?? 0) - ($data['first_color'] ?? 0));
-            
-            $sheet->setCellValue('A' . $row, $data['mac_address'] ?: $data['mac_norm']);
-            $sheet->setCellValue('B' . $row, $data['client_name'] . ' - ' . $data['model']);
-            $sheet->setCellValue('C' . $row, $data['first_bw']);
-            $sheet->setCellValue('D' . $row, $data['first_color']);
-            $sheet->setCellValue('E' . $row, $data['start_bw'] ?? 0);
-            $sheet->setCellValue('F' . $row, $data['start_color'] ?? 0);
-            $sheet->setCellValue('G' . $row, $data['end_bw'] ?? 0);
-            $sheet->setCellValue('H' . $row, $data['end_color'] ?? 0);
-            $sheet->setCellValue('I' . $row, $consumptionBw);
-            $sheet->setCellValue('J' . $row, $consumptionColor);
-            $sheet->setCellValue('K' . $row, $period);
-            $sheet->setCellValue('L' . $row, $dateStart);
-            $sheet->setCellValue('M' . $row, $dateEnd);
-            $row++;
+        foreach ($exportData as $periodKey => $macs) {
+            foreach ($macs as $data) {
+                $sheet->setCellValue('A' . $row, $data['period_label']);
+                $sheet->setCellValue('B' . $row, $data['mac_address']);
+                $sheet->setCellValue('C' . $row, $data['client_name']);
+                $sheet->setCellValue('D' . $row, $data['numero_client']);
+                $sheet->setCellValue('E' . $row, $data['model']);
+                $sheet->setCellValue('F' . $row, $data['counter_start_date']);
+                $sheet->setCellValue('G' . $row, $data['counter_start_bw']);
+                $sheet->setCellValue('H' . $row, $data['counter_start_color']);
+                $sheet->setCellValue('I' . $row, $data['counter_end_date']);
+                $sheet->setCellValue('J' . $row, $data['counter_end_bw']);
+                $sheet->setCellValue('K' . $row, $data['counter_end_color']);
+                $sheet->setCellValue('L' . $row, $data['consumption_bw']);
+                $sheet->setCellValue('M' . $row, $data['consumption_color']);
+                $row++;
+            }
         }
         
         // Ajuster la largeur des colonnes
@@ -341,7 +240,7 @@ try {
         exit;
         
     } else {
-        // Fallback : Générer un CSV si PhpSpreadsheet n'est pas disponible
+        // Fallback : Générer un CSV
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment;filename="paiements_' . date('Y-m-d_His') . '.csv"');
         header('Cache-Control: max-age=0');
@@ -353,41 +252,40 @@ try {
         
         // En-têtes
         fputcsv($output, [
+            'Période',
             'MAC adresse',
+            'Client',
+            'Numéro client',
             'Photocopieur',
+            'Date compteur départ',
             'Compteur départ N&B',
             'Compteur départ Couleur',
-            'Compteur début N&B',
-            'Compteur début Couleur',
+            'Date compteur fin',
             'Compteur fin N&B',
             'Compteur fin Couleur',
             'Consommation N&B',
-            'Consommation Couleur',
-            'Période sélectionnée',
-            'date_start',
-            'date_end'
+            'Consommation Couleur'
         ], ';');
         
         // Données
-        foreach ($macData as $data) {
-            $consumptionBw = max(0, ($data['end_bw'] ?? 0) - ($data['first_bw'] ?? 0));
-            $consumptionColor = max(0, ($data['end_color'] ?? 0) - ($data['first_color'] ?? 0));
-            
-            fputcsv($output, [
-                $data['mac_address'] ?: $data['mac_norm'],
-                $data['client_name'] . ' - ' . $data['model'],
-                $data['first_bw'],
-                $data['first_color'],
-                $data['start_bw'] ?? 0,
-                $data['start_color'] ?? 0,
-                $data['end_bw'] ?? 0,
-                $data['end_color'] ?? 0,
-                $consumptionBw,
-                $consumptionColor,
-                $period,
-                $dateStart,
-                $dateEnd
-            ], ';');
+        foreach ($exportData as $periodKey => $macs) {
+            foreach ($macs as $data) {
+                fputcsv($output, [
+                    $data['period_label'],
+                    $data['mac_address'],
+                    $data['client_name'],
+                    $data['numero_client'],
+                    $data['model'],
+                    $data['counter_start_date'],
+                    $data['counter_start_bw'],
+                    $data['counter_start_color'],
+                    $data['counter_end_date'],
+                    $data['counter_end_bw'],
+                    $data['counter_end_color'],
+                    $data['consumption_bw'],
+                    $data['consumption_color']
+                ], ';');
+            }
         }
         
         fclose($output);
@@ -403,4 +301,3 @@ try {
     http_response_code(500);
     die('Erreur serveur: ' . $e->getMessage());
 }
-

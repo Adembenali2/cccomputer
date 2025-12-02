@@ -3,6 +3,7 @@
 // Calcule selon les règles : N&B 0.05€ si > 1000 copies/mois, Couleur 0.09€
 // Période de facturation : du 20 du mois au 20 du mois suivant
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/includes/paiements_helpers.php';
 
 initApi();
 requireApiAuth();
@@ -28,218 +29,6 @@ function getBillingPeriod($year, $month) {
 }
 
 /**
- * Trouve le premier compteur de la période de facturation pour une MAC
- */
-function getFirstCounterInPeriod($pdo, $macNorm, DateTime $periodStart) {
-    if (empty($macNorm) || !($periodStart instanceof DateTime)) {
-        return null;
-    }
-    
-    try {
-        $sql = "
-            SELECT 
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor
-            FROM (
-                SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                FROM compteur_relevee
-                WHERE mac_norm = :mac AND Timestamp >= :period_start
-                UNION ALL
-                SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac AND Timestamp >= :period_start
-            ) AS combined
-            ORDER BY Timestamp ASC
-            LIMIT 1
-        ";
-        
-        $stmt = $pdo->prepare($sql);
-        if (!$stmt) {
-            error_log('paiements_clients.php - Erreur préparation requête getFirstCounterInPeriod');
-            return null;
-        }
-        
-        $stmt->execute([
-            ':mac' => $macNorm,
-            ':period_start' => $periodStart->format('Y-m-d H:i:s')
-        ]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$result) {
-            return null;
-        }
-        
-        return [
-            'bw' => (int)($result['TotalBW'] ?? 0),
-            'color' => (int)($result['TotalColor'] ?? 0)
-        ];
-    } catch (Exception $e) {
-        error_log('paiements_clients.php - Exception dans getFirstCounterInPeriod: ' . $e->getMessage());
-        return null;
-    }
-}
-
-/**
- * Calcule la consommation pour une période donnée
- * @param bool $monthly Si true, calcule la consommation mensuelle (différence entre début et fin)
- *                       Si false, calcule la consommation cumulée depuis le premier compteur
- */
-function calculateConsumption($pdo, $macNorm, $periodStart, $periodEnd, $firstCounters, $monthly = false) {
-    if (empty($macNorm) || !($periodStart instanceof DateTime) || !($periodEnd instanceof DateTime)) {
-        return ['bw' => 0, 'color' => 0];
-    }
-    
-    try {
-        // Récupérer le relevé au début de la période
-        $sqlStart = "
-            SELECT 
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor
-            FROM (
-                SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                FROM compteur_relevee
-                WHERE mac_norm = :mac AND Timestamp <= :period_start
-                UNION ALL
-                SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac AND Timestamp <= :period_start
-            ) AS combined
-            ORDER BY Timestamp DESC
-            LIMIT 1
-        ";
-        
-        // Récupérer le relevé à la fin de la période
-        $sqlEnd = "
-            SELECT 
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor
-            FROM (
-                SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                FROM compteur_relevee
-                WHERE mac_norm = :mac AND Timestamp <= :period_end
-                UNION ALL
-                SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac AND Timestamp <= :period_end
-            ) AS combined
-            ORDER BY Timestamp DESC
-            LIMIT 1
-        ";
-        
-        $stmtStart = $pdo->prepare($sqlStart);
-        if (!$stmtStart) {
-            error_log('paiements_clients.php - Erreur préparation requête sqlStart');
-            return ['bw' => 0, 'color' => 0];
-        }
-        
-        $stmtStart->execute([
-            ':mac' => $macNorm,
-            ':period_start' => $periodStart->format('Y-m-d H:i:s')
-        ]);
-        $resultStart = $stmtStart->fetch(PDO::FETCH_ASSOC);
-        
-        $stmtEnd = $pdo->prepare($sqlEnd);
-        if (!$stmtEnd) {
-            error_log('paiements_clients.php - Erreur préparation requête sqlEnd');
-            return ['bw' => 0, 'color' => 0];
-        }
-        
-        $stmtEnd->execute([
-            ':mac' => $macNorm,
-            ':period_end' => $periodEnd->format('Y-m-d H:i:s')
-        ]);
-        $resultEnd = $stmtEnd->fetch(PDO::FETCH_ASSOC);
-    } catch (Exception $e) {
-        error_log('paiements_clients.php - Exception dans calculateConsumption: ' . $e->getMessage());
-        return ['bw' => 0, 'color' => 0];
-    }
-    
-    if (!$resultEnd) {
-        return ['bw' => 0, 'color' => 0];
-    }
-    
-    $endBw = (int)($resultEnd['TotalBW'] ?? 0);
-    $endColor = (int)($resultEnd['TotalColor'] ?? 0);
-    
-    if ($monthly) {
-        // Consommation mensuelle : différence entre début et fin de période
-        // Le début de période doit être le premier compteur à partir du 20 du mois (début de période)
-        // Si pas de relevé au début exact, chercher le premier relevé dans la période
-        if (!$resultStart) {
-            // Chercher le premier relevé dans la période
-            $sqlFirstInPeriod = "
-                SELECT 
-                    COALESCE(TotalBW, 0) as TotalBW,
-                    COALESCE(TotalColor, 0) as TotalColor
-                FROM (
-                    SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                    FROM compteur_relevee
-                    WHERE mac_norm = :mac AND Timestamp >= :period_start AND Timestamp <= :period_end
-                    UNION ALL
-                    SELECT mac_norm, Timestamp, TotalBW, TotalColor
-                    FROM compteur_relevee_ancien
-                    WHERE mac_norm = :mac AND Timestamp >= :period_start AND Timestamp <= :period_end
-                ) AS combined
-                ORDER BY Timestamp ASC
-                LIMIT 1
-            ";
-            
-            try {
-                $stmtFirst = $pdo->prepare($sqlFirstInPeriod);
-                if ($stmtFirst) {
-                    $stmtFirst->execute([
-                        ':mac' => $macNorm,
-                        ':period_start' => $periodStart->format('Y-m-d H:i:s'),
-                        ':period_end' => $periodEnd->format('Y-m-d H:i:s')
-                    ]);
-                    $resultStart = $stmtFirst->fetch(PDO::FETCH_ASSOC);
-                }
-            } catch (Exception $e) {
-                error_log('paiements_clients.php - Exception dans sqlFirstInPeriod: ' . $e->getMessage());
-                $resultStart = null;
-            }
-        }
-        
-        if (!$resultStart) {
-            // Si vraiment aucun relevé dans la période, consommation = 0
-            return ['bw' => 0, 'color' => 0];
-        }
-        
-        $startBw = (int)($resultStart['TotalBW'] ?? 0);
-        $startColor = (int)($resultStart['TotalColor'] ?? 0);
-        
-        return [
-            'bw' => max(0, $endBw - $startBw),
-            'color' => max(0, $endColor - $startColor)
-        ];
-    } else {
-        // Consommation cumulée depuis le premier compteur de la période
-        // On utilise le premier compteur à partir du début de période (20 du mois)
-        try {
-            $firstCounter = getFirstCounterInPeriod($pdo, $macNorm, $periodStart);
-            if ($firstCounter === null) {
-                // Fallback : utiliser le premier compteur global
-                $firstBw = $firstCounters[$macNorm]['bw'] ?? 0;
-                $firstColor = $firstCounters[$macNorm]['color'] ?? 0;
-            } else {
-                $firstBw = $firstCounter['bw'] ?? 0;
-                $firstColor = $firstCounter['color'] ?? 0;
-            }
-        } catch (Exception $e) {
-            error_log('paiements_clients.php - Exception getFirstCounterInPeriod: ' . $e->getMessage());
-            // Fallback : utiliser le premier compteur global
-            $firstBw = $firstCounters[$macNorm]['bw'] ?? 0;
-            $firstColor = $firstCounters[$macNorm]['color'] ?? 0;
-        }
-        
-        return [
-            'bw' => max(0, $endBw - $firstBw),
-            'color' => max(0, $endColor - $firstColor)
-        ];
-    }
-}
-
-/**
  * Calcule la dette selon les règles de tarification
  */
 function calculateDebt($consumptionBw, $consumptionColor) {
@@ -255,7 +44,6 @@ function calculateDebt($consumptionBw, $consumptionColor) {
 
 try {
     // Initialiser les variables importantes
-    $firstCounters = [];
     $photocopieursByClient = [];
     $clients = [];
     
@@ -277,78 +65,6 @@ try {
     $stmtClients = $pdo->prepare($sqlClients);
     $stmtClients->execute();
     $clientsRaw = $stmtClients->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Récupérer tous les relevés pour trouver le premier compteur par MAC
-    $sqlAllReleves = "
-        SELECT 
-            mac_norm,
-            MIN(Timestamp) as first_timestamp,
-            (
-                SELECT TotalBW 
-                FROM compteur_relevee 
-                WHERE mac_norm = t.mac_norm AND Timestamp = t.first_ts
-                LIMIT 1
-            ) as first_bw,
-            (
-                SELECT TotalColor 
-                FROM compteur_relevee 
-                WHERE mac_norm = t.mac_norm AND Timestamp = t.first_ts
-                LIMIT 1
-            ) as first_color
-        FROM (
-            SELECT 
-                mac_norm,
-                MIN(Timestamp) as first_ts
-            FROM (
-                SELECT mac_norm, Timestamp
-                FROM compteur_relevee
-                WHERE mac_norm IS NOT NULL AND mac_norm != ''
-                UNION ALL
-                SELECT mac_norm, Timestamp
-                FROM compteur_relevee_ancien
-                WHERE mac_norm IS NOT NULL AND mac_norm != ''
-            ) AS all_releves
-            GROUP BY mac_norm
-        ) AS t
-    ";
-    
-    // Approche simplifiée : récupérer tous les relevés triés
-    $sqlAllRelevesSimple = "
-        SELECT 
-            mac_norm,
-            Timestamp,
-            COALESCE(TotalBW, 0) as TotalBW,
-            COALESCE(TotalColor, 0) as TotalColor
-        FROM (
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee
-            WHERE mac_norm IS NOT NULL AND mac_norm != ''
-            UNION ALL
-            SELECT mac_norm, Timestamp, TotalBW, TotalColor
-            FROM compteur_relevee_ancien
-            WHERE mac_norm IS NOT NULL AND mac_norm != ''
-        ) AS combined
-        ORDER BY mac_norm, Timestamp ASC
-    ";
-    
-    $stmt = $pdo->prepare($sqlAllRelevesSimple);
-    $stmt->execute();
-    $allReleves = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Trouver le premier compteur pour chaque MAC
-    $firstCounters = [];
-    foreach ($allReleves as $releve) {
-        $mac = trim($releve['mac_norm'] ?? '');
-        if (empty($mac)) {
-            continue;
-        }
-        if (!isset($firstCounters[$mac])) {
-            $firstCounters[$mac] = [
-                'bw' => (int)($releve['TotalBW'] ?? 0),
-                'color' => (int)($releve['TotalColor'] ?? 0)
-            ];
-        }
-    }
     
     // Récupérer les photocopieurs par client
     $sqlPhotocopieurs = "
@@ -417,27 +133,25 @@ try {
         $clientPhotos = $photocopieursByClient[$clientId] ?? [];
         
         // Calculer la consommation mensuelle totale pour ce client (somme de tous ses photocopieurs)
-        // Pour la période actuelle (20→20), on calcule la différence entre début et fin
+        // Pour la période actuelle (20→20), on utilise calculatePeriodConsumption
         $totalBw = 0;
         $totalColor = 0;
         
         foreach ($clientPhotos as $photo) {
             $mac = $photo['mac_norm'];
-            if (!isset($firstCounters[$mac])) {
+            if (empty($mac)) {
                 continue;
             }
             
-            $consumption = calculateConsumption(
+            $consumption = calculatePeriodConsumption(
                 $pdo,
                 $mac,
                 $currentPeriod['start'],
-                $currentPeriod['end'],
-                $firstCounters,
-                true // monthly = true pour consommation mensuelle
+                $currentPeriod['end']
             );
             
-            $totalBw += $consumption['bw'];
-            $totalColor += $consumption['color'];
+            $totalBw += $consumption['bw'] ?? 0;
+            $totalColor += $consumption['color'] ?? 0;
         }
         
         // Calculer la dette selon les règles
@@ -465,27 +179,50 @@ try {
                 $histPeriod = getBillingPeriod($prevYear, $prevMonth);
             }
             
-            // Calculer la consommation pour cette période (mensuelle : différence entre début et fin)
+            // Calculer la consommation pour cette période selon la logique 20→20
             $histBw = 0;
             $histColor = 0;
+            $histStartCounters = ['bw' => 0, 'color' => 0];
+            $histEndCounters = ['bw' => 0, 'color' => 0];
+            $histStartDate = null;
+            $histEndDate = null;
             
             foreach ($clientPhotos as $photo) {
                 $mac = $photo['mac_norm'];
-                if (!isset($firstCounters[$mac])) {
+                if (empty($mac)) {
                     continue;
                 }
                 
-                $consumption = calculateConsumption(
+                $consumption = calculatePeriodConsumption(
                     $pdo,
                     $mac,
                     $histPeriod['start'],
-                    $histPeriod['end'],
-                    $firstCounters,
-                    true // monthly = true pour calculer la différence mensuelle
+                    $histPeriod['end']
                 );
                 
-                $histBw += $consumption['bw'];
-                $histColor += $consumption['color'];
+                $histBw += $consumption['bw'] ?? 0;
+                $histColor += $consumption['color'] ?? 0;
+                
+                // Agréger les compteurs de départ et de fin (pour la première MAC, on prend ses valeurs)
+                if ($histStartDate === null && isset($consumption['start_counter'])) {
+                    $histStartCounters['bw'] = $consumption['start_counter']['bw'] ?? 0;
+                    $histStartCounters['color'] = $consumption['start_counter']['color'] ?? 0;
+                    if (isset($consumption['start_counter']['timestamp'])) {
+                        $histStartDate = $consumption['start_counter']['timestamp'];
+                    }
+                }
+                
+                if (isset($consumption['end_counter'])) {
+                    // Pour la fin, on prend les compteurs de la dernière MAC (ou on pourrait sommer)
+                    $histEndCounters['bw'] = max($histEndCounters['bw'], $consumption['end_counter']['bw'] ?? 0);
+                    $histEndCounters['color'] = max($histEndCounters['color'], $consumption['end_counter']['color'] ?? 0);
+                    if (isset($consumption['end_counter']['timestamp'])) {
+                        $endTimestamp = $consumption['end_counter']['timestamp'];
+                        if ($histEndDate === null || $endTimestamp > $histEndDate) {
+                            $histEndDate = $endTimestamp;
+                        }
+                    }
+                }
             }
             
             // Calculer la dette pour cette période
@@ -495,6 +232,12 @@ try {
                 'period_label' => $histPeriod['label'],
                 'period_start' => $histPeriod['start']->format('Y-m-d'),
                 'period_end' => $histPeriod['end']->format('Y-m-d'),
+                'counter_start_bw' => $histStartCounters['bw'],
+                'counter_start_color' => $histStartCounters['color'],
+                'counter_start_date' => $histStartDate ? $histStartDate->format('Y-m-d H:i:s') : null,
+                'counter_end_bw' => $histEndCounters['bw'],
+                'counter_end_color' => $histEndCounters['color'],
+                'counter_end_date' => $histEndDate ? $histEndDate->format('Y-m-d H:i:s') : null,
                 'consumption_bw' => $histBw,
                 'consumption_color' => $histColor,
                 'debt' => $histDebt,
