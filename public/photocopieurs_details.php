@@ -33,6 +33,17 @@ function logDeviceAction(PDO $pdo, string $action, string $details): void {
   }
 }
 
+/* ---------- Mode Debug ---------- */
+$debugMode = isset($_GET['debug']) && $_GET['debug'] == '1';
+$debugInfo = [
+  'raw_params' => [],
+  'normalized' => [],
+  'mode' => [],
+  'queries' => [],
+  'results' => [],
+  'errors' => []
+];
+
 /* ---------- Entrée ---------- */
 /**
  * CORRECTION BUG : Normalisation de la MAC avant validation
@@ -56,6 +67,14 @@ function logDeviceAction(PDO $pdo, string $action, string $details): void {
 $macInput = trim($_GET['mac'] ?? ''); // MAC brute depuis l'URL (peut contenir des ':')
 $snParam  = trim($_GET['sn'] ?? '');
 
+// DEBUG : Stocker les paramètres bruts
+if ($debugMode) {
+  $debugInfo['raw_params'] = [
+    '$_GET[mac]' => $macInput ?: '(vide)',
+    '$_GET[sn]' => $snParam ?: '(vide)'
+  ];
+}
+
 // Normaliser la MAC si fournie (enlever les séparateurs et vérifier qu'elle fait 12 hex)
 $macParam = null;
 if ($macInput !== '') {
@@ -63,6 +82,15 @@ if ($macInput !== '') {
   if ($normalized['norm'] !== null) {
     $macParam = $normalized['norm']; // Format normalisé : 12 hex sans séparateurs (ex: "0026733FC694")
   }
+}
+
+// DEBUG : Stocker la normalisation
+if ($debugMode) {
+  $debugInfo['normalized'] = [
+    '$macInput' => $macInput ?: '(vide)',
+    '$macParam après normalizeMac()' => $macParam ?? '(null)',
+    '$snParam' => $snParam ?: '(vide)'
+  ];
 }
 
 // Déterminer quel critère utiliser pour la recherche
@@ -76,6 +104,14 @@ if ($macParam !== null && $macParam !== '') {
   http_response_code(400);
   echo "<!doctype html><meta charset='utf-8'><p>Paramètre manquant ou invalide. Utilisez ?mac=001122AABBCC (12 hex) ou ?sn=SERIAL.</p>";
   exit;
+}
+
+// DEBUG : Stocker le mode utilisé
+if ($debugMode) {
+  $debugInfo['mode'] = [
+    '$useMac' => $useMac ? 'true' : 'false',
+    '$useSn' => $useSn ? 'true' : 'false'
+  ];
 }
 
 /* ---------- Action: associer un client ---------- */
@@ -176,9 +212,28 @@ try {
       WHERE mac_norm = :mac
       ORDER BY `Timestamp` DESC, id DESC
     ";
+    
+    // DEBUG : Stocker la requête SQL
+    if ($debugMode) {
+      $debugInfo['queries'][] = [
+        'type' => 'Recherche principale par MAC',
+        'sql' => $sql,
+        'params' => [':mac' => $macParam]
+      ];
+    }
+    
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':mac' => $macParam]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // DEBUG : Stocker le nombre de résultats
+    if ($debugMode) {
+      $debugInfo['results'][] = [
+        'etape' => 'Recherche par MAC (mac_norm)',
+        'nb_lignes' => count($rows),
+        'param_utilise' => 'mac_norm = ' . $macParam
+      ];
+    }
     
     error_log('photocopieurs_details DEBUG: Recherche par MAC=' . $macParam . ' → ' . count($rows) . ' résultats');
     
@@ -192,9 +247,28 @@ try {
         // C'est la source la plus fiable car c'est la liaison client-photocopieur
         // IMPORTANT : On récupère le SerialNumber même si la recherche par MAC n'a rien donné
         // car les relevés peuvent avoir MacAddress NULL mais SerialNumber valide
-        $stmtSn = $pdo->prepare("SELECT SerialNumber FROM photocopieurs_clients WHERE mac_norm = :mac AND SerialNumber IS NOT NULL AND SerialNumber != '' LIMIT 1");
+        $sqlSn1 = "SELECT SerialNumber FROM photocopieurs_clients WHERE mac_norm = :mac AND SerialNumber IS NOT NULL AND SerialNumber != '' LIMIT 1";
+        
+        // DEBUG : Stocker la requête de recherche SerialNumber
+        if ($debugMode) {
+          $debugInfo['queries'][] = [
+            'type' => 'Fallback ÉTAPE 1 : Recherche SerialNumber dans photocopieurs_clients',
+            'sql' => $sqlSn1,
+            'params' => [':mac' => $macParam]
+          ];
+        }
+        
+        $stmtSn = $pdo->prepare($sqlSn1);
         $stmtSn->execute([':mac' => $macParam]);
         $snFromMac = $stmtSn->fetchColumn();
+        
+        // DEBUG : Stocker le résultat
+        if ($debugMode) {
+          $debugInfo['results'][] = [
+            'etape' => 'Fallback ÉTAPE 1 : SerialNumber depuis photocopieurs_clients',
+            'serial_number_trouve' => ($snFromMac !== false && $snFromMac !== null) ? $snFromMac : '(aucun)'
+          ];
+        }
         
         error_log('photocopieurs_details DEBUG: SerialNumber depuis photocopieurs_clients pour MAC=' . $macParam . ' → ' . ($snFromMac !== false && $snFromMac !== null ? $snFromMac : 'NULL'));
         
@@ -202,7 +276,7 @@ try {
         // On cherche un SerialNumber dans les relevés qui ont cette MAC (même si mac_norm est NULL)
         // On normalise MacAddress manuellement pour trouver même si mac_norm est NULL dans certains cas
         if (($snFromMac === false || $snFromMac === null || $snFromMac === '') && !empty($macParam)) {
-          $stmtSn2 = $pdo->prepare("
+          $sqlSn2 = "
             SELECT DISTINCT SerialNumber 
             FROM (
               SELECT SerialNumber FROM compteur_relevee 
@@ -214,9 +288,28 @@ try {
                 AND SerialNumber IS NOT NULL AND SerialNumber != ''
             ) AS combined
             LIMIT 1
-          ");
+          ";
+          
+          // DEBUG : Stocker la requête
+          if ($debugMode) {
+            $debugInfo['queries'][] = [
+              'type' => 'Fallback ÉTAPE 2 : Recherche SerialNumber dans les relevés',
+              'sql' => $sqlSn2,
+              'params' => [':mac' => $macParam]
+            ];
+          }
+          
+          $stmtSn2 = $pdo->prepare($sqlSn2);
           $stmtSn2->execute([':mac' => $macParam]);
           $snFromMac = $stmtSn2->fetchColumn();
+          
+          // DEBUG : Stocker le résultat
+          if ($debugMode) {
+            $debugInfo['results'][] = [
+              'etape' => 'Fallback ÉTAPE 2 : SerialNumber depuis relevés',
+              'serial_number_trouve' => ($snFromMac !== false && $snFromMac !== null) ? $snFromMac : '(aucun)'
+            ];
+          }
           
           error_log('photocopieurs_details DEBUG: SerialNumber depuis relevés pour MAC=' . $macParam . ' → ' . ($snFromMac !== false && $snFromMac !== null ? $snFromMac : 'NULL'));
         }
@@ -235,12 +328,37 @@ try {
             WHERE SerialNumber = :sn
             ORDER BY `Timestamp` DESC, id DESC
           ";
+          
+          // DEBUG : Stocker la requête
+          if ($debugMode) {
+            $debugInfo['queries'][] = [
+              'type' => 'Fallback ÉTAPE 3 : Recherche relevés par SerialNumber',
+              'sql' => $sqlSn,
+              'params' => [':sn' => $snFromMac]
+            ];
+          }
+          
           $stmtSn3 = $pdo->prepare($sqlSn);
           $stmtSn3->execute([':sn' => $snFromMac]);
           $rows = $stmtSn3->fetchAll(PDO::FETCH_ASSOC);
           
+          // DEBUG : Stocker le nombre de résultats
+          if ($debugMode) {
+            $debugInfo['results'][] = [
+              'etape' => 'Fallback ÉTAPE 3 : Recherche relevés par SerialNumber',
+              'nb_lignes' => count($rows),
+              'param_utilise' => 'SerialNumber = ' . $snFromMac
+            ];
+          }
+          
           error_log('photocopieurs_details DEBUG: Recherche par SerialNumber=' . $snFromMac . ' → ' . count($rows) . ' résultats');
         } else {
+          if ($debugMode) {
+            $debugInfo['results'][] = [
+              'etape' => 'Fallback : Aucun SerialNumber trouvé',
+              'message' => 'Impossible de faire un fallback par SerialNumber'
+            ];
+          }
           error_log('photocopieurs_details DEBUG: Aucun SerialNumber trouvé pour MAC=' . $macParam . ' - Impossible de faire un fallback');
         }
       } catch (PDOException $eSn) {
@@ -259,11 +377,39 @@ try {
       WHERE SerialNumber = :sn
       ORDER BY `Timestamp` DESC, id DESC
     ";
+    
+    // DEBUG : Stocker la requête SQL
+    if ($debugMode) {
+      $debugInfo['queries'][] = [
+        'type' => 'Recherche par SerialNumber',
+        'sql' => $sql,
+        'params' => [':sn' => $snParam]
+      ];
+    }
+    
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':sn' => $snParam]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
+    // DEBUG : Stocker le nombre de résultats
+    if ($debugMode) {
+      $debugInfo['results'][] = [
+        'etape' => 'Recherche par SerialNumber',
+        'nb_lignes' => count($rows),
+        'param_utilise' => 'SerialNumber = ' . $snParam
+      ];
+    }
+    
     error_log('photocopieurs_details DEBUG: Recherche par SerialNumber=' . $snParam . ' → ' . count($rows) . ' résultats');
+  }
+  
+  // DEBUG : Stocker le résultat final
+  if ($debugMode) {
+    $debugInfo['results'][] = [
+      'etape' => 'RÉSULTAT FINAL',
+      'nb_lignes_total' => count($rows),
+      'statut' => empty($rows) ? 'AUCUN RÉSULTAT' : 'RÉSULTATS TROUVÉS'
+    ];
   }
   
   // Debug : logger si aucun résultat trouvé (uniquement en cas de problème)
@@ -271,6 +417,16 @@ try {
     error_log('photocopieurs_details: Aucun relevé trouvé pour ' . ($useMac ? 'MAC=' . $macParam : 'SN=' . $snParam));
   }
 } catch (PDOException $e) {
+  // DEBUG : Stocker l'erreur
+  if ($debugMode) {
+    $debugInfo['errors'][] = [
+      'message' => $e->getMessage(),
+      'code' => $e->getCode(),
+      'query' => $sql ?? 'N/A',
+      'params' => $useMac ? [':mac' => $macParam] : [':sn' => $snParam]
+    ];
+  }
+  
   error_log('photocopieurs_details SQL error: '.$e->getMessage());
   error_log('photocopieurs_details SQL query: '.($sql ?? 'N/A'));
   error_log('photocopieurs_details SQL params: '.json_encode($useMac ? [':mac' => $macParam] : [':sn' => $snParam]));
@@ -575,5 +731,118 @@ function pctOrIntOrNull($v): ?int {
       }
     })();
   </script>
+
+  <?php if ($debugMode): ?>
+  <!-- ===== MODE DEBUG ===== -->
+  <div style="margin: 2rem; padding: 1.5rem; background: #f5f5f5; border: 2px solid #d32f2f; border-radius: 4px; font-family: monospace; font-size: 13px;">
+    <h3 style="margin-top: 0; color: #d32f2f; border-bottom: 2px solid #d32f2f; padding-bottom: 0.5rem;">🔍 MODE DEBUG ACTIVÉ</h3>
+    
+    <!-- Paramètres bruts -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="margin: 0.5rem 0; color: #1976d2;">1. Paramètres bruts reçus</h4>
+      <div style="background: white; padding: 0.75rem; border-left: 3px solid #1976d2;">
+        <div><strong>$_GET['mac']:</strong> <?= h($debugInfo['raw_params']['$_GET[mac]'] ?? '(non défini)') ?></div>
+        <div><strong>$_GET['sn']:</strong> <?= h($debugInfo['raw_params']['$_GET[sn]'] ?? '(non défini)') ?></div>
+      </div>
+    </div>
+    
+    <!-- Normalisation -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="margin: 0.5rem 0; color: #1976d2;">2. Normalisation</h4>
+      <div style="background: white; padding: 0.75rem; border-left: 3px solid #1976d2;">
+        <div><strong>$macInput:</strong> <?= h($debugInfo['normalized']['$macInput'] ?? '(non défini)') ?></div>
+        <div><strong>$macParam après normalizeMac():</strong> <span style="color: #388e3c; font-weight: bold;"><?= h($debugInfo['normalized']['$macParam après normalizeMac()'] ?? '(null)') ?></span></div>
+        <div><strong>$snParam:</strong> <?= h($debugInfo['normalized']['$snParam'] ?? '(non défini)') ?></div>
+      </div>
+    </div>
+    
+    <!-- Mode utilisé -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="margin: 0.5rem 0; color: #1976d2;">3. Mode de recherche</h4>
+      <div style="background: white; padding: 0.75rem; border-left: 3px solid #1976d2;">
+        <div><strong>$useMac:</strong> <span style="color: <?= $debugInfo['mode']['$useMac'] === 'true' ? '#388e3c' : '#d32f2f' ?>; font-weight: bold;"><?= h($debugInfo['mode']['$useMac'] ?? 'false') ?></span></div>
+        <div><strong>$useSn:</strong> <span style="color: <?= $debugInfo['mode']['$useSn'] === 'true' ? '#388e3c' : '#d32f2f' ?>; font-weight: bold;"><?= h($debugInfo['mode']['$useSn'] ?? 'false') ?></span></div>
+      </div>
+    </div>
+    
+    <!-- Requêtes SQL -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="margin: 0.5rem 0; color: #1976d2;">4. Requêtes SQL exécutées</h4>
+      <?php if (empty($debugInfo['queries'])): ?>
+        <div style="background: #fff3cd; padding: 0.75rem; border-left: 3px solid #ffc107;">Aucune requête exécutée</div>
+      <?php else: ?>
+        <?php foreach ($debugInfo['queries'] as $idx => $query): ?>
+          <div style="background: white; padding: 0.75rem; margin-bottom: 0.5rem; border-left: 3px solid #1976d2;">
+            <div style="font-weight: bold; margin-bottom: 0.5rem;"><?= ($idx + 1) ?>. <?= h($query['type']) ?></div>
+            <div style="background: #f5f5f5; padding: 0.5rem; margin: 0.5rem 0; border-radius: 2px; overflow-x: auto;">
+              <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;"><?= h($query['sql']) ?></pre>
+            </div>
+            <div style="margin-top: 0.5rem;"><strong>Paramètres:</strong> <?= h(json_encode($query['params'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></div>
+          </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </div>
+    
+    <!-- Résultats à chaque étape -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="margin: 0.5rem 0; color: #1976d2;">5. Résultats à chaque étape</h4>
+      <?php if (empty($debugInfo['results'])): ?>
+        <div style="background: #fff3cd; padding: 0.75rem; border-left: 3px solid #ffc107;">Aucun résultat enregistré</div>
+      <?php else: ?>
+        <?php foreach ($debugInfo['results'] as $idx => $result): ?>
+          <div style="background: white; padding: 0.75rem; margin-bottom: 0.5rem; border-left: 3px solid <?= isset($result['nb_lignes']) && $result['nb_lignes'] > 0 ? '#388e3c' : '#d32f2f' ?>;">
+            <div style="font-weight: bold; margin-bottom: 0.5rem;"><?= ($idx + 1) ?>. <?= h($result['etape']) ?></div>
+            <?php if (isset($result['nb_lignes'])): ?>
+              <div><strong>Nombre de lignes trouvées:</strong> <span style="color: <?= $result['nb_lignes'] > 0 ? '#388e3c' : '#d32f2f' ?>; font-weight: bold; font-size: 16px;"><?= $result['nb_lignes'] ?></span></div>
+            <?php endif; ?>
+            <?php if (isset($result['param_utilise'])): ?>
+              <div><strong>Paramètre utilisé:</strong> <?= h($result['param_utilise']) ?></div>
+            <?php endif; ?>
+            <?php if (isset($result['serial_number_trouve'])): ?>
+              <div><strong>SerialNumber trouvé:</strong> <span style="color: <?= $result['serial_number_trouve'] !== '(aucun)' ? '#388e3c' : '#d32f2f' ?>; font-weight: bold;"><?= h($result['serial_number_trouve']) ?></span></div>
+            <?php endif; ?>
+            <?php if (isset($result['message'])): ?>
+              <div style="color: #d32f2f;"><?= h($result['message']) ?></div>
+            <?php endif; ?>
+            <?php if (isset($result['statut'])): ?>
+              <div style="margin-top: 0.5rem; padding: 0.5rem; background: <?= $result['statut'] === 'RÉSULTATS TROUVÉS' ? '#c8e6c9' : '#ffcdd2' ?>; border-radius: 2px; font-weight: bold; color: <?= $result['statut'] === 'RÉSULTATS TROUVÉS' ? '#2e7d32' : '#c62828' ?>;">
+                <?= h($result['statut']) ?>
+              </div>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </div>
+    
+    <!-- Erreurs SQL -->
+    <?php if (!empty($debugInfo['errors'])): ?>
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="margin: 0.5rem 0; color: #d32f2f;">6. Erreurs SQL</h4>
+      <?php foreach ($debugInfo['errors'] as $idx => $error): ?>
+        <div style="background: #ffebee; padding: 0.75rem; margin-bottom: 0.5rem; border-left: 3px solid #d32f2f;">
+          <div style="font-weight: bold; margin-bottom: 0.5rem; color: #d32f2f;">Erreur <?= ($idx + 1) ?>:</div>
+          <div><strong>Message:</strong> <?= h($error['message']) ?></div>
+          <?php if (isset($error['code'])): ?>
+            <div><strong>Code:</strong> <?= h($error['code']) ?></div>
+          <?php endif; ?>
+          <?php if (isset($error['query'])): ?>
+            <div style="margin-top: 0.5rem;"><strong>Requête:</strong></div>
+            <div style="background: #f5f5f5; padding: 0.5rem; margin: 0.5rem 0; border-radius: 2px; overflow-x: auto;">
+              <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;"><?= h($error['query']) ?></pre>
+            </div>
+          <?php endif; ?>
+          <?php if (isset($error['params'])): ?>
+            <div><strong>Paramètres:</strong> <?= h(json_encode($error['params'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></div>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+    
+    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ccc; color: #666; font-size: 12px;">
+      <strong>Note:</strong> Le mode debug est activé uniquement quand <code>?debug=1</code> est présent dans l'URL.
+    </div>
+  </div>
+  <?php endif; ?>
 </body>
 </html>
