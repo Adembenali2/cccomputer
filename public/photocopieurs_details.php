@@ -105,11 +105,33 @@ try {
   // Sélection explicite des colonnes nécessaires au lieu de SELECT * pour améliorer les performances
   $columns = "id, `Timestamp`, Model, Nom, Status, IpAddress, MacAddress, SerialNumber, 
               TonerBlack, TonerCyan, TonerMagenta, TonerYellow, TotalBW, TotalColor, TotalPages";
+  
+  // Utiliser UNION ALL pour combiner les relevés des deux tables (nouveaux et anciens)
   if ($useMac) {
-    $stmt = $pdo->prepare("SELECT {$columns} FROM compteur_relevee WHERE mac_norm = :mac ORDER BY `Timestamp` DESC, id DESC");
+    $sql = "
+      SELECT {$columns}, 'nouveau' AS source
+      FROM compteur_relevee 
+      WHERE mac_norm = :mac
+      UNION ALL
+      SELECT {$columns}, 'ancien' AS source
+      FROM compteur_relevee_ancien 
+      WHERE mac_norm = :mac
+      ORDER BY `Timestamp` DESC, id DESC
+    ";
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([':mac' => $macParam]);
   } else {
-    $stmt = $pdo->prepare("SELECT {$columns} FROM compteur_relevee WHERE SerialNumber = :sn ORDER BY `Timestamp` DESC, id DESC");
+    $sql = "
+      SELECT {$columns}, 'nouveau' AS source
+      FROM compteur_relevee 
+      WHERE SerialNumber = :sn
+      UNION ALL
+      SELECT {$columns}, 'ancien' AS source
+      FROM compteur_relevee_ancien 
+      WHERE SerialNumber = :sn
+      ORDER BY `Timestamp` DESC, id DESC
+    ";
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([':sn' => $snParam]);
   }
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -275,9 +297,13 @@ function pctOrIntOrNull($v): ?int {
 
               $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
               $totCol  = is_null($r['TotalColor']) ? '—' : number_format((int)$r['TotalColor'], 0, ',', ' ');
+              
+              // Indicateur pour les relevés de l'ancien système
+              $dataSource = $r['source'] ?? null;
+              $isAncien = ($dataSource === 'ancien');
             ?>
               <tr>
-                <td><?= h($ts) ?></td>
+                <td><?= h($ts) ?><?php if ($isAncien): ?> <span class="ancien-badge" title="Données provenant de l'ancien système" aria-label="Ancien système">📜</span><?php endif; ?></td>
                 <td><?= h($mod) ?></td>
                 <td><?= h($st) ?></td>
                 <td class="td-toner"><div class="toner-bar k"><span style="width:<?= $tk!==null?$tk:0 ?>%"></span></div><em><?= $tk!==null ? $tk.'%' : '—' ?></em></td>

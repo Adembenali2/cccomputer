@@ -11,6 +11,7 @@ $pdo = requirePdoConnection();
 // Paramètres de filtrage
 $period = trim($_GET['period'] ?? 'month'); // 'day', 'month', 'year'
 $macFilter = trim($_GET['mac'] ?? ''); // MAC spécifique ou vide pour toute la flotte
+$clientId = trim($_GET['client_id'] ?? ''); // ID client ou vide pour tous les clients
 $dateStart = trim($_GET['date_start'] ?? '');
 $dateEnd = trim($_GET['date_end'] ?? '');
 
@@ -134,6 +135,44 @@ try {
     $stmtFiltered->execute($paramsFiltered);
     $releves = $stmtFiltered->fetchAll(PDO::FETCH_ASSOC);
     
+    // ÉTAPE 2.5 : Filtrer par client si nécessaire
+    if (!empty($clientId) && is_numeric($clientId)) {
+        $clientIdInt = (int)$clientId;
+        
+        // Récupérer les MAC associées à ce client
+        $sqlClientMacs = "
+            SELECT DISTINCT mac_norm
+            FROM photocopieurs_clients
+            WHERE id_client = :client_id
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+        ";
+        
+        $stmtClientMacs = $pdo->prepare($sqlClientMacs);
+        $stmtClientMacs->execute([':client_id' => $clientIdInt]);
+        $clientMacs = $stmtClientMacs->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (empty($clientMacs)) {
+            // Aucun photocopieur pour ce client, retourner des données vides
+            jsonResponse([
+                'ok' => true,
+                'data' => [
+                    'labels' => [],
+                    'bw' => [],
+                    'color' => [],
+                    'total_bw' => 0,
+                    'total_color' => 0
+                ],
+                'photocopieurs' => []
+            ]);
+        }
+        
+        // Filtrer les relevés pour ne garder que ceux de ce client
+        $releves = array_filter($releves, function($releve) use ($clientMacs) {
+            return in_array($releve['mac_norm'] ?? '', $clientMacs, true);
+        });
+    }
+    
     // ÉTAPE 3 : Calculer la consommation réelle selon la logique 20→20
     // On calcule pour chaque période de facturation (20→20) dans la plage de dates
     
@@ -150,11 +189,48 @@ try {
         $macsInReleves = [$macNorm => true];
     }
     
+    // Trouver le premier relevé réel pour démarrer les périodes
+    $firstReleveDate = null;
+    if (!empty($macsInReleves)) {
+        $macList = array_keys($macsInReleves);
+        $macPlaceholders = implode(',', array_fill(0, count($macList), '?'));
+        
+        $sqlFirstReleve = "
+            SELECT MIN(Timestamp) as first_timestamp
+            FROM (
+                SELECT Timestamp
+                FROM compteur_relevee
+                WHERE mac_norm IN ($macPlaceholders)
+                UNION ALL
+                SELECT Timestamp
+                FROM compteur_relevee_ancien
+                WHERE mac_norm IN ($macPlaceholders)
+            ) AS combined
+        ";
+        
+        $stmtFirstReleve = $pdo->prepare($sqlFirstReleve);
+        $stmtFirstReleve->execute(array_merge($macList, $macList));
+        $firstReleve = $stmtFirstReleve->fetch(PDO::FETCH_ASSOC);
+        
+        if ($firstReleve && !empty($firstReleve['first_timestamp'])) {
+            try {
+                $firstReleveDate = new DateTime($firstReleve['first_timestamp']);
+            } catch (Exception $e) {
+                error_log('paiements_data.php - Erreur parsing first_releve date: ' . $e->getMessage());
+            }
+        }
+    }
+    
     // Récupérer toutes les périodes de facturation (20→20) dans la plage de dates
     $dateStartObj = new DateTime($dateStart);
     $dateEndObj = new DateTime($dateEnd);
     
-    // Ajuster le début à la période de facturation
+    // Ajuster le début : utiliser le premier relevé réel s'il est antérieur à la date de début
+    if ($firstReleveDate && $firstReleveDate < $dateStartObj) {
+        $dateStartObj = clone $firstReleveDate;
+    }
+    
+    // Ajuster le début à la période de facturation (20 du mois)
     $currentPeriodStart = clone $dateStartObj;
     $startDay = (int)$currentPeriodStart->format('d');
     if ($startDay < 20) {

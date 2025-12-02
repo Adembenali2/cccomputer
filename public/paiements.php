@@ -59,6 +59,14 @@ $csrfToken = ensureCsrfToken();
                 </div>
                 
                 <div class="filter-group">
+                    <label for="filter-client">Client</label>
+                    <select id="filter-client" class="filter-select">
+                        <option value="">Tous les clients</option>
+                        <!-- Rempli dynamiquement via JavaScript -->
+                    </select>
+                </div>
+                
+                <div class="filter-group">
                     <label for="filter-photocopieur">Photocopieur</label>
                     <select id="filter-photocopieur" class="filter-select">
                         <option value="">Toute la flotte</option>
@@ -171,6 +179,7 @@ $csrfToken = ensureCsrfToken();
             initializeFilters();
             setupEventListeners();
             loadPhotocopieurs();
+            loadClientsForFilter();
             loadData();
             loadClients();
         });
@@ -192,6 +201,7 @@ $csrfToken = ensureCsrfToken();
         // Configurer les écouteurs d'événements pour mise à jour automatique
         function setupEventListeners() {
             const periodSelect = document.getElementById('filter-period');
+            const clientSelect = document.getElementById('filter-client');
             const photocopieurSelect = document.getElementById('filter-photocopieur');
             const dateStartInput = document.getElementById('filter-date-start');
             const dateEndInput = document.getElementById('filter-date-end');
@@ -200,6 +210,12 @@ $csrfToken = ensureCsrfToken();
             // Mise à jour automatique lors des changements
             periodSelect.addEventListener('change', () => {
                 updateDefaultDates();
+                loadData();
+            });
+            
+            clientSelect.addEventListener('change', () => {
+                // Mettre à jour la liste des photocopieurs selon le client sélectionné
+                updatePhotocopieursForClient();
                 loadData();
             });
             
@@ -297,12 +313,91 @@ $csrfToken = ensureCsrfToken();
             }
         }
         
+        // Charger la liste des clients pour le filtre
+        async function loadClientsForFilter() {
+            try {
+                const response = await fetch('/API/paiements_clients.php');
+                const data = await response.json();
+                
+                if (data.ok && data.clients) {
+                    const select = document.getElementById('filter-client');
+                    const firstOption = select.firstElementChild;
+                    select.innerHTML = '';
+                    select.appendChild(firstOption);
+                    
+                    // Ajouter les clients
+                    data.clients.forEach(client => {
+                        const option = document.createElement('option');
+                        option.value = client.id;
+                        option.textContent = client.raison_sociale || 'Client #' + (client.numero_client || client.id);
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur chargement clients:', error);
+            }
+        }
+        
+        // Mettre à jour la liste des photocopieurs selon le client sélectionné
+        function updatePhotocopieursForClient() {
+            const clientId = document.getElementById('filter-client').value;
+            const select = document.getElementById('filter-photocopieur');
+            const firstOption = select.firstElementChild;
+            
+            if (!clientId || clientId === '') {
+                // Afficher tous les photocopieurs
+                select.innerHTML = '';
+                select.appendChild(firstOption);
+                photocopieursList.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.mac_norm;
+                    option.textContent = p.label;
+                    select.appendChild(option);
+                });
+            } else {
+                // Afficher uniquement les photocopieurs du client
+                // On aura besoin d'une API pour récupérer les photocopieurs d'un client
+                // Pour l'instant, on filtre depuis la liste existante
+                select.innerHTML = '';
+                select.appendChild(firstOption);
+                
+                // Filtrer les photocopieurs par client (si l'info est disponible)
+                // Sinon, on chargera depuis l'API
+                loadPhotocopieursForClient(clientId);
+            }
+        }
+        
+        // Charger les photocopieurs d'un client spécifique
+        async function loadPhotocopieursForClient(clientId) {
+            try {
+                const response = await fetch(`/API/clients/get_client_photocopieur.php?client_id=${clientId}`);
+                const data = await response.json();
+                
+                const select = document.getElementById('filter-photocopieur');
+                const firstOption = select.firstElementChild;
+                select.innerHTML = '';
+                select.appendChild(firstOption);
+                
+                if (data.ok && data.photocopieurs && data.photocopieurs.length > 0) {
+                    data.photocopieurs.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.mac_norm || '';
+                        option.textContent = (p.model || 'Inconnu') + ' (' + (p.mac_address || 'N/A') + ')';
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur chargement photocopieurs client:', error);
+            }
+        }
+        
         // Charger les données et mettre à jour le graphique
         async function loadData() {
             // Éviter les requêtes multiples simultanées
             if (isLoading) return;
             
             const period = document.getElementById('filter-period').value;
+            const clientId = document.getElementById('filter-client').value;
             const mac = document.getElementById('filter-photocopieur').value;
             const dateStart = document.getElementById('filter-date-start').value;
             const dateEnd = document.getElementById('filter-date-end').value;
@@ -321,8 +416,10 @@ $csrfToken = ensureCsrfToken();
             
             // Afficher un indicateur de chargement
             const chartContainer = document.querySelector('.chart-container');
-            chartContainer.style.opacity = '0.6';
-            chartContainer.style.pointerEvents = 'none';
+            if (chartContainer) {
+                chartContainer.style.opacity = '0.6';
+                chartContainer.style.pointerEvents = 'none';
+            }
             
             try {
                 const params = new URLSearchParams({
@@ -330,6 +427,11 @@ $csrfToken = ensureCsrfToken();
                     date_start: dateStart,
                     date_end: dateEnd
                 });
+                
+                // Ajouter le filtre client si sélectionné
+                if (clientId && clientId.trim() !== '') {
+                    params.append('client_id', clientId.trim());
+                }
                 
                 // Ne passer la MAC que si elle est valide (non vide et format correct)
                 if (mac && mac.trim() !== '') {
@@ -351,8 +453,10 @@ $csrfToken = ensureCsrfToken();
                 showError('Erreur lors du chargement des données');
             } finally {
                 isLoading = false;
-                chartContainer.style.opacity = '1';
-                chartContainer.style.pointerEvents = 'auto';
+                if (chartContainer) {
+                    chartContainer.style.opacity = '1';
+                    chartContainer.style.pointerEvents = 'auto';
+                }
             }
         }
         
@@ -496,14 +600,33 @@ $csrfToken = ensureCsrfToken();
         function updateChart(data) {
             const ctx = document.getElementById('consumptionChart').getContext('2d');
             
+            // S'assurer que les données sont bien définies
+            if (!data || !data.labels || !data.bw || !data.color) {
+                console.error('Données invalides pour le graphique:', data);
+                // Initialiser avec des données vides
+                data = {
+                    labels: [],
+                    bw: [],
+                    color: []
+                };
+            }
+            
             // Formater les labels selon la période
             const period = document.getElementById('filter-period').value;
-            const formattedLabels = data.labels.map(label => {
+            const formattedLabels = (data.labels || []).map(label => {
                 if (period === 'day') {
-                    return new Date(label).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                    try {
+                        return new Date(label + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                    } catch (e) {
+                        return label;
+                    }
                 } else if (period === 'month') {
-                    const [year, month] = label.split('-');
-                    return new Date(year, month - 1).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+                    try {
+                        const [year, month] = label.split('-');
+                        return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+                    } catch (e) {
+                        return label;
+                    }
                 } else {
                     return label;
                 }
@@ -512,6 +635,12 @@ $csrfToken = ensureCsrfToken();
             // Détruire le graphique existant s'il existe
             if (consumptionChart) {
                 consumptionChart.destroy();
+                consumptionChart = null;
+            }
+            
+            // Vérifier qu'on a au moins un label
+            if (formattedLabels.length === 0) {
+                console.warn('Aucune donnée à afficher dans le graphique');
             }
             
             // Créer le nouveau graphique en ligne (line chart)
@@ -522,7 +651,7 @@ $csrfToken = ensureCsrfToken();
                     datasets: [
                         {
                             label: 'Noir et blanc',
-                            data: data.bw,
+                            data: data.bw || [],
                             borderColor: 'rgb(0, 0, 0)', // Noir
                             backgroundColor: 'rgba(0, 0, 0, 0.1)',
                             borderWidth: 2,
@@ -532,11 +661,12 @@ $csrfToken = ensureCsrfToken();
                             pointHoverRadius: 5,
                             pointBackgroundColor: 'rgb(0, 0, 0)', // Noir
                             pointBorderColor: '#fff',
-                            pointBorderWidth: 2
+                            pointBorderWidth: 2,
+                            spanGaps: true // Permet d'afficher même avec des gaps
                         },
                         {
                             label: 'Couleur',
-                            data: data.color,
+                            data: data.color || [],
                             borderColor: 'rgb(220, 38, 38)', // Rouge
                             backgroundColor: 'rgba(220, 38, 38, 0.1)',
                             borderWidth: 2,
@@ -546,7 +676,8 @@ $csrfToken = ensureCsrfToken();
                             pointHoverRadius: 5,
                             pointBackgroundColor: 'rgb(220, 38, 38)', // Rouge
                             pointBorderColor: '#fff',
-                            pointBorderWidth: 2
+                            pointBorderWidth: 2,
+                            spanGaps: true // Permet d'afficher même avec des gaps
                         }
                     ]
                 },
