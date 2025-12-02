@@ -34,13 +34,45 @@ function logDeviceAction(PDO $pdo, string $action, string $details): void {
 }
 
 /* ---------- Entrée ---------- */
-$macParam = strtoupper(trim($_GET['mac'] ?? '')); // attendu: 12 hex sans séparateurs
+/**
+ * CORRECTION BUG : Normalisation de la MAC avant validation
+ * 
+ * PROBLÈME IDENTIFIÉ :
+ * - La MAC peut arriver dans l'URL avec des séparateurs (ex: "00:26:73:3F:C6:94")
+ * - L'ancienne validation exigeait 12 hex sans séparateurs, ce qui faisait échouer la validation
+ * - Résultat : aucun relevé n'était chargé même s'ils existaient en base
+ * 
+ * SOLUTION :
+ * - Normaliser la MAC AVANT la validation en utilisant normalizeMac()
+ * - Cette fonction enlève tous les séparateurs et vérifie que la MAC fait 12 hex
+ * - La version normalisée ($macParam) est utilisée dans toutes les requêtes SQL
+ * - Cela garantit que les relevés sont trouvés dans compteur_relevee ET compteur_relevee_ancien
+ * 
+ * FORMAT ATTENDU EN BASE :
+ * - La colonne mac_norm est générée comme : replace(upper(MacAddress),':','')
+ * - Format stocké : 12 hex sans séparateurs (ex: "0026733FC694")
+ * - $macParam utilise exactement ce format pour la correspondance WHERE
+ */
+$macInput = trim($_GET['mac'] ?? ''); // MAC brute depuis l'URL (peut contenir des ':')
 $snParam  = trim($_GET['sn'] ?? '');
 
-$useMac = false; $useSn = false;
-if ($macParam !== '' && preg_match('/^[0-9A-F]{12}$/', $macParam)) $useMac = true;
-elseif ($snParam !== '')                                           $useSn  = true;
-else {
+// Normaliser la MAC si fournie (enlever les séparateurs et vérifier qu'elle fait 12 hex)
+$macParam = null;
+if ($macInput !== '') {
+  $normalized = normalizeMac($macInput);
+  if ($normalized['norm'] !== null) {
+    $macParam = $normalized['norm']; // Format normalisé : 12 hex sans séparateurs (ex: "0026733FC694")
+  }
+}
+
+// Déterminer quel critère utiliser pour la recherche
+$useMac = false; 
+$useSn = false;
+if ($macParam !== null && $macParam !== '') {
+  $useMac = true;
+} elseif ($snParam !== '') {
+  $useSn = true;
+} else {
   http_response_code(400);
   echo "<!doctype html><meta charset='utf-8'><p>Paramètre manquant ou invalide. Utilisez ?mac=001122AABBCC (12 hex) ou ?sn=SERIAL.</p>";
   exit;
@@ -101,15 +133,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
 }
 
 /* ---------- Lecture relevés ---------- */
+// CORRECTION BUG : La MAC est maintenant normalisée AVANT cette section (lignes 36-58)
+// $macParam contient toujours la MAC au format normalisé (12 hex sans séparateurs)
+// Cela garantit que la requête SQL trouve les relevés même si la MAC arrive avec des ':' dans l'URL
 try {
   // Sélection explicite des colonnes nécessaires au lieu de SELECT * pour améliorer les performances
   $columns = "id, `Timestamp`, Model, Nom, Status, IpAddress, MacAddress, SerialNumber, 
               TonerBlack, TonerCyan, TonerMagenta, TonerYellow, TotalBW, TotalColor, TotalPages";
   
   // Utiliser UNION ALL pour combiner les relevés des deux tables (nouveaux et anciens)
-  // Les deux tables ont la même structure et mac_norm est généré de la même manière
+  // Les deux tables ont la même structure et mac_norm est généré de la même manière :
+  // mac_norm = replace(upper(MacAddress),':','') → format 12 hex sans séparateurs
+  // La condition WHERE utilise mac_norm qui correspond exactement au format de $macParam
   if ($useMac) {
     // Requête optimisée : UNION ALL pour combiner les deux sources
+    // IMPORTANT : $macParam est déjà normalisé (12 hex sans séparateurs) grâce à normalizeMac()
     $sql = "
       SELECT {$columns}, 'nouveau' AS source
       FROM compteur_relevee 
