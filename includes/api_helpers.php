@@ -2,6 +2,11 @@
 // includes/api_helpers.php
 // Fonctions helper communes pour les API
 
+// Charger le logger si disponible
+if (file_exists(__DIR__ . '/Logger.php')) {
+    require_once __DIR__ . '/Logger.php';
+}
+
 /**
  * Réponse JSON standardisée pour toutes les API
  */

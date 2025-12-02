@@ -1,0 +1,30 @@
+# Dependencies
+/vendor/
+composer.lock
+
+# Logs
+/logs/
+*.log
+
+# Tests
+.phpunit.cache/
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Sentry
+config/sentry.local.php
+
