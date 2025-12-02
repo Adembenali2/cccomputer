@@ -107,15 +107,16 @@ try {
               TonerBlack, TonerCyan, TonerMagenta, TonerYellow, TotalBW, TotalColor, TotalPages";
   
   // Utiliser UNION ALL pour combiner les relevés des deux tables (nouveaux et anciens)
+  // Les deux tables ont la même structure et mac_norm est généré de la même manière
   if ($useMac) {
     $sql = "
       SELECT {$columns}, 'nouveau' AS source
       FROM compteur_relevee 
-      WHERE mac_norm = :mac
+      WHERE mac_norm = :mac AND mac_norm IS NOT NULL AND mac_norm != ''
       UNION ALL
       SELECT {$columns}, 'ancien' AS source
       FROM compteur_relevee_ancien 
-      WHERE mac_norm = :mac
+      WHERE mac_norm = :mac AND mac_norm IS NOT NULL AND mac_norm != ''
       ORDER BY `Timestamp` DESC, id DESC
     ";
     $stmt = $pdo->prepare($sql);
@@ -124,11 +125,11 @@ try {
     $sql = "
       SELECT {$columns}, 'nouveau' AS source
       FROM compteur_relevee 
-      WHERE SerialNumber = :sn
+      WHERE SerialNumber = :sn AND SerialNumber IS NOT NULL AND SerialNumber != ''
       UNION ALL
       SELECT {$columns}, 'ancien' AS source
       FROM compteur_relevee_ancien 
-      WHERE SerialNumber = :sn
+      WHERE SerialNumber = :sn AND SerialNumber IS NOT NULL AND SerialNumber != ''
       ORDER BY `Timestamp` DESC, id DESC
     ";
     $stmt = $pdo->prepare($sql);
@@ -141,15 +142,16 @@ try {
 }
 
 /* ---------- En-tête (infos machine) ---------- */
-$latest     = $rows[0] ?? null;
+$latest     = !empty($rows) ? $rows[0] : null;
 $macPrettyFromParam = $useMac ? implode(':', str_split($macParam,2)) : null;
 
-$macDisplay = $latest['MacAddress']   ?? ($macPrettyFromParam ?: '—'); // ce qu'on montre à l'écran
-$snDisplay  = $latest['SerialNumber'] ?? ($useSn ? $snParam : '—');
-$model      = $latest['Model']        ?? '—';
-$name       = $latest['Nom']          ?? '—';
-$status     = $latest['Status']       ?? '—';
-$ipDisplay  = $latest['IpAddress']    ?? '—';
+// Vérifier que $latest existe avant d'accéder à ses propriétés
+$macDisplay = ($latest && isset($latest['MacAddress']))   ? $latest['MacAddress']   : ($macPrettyFromParam ?: '—');
+$snDisplay  = ($latest && isset($latest['SerialNumber'])) ? $latest['SerialNumber'] : ($useSn ? $snParam : '—');
+$model      = ($latest && isset($latest['Model']))        ? $latest['Model']        : '—';
+$name       = ($latest && isset($latest['Nom']))          ? $latest['Nom']          : '—';
+$status     = ($latest && isset($latest['Status']))       ? $latest['Status']       : '—';
+$ipDisplay  = ($latest && isset($latest['IpAddress']))    ? $latest['IpAddress']    : '—';
 
 /* ---------- Client attribué (si existe) ---------- */
 $client = null;
