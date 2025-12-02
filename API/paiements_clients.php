@@ -28,6 +28,44 @@ function getBillingPeriod($year, $month) {
 }
 
 /**
+ * Trouve le premier compteur de la période de facturation pour une MAC
+ */
+function getFirstCounterInPeriod($pdo, $macNorm, DateTime $periodStart) {
+    $sql = "
+        SELECT 
+            COALESCE(TotalBW, 0) as TotalBW,
+            COALESCE(TotalColor, 0) as TotalColor
+        FROM (
+            SELECT mac_norm, Timestamp, TotalBW, TotalColor
+            FROM compteur_relevee
+            WHERE mac_norm = :mac AND Timestamp >= :period_start
+            UNION ALL
+            SELECT mac_norm, Timestamp, TotalBW, TotalColor
+            FROM compteur_relevee_ancien
+            WHERE mac_norm = :mac AND Timestamp >= :period_start
+        ) AS combined
+        ORDER BY Timestamp ASC
+        LIMIT 1
+    ";
+    
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        ':mac' => $macNorm,
+        ':period_start' => $periodStart->format('Y-m-d H:i:s')
+    ]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$result) {
+        return null;
+    }
+    
+    return [
+        'bw' => (int)($result['TotalBW'] ?? 0),
+        'color' => (int)($result['TotalColor'] ?? 0)
+    ];
+}
+
+/**
  * Calcule la consommation pour une période donnée
  * @param bool $monthly Si true, calcule la consommation mensuelle (différence entre début et fin)
  *                       Si false, calcule la consommation cumulée depuis le premier compteur
@@ -92,6 +130,41 @@ function calculateConsumption($pdo, $macNorm, $periodStart, $periodEnd, $firstCo
     
     if ($monthly) {
         // Consommation mensuelle : différence entre début et fin de période
+        // Le début de période doit être le premier compteur à partir du 20 du mois (début de période)
+        // Si pas de relevé au début exact, chercher le premier relevé dans la période
+        if (!$resultStart) {
+            // Chercher le premier relevé dans la période
+            $sqlFirstInPeriod = "
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor
+                FROM (
+                    SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                    FROM compteur_relevee
+                    WHERE mac_norm = :mac AND Timestamp >= :period_start AND Timestamp <= :period_end
+                    UNION ALL
+                    SELECT mac_norm, Timestamp, TotalBW, TotalColor
+                    FROM compteur_relevee_ancien
+                    WHERE mac_norm = :mac AND Timestamp >= :period_start AND Timestamp <= :period_end
+                ) AS combined
+                ORDER BY Timestamp ASC
+                LIMIT 1
+            ";
+            
+            $stmtFirst = $pdo->prepare($sqlFirstInPeriod);
+            $stmtFirst->execute([
+                ':mac' => $macNorm,
+                ':period_start' => $periodStart->format('Y-m-d H:i:s'),
+                ':period_end' => $periodEnd->format('Y-m-d H:i:s')
+            ]);
+            $resultStart = $stmtFirst->fetch(PDO::FETCH_ASSOC);
+        }
+        
+        if (!$resultStart) {
+            // Si vraiment aucun relevé dans la période, consommation = 0
+            return ['bw' => 0, 'color' => 0];
+        }
+        
         $startBw = (int)($resultStart['TotalBW'] ?? 0);
         $startColor = (int)($resultStart['TotalColor'] ?? 0);
         
@@ -100,9 +173,17 @@ function calculateConsumption($pdo, $macNorm, $periodStart, $periodEnd, $firstCo
             'color' => max(0, $endColor - $startColor)
         ];
     } else {
-        // Consommation cumulée depuis le premier compteur
-        $firstBw = $firstCounters[$macNorm]['bw'] ?? 0;
-        $firstColor = $firstCounters[$macNorm]['color'] ?? 0;
+        // Consommation cumulée depuis le premier compteur de la période
+        // On utilise le premier compteur à partir du début de période (20 du mois)
+        $firstCounter = getFirstCounterInPeriod($pdo, $macNorm, $periodStart);
+        if ($firstCounter === null) {
+            // Fallback : utiliser le premier compteur global
+            $firstBw = $firstCounters[$macNorm]['bw'] ?? 0;
+            $firstColor = $firstCounters[$macNorm]['color'] ?? 0;
+        } else {
+            $firstBw = $firstCounter['bw'];
+            $firstColor = $firstCounter['color'];
+        }
         
         return [
             'bw' => max(0, $endBw - $firstBw),

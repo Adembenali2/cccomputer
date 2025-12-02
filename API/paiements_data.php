@@ -66,6 +66,70 @@ if (!empty($macFilter)) {
     }
 }
 
+/**
+ * Fonction pour obtenir la période de facturation (20→20) pour une date donnée
+ */
+function getBillingPeriodForDate(DateTime $date) {
+    $year = (int)$date->format('Y');
+    $month = (int)$date->format('m');
+    $day = (int)$date->format('d');
+    
+    // Si on est avant le 20, la période commence le 20 du mois précédent
+    if ($day < 20) {
+        $periodStart = new DateTime("$year-$month-20 00:00:00");
+        $periodStart->modify('-1 month');
+        $periodEnd = new DateTime("$year-$month-20 23:59:59");
+    } else {
+        // Sinon, la période commence le 20 du mois courant
+        $periodStart = new DateTime("$year-$month-20 00:00:00");
+        $periodEnd = clone $periodStart;
+        $periodEnd->modify('+1 month');
+    }
+    
+    return [
+        'start' => $periodStart,
+        'end' => $periodEnd
+    ];
+}
+
+/**
+ * Trouve le premier compteur de la période de facturation pour une MAC
+ */
+function getFirstCounterInPeriod($pdo, $macNorm, DateTime $periodStart) {
+    $sql = "
+        SELECT 
+            COALESCE(TotalBW, 0) as TotalBW,
+            COALESCE(TotalColor, 0) as TotalColor
+        FROM (
+            SELECT mac_norm, Timestamp, TotalBW, TotalColor
+            FROM compteur_relevee
+            WHERE mac_norm = :mac AND Timestamp >= :period_start
+            UNION ALL
+            SELECT mac_norm, Timestamp, TotalBW, TotalColor
+            FROM compteur_relevee_ancien
+            WHERE mac_norm = :mac AND Timestamp >= :period_start
+        ) AS combined
+        ORDER BY Timestamp ASC
+        LIMIT 1
+    ";
+    
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        ':mac' => $macNorm,
+        ':period_start' => $periodStart->format('Y-m-d H:i:s')
+    ]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$result) {
+        return null;
+    }
+    
+    return [
+        'bw' => (int)($result['TotalBW'] ?? 0),
+        'color' => (int)($result['TotalColor'] ?? 0)
+    ];
+}
+
 try {
     // ÉTAPE 1 : Trouver le premier compteur (compteur de départ) pour chaque MAC
     // On cherche dans les deux tables et on prend le plus ancien pour chaque MAC
@@ -244,8 +308,11 @@ try {
     $stmtFiltered->execute($paramsFiltered);
     $releves = $stmtFiltered->fetchAll(PDO::FETCH_ASSOC);
     
-    // ÉTAPE 3 : Calculer la consommation réelle (compteur_actuel - compteur_depart)
+    // ÉTAPE 3 : Calculer la consommation réelle (compteur_actuel - compteur_depart_de_la_periode)
     $consumption = []; // Structure: [period_label => ['bw' => total, 'color' => total]]
+    
+    // Cache pour les premiers compteurs de période (évite les requêtes multiples)
+    $periodFirstCountersCache = []; // [mac_period_key => ['bw' => value, 'color' => value]]
     
     foreach ($releves as $releve) {
         // Ignorer les relevés sans MAC ou sans timestamp valide
@@ -266,11 +333,28 @@ try {
         $currentBw = (int)($releve['TotalBW'] ?? 0);
         $currentColor = (int)($releve['TotalColor'] ?? 0);
         
-        // Récupérer le compteur de départ pour cette MAC
-        $firstBw = $firstCounters[$mac]['bw'] ?? 0;
-        $firstColor = $firstCounters[$mac]['color'] ?? 0;
+        // Déterminer la période de facturation pour ce relevé (20→20)
+        $billingPeriod = getBillingPeriodForDate($timestamp);
+        $periodKey = $mac . '_' . $billingPeriod['start']->format('Y-m-d');
         
-        // Calculer la consommation réelle : compteur_actuel - compteur_depart
+        // Récupérer ou mettre en cache le premier compteur de cette période
+        if (!isset($periodFirstCountersCache[$periodKey])) {
+            $firstCounter = getFirstCounterInPeriod($pdo, $mac, $billingPeriod['start']);
+            if ($firstCounter === null) {
+                // Si pas de compteur dans la période, utiliser le premier compteur global comme fallback
+                $periodFirstCountersCache[$periodKey] = [
+                    'bw' => $firstCounters[$mac]['bw'] ?? 0,
+                    'color' => $firstCounters[$mac]['color'] ?? 0
+                ];
+            } else {
+                $periodFirstCountersCache[$periodKey] = $firstCounter;
+            }
+        }
+        
+        $firstBw = $periodFirstCountersCache[$periodKey]['bw'];
+        $firstColor = $periodFirstCountersCache[$periodKey]['color'];
+        
+        // Calculer la consommation réelle : compteur_actuel - compteur_depart_de_la_periode
         $consumptionBw = max(0, $currentBw - $firstBw);
         $consumptionColor = max(0, $currentColor - $firstColor);
         
