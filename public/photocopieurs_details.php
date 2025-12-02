@@ -109,35 +109,44 @@ try {
   // Utiliser UNION ALL pour combiner les relevés des deux tables (nouveaux et anciens)
   // Les deux tables ont la même structure et mac_norm est généré de la même manière
   if ($useMac) {
+    // Requête optimisée : UNION ALL pour combiner les deux sources
     $sql = "
       SELECT {$columns}, 'nouveau' AS source
       FROM compteur_relevee 
-      WHERE mac_norm = :mac AND mac_norm IS NOT NULL AND mac_norm != ''
+      WHERE mac_norm = :mac
       UNION ALL
       SELECT {$columns}, 'ancien' AS source
       FROM compteur_relevee_ancien 
-      WHERE mac_norm = :mac AND mac_norm IS NOT NULL AND mac_norm != ''
+      WHERE mac_norm = :mac
       ORDER BY `Timestamp` DESC, id DESC
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':mac' => $macParam]);
   } else {
+    // Recherche par numéro de série
     $sql = "
       SELECT {$columns}, 'nouveau' AS source
       FROM compteur_relevee 
-      WHERE SerialNumber = :sn AND SerialNumber IS NOT NULL AND SerialNumber != ''
+      WHERE SerialNumber = :sn
       UNION ALL
       SELECT {$columns}, 'ancien' AS source
       FROM compteur_relevee_ancien 
-      WHERE SerialNumber = :sn AND SerialNumber IS NOT NULL AND SerialNumber != ''
+      WHERE SerialNumber = :sn
       ORDER BY `Timestamp` DESC, id DESC
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':sn' => $snParam]);
   }
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  
+  // Debug : logger si aucun résultat trouvé (uniquement en cas de problème)
+  if (empty($rows)) {
+    error_log('photocopieurs_details: Aucun relevé trouvé pour ' . ($useMac ? 'MAC=' . $macParam : 'SN=' . $snParam));
+  }
 } catch (PDOException $e) {
   error_log('photocopieurs_details SQL error: '.$e->getMessage());
+  error_log('photocopieurs_details SQL query: '.($sql ?? 'N/A'));
+  error_log('photocopieurs_details SQL params: '.json_encode($useMac ? [':mac' => $macParam] : [':sn' => $snParam]));
   $rows = [];
 }
 
