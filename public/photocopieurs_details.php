@@ -140,12 +140,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
  * - Si MacAddress est NULL dans les relevés, mac_norm sera aussi NULL (colonne générée)
  * - La requête WHERE mac_norm = :mac ne trouve rien si mac_norm est NULL
  * - Certains relevés anciens peuvent avoir MacAddress NULL mais SerialNumber valide
+ * - Le fallback par SerialNumber ne fonctionnait que si on trouvait le SN dans photocopieurs_clients
  * 
- * SOLUTION :
+ * SOLUTION AMÉLIORÉE :
  * - Recherche d'abord par mac_norm (si MAC fournie)
- * - Si aucun résultat, essayer aussi par SerialNumber (si disponible depuis photocopieurs_clients)
+ * - Si aucun résultat, récupérer le SerialNumber depuis photocopieurs_clients (si disponible)
+ * - Si SerialNumber trouvé, rechercher TOUS les relevés par SerialNumber (même ceux avec MacAddress NULL)
  * - UNION ALL pour combiner compteur_relevee et compteur_relevee_ancien
- * - Gérer le cas où mac_norm est NULL en cherchant aussi par SerialNumber
+ * - Recherche aussi par SerialNumber directement dans les relevés si photocopieurs_clients n'a pas de SN
  */
 try {
   // Sélection explicite des colonnes nécessaires au lieu de SELECT * pour améliorer les performances
@@ -153,6 +155,10 @@ try {
               TonerBlack, TonerCyan, TonerMagenta, TonerYellow, TotalBW, TotalColor, TotalPages";
   
   $rows = [];
+  
+  // DEBUG : Log des paramètres reçus
+  error_log('photocopieurs_details DEBUG: $_GET[mac]=' . ($_GET['mac'] ?? 'NULL') . ', $_GET[sn]=' . ($_GET['sn'] ?? 'NULL'));
+  error_log('photocopieurs_details DEBUG: $macParam=' . ($macParam ?? 'NULL') . ', $useMac=' . ($useMac ? 'true' : 'false') . ', $useSn=' . ($useSn ? 'true' : 'false'));
   
   if ($useMac) {
     // Recherche principale par mac_norm (format normalisé : 12 hex sans séparateurs)
@@ -174,22 +180,28 @@ try {
     $stmt->execute([':mac' => $macParam]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
+    error_log('photocopieurs_details DEBUG: Recherche par MAC=' . $macParam . ' → ' . count($rows) . ' résultats');
+    
     // Si aucun résultat par MAC, essayer de trouver le SerialNumber associé à cette MAC
     // Cela gère le cas où les relevés ont MacAddress NULL mais SerialNumber valide
-    // On cherche dans photocopieurs_clients d'abord, puis dans les relevés eux-mêmes
     if (empty($rows)) {
       try {
         $snFromMac = null;
         
-        // Essayer d'abord dans photocopieurs_clients (photocopieur attribué)
+        // ÉTAPE 1 : Essayer d'abord dans photocopieurs_clients (photocopieur attribué)
+        // C'est la source la plus fiable car c'est la liaison client-photocopieur
+        // IMPORTANT : On récupère le SerialNumber même si la recherche par MAC n'a rien donné
+        // car les relevés peuvent avoir MacAddress NULL mais SerialNumber valide
         $stmtSn = $pdo->prepare("SELECT SerialNumber FROM photocopieurs_clients WHERE mac_norm = :mac AND SerialNumber IS NOT NULL AND SerialNumber != '' LIMIT 1");
         $stmtSn->execute([':mac' => $macParam]);
         $snFromMac = $stmtSn->fetchColumn();
         
-        // Si pas trouvé, chercher dans les relevés (photocopieur non attribué mais avec relevés)
+        error_log('photocopieurs_details DEBUG: SerialNumber depuis photocopieurs_clients pour MAC=' . $macParam . ' → ' . ($snFromMac !== false && $snFromMac !== null ? $snFromMac : 'NULL'));
+        
+        // ÉTAPE 2 : Si pas trouvé dans photocopieurs_clients, chercher dans les relevés eux-mêmes
+        // On cherche un SerialNumber dans les relevés qui ont cette MAC (même si mac_norm est NULL)
+        // On normalise MacAddress manuellement pour trouver même si mac_norm est NULL dans certains cas
         if (($snFromMac === false || $snFromMac === null || $snFromMac === '') && !empty($macParam)) {
-          // Chercher un SerialNumber dans les relevés qui ont cette MAC
-          // On normalise MacAddress manuellement pour trouver même si mac_norm est NULL dans certains cas
           $stmtSn2 = $pdo->prepare("
             SELECT DISTINCT SerialNumber 
             FROM (
@@ -205,9 +217,13 @@ try {
           ");
           $stmtSn2->execute([':mac' => $macParam]);
           $snFromMac = $stmtSn2->fetchColumn();
+          
+          error_log('photocopieurs_details DEBUG: SerialNumber depuis relevés pour MAC=' . $macParam . ' → ' . ($snFromMac !== false && $snFromMac !== null ? $snFromMac : 'NULL'));
         }
         
-        // Si on a trouvé un SerialNumber, rechercher les relevés par SerialNumber
+        // ÉTAPE 3 : Si on a trouvé un SerialNumber, rechercher TOUS les relevés par SerialNumber
+        // Cela permet de trouver même les relevés avec MacAddress NULL
+        // C'est la clé : même si MacAddress est NULL dans les relevés, on peut les trouver par SerialNumber
         if ($snFromMac !== false && $snFromMac !== null && $snFromMac !== '') {
           $sqlSn = "
             SELECT {$columns}, 'nouveau' AS source
@@ -222,6 +238,10 @@ try {
           $stmtSn3 = $pdo->prepare($sqlSn);
           $stmtSn3->execute([':sn' => $snFromMac]);
           $rows = $stmtSn3->fetchAll(PDO::FETCH_ASSOC);
+          
+          error_log('photocopieurs_details DEBUG: Recherche par SerialNumber=' . $snFromMac . ' → ' . count($rows) . ' résultats');
+        } else {
+          error_log('photocopieurs_details DEBUG: Aucun SerialNumber trouvé pour MAC=' . $macParam . ' - Impossible de faire un fallback');
         }
       } catch (PDOException $eSn) {
         error_log('photocopieurs_details fallback SN search error: '.$eSn->getMessage());
@@ -242,6 +262,8 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':sn' => $snParam]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    error_log('photocopieurs_details DEBUG: Recherche par SerialNumber=' . $snParam . ' → ' . count($rows) . ' résultats');
   }
   
   // Debug : logger si aucun résultat trouvé (uniquement en cas de problème)
