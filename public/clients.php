@@ -205,7 +205,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             header('Location: /public/clients.php?added=1');
             exit;
         } catch (PDOException $e) {
-            $pdo->rollBack();
+            // Rollback uniquement si une transaction est active
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             
             if (isNoDefaultIdError($e)) {
                 try {
@@ -237,7 +240,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     header('Location: /public/clients.php?added=1');
                     exit;
                 } catch (PDOException $eId) {
-                    $pdo->rollBack();
+                    // Rollback uniquement si une transaction est active
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    // S'assurer de déverrouiller la table en cas d'erreur
+                    try {
+                        $pdo->exec("UNLOCK TABLES");
+                    } catch (PDOException $unlockEx) {
+                        // Ignorer l'erreur de déverrouillage si la table n'était pas verrouillée
+                    }
                     error_log('clients.php INSERT with id error: ' . $eId->getMessage());
                     $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible de créer le client (id requis)."];
                 }
@@ -253,7 +265,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     header('Location: /public/clients.php?added=1');
                     exit;
                 } catch (PDOException $e2) {
-                    $pdo->rollBack();
+                    // Rollback uniquement si une transaction est active
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                     error_log('clients.php INSERT retry duplicate error: ' . $e2->getMessage());
                     $flash = ['type' => 'error', 'msg' => "Erreur SQL (unicité): impossible de créer le client."];
                 }
@@ -303,7 +318,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 if (!$macNorm && $snInput === '') {
                     $flash = ['type' => 'error', 'msg' => "Adresse MAC ou numéro de série valide requis."];
                     $shouldOpenAttachModal = true;
-                    $pdo->rollBack();
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                 } else {
                     $existing = null;
                     
@@ -365,7 +382,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 $flash = ['type' => 'error', 'msg' => "Erreur: " . $e->getMessage()];
                 $shouldOpenAttachModal = true;
             } catch (PDOException $e) {
-                $pdo->rollBack();
+                // Rollback uniquement si une transaction est active
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 error_log('clients.php attach_photocopieur error: ' . $e->getMessage());
                 $flash = ['type' => 'error', 'msg' => "Erreur SQL: impossible d'attribuer le photocopieur."];
                 $shouldOpenAttachModal = true;

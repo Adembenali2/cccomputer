@@ -17,27 +17,52 @@ class DebtService
 {
     private ConsumptionService $consumptionService;
     
-    // Configuration des tarifs (peut être externalisée dans un fichier de config)
+    // Configuration des tarifs selon les règles du projet
+    // N&B : 0.05€ par copie si > 1000 copies/mois, sinon 0€
+    // Couleur : 0.09€ par copie
     private const PRICING = [
-        'packbronze' => [
-            'base_price' => 20.0,
-            'included_bw' => 1000,
-            'included_color' => 100,
-            'price_per_bw' => 0.05,
-            'price_per_color' => 0.15,
-        ],
-        'packargent' => [
-            'base_price' => 35.0,
-            'included_bw' => 2000,
-            'included_color' => 200,
-            'price_per_bw' => 0.04,
-            'price_per_color' => 0.12,
-        ],
+        'bw_base' => 0.05,      // Prix par copie N&B si > seuil
+        'bw_threshold' => 1000,  // Seuil pour N&B
+        'color_base' => 0.09,    // Prix par copie couleur
     ];
     
     public function __construct(ConsumptionService $consumptionService)
     {
         $this->consumptionService = $consumptionService;
+    }
+    
+    /**
+     * Calcule la dette pour une consommation donnée selon les règles de tarification
+     * 
+     * Règles :
+     * - N&B : 0.05€ par copie si > 1000 copies/mois, sinon 0€
+     * - Couleur : 0.09€ par copie
+     * 
+     * @param int $bwConsumption Consommation N&B
+     * @param int $colorConsumption Consommation couleur
+     * @return array ['debt' => float, 'bw_amount' => float, 'color_amount' => float, ...]
+     */
+    public function calculateDebt(int $bwConsumption, int $colorConsumption): array
+    {
+        $bwAmount = 0;
+        if ($bwConsumption > self::PRICING['bw_threshold']) {
+            $bwAmount = $bwConsumption * self::PRICING['bw_base'];
+        }
+        
+        $colorAmount = $colorConsumption * self::PRICING['color_base'];
+        
+        $totalDebt = $bwAmount + $colorAmount;
+        
+        return [
+            'debt' => round($totalDebt, 2),
+            'bw_consumption' => $bwConsumption,
+            'color_consumption' => $colorConsumption,
+            'bw_amount' => round($bwAmount, 2),
+            'color_amount' => round($colorAmount, 2),
+            'bw_threshold' => self::PRICING['bw_threshold'],
+            'bw_price' => self::PRICING['bw_base'],
+            'color_price' => self::PRICING['color_base'],
+        ];
     }
     
     /**
@@ -57,30 +82,17 @@ class DebtService
             return null;
         }
         
-        $pricing = self::PRICING[$client->offre] ?? self::PRICING['packbronze'];
-        
         $bwConsumption = $consumption['bw'];
         $colorConsumption = $consumption['color'];
         
-        // Calculer les copies en excès
-        $excessBw = max(0, $bwConsumption - $pricing['included_bw']);
-        $excessColor = max(0, $colorConsumption - $pricing['included_color']);
+        $debtData = $this->calculateDebt($bwConsumption, $colorConsumption);
         
-        // Calculer la dette
-        $debt = $pricing['base_price'] 
-            + ($excessBw * $pricing['price_per_bw'])
-            + ($excessColor * $pricing['price_per_color']);
-        
-        return [
-            'debt' => round($debt, 2),
-            'bw_consumption' => $bwConsumption,
-            'color_consumption' => $colorConsumption,
-            'excess_bw' => $excessBw,
-            'excess_color' => $excessColor,
-            'base_price' => $pricing['base_price'],
+        return array_merge($debtData, [
             'period_start' => $periodStart,
             'period_end' => $periodEnd,
-        ];
+            'start_counter' => $consumption['start_counter'] ?? null,
+            'end_counter' => $consumption['end_counter'] ?? null,
+        ]);
     }
 }
 

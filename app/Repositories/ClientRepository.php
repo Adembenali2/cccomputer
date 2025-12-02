@@ -111,5 +111,66 @@ class ClientRepository
         
         return $results;
     }
+    
+    /**
+     * Récupère tous les clients avec leurs photocopieurs associés
+     * 
+     * @return array ['client' => Client, 'photocopieurs' => array[]]
+     */
+    public function findAllWithPhotocopieurs(): array
+    {
+        $sql = "
+            SELECT 
+                c.*,
+                pc.mac_norm,
+                pc.MacAddress,
+                pc.SerialNumber,
+                COALESCE(
+                    r1.Model,
+                    r2.Model,
+                    'Inconnu'
+                ) as Model
+            FROM clients c
+            INNER JOIN photocopieurs_clients pc ON pc.id_client = c.id
+            LEFT JOIN (
+                SELECT mac_norm, Model, 
+                       ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) as rn
+                FROM compteur_relevee
+                WHERE Model IS NOT NULL
+            ) r1 ON r1.mac_norm = pc.mac_norm AND r1.rn = 1
+            LEFT JOIN (
+                SELECT mac_norm, Model,
+                       ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) as rn
+                FROM compteur_relevee_ancien
+                WHERE Model IS NOT NULL
+            ) r2 ON r2.mac_norm = pc.mac_norm AND r2.rn = 1
+            WHERE pc.mac_norm IS NOT NULL AND pc.mac_norm != ''
+            ORDER BY c.raison_sociale, pc.mac_norm
+        ";
+        
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute();
+        
+        $clientsData = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $clientId = (int)($row['id'] ?? 0);
+            
+            if (!isset($clientsData[$clientId])) {
+                $clientsData[$clientId] = [
+                    'client' => Client::fromArray($row),
+                    'photocopieurs' => []
+                ];
+            }
+            
+            $clientsData[$clientId]['photocopieurs'][] = [
+                'mac_norm' => trim($row['mac_norm'] ?? ''),
+                'mac_address' => $row['MacAddress'] ?? '',
+                'serial' => $row['SerialNumber'] ?? '',
+                'model' => $row['Model'] ?? 'Inconnu'
+            ];
+        }
+        
+        return array_values($clientsData);
+    }
 }
 
