@@ -202,14 +202,16 @@ try {
     // La colonne mac_norm est générée comme : replace(upper(MacAddress),':','')
     // Format attendu : 12 hex en majuscules sans séparateurs (ex: "0026733FC694")
     // Si MacAddress est NULL, mac_norm sera NULL aussi, donc la condition mac_norm = :mac ne trouvera rien
+    // CORRECTION BUG HY093 : PDO ne permet pas d'utiliser le même paramètre deux fois dans UNION ALL
+    // On utilise :mac1 et :mac2 avec la même valeur
     $sql = "
       SELECT {$columns}, 'nouveau' AS source
       FROM compteur_relevee 
-      WHERE mac_norm = :mac
+      WHERE mac_norm = :mac1
       UNION ALL
       SELECT {$columns}, 'ancien' AS source
       FROM compteur_relevee_ancien 
-      WHERE mac_norm = :mac
+      WHERE mac_norm = :mac2
       ORDER BY `Timestamp` DESC, id DESC
     ";
     
@@ -218,12 +220,12 @@ try {
       $debugInfo['queries'][] = [
         'type' => 'Recherche principale par MAC',
         'sql' => $sql,
-        'params' => [':mac' => $macParam]
+        'params' => [':mac1' => $macParam, ':mac2' => $macParam]
       ];
     }
     
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([':mac' => $macParam]);
+    $stmt->execute([':mac1' => $macParam, ':mac2' => $macParam]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // DEBUG : Stocker le nombre de résultats
@@ -275,16 +277,18 @@ try {
         // ÉTAPE 2 : Si pas trouvé dans photocopieurs_clients, chercher dans les relevés eux-mêmes
         // On cherche un SerialNumber dans les relevés qui ont cette MAC (même si mac_norm est NULL)
         // On normalise MacAddress manuellement pour trouver même si mac_norm est NULL dans certains cas
+        // CORRECTION BUG HY093 : PDO ne permet pas d'utiliser le même paramètre deux fois dans UNION
+        // On utilise :mac1 et :mac2 avec la même valeur
         if (($snFromMac === false || $snFromMac === null || $snFromMac === '') && !empty($macParam)) {
           $sqlSn2 = "
             SELECT DISTINCT SerialNumber 
             FROM (
               SELECT SerialNumber FROM compteur_relevee 
-              WHERE REPLACE(UPPER(COALESCE(MacAddress, '')), ':', '') = :mac 
+              WHERE REPLACE(UPPER(COALESCE(MacAddress, '')), ':', '') = :mac1 
                 AND SerialNumber IS NOT NULL AND SerialNumber != ''
               UNION
               SELECT SerialNumber FROM compteur_relevee_ancien 
-              WHERE REPLACE(UPPER(COALESCE(MacAddress, '')), ':', '') = :mac 
+              WHERE REPLACE(UPPER(COALESCE(MacAddress, '')), ':', '') = :mac2 
                 AND SerialNumber IS NOT NULL AND SerialNumber != ''
             ) AS combined
             LIMIT 1
@@ -295,12 +299,12 @@ try {
             $debugInfo['queries'][] = [
               'type' => 'Fallback ÉTAPE 2 : Recherche SerialNumber dans les relevés',
               'sql' => $sqlSn2,
-              'params' => [':mac' => $macParam]
+              'params' => [':mac1' => $macParam, ':mac2' => $macParam]
             ];
           }
           
           $stmtSn2 = $pdo->prepare($sqlSn2);
-          $stmtSn2->execute([':mac' => $macParam]);
+          $stmtSn2->execute([':mac1' => $macParam, ':mac2' => $macParam]);
           $snFromMac = $stmtSn2->fetchColumn();
           
           // DEBUG : Stocker le résultat
@@ -317,15 +321,17 @@ try {
         // ÉTAPE 3 : Si on a trouvé un SerialNumber, rechercher TOUS les relevés par SerialNumber
         // Cela permet de trouver même les relevés avec MacAddress NULL
         // C'est la clé : même si MacAddress est NULL dans les relevés, on peut les trouver par SerialNumber
+        // CORRECTION BUG HY093 : PDO ne permet pas d'utiliser le même paramètre deux fois dans UNION ALL
+        // On utilise :sn1 et :sn2 avec la même valeur
         if ($snFromMac !== false && $snFromMac !== null && $snFromMac !== '') {
           $sqlSn = "
             SELECT {$columns}, 'nouveau' AS source
             FROM compteur_relevee 
-            WHERE SerialNumber = :sn
+            WHERE SerialNumber = :sn1
             UNION ALL
             SELECT {$columns}, 'ancien' AS source
             FROM compteur_relevee_ancien 
-            WHERE SerialNumber = :sn
+            WHERE SerialNumber = :sn2
             ORDER BY `Timestamp` DESC, id DESC
           ";
           
@@ -334,12 +340,12 @@ try {
             $debugInfo['queries'][] = [
               'type' => 'Fallback ÉTAPE 3 : Recherche relevés par SerialNumber',
               'sql' => $sqlSn,
-              'params' => [':sn' => $snFromMac]
+              'params' => [':sn1' => $snFromMac, ':sn2' => $snFromMac]
             ];
           }
           
           $stmtSn3 = $pdo->prepare($sqlSn);
-          $stmtSn3->execute([':sn' => $snFromMac]);
+          $stmtSn3->execute([':sn1' => $snFromMac, ':sn2' => $snFromMac]);
           $rows = $stmtSn3->fetchAll(PDO::FETCH_ASSOC);
           
           // DEBUG : Stocker le nombre de résultats
@@ -367,14 +373,16 @@ try {
     }
   } else {
     // Recherche par numéro de série
+    // CORRECTION BUG HY093 : PDO ne permet pas d'utiliser le même paramètre deux fois dans UNION ALL
+    // On utilise :sn1 et :sn2 avec la même valeur
     $sql = "
       SELECT {$columns}, 'nouveau' AS source
       FROM compteur_relevee 
-      WHERE SerialNumber = :sn
+      WHERE SerialNumber = :sn1
       UNION ALL
       SELECT {$columns}, 'ancien' AS source
       FROM compteur_relevee_ancien 
-      WHERE SerialNumber = :sn
+      WHERE SerialNumber = :sn2
       ORDER BY `Timestamp` DESC, id DESC
     ";
     
@@ -383,12 +391,12 @@ try {
       $debugInfo['queries'][] = [
         'type' => 'Recherche par SerialNumber',
         'sql' => $sql,
-        'params' => [':sn' => $snParam]
+        'params' => [':sn1' => $snParam, ':sn2' => $snParam]
       ];
     }
     
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([':sn' => $snParam]);
+    $stmt->execute([':sn1' => $snParam, ':sn2' => $snParam]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // DEBUG : Stocker le nombre de résultats
