@@ -175,17 +175,13 @@ async function searchUsers(query) {
     const searchQuery = query || '';
     
     try {
-        const response = await fetch(`/API/chatroom_search_users.php?q=${encodeURIComponent(searchQuery)}&limit=10`, {
+        const data = await apiClient.json(`/API/chatroom_search_users.php?q=${encodeURIComponent(searchQuery)}&limit=10`, {
+            method: 'GET',
             credentials: 'same-origin'
+        }, {
+            abortKey: 'search_users',
+            retries: 2
         });
-        
-        if (!response.ok) {
-            console.error('Erreur recherche utilisateurs: HTTP', response.status);
-            mentionSuggestions.classList.remove('show');
-            return;
-        }
-        
-        const data = await response.json();
         
         if (data.ok && data.users) {
             mentionSuggestionsList = data.users;
@@ -195,8 +191,10 @@ async function searchUsers(query) {
             mentionSuggestions.classList.remove('show');
         }
     } catch (error) {
-        console.error('Erreur recherche utilisateurs:', error);
-        mentionSuggestions.classList.remove('show');
+        if (error.name !== 'AbortError') {
+            // Erreur silencieuse pour la recherche (ne pas perturber l'utilisateur)
+            mentionSuggestions.classList.remove('show');
+        }
     }
 }
 

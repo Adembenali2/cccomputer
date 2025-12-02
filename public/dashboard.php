@@ -121,6 +121,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Dashboard - CCComputer</title>
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
+    <script src="/assets/js/api.js"></script>
     <script src="/assets/js/dashboard.js" defer></script>
 </head>
 <body class="page-dashboard">
@@ -900,8 +901,11 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             deliveryList.innerHTML = '<p class="hint">Chargement...</p>';
             
             try {
-                const response = await fetch(`/API/dashboard_get_deliveries.php?client_id=${clientId}`);
-                const data = await response.json();
+                const data = await apiClient.json(`/API/dashboard_get_deliveries.php?client_id=${clientId}`, {
+                    method: 'GET'
+                }, {
+                    abortKey: 'load_deliveries_' + clientId
+                });
                 
                 if (!data.ok) {
                     deliveryList.innerHTML = `<p class="hint" style="color: #dc2626;">Erreur: ${data.error || 'Erreur de chargement'}</p>`;
@@ -956,7 +960,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 });
                 
             } catch (err) {
-                console.error('Erreur chargement livraisons:', err);
+                if (err.name !== 'AbortError') {
+                    showNotification('Erreur de chargement des livraisons', 'error');
+                }
                 deliveryList.innerHTML = '<p class="hint" style="color: #dc2626;">Erreur de chargement des livraisons.</p>';
             }
         }
@@ -967,8 +973,11 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             if (!select) return;
             
             try {
-                const response = await fetch('/API/dashboard_get_livreurs.php');
-                const data = await response.json();
+                const data = await apiClient.json('/API/dashboard_get_livreurs.php', {
+                    method: 'GET'
+                }, {
+                    abortKey: 'load_livreurs'
+                });
                 
                 if (!data.ok) {
                     select.innerHTML = '<option value="">Erreur de chargement</option>';
@@ -1418,8 +1427,11 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             if (!select) return;
             
             try {
-                const response = await fetch('/API/dashboard_get_techniciens.php');
-                const data = await response.json();
+                const data = await apiClient.json('/API/dashboard_get_techniciens.php', {
+                    method: 'GET'
+                }, {
+                    abortKey: 'load_techniciens'
+                });
                 
                 if (!data.ok) {
                     select.innerHTML = '<option value="">Erreur de chargement</option>';
@@ -1437,7 +1449,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 });
                 
             } catch (err) {
-                console.error('Erreur chargement techniciens:', err);
+                if (err.name !== 'AbortError') {
+                    showNotification('Erreur de chargement des techniciens', 'error');
+                }
                 select.innerHTML = '<option value="">Erreur de chargement</option>';
             }
         }

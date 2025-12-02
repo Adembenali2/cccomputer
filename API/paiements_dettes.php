@@ -259,6 +259,7 @@ try {
     }
     
     // ÉTAPE 4 : Récupérer les clients et leurs photocopieurs
+    // Optimisation : remplacer les sous-requêtes corrélées par des LEFT JOIN
     $sqlClients = "
         SELECT 
             c.id as client_id,
@@ -268,12 +269,24 @@ try {
             pc.MacAddress,
             pc.SerialNumber,
             COALESCE(
-                (SELECT Model FROM compteur_relevee WHERE mac_norm = pc.mac_norm AND Model IS NOT NULL ORDER BY Timestamp DESC LIMIT 1),
-                (SELECT Model FROM compteur_relevee_ancien WHERE mac_norm = pc.mac_norm AND Model IS NOT NULL ORDER BY Timestamp DESC LIMIT 1),
+                r1.Model,
+                r2.Model,
                 'Inconnu'
             ) as Model
         FROM clients c
         INNER JOIN photocopieurs_clients pc ON pc.id_client = c.id
+        LEFT JOIN (
+            SELECT mac_norm, Model, 
+                   ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) as rn
+            FROM compteur_relevee
+            WHERE Model IS NOT NULL
+        ) r1 ON r1.mac_norm = pc.mac_norm AND r1.rn = 1
+        LEFT JOIN (
+            SELECT mac_norm, Model,
+                   ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) as rn
+            FROM compteur_relevee_ancien
+            WHERE Model IS NOT NULL
+        ) r2 ON r2.mac_norm = pc.mac_norm AND r2.rn = 1
         WHERE pc.mac_norm IS NOT NULL AND pc.mac_norm != ''
         ORDER BY c.raison_sociale, pc.mac_norm
     ";

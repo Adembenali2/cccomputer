@@ -1272,7 +1272,6 @@ $sectionImages = [
         return new Promise(function(resolve, reject) {
             // Vérifier si déjà chargé
             if (typeof Html5Qrcode !== 'undefined') {
-                console.log('html5-qrcode déjà chargé');
                 resolve();
                 return;
             }
@@ -1308,7 +1307,6 @@ $sectionImages = [
                         attempts++;
                         if (typeof Html5Qrcode !== 'undefined') {
                             clearInterval(checkLibrary);
-                            console.log('✓ html5-qrcode chargé depuis:', cdnUrls[index]);
                             resolve();
                         } else if (attempts >= maxAttempts) {
                             clearInterval(checkLibrary);
@@ -1337,7 +1335,6 @@ $sectionImages = [
     
     // Mettre à jour le statut de chargement
     window.html5QrcodeLoaded.then(function() {
-        console.log('✓ Bibliothèque html5-qrcode chargée avec succès');
         window.html5QrcodeReady = true;
         // Mettre à jour l'indicateur visuel
         setTimeout(function() {
@@ -1386,7 +1383,7 @@ $sectionImages = [
         initFilter();
         initDetailModal();
         initAddModal();
-        console.log('Scripts stock initialisés');
+        // Scripts stock initialisés
     }
 
     // Attendre que le DOM soit complètement chargé
@@ -2334,7 +2331,7 @@ $sectionImages = [
                     cameraConfig = { facingMode: 'user' };
                     html5QrcodeScanner = new Html5Qrcode('reader');
                     
-                    console.log('📹 Démarrage caméra avant...');
+                    // Démarrage caméra avant
                     await html5QrcodeScanner.start(
                         cameraConfig,
                         {
@@ -2356,12 +2353,12 @@ $sectionImages = [
                         onScanError
                     );
                     started = true;
-                    console.log('✅ Caméra avant démarrée avec succès');
+                    // Caméra avant démarrée
                 }
                 
                 if (started) {
                     isScanning = true;
-                    console.log('🎉 Scanner prêt - Attente de scan QR code...');
+                    // Scanner prêt
                 } else {
                     console.error('❌ Échec démarrage caméra');
                 }
@@ -2455,7 +2452,7 @@ $sectionImages = [
             
             // Éviter les scans multiples du même code (déduplication rapide)
             if (decodedText === lastScannedCode && (now - lastScanTime) < SCAN_COOLDOWN_MS) {
-                console.log('Scan ignoré (déjà scanné récemment)');
+                // Scan ignoré (déjà scanné récemment)
                 return;
             }
             
@@ -2463,7 +2460,7 @@ $sectionImages = [
             lastScannedCode = decodedText;
             lastScanTime = now;
             
-            console.log('✓ Code scanné avec succès:', decodedText);
+            // Code scanné avec succès
             
             // Remplir automatiquement le champ de recherche IMMÉDIATEMENT
             fillSearchField(decodedText);
@@ -2523,7 +2520,7 @@ $sectionImages = [
                 
                 if (!response.ok || !data.ok) {
                     // Si produit non trouvé, on garde juste le code-barres dans la recherche
-                    console.log('Produit non trouvé pour le code-barres:', barcode);
+                    // Produit non trouvé pour le code-barres
                     return;
                 }
                 
