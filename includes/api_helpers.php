@@ -31,6 +31,7 @@ function requireApiAuth(): void {
     }
 }
 
+
 /**
  * Vérifie le token CSRF pour les requêtes POST/PUT/DELETE
  */
@@ -44,22 +45,73 @@ function requireCsrfToken(?string $token = null): void {
 }
 
 /**
+ * Classe simple pour gérer la connexion PDO de manière centralisée
+ * Améliore la gestion des GLOBALS sans casser le comportement existant
+ */
+class DatabaseConnection {
+    private static ?PDO $instance = null;
+    
+    /**
+     * Récupère l'instance PDO unique (Singleton)
+     * Compatible avec le système GLOBALS existant
+     */
+    public static function getInstance(): PDO {
+        // Si déjà initialisé, retourner l'instance
+        if (self::$instance !== null && self::$instance instanceof PDO) {
+            // Maintenir la compatibilité avec GLOBALS
+            $GLOBALS['pdo'] = self::$instance;
+            return self::$instance;
+        }
+        
+        // Sinon, récupérer depuis GLOBALS ou charger db.php
+        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+            self::$instance = $GLOBALS['pdo'];
+            return self::$instance;
+        }
+        
+        // Dernier recours : charger db.php
+        if (!defined('DB_LOADED')) {
+            require_once __DIR__ . '/db.php';
+        }
+        
+        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+            self::$instance = $GLOBALS['pdo'];
+            return self::$instance;
+        }
+        
+        throw new RuntimeException('Impossible de récupérer la connexion PDO');
+    }
+}
+
+/**
  * Vérifie que la connexion PDO existe
+ * Utilise DatabaseConnection pour une meilleure gestion interne
  */
 function requirePdoConnection(?PDO $pdo = null): PDO {
-    // Priorité 1: Vérifier GLOBALS (le plus fiable)
+    // Priorité 1: Vérifier le paramètre passé
+    if ($pdo instanceof PDO) {
+        // S'assurer qu'il est aussi dans GLOBALS pour compatibilité
+        $GLOBALS['pdo'] = $pdo;
+        DatabaseConnection::$instance = $pdo;
+        return $pdo;
+    }
+    
+    // Priorité 2: Utiliser DatabaseConnection (améliore la gestion interne)
+    try {
+        $pdo = DatabaseConnection::getInstance();
+        // Maintenir la compatibilité avec GLOBALS
+        $GLOBALS['pdo'] = $pdo;
+        return $pdo;
+    } catch (RuntimeException $e) {
+        // Fallback sur l'ancienne méthode pour compatibilité
+    }
+    
+    // Priorité 3: Vérifier GLOBALS directement (ancienne méthode)
     if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
         return $GLOBALS['pdo'];
     }
     
-    // Priorité 2: Vérifier le paramètre passé
-    if ($pdo instanceof PDO) {
-        // S'assurer qu'il est aussi dans GLOBALS
-        $GLOBALS['pdo'] = $pdo;
-        return $pdo;
-    }
-    
-    // Priorité 3: Vérifier la variable globale classique
+    // Priorité 4: Vérifier la variable globale classique
     global $pdo;
     if (isset($pdo) && $pdo instanceof PDO) {
         // S'assurer qu'il est aussi dans GLOBALS
@@ -112,6 +164,12 @@ function requirePdoConnection(?PDO $pdo = null): PDO {
  * Initialise l'environnement API (session, DB, headers)
  */
 function initApi(): void {
+    // Activer le rate limiting en premier (60 requêtes par minute par défaut)
+    if (!function_exists('requireRateLimit')) {
+        require_once __DIR__ . '/rate_limiter.php';
+    }
+    requireRateLimit(60, 60); // 60 requêtes par minute
+    
     ob_start();
     error_reporting(E_ALL);
     ini_set('display_errors', 0);

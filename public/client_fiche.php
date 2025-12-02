@@ -179,15 +179,32 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
   }
 
   if (empty($errors)) {
-    // construire SQL dynamique
+    // Whitelist des colonnes autorisées pour sécuriser l'UPDATE dynamique
+    $allowedColumns = [
+      'numero_client', 'raison_sociale', 'adresse', 'code_postal', 'ville',
+      'adresse_livraison', 'livraison_identique', 'siret', 'numero_tva',
+      'depot_mode', 'nom_dirigeant', 'prenom_dirigeant', 'telephone1',
+      'telephone2', 'email', 'parrain', 'offre', 'iban'
+    ];
+    $allowedFileColumns = ['pdf1', 'pdf2', 'pdf3', 'pdf4', 'pdf5', 'pdfcontrat'];
+    
+    // construire SQL dynamique avec validation des colonnes
     $set = [];
     $params = [':id'=>$id];
     foreach ($data as $k=>$v) {
-      $set[] = "$k = :$k";
+      // Vérifier que la colonne est autorisée avant de l'ajouter
+      if (!in_array($k, $allowedColumns, true)) {
+        continue; // Ignorer les colonnes non autorisées
+      }
+      $set[] = "`$k` = :$k";
       $params[":$k"] = ($v === '' ? null : $v);
     }
     foreach ($fileUpdates as $k=>$v) {
-      $set[] = "$k = :$k";
+      // Vérifier que la colonne de fichier est autorisée
+      if (!in_array($k, $allowedFileColumns, true)) {
+        continue; // Ignorer les colonnes non autorisées
+      }
+      $set[] = "`$k` = :$k";
       $params[":$k"] = $v; // peut être null
     }
     $sql = "UPDATE clients SET ".implode(', ', $set)." WHERE id = :id";

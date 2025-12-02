@@ -257,7 +257,7 @@ function getPeriodEndCounter($pdo, $macNorm, DateTime $periodEnd) {
             ':mac1' => $macNorm,
             ':period_end1' => $periodEndStr,
             ':mac2' => $macNorm,
-            ':period_end2' => $periodEndStr
+            ':period_end2' => $periodEndStr,
             ':period_end' => $periodEndStr
         ]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);

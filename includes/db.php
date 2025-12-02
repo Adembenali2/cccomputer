@@ -50,11 +50,14 @@ try {
     // S'assurer aussi que la variable globale classique est définie
     global $pdo;
     
-    // Log de succès pour le débogage
-    error_log("DB connection successful: DSN=$dsn, User=$user, PDO stored in GLOBALS");
+    // Log de succès pour le débogage (sans informations sensibles)
+    $safeDsn = preg_replace('/:[^@]+@/', ':****@', $dsn);
+    error_log("DB connection successful: DSN=$safeDsn, PDO stored in GLOBALS");
     
 } catch (PDOException $e) {
-    error_log("DB connection error: " . $e->getMessage() . " | DSN: $dsn | User: $user");
+    // Ne jamais logger les credentials en clair
+    $safeDsn = preg_replace('/:[^@]+@/', ':****@', $dsn);
+    error_log("DB connection error: " . $e->getMessage() . " | DSN: $safeDsn");
     
     // S'assurer que $pdo n'est pas défini en cas d'erreur
     unset($GLOBALS['pdo']);

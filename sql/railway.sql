@@ -29,7 +29,7 @@ CREATE TABLE `chatroom_messages` (
   KEY `idx_type_lien` (`type_lien`,`id_lien`),
   KEY `idx_date_envoi_desc` (`date_envoi` DESC),
   CONSTRAINT `fk_chatroom_messages_user` FOREIGN KEY (`id_user`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `chatroom_notifications`;
 CREATE TABLE `chatroom_notifications` (
@@ -46,7 +46,7 @@ CREATE TABLE `chatroom_notifications` (
   KEY `idx_date_creation` (`date_creation`),
   CONSTRAINT `fk_chatroom_notif_message` FOREIGN KEY (`id_message`) REFERENCES `chatroom_messages` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_chatroom_notif_user` FOREIGN KEY (`id_user`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=61 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `client_stock`;
 CREATE TABLE `client_stock` (
@@ -130,7 +130,7 @@ CREATE TABLE `compteur_relevee` (
   PRIMARY KEY (`id`),
   KEY `ix_compteur_date` (`Timestamp`),
   KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`)
-) ENGINE=InnoDB AUTO_INCREMENT=109792 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=109978 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `compteur_relevee_ancien`;
 CREATE TABLE `compteur_relevee_ancien` (
@@ -163,10 +163,10 @@ CREATE TABLE `compteur_relevee_ancien` (
   `DateInsertion` datetime DEFAULT NULL,
   `mac_norm` char(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci GENERATED ALWAYS AS (replace(upper(`MacAddress`),_utf8mb4':',_utf8mb4'')) STORED,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_mac_ts_ancien` (`mac_norm`,`Timestamp`),
   KEY `ix_compteur_date` (`Timestamp`),
-  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`),
-  UNIQUE KEY `uniq_mac_ts_ancien` (`mac_norm`,`Timestamp`)
-) ENGINE=InnoDB AUTO_INCREMENT=125834 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`)
+) ENGINE=InnoDB AUTO_INCREMENT=149430 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `historique`;
 CREATE TABLE `historique` (
@@ -179,7 +179,7 @@ CREATE TABLE `historique` (
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_date_action` (`date_action`)
-) ENGINE=InnoDB AUTO_INCREMENT=427 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=555 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `import_run`;
 CREATE TABLE `import_run` (
@@ -190,7 +190,15 @@ CREATE TABLE `import_run` (
   `ok` tinyint(1) NOT NULL,
   `msg` text,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2139 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2891 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+DROP TABLE IF EXISTS `ionos_cursor`;
+CREATE TABLE `ionos_cursor` (
+  `id` tinyint NOT NULL DEFAULT '1',
+  `last_ts` datetime DEFAULT NULL,
+  `last_mac` char(12) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 DROP TABLE IF EXISTS `lcd_catalog`;
 CREATE TABLE `lcd_catalog` (
@@ -374,7 +382,7 @@ CREATE TABLE `photocopieurs_clients` (
   UNIQUE KEY `u_mac` (`mac_norm`),
   KEY `idx_pc_client` (`id_client`),
   CONSTRAINT `fk_pc_client__clients_id` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `sav`;
 CREATE TABLE `sav` (
@@ -411,7 +419,7 @@ CREATE TABLE `sav` (
   KEY `idx_sav_date_intervention` (`date_intervention_prevue`),
   CONSTRAINT `fk_sav_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_sav_technicien` FOREIGN KEY (`id_technicien`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `sav_pieces_utilisees`;
 CREATE TABLE `sav_pieces_utilisees` (
@@ -481,7 +489,7 @@ CREATE TABLE `user_permissions` (
   KEY `idx_user_id` (`user_id`),
   KEY `idx_page` (`page`),
   CONSTRAINT `fk_user_permissions_user` FOREIGN KEY (`user_id`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=157 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=181 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `utilisateurs`;
 CREATE TABLE `utilisateurs` (
@@ -500,7 +508,7 @@ CREATE TABLE `utilisateurs` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_email_unique` (`Email`),
   KEY `idx_last_activity` (`last_activity`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP VIEW IF EXISTS `v_compteur_last`;
 with `t` as (select `r`.`id` AS `id`,`r`.`Timestamp` AS `Timestamp`,`r`.`IpAddress` AS `IpAddress`,`r`.`Nom` AS `Nom`,`r`.`Model` AS `Model`,`r`.`SerialNumber` AS `SerialNumber`,`r`.`MacAddress` AS `MacAddress`,`r`.`Status` AS `Status`,`r`.`TonerBlack` AS `TonerBlack`,`r`.`TonerCyan` AS `TonerCyan`,`r`.`TonerMagenta` AS `TonerMagenta`,`r`.`TonerYellow` AS `TonerYellow`,`r`.`TotalPages` AS `TotalPages`,`r`.`FaxPages` AS `FaxPages`,`r`.`CopiedPages` AS `CopiedPages`,`r`.`PrintedPages` AS `PrintedPages`,`r`.`BWCopies` AS `BWCopies`,`r`.`ColorCopies` AS `ColorCopies`,`r`.`MonoCopies` AS `MonoCopies`,`r`.`BichromeCopies` AS `BichromeCopies`,`r`.`BWPrinted` AS `BWPrinted`,`r`.`BichromePrinted` AS `BichromePrinted`,`r`.`MonoPrinted` AS `MonoPrinted`,`r`.`ColorPrinted` AS `ColorPrinted`,`r`.`TotalColor` AS `TotalColor`,`r`.`TotalBW` AS `TotalBW`,`r`.`DateInsertion` AS `DateInsertion`,`r`.`mac_norm` AS `mac_norm`,row_number() OVER (PARTITION BY `r`.`mac_norm` ORDER BY `r`.`Timestamp` desc )  AS `rn` from `railway`.`compteur_relevee` `r`) select `t`.`id` AS `id`,`t`.`Timestamp` AS `Timestamp`,`t`.`IpAddress` AS `IpAddress`,`t`.`Nom` AS `Nom`,`t`.`Model` AS `Model`,`t`.`SerialNumber` AS `SerialNumber`,`t`.`MacAddress` AS `MacAddress`,`t`.`Status` AS `Status`,`t`.`TonerBlack` AS `TonerBlack`,`t`.`TonerCyan` AS `TonerCyan`,`t`.`TonerMagenta` AS `TonerMagenta`,`t`.`TonerYellow` AS `TonerYellow`,`t`.`TotalPages` AS `TotalPages`,`t`.`FaxPages` AS `FaxPages`,`t`.`CopiedPages` AS `CopiedPages`,`t`.`PrintedPages` AS `PrintedPages`,`t`.`BWCopies` AS `BWCopies`,`t`.`ColorCopies` AS `ColorCopies`,`t`.`MonoCopies` AS `MonoCopies`,`t`.`BichromeCopies` AS `BichromeCopies`,`t`.`BWPrinted` AS `BWPrinted`,`t`.`BichromePrinted` AS `BichromePrinted`,`t`.`MonoPrinted` AS `MonoPrinted`,`t`.`ColorPrinted` AS `ColorPrinted`,`t`.`TotalColor` AS `TotalColor`,`t`.`TotalBW` AS `TotalBW`,`t`.`DateInsertion` AS `DateInsertion`,`t`.`mac_norm` AS `mac_norm`,`t`.`rn` AS `rn` from `t` where (`t`.`rn` = 1);

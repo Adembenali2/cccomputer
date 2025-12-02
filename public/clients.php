@@ -210,19 +210,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             if (isNoDefaultIdError($e)) {
                 try {
                     $pdo->beginTransaction();
-                    $id = nextClientId($pdo);
-                    $pdo->prepare("
-                        INSERT INTO clients
-                        (id, numero_client, raison_sociale, adresse, code_postal, ville,
-                         adresse_livraison, livraison_identique, siret, numero_tva,
-                         nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
-                         email, parrain, offre)
-                        VALUES
-                        (:id, :numero_client, :raison_sociale, :adresse, :code_postal, :ville,
-                         :adresse_livraison, :livraison_identique, :siret, :numero_tva,
-                         :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
-                         :email, :parrain, :offre)
-                    ")->execute($params + [':id' => $id]);
+                    // Utiliser un verrou de table pour éviter les race conditions
+                    // Note: En production, il serait préférable d'utiliser AUTO_INCREMENT
+                    $pdo->exec("LOCK TABLES clients WRITE");
+                    try {
+                        $id = nextClientId($pdo);
+                        $pdo->prepare("
+                            INSERT INTO clients
+                            (id, numero_client, raison_sociale, adresse, code_postal, ville,
+                             adresse_livraison, livraison_identique, siret, numero_tva,
+                             nom_dirigeant, prenom_dirigeant, telephone1, telephone2,
+                             email, parrain, offre)
+                            VALUES
+                            (:id, :numero_client, :raison_sociale, :adresse, :code_postal, :ville,
+                             :adresse_livraison, :livraison_identique, :siret, :numero_tva,
+                             :nom_dirigeant, :prenom_dirigeant, :telephone1, :telephone2,
+                             :email, :parrain, :offre)
+                        ")->execute($params + [':id' => $id]);
+                    } finally {
+                        $pdo->exec("UNLOCK TABLES");
+                    }
 
                     $details = "Client créé: ID=" . $id . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
                     enregistrerAction($pdo, currentUserId(), 'client_ajoute', $details);
