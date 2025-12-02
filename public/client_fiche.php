@@ -10,6 +10,44 @@ const ALLOWED_DEPOT_CF  = ['espece','cheque','virement','paiement_carte'];
 const ALLOWED_OFFRES_CF = ['packbronze','packargent'];
 const ALLOWED_UPLOAD_EXT = ['pdf','jpg','jpeg','png'];
 
+/**
+ * Valide la signature d'un fichier (magic bytes) pour détecter les fichiers malveillants renommés
+ * 
+ * @param string $filepath Chemin du fichier temporaire
+ * @param string $expectedType Extension attendue (pdf, jpg, png)
+ * @return bool true si la signature correspond, false sinon
+ */
+function validateFileSignature(string $filepath, string $expectedType): bool {
+    if (!file_exists($filepath) || !is_readable($filepath)) {
+        return false;
+    }
+    
+    $handle = @fopen($filepath, 'rb');
+    if (!$handle) {
+        return false;
+    }
+    
+    $bytes = @fread($handle, 4);
+    @fclose($handle);
+    
+    if ($bytes === false || strlen($bytes) < 4) {
+        return false;
+    }
+    
+    $signatures = [
+        'pdf' => ["%PDF"],
+        'jpg' => ["\xFF\xD8\xFF"],
+        'jpeg' => ["\xFF\xD8\xFF"],
+        'png' => ["\x89\x50\x4E\x47"]
+    ];
+    
+    if (!isset($signatures[$expectedType])) {
+        return false;
+    }
+    
+    return strpos($bytes, $signatures[$expectedType][0]) === 0;
+}
+
 // Les fonctions h(), ensureCsrfToken(), assertValidCsrf(), validatePhone(), validatePostalCode(), validateSiret() sont définies dans includes/helpers.php
 function v(?string $k, $default='') { return $_POST[$k] ?? $default; }
 
@@ -70,6 +108,10 @@ function store_upload(array $file, int $id): ?string {
   finfo_close($finfo);
   $allowedMimes = ['application/pdf', 'image/jpeg', 'image/png'];
   if (!in_array($mimeType, $allowedMimes, true)) return null;
+  
+  // Vérification de la signature du fichier (magic bytes) pour plus de sécurité
+  $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+  if (!validateFileSignature($file['tmp_name'], $ext)) return null;
   
   $dir = ensure_upload_dir($id);
   $base = date('Ymd_His').'_'.safe_filename($file['name']);

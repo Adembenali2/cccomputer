@@ -1,13 +1,29 @@
 <?php
-// includes/helpers.php
-// Fonctions helper communes pour tout le site
+declare(strict_types=1);
+
+/**
+ * includes/helpers.php
+ * Fonctions helper communes pour tout le site
+ * 
+ * Ce fichier contient les fonctions utilitaires utilisées dans tout le projet :
+ * - Échappement HTML (XSS protection)
+ * - Validation de données (email, téléphone, SIRET, etc.)
+ * - Formatage de dates
+ * - Gestion CSRF
+ * - Requêtes SQL sécurisées
+ * - Helpers de session
+ */
 
 /**
  * Échappe les données pour éviter les attaques XSS
  * Utilisé dans tous les templates PHP
+ * 
+ * @param string|null $s Chaîne à échapper
+ * @return string Chaîne échappée
  */
 if (!function_exists('h')) {
-    function h(?string $s): string {
+    function h(?string $s): string
+    {
         return htmlspecialchars((string)$s ?? '', ENT_QUOTES, 'UTF-8');
     }
 }
@@ -15,14 +31,14 @@ if (!function_exists('h')) {
 /**
  * Valide et nettoie un email
  * Retourne l'email nettoyé si valide, sinon lance une exception
+ * Utilise la classe Validator centralisée
  */
 if (!function_exists('validateEmail')) {
     function validateEmail(string $email): string {
-        $email = trim($email);
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new InvalidArgumentException('Email invalide');
+        if (!class_exists('Validator')) {
+            require_once __DIR__ . '/Validator.php';
         }
-        return $email;
+        return Validator::email($email);
     }
 }
 
@@ -176,9 +192,12 @@ if (!function_exists('safeFetchColumn')) {
 
 /**
  * Récupère l'ID de l'utilisateur actuel depuis la session
+ * 
+ * @return int|null ID de l'utilisateur ou null si non connecté
  */
 if (!function_exists('currentUserId')) {
-    function currentUserId(): ?int {
+    function currentUserId(): ?int
+    {
         if (isset($_SESSION['user']['id'])) {
             return (int)$_SESSION['user']['id'];
         }
@@ -191,9 +210,12 @@ if (!function_exists('currentUserId')) {
 
 /**
  * Récupère le rôle de l'utilisateur actuel depuis la session
+ * 
+ * @return string|null Rôle de l'utilisateur ou null si non connecté
  */
 if (!function_exists('currentUserRole')) {
-    function currentUserRole(): ?string {
+    function currentUserRole(): ?string
+    {
         if (isset($_SESSION['emploi'])) {
             return $_SESSION['emploi'];
         }
@@ -209,9 +231,14 @@ if (!function_exists('currentUserRole')) {
 
 /**
  * Vérifie le token CSRF et lance une exception si invalide
+ * 
+ * @param string $token Token CSRF à vérifier
+ * @return void
+ * @throws RuntimeException Si le token est invalide
  */
 if (!function_exists('assertValidCsrf')) {
-    function assertValidCsrf(string $token): void {
+    function assertValidCsrf(string $token): void
+    {
         if (empty($token) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
             throw new RuntimeException("Session expirée. Veuillez recharger la page.");
         }

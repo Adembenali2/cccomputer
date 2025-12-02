@@ -34,6 +34,7 @@ function requireApiAuth(): void {
 
 /**
  * Vérifie le token CSRF pour les requêtes POST/PUT/DELETE
+ * Middleware CSRF pour toutes les API modifiantes
  */
 function requireCsrfToken(?string $token = null): void {
     $token = $token ?? ($_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
@@ -42,6 +43,16 @@ function requireCsrfToken(?string $token = null): void {
     if (empty($token) || empty($sessionToken) || !hash_equals($sessionToken, $token)) {
         jsonResponse(['ok' => false, 'error' => 'Token CSRF invalide'], 403);
     }
+}
+
+/**
+ * Vérifie le CSRF pour les API (alias pour cohérence)
+ * 
+ * @param string|null $token Token CSRF (optionnel, récupéré automatiquement)
+ * @return void
+ */
+function requireCsrfForApi(?string $token = null): void {
+    requireCsrfToken($token);
 }
 
 /**

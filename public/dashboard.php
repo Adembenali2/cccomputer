@@ -62,22 +62,18 @@ $nb_livraisons_a_faire = (int)(safeFetchColumn(
 // ==================================================================
 // Récupération clients depuis la BDD (optimisé pour performance)
 // ==================================================================
-// Limite à 500 clients pour éviter les problèmes de mémoire
-// Pour plus de clients, utiliser la pagination ou le chargement à la demande
-// Utilisation de cache pour améliorer les performances
+// Utilisation de cache partagé (APCu ou fichier) pour améliorer les performances
+require_once __DIR__ . '/../includes/CacheHelper.php';
+
+// Charger la configuration centralisée
+$config = require __DIR__ . '/../config/app.php';
+$limit = $config['limits']['clients_per_page'] ?? 500;
+$cacheTtl = $config['limits']['cache_ttl'] ?? 300;
+
 $cacheKey = 'dashboard_clients_list_' . md5($user_id);
-$cacheFile = __DIR__ . '/../cache/' . md5($cacheKey) . '.json';
+$clients = CacheHelper::get($cacheKey, null);
 
-$clients = [];
-if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 300) {
-    // Cache valide pendant 5 minutes
-    $cached = json_decode(file_get_contents($cacheFile), true);
-    if (is_array($cached)) {
-        $clients = $cached;
-    }
-}
-
-if (empty($clients)) {
+if ($clients === null) {
     $clients = safeFetchAll(
         $pdo,
         "SELECT 
@@ -106,16 +102,13 @@ if (empty($clients)) {
             iban
         FROM clients
         ORDER BY raison_sociale ASC
-        LIMIT 500",
-        [],
+        LIMIT :limit",
+        [':limit' => $limit],
         'clients_list'
     );
     
     // Sauvegarder dans le cache
-    if (!is_dir(__DIR__ . '/../cache')) {
-        @mkdir(__DIR__ . '/../cache', 0755, true);
-    }
-    @file_put_contents($cacheFile, json_encode($clients));
+    CacheHelper::set($cacheKey, $clients, $cacheTtl);
 }
 
 $nbClients = is_array($clients) ? count($clients) : 0;

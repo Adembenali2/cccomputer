@@ -1,5 +1,11 @@
 <?php
-// includes/db.php - Configuration base de données
+declare(strict_types=1);
+
+/**
+ * includes/db.php
+ * Configuration de la connexion à la base de données
+ * Gère les variables d'environnement (Railway, Docker) et le fallback local (XAMPP)
+ */
 
 // Priorité 1: Variables d'environnement (Railway, Docker, etc.)
 $host = getenv('MYSQLHOST');

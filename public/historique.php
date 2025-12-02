@@ -186,19 +186,46 @@ try {
 // ====== Calcul des statistiques ======
 $historiqueCount = count($historique);
 
-// Comptage des utilisateurs uniques
-$uniqueUsers = [];
-foreach ($historique as $row) {
-    $fullname = trim(($row['nom'] ?? '') . ' ' . ($row['prenom'] ?? ''));
-    if ($fullname !== '') {
-        $uniqueUsers[$fullname] = true;
-    }
+// Calculer les statistiques en SQL pour de meilleures performances
+// (optimisation: éviter de parcourir tout le tableau en PHP)
+$statsSql = "
+    SELECT 
+        COUNT(*) as total,
+        COUNT(DISTINCT h.user_id) as unique_users,
+        MIN(h.date_action) as first_activity,
+        MAX(h.date_action) as last_activity
+    FROM historique h
+    LEFT JOIN utilisateurs u ON h.user_id = u.id
+";
+if (!empty($whereConditions)) {
+    $statsSql .= ' WHERE ' . implode(' AND ', $whereConditions);
 }
-$uniqueUsersCount = count($uniqueUsers);
 
-// Dates de première et dernière activité
-$lastActivity = $historique[0]['date_action'] ?? null;
-$firstActivity = $historiqueCount > 0 ? ($historique[$historiqueCount - 1]['date_action'] ?? null) : null;
+try {
+    $statsStmt = $pdo->prepare($statsSql);
+    foreach ($params as $key => $value) {
+        $statsStmt->bindValue($key, $value, PDO::PARAM_STR);
+    }
+    $statsStmt->execute();
+    $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+    
+    $uniqueUsersCount = (int)($stats['unique_users'] ?? 0);
+    $lastActivity = $stats['last_activity'] ?? null;
+    $firstActivity = $stats['first_activity'] ?? null;
+} catch (PDOException $e) {
+    // Fallback sur le calcul PHP si la requête échoue
+    error_log('historique.php stats SQL error: ' . $e->getMessage());
+    $uniqueUsers = [];
+    foreach ($historique as $row) {
+        $fullname = trim(($row['nom'] ?? '') . ' ' . ($row['prenom'] ?? ''));
+        if ($fullname !== '') {
+            $uniqueUsers[$fullname] = true;
+        }
+    }
+    $uniqueUsersCount = count($uniqueUsers);
+    $lastActivity = $historique[0]['date_action'] ?? null;
+    $firstActivity = $historiqueCount > 0 ? ($historique[$historiqueCount - 1]['date_action'] ?? null) : null;
+}
 
 $filtersActive = ($searchUser !== '' || $searchDate !== '');
 

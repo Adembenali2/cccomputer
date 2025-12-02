@@ -127,42 +127,6 @@ try {
     $stmtSav = $pdo->prepare($sqlSav);
     $stmtSav->execute($paramsSav);
     $savs = $stmtSav->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Sauvegarder les données
-    $savsAfterQuery = $savs;
-    
-    // Debug temporaire
-    if (empty($savs)) {
-        error_log('agenda.php - Aucun SAV trouvé après exécution');
-        error_log('agenda.php - isAdmin: ' . ($isAdmin ? 'true' : 'false') . ', isTechnicien: ' . ($isTechnicien ? 'true' : 'false') . ', currentUserId: ' . $currentUserId . ', currentUserRole: ' . ($currentUserRole ?? 'null'));
-        
-        // Test direct de la requête
-        try {
-            $testSql = "SELECT COUNT(*) as cnt FROM sav WHERE date_ouverture BETWEEN :start_date AND :end_date AND statut NOT IN ('resolu', 'annule')";
-            $testStmt = $pdo->prepare($testSql);
-            $testStmt->execute([':start_date' => $startDate, ':end_date' => $endDate]);
-            $testResult = $testStmt->fetch(PDO::FETCH_ASSOC);
-            error_log('agenda.php - Test direct (dans période): ' . ($testResult['cnt'] ?? 0) . ' SAV trouvés');
-            
-            // Test avec SAV en cours
-            $testSql2 = "SELECT COUNT(*) as cnt FROM sav WHERE date_ouverture >= :max_ongoing_date AND date_ouverture <= :end_date AND statut NOT IN ('resolu', 'annule')";
-            $testStmt2 = $pdo->prepare($testSql2);
-            $testStmt2->execute([':max_ongoing_date' => $maxOngoingDate, ':end_date' => $endDate]);
-            $testResult2 = $testStmt2->fetch(PDO::FETCH_ASSOC);
-            error_log('agenda.php - Test direct (en cours): ' . ($testResult2['cnt'] ?? 0) . ' SAV trouvés (maxOngoingDate: ' . $maxOngoingDate . ')');
-            
-            // Test tous les SAV non résolus
-            $testSql3 = "SELECT id, reference, date_ouverture, statut, id_technicien FROM sav WHERE statut NOT IN ('resolu', 'annule') ORDER BY date_ouverture DESC LIMIT 5";
-            $testStmt3 = $pdo->prepare($testSql3);
-            $testStmt3->execute();
-            $testResult3 = $testStmt3->fetchAll(PDO::FETCH_ASSOC);
-            error_log('agenda.php - Derniers SAV non résolus: ' . json_encode($testResult3));
-        } catch (PDOException $e) {
-            error_log('agenda.php - Erreur test direct: ' . $e->getMessage());
-        }
-    } else {
-        error_log('agenda.php - ' . count($savs) . ' SAV trouvés');
-    }
 } catch (PDOException $e) {
     error_log('agenda.php - Erreur récupération SAV: ' . $e->getMessage());
 }
@@ -391,54 +355,6 @@ $totalSavs = count($savs);
 $totalLivraisons = count($livraisons);
 
 // Debug : Vérifier s'il y a des SAV/livraisons dans la base (pour diagnostic)
-$debugInfo = [];
-if (empty($savs) && empty($livraisons)) {
-    try {
-        // Compter tous les SAV non résolus/annulés
-        $stmtDebug = $pdo->prepare("SELECT COUNT(*) as total FROM sav WHERE statut NOT IN ('resolu', 'annule')");
-        $stmtDebug->execute();
-        $debugInfo['total_savs_db'] = $stmtDebug->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
-        
-        // Compter toutes les livraisons non livrées/annulées
-        $stmtDebug = $pdo->prepare("SELECT COUNT(*) as total FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
-        $stmtDebug->execute();
-        $debugInfo['total_livraisons_db'] = $stmtDebug->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
-        
-        // Vérifier les dates des SAV
-        $stmtDebug = $pdo->prepare("SELECT MIN(date_ouverture) as min_date, MAX(date_ouverture) as max_date FROM sav WHERE statut NOT IN ('resolu', 'annule')");
-        $stmtDebug->execute();
-        $datesSav = $stmtDebug->fetch(PDO::FETCH_ASSOC);
-        $debugInfo['sav_dates'] = $datesSav;
-        
-        // Vérifier les dates des livraisons
-        $stmtDebug = $pdo->prepare("SELECT MIN(date_prevue) as min_date, MAX(date_prevue) as max_date FROM livraisons WHERE statut NOT IN ('livree', 'annulee')");
-        $stmtDebug->execute();
-        $datesLiv = $stmtDebug->fetch(PDO::FETCH_ASSOC);
-        $debugInfo['livraison_dates'] = $datesLiv;
-        
-        // Vérifier les SAV dans la période avec détails
-        $stmtDebug = $pdo->prepare("
-            SELECT id, reference, date_ouverture, id_technicien, statut 
-            FROM sav 
-            WHERE statut NOT IN ('resolu', 'annule') 
-            AND date_ouverture BETWEEN :start_date AND :end_date
-        ");
-        $stmtDebug->execute([':start_date' => $startDate, ':end_date' => $endDate]);
-        $debugInfo['savs_in_period'] = $stmtDebug->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Informations sur l'utilisateur
-        $debugInfo['user_info'] = [
-            'isAdmin' => $isAdmin,
-            'isTechnicien' => $isTechnicien,
-            'isLivreur' => $isLivreur,
-            'currentUserId' => $currentUserId,
-            'currentUserRole' => $currentUserRole,
-            'filterUser' => $filterUser
-        ];
-    } catch (PDOException $e) {
-        error_log('agenda.php - Erreur debug: ' . $e->getMessage());
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
