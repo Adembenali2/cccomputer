@@ -84,12 +84,27 @@ function generateBarcode(PDO $pdo, string $type, string $table): string {
     $time = date('His');
     
     // Générer un numéro séquentiel unique pour cette seconde
-    // Utilisation de backticks pour échapper le nom de table
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*) FROM `{$table}` 
-        WHERE barcode LIKE :pattern
-    ");
+    // Utilisation d'un switch pour éviter l'interpolation de variable dans SQL
+    $sql = '';
+    switch ($table) {
+        case 'paper_catalog':
+            $sql = "SELECT COUNT(*) FROM paper_catalog WHERE barcode LIKE :pattern";
+            break;
+        case 'toner_catalog':
+            $sql = "SELECT COUNT(*) FROM toner_catalog WHERE barcode LIKE :pattern";
+            break;
+        case 'lcd_catalog':
+            $sql = "SELECT COUNT(*) FROM lcd_catalog WHERE barcode LIKE :pattern";
+            break;
+        case 'pc_catalog':
+            $sql = "SELECT COUNT(*) FROM pc_catalog WHERE barcode LIKE :pattern";
+            break;
+        default:
+            throw new InvalidArgumentException('Table non autorisée: ' . $table);
+    }
+    
     $pattern = "{$prefix}-{$date}-{$time}-%";
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([':pattern' => $pattern]);
     $count = (int)$stmt->fetchColumn();
     
@@ -97,7 +112,21 @@ function generateBarcode(PDO $pdo, string $type, string $table): string {
     $barcode = "{$prefix}-{$date}-{$time}-{$sequence}";
     
     // Vérifier l'unicité (double vérification)
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$table}` WHERE barcode = :barcode");
+    switch ($table) {
+        case 'paper_catalog':
+            $sql = "SELECT COUNT(*) FROM paper_catalog WHERE barcode = :barcode";
+            break;
+        case 'toner_catalog':
+            $sql = "SELECT COUNT(*) FROM toner_catalog WHERE barcode = :barcode";
+            break;
+        case 'lcd_catalog':
+            $sql = "SELECT COUNT(*) FROM lcd_catalog WHERE barcode = :barcode";
+            break;
+        case 'pc_catalog':
+            $sql = "SELECT COUNT(*) FROM pc_catalog WHERE barcode = :barcode";
+            break;
+    }
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([':barcode' => $barcode]);
     if ($stmt->fetchColumn() > 0) {
         // Si collision, ajouter un suffixe aléatoire

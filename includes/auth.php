@@ -38,7 +38,7 @@ $lastActivityUpdate = $_SESSION['last_activity_update'] ?? 0;
 if (time() - $lastActivityUpdate > 30) {
     try {
         $stmt = $pdo->prepare("UPDATE utilisateurs SET last_activity = NOW() WHERE id = :id");
-        $stmt->execute(['id' => $user_id]);
+        $stmt->execute([':id' => $user_id]);
         $_SESSION['last_activity_update'] = time();
     } catch (PDOException $e) {
         // Si le champ n'existe pas encore, on ignore l'erreur (migration pas encore appliquée)
@@ -51,7 +51,7 @@ if (time() - $lastActivityUpdate > 30) {
 $lastStatusCheck = $_SESSION['user_status_check_time'] ?? 0;
 if (time() - $lastStatusCheck > 30) {
     $stmt = $pdo->prepare("SELECT id, statut FROM utilisateurs WHERE id = :id LIMIT 1");
-    $stmt->execute(['id' => $user_id]);
+    $stmt->execute([':id' => $user_id]);
     $userCheck = $stmt->fetch(PDO::FETCH_ASSOC);
     
     // Si l'utilisateur n'existe plus ou est inactif, déconnexion immédiate
@@ -86,7 +86,7 @@ if (time() - $lastStatusCheck > 30) {
 $lastCheck = $_SESSION['user_check_time'] ?? 0;
 if (time() - $lastCheck > 300) { // 5 minutes
     $stmt = $pdo->prepare("SELECT id FROM utilisateurs WHERE id = :id LIMIT 1");
-    $stmt->execute(['id' => $user_id]);
+    $stmt->execute([':id' => $user_id]);
     if (!$stmt->fetch()) {
         $_SESSION = [];
         if (ini_get('session.use_cookies')) {

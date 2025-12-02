@@ -15,9 +15,9 @@ require_once __DIR__ . '/../includes/helpers.php';
 authorize_page('stock', []);
 
 // Récupérer les paramètres
-$type = $_GET['type'] ?? '';
+$type = trim($_GET['type'] ?? '');
 $productId = (int)($_GET['id'] ?? 0);
-$productName = $_GET['name'] ?? 'Produit';
+$productName = trim($_GET['name'] ?? 'Produit');
 
 if (empty($type) || $productId === 0) {
     die('Paramètres manquants');

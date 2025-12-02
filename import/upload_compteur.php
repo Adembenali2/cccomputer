@@ -163,7 +163,12 @@ foreach($batch as $f){
   if(empty($vals['MacAddress']) || empty($vals['Timestamp'])){
     $err++; sftp_safe_move($sftp,$f['path'],'/errors'); continue;
   }
-  $vals['Timestamp']=date('Y-m-d H:i:s', strtotime((string)$vals['Timestamp']));
+  // Validation et conversion de la date
+  $timestamp = strtotime((string)$vals['Timestamp']);
+  if ($timestamp === false) {
+    $err++; sftp_safe_move($sftp,$f['path'],'/errors'); continue;
+  }
+  $vals['Timestamp'] = date('Y-m-d H:i:s', $timestamp);
   try{
     $pdo->beginTransaction();
     $bind=[]; foreach($FIELDS as $k){ $bind[":$k"]=$vals[$k]; }

@@ -40,7 +40,7 @@ $stmt = $pdo->prepare("
     WHERE Email = :email 
     LIMIT 1
 ");
-$stmt->execute(['email' => $email]);
+$stmt->execute([':email' => $email]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 // Vérifs
