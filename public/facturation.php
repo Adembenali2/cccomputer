@@ -48,15 +48,21 @@ ensureCsrfToken();
     <section class="filters-bar">
         <div class="client-search-section">
             <div class="client-search-wrapper">
-                <label for="clientSearchInput">Rechercher un client</label>
+                <label for="clientSearchInput" class="client-search-label">Rechercher un client</label>
                 <div class="client-search-container">
-                    <input 
-                        type="text" 
-                        id="clientSearchInput" 
-                        class="client-search-input" 
-                        placeholder="Rechercher un client (nom, prénom, raison sociale, référence client…)"
-                        autocomplete="off"
-                    >
+                    <div class="client-search-input-wrapper">
+                        <svg class="client-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                        </svg>
+                        <input 
+                            type="text" 
+                            id="clientSearchInput" 
+                            class="client-search-input" 
+                            placeholder="Rechercher un client (nom, prénom, raison sociale, référence client…)"
+                            autocomplete="off"
+                        >
+                    </div>
                     <div id="clientSearchDropdown" class="client-search-dropdown" style="display:none;"></div>
                 </div>
                 <div id="selectedClientDisplay" class="selected-client-display" style="display:none;">
@@ -769,14 +775,27 @@ const mockData = {
             const clients = [];
             const prefixes = ['ACME', 'Beta', 'CC', 'Delta', 'Echo', 'Fusion', 'Gamma', 'Hyper', 'Innov', 'Jupiter', 'Kappa', 'Lambda', 'Matrix', 'Nova', 'Omega', 'Prime', 'Quantum', 'Rapid', 'Sigma', 'Titan', 'Ultra', 'Vector', 'Wave', 'Xeno', 'Ypsilon', 'Zenith'];
             const suffixes = ['SARL', 'Industries', 'Services', 'Solutions', 'Technologies', 'Group', 'Corp', 'Ltd', 'SA', 'GmbH'];
+            const prenoms = ['Jean', 'Marie', 'Pierre', 'Sophie', 'Luc', 'Anne', 'Paul', 'Julie', 'Marc', 'Claire', 'Thomas', 'Laura', 'David', 'Emma', 'Nicolas', 'Sarah'];
+            const noms = ['Dupont', 'Martin', 'Bernard', 'Dubois', 'Lefebvre', 'Moreau', 'Laurent', 'Simon', 'Michel', 'Garcia', 'Petit', 'Roux', 'Vincent', 'Fournier', 'Leroy', 'Lambert'];
             
             for (let i = 1; i <= 150; i++) {
                 const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
                 const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
                 const num = Math.floor(Math.random() * 999) + 1;
+                const prenom = prenoms[Math.floor(Math.random() * prenoms.length)];
+                const nom = noms[Math.floor(Math.random() * noms.length)];
+                const raisonSociale = `${prefix} ${suffix} ${num}`;
+                const reference = `CLI-${String(i).padStart(4, '0')}`;
+                
                 clients.push({
                     id: String(i),
-                    name: `${prefix} ${suffix} ${num}`
+                    name: raisonSociale,
+                    prenom: prenom,
+                    nom: nom,
+                    raisonSociale: raisonSociale,
+                    reference: reference,
+                    // Texte de recherche combiné pour faciliter la recherche
+                    searchText: `${prenom} ${nom} ${raisonSociale} ${reference}`.toLowerCase()
                 });
             }
             return clients;
@@ -878,10 +897,12 @@ function initClientSearch() {
     const searchInput = document.getElementById('clientSearchInput');
     const dropdown = document.getElementById('clientSearchDropdown');
     const selectedDisplay = document.getElementById('selectedClientDisplay');
-    const selectedName = selectedDisplay.querySelector('.selected-client-name');
     const btnRemove = document.getElementById('btnRemoveClient');
     
-    if (!searchInput || !dropdown) return;
+    if (!searchInput || !dropdown || !selectedDisplay) return;
+    
+    const selectedName = selectedDisplay.querySelector('.selected-client-name');
+    if (!selectedName) return;
     
     let searchTimeout = null;
     
@@ -960,7 +981,7 @@ function performClientSearch(query, dropdown) {
     dropdown.innerHTML = '';
     
     if (filtered.length === 0) {
-        dropdown.innerHTML = '<div class="dropdown-item">Aucun client trouvé</div>';
+        dropdown.innerHTML = '<div class="dropdown-item empty-state">Aucun client trouvé</div>';
     } else {
         filtered.forEach(client => {
             const item = document.createElement('div');
@@ -1005,7 +1026,10 @@ function selectClient(clientId, clientName) {
     selectedClientId = clientId;
     
     const selectedDisplay = document.getElementById('selectedClientDisplay');
+    if (!selectedDisplay) return;
+    
     const selectedName = selectedDisplay.querySelector('.selected-client-name');
+    if (!selectedName) return;
     
     selectedName.textContent = clientName;
     selectedDisplay.style.display = 'flex';
@@ -1018,7 +1042,9 @@ function clearClientSelection() {
     selectedClientId = null;
     
     const selectedDisplay = document.getElementById('selectedClientDisplay');
-    selectedDisplay.style.display = 'none';
+    if (selectedDisplay) {
+        selectedDisplay.style.display = 'none';
+    }
     
     const searchInput = document.getElementById('clientSearchInput');
     if (searchInput) {
