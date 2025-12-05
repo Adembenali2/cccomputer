@@ -853,7 +853,10 @@ const mockData = {
                 clientData.colorData.forEach((val, i) => colorData[i] += val);
             });
             
-            return { labels, nbData, colorData };
+            // Calculer le total (N&B + Couleur)
+            const totalData = labels.map((_, i) => nbData[i] + colorData[i]);
+            
+            return { labels, nbData, colorData, totalData };
         },
         
         // Fonction pour obtenir les données d'un ou plusieurs clients
@@ -880,7 +883,10 @@ const mockData = {
                 clientData.colorData.forEach((val, i) => colorData[i] += val);
             });
             
-            return { labels, nbData, colorData };
+            // Calculer le total (N&B + Couleur)
+            const totalData = labels.map((_, i) => nbData[i] + colorData[i]);
+            
+            return { labels, nbData, colorData, totalData };
         }
     }
 };
@@ -1016,28 +1022,55 @@ function initConsumptionChart() {
         chartData = mockData.consommation.getClientsData(selectedClientIds, granularity);
     }
     
-    // Créer les datasets pour N&B et Couleur
+    // Créer les 3 datasets pour N&B, Couleur et Total (line chart)
     const datasets = [
         {
-            label: '◼ Noir & Blanc',
+            label: 'Noir & Blanc',
             data: chartData.nbData,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            borderColor: 'rgb(0, 0, 0)',
-            borderWidth: 2,
-            stack: 'consumption'
+            borderColor: 'rgb(30, 41, 59)', // Gris foncé (slate-800) - cohérent avec le projet
+            backgroundColor: 'rgba(30, 41, 59, 0.1)',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: 'rgb(30, 41, 59)',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
         },
         {
-            label: '◼ Couleur',
+            label: 'Couleur',
             data: chartData.colorData,
-            backgroundColor: 'rgba(220, 38, 38, 0.7)',
-            borderColor: 'rgb(220, 38, 38)',
-            borderWidth: 2,
-            stack: 'consumption'
+            borderColor: 'rgb(139, 92, 246)', // Violet (violet-500) - cohérent avec le projet
+            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: 'rgb(139, 92, 246)',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+        },
+        {
+            label: 'Total',
+            data: chartData.totalData,
+            borderColor: 'rgb(59, 130, 246)', // Bleu (blue-500) - accent principal du projet
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: 'rgb(59, 130, 246)',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            borderDash: [5, 5] // Ligne en pointillés pour différencier la courbe Total
         }
     ];
     
     const config = {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: chartData.labels,
             datasets: datasets
@@ -1045,6 +1078,10 @@ function initConsumptionChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
             plugins: {
                 legend: {
                     display: true,
@@ -1054,7 +1091,31 @@ function initConsumptionChart() {
                         padding: 15,
                         font: {
                             family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                            size: 12
+                            size: 12,
+                            weight: '500'
+                        },
+                        generateLabels: function(chart) {
+                            const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                            const labels = original.call(this, chart);
+                            // Personnaliser les labels avec des carrés colorés
+                            labels.forEach((label, index) => {
+                                if (index === 0) {
+                                    label.text = '◼ Noir & Blanc';
+                                } else if (index === 1) {
+                                    label.text = '◼ Couleur';
+                                } else if (index === 2) {
+                                    label.text = '◼ Total';
+                                }
+                            });
+                            return labels;
+                        },
+                        onClick: function(e, legendItem, legend) {
+                            // Permettre de cliquer sur la légende pour masquer/afficher les courbes
+                            const index = legendItem.datasetIndex;
+                            const chart = legend.chart;
+                            const meta = chart.getDatasetMeta(index);
+                            meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                            chart.update();
                         }
                     }
                 },
@@ -1072,14 +1133,12 @@ function initConsumptionChart() {
                     },
                     callbacks: {
                         label: function(context) {
-                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
-                        },
-                        footer: function(tooltipItems) {
-                            if (tooltipItems.length === 2) {
-                                const total = tooltipItems[0].parsed.y + tooltipItems[1].parsed.y;
-                                return 'Total: ' + total.toLocaleString('fr-FR') + ' pages';
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
                             }
-                            return '';
+                            label += context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                            return label;
                         }
                     }
                 }
@@ -1087,7 +1146,6 @@ function initConsumptionChart() {
             scales: {
                 y: {
                     beginAtZero: true,
-                    stacked: true,
                     ticks: {
                         callback: function(value) {
                             return value.toLocaleString('fr-FR');
@@ -1102,7 +1160,6 @@ function initConsumptionChart() {
                     }
                 },
                 x: {
-                    stacked: true,
                     ticks: {
                         font: {
                             family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
