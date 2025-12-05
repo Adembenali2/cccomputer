@@ -4,6 +4,62 @@
     background-color: var(--bg-secondary);
 }
 
+/* ====== Graphique de consommation ====== */
+.chart-section {
+    margin-bottom: 2rem;
+}
+
+.chart-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.chart-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.chart-control-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.chart-select {
+    min-width: 180px;
+}
+
+.card-subtitle {
+    margin: 0.25rem 0 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.chart-container {
+    position: relative;
+    height: 400px;
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .chart-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .chart-select {
+        min-width: 100%;
+    }
+    
+    .chart-container {
+        height: 300px;
+    }
+}
+
 /* ====== Header de page ====== */
 .facturation-header {
     display: flex;

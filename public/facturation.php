@@ -21,6 +21,8 @@ ensureCsrfToken();
     <link rel="stylesheet" href="/assets/css/main.css">
     <!-- CSS spécifique à la page facturation -->
     <link rel="stylesheet" href="/assets/css/facturation.css">
+    <!-- Chart.js pour les graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="page-facturation">
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -87,6 +89,42 @@ ensureCsrfToken();
             <span class="summary-item">Conso N&B : <strong>12 430 pages</strong></span>
             <span class="summary-item">Couleur : <strong>3 210 pages</strong></span>
             <span class="summary-item">Montant estimé : <strong>845,20 €</strong></span>
+        </div>
+    </section>
+
+    <!-- Graphique de consommation -->
+    <section class="chart-section">
+        <div class="content-card">
+            <div class="card-header">
+                <div>
+                    <h3>Consommation des clients</h3>
+                    <p class="card-subtitle">Vue globale de la consommation par période</p>
+                </div>
+                <div class="chart-controls">
+                    <div class="chart-control-group">
+                        <label for="chartClient">Client</label>
+                        <select id="chartClient" class="filter-select chart-select">
+                            <option value="">Tous les clients</option>
+                            <option value="1">Client A – ACME SARL</option>
+                            <option value="2">Client B – Beta Industries</option>
+                            <option value="3">Client C – CC Services</option>
+                        </select>
+                    </div>
+                    <div class="chart-control-group">
+                        <label for="chartGranularity">Granularité</label>
+                        <select id="chartGranularity" class="filter-select chart-select">
+                            <option value="year">Année</option>
+                            <option value="month" selected>Mois</option>
+                            <option value="day">Jour</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="consumptionChart"></canvas>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -747,8 +785,286 @@ const mockData = {
         { id: 3, factureId: 2, date: '2024-12-20', montant: 1120.50, mode: 'Virement', reference: 'VIR-2024-089' },
         { id: 4, factureId: 3, date: '2024-12-08', montant: 450.00, mode: 'Chèque', reference: 'CHQ-2024-123' },
         { id: 5, factureId: 5, date: '2024-11-20', montant: 320.00, mode: 'Carte bancaire', reference: 'CB-2024-234' }
-    ]
+    ],
+    // Mock data pour la consommation
+    consommation: {
+        clients: [
+            { id: '', name: 'Tous les clients' },
+            { id: '1', name: 'Client A – ACME SARL' },
+            { id: '2', name: 'Client B – Beta Industries' },
+            { id: '3', name: 'Client C – CC Services' }
+        ],
+        byYear: {
+            '': {
+                labels: ['2022', '2023', '2024', '2025'],
+                datasets: [
+                    {
+                        label: 'Client A – ACME SARL',
+                        data: [45000, 52000, 58000, 12000],
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgb(59, 130, 246)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Client B – Beta Industries',
+                        data: [38000, 42000, 48000, 10000],
+                        backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                        borderColor: 'rgb(16, 185, 129)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Client C – CC Services',
+                        data: [32000, 35000, 40000, 8500],
+                        backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                        borderColor: 'rgb(139, 92, 246)',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            '1': {
+                labels: ['2022', '2023', '2024', '2025'],
+                data: [45000, 52000, 58000, 12000],
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                borderColor: 'rgb(59, 130, 246)',
+                borderWidth: 2
+            },
+            '2': {
+                labels: ['2022', '2023', '2024', '2025'],
+                data: [38000, 42000, 48000, 10000],
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                borderColor: 'rgb(16, 185, 129)',
+                borderWidth: 2
+            },
+            '3': {
+                labels: ['2022', '2023', '2024', '2025'],
+                data: [32000, 35000, 40000, 8500],
+                backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                borderColor: 'rgb(139, 92, 246)',
+                borderWidth: 2
+            }
+        },
+        byMonth: {
+            '': {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                datasets: [
+                    {
+                        label: 'Client A – ACME SARL',
+                        data: [4200, 4500, 4800, 5100, 4900, 5200, 5000, 4800, 5100, 5300, 5000, 12000],
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgb(59, 130, 246)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Client B – Beta Industries',
+                        data: [3500, 3800, 4000, 4200, 4100, 4300, 4200, 4000, 4200, 4400, 4200, 10000],
+                        backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                        borderColor: 'rgb(16, 185, 129)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Client C – CC Services',
+                        data: [3000, 3200, 3400, 3600, 3500, 3700, 3600, 3400, 3600, 3800, 3600, 8500],
+                        backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                        borderColor: 'rgb(139, 92, 246)',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            '1': {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                data: [4200, 4500, 4800, 5100, 4900, 5200, 5000, 4800, 5100, 5300, 5000, 12000],
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                borderColor: 'rgb(59, 130, 246)',
+                borderWidth: 2
+            },
+            '2': {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                data: [3500, 3800, 4000, 4200, 4100, 4300, 4200, 4000, 4200, 4400, 4200, 10000],
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                borderColor: 'rgb(16, 185, 129)',
+                borderWidth: 2
+            },
+            '3': {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                data: [3000, 3200, 3400, 3600, 3500, 3700, 3600, 3400, 3600, 3800, 3600, 8500],
+                backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                borderColor: 'rgb(139, 92, 246)',
+                borderWidth: 2
+            }
+        },
+        byDay: {
+            '': {
+                labels: Array.from({length: 30}, (_, i) => (i + 1).toString()),
+                datasets: [
+                    {
+                        label: 'Client A – ACME SARL',
+                        data: Array.from({length: 30}, () => Math.floor(Math.random() * 200) + 350),
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgb(59, 130, 246)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Client B – Beta Industries',
+                        data: Array.from({length: 30}, () => Math.floor(Math.random() * 150) + 280),
+                        backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                        borderColor: 'rgb(16, 185, 129)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Client C – CC Services',
+                        data: Array.from({length: 30}, () => Math.floor(Math.random() * 120) + 240),
+                        backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                        borderColor: 'rgb(139, 92, 246)',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            '1': {
+                labels: Array.from({length: 30}, (_, i) => (i + 1).toString()),
+                data: Array.from({length: 30}, () => Math.floor(Math.random() * 200) + 350),
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                borderColor: 'rgb(59, 130, 246)',
+                borderWidth: 2
+            },
+            '2': {
+                labels: Array.from({length: 30}, (_, i) => (i + 1).toString()),
+                data: Array.from({length: 30}, () => Math.floor(Math.random() * 150) + 280),
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                borderColor: 'rgb(16, 185, 129)',
+                borderWidth: 2
+            },
+            '3': {
+                labels: Array.from({length: 30}, (_, i) => (i + 1).toString()),
+                data: Array.from({length: 30}, () => Math.floor(Math.random() * 120) + 240),
+                backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                borderColor: 'rgb(139, 92, 246)',
+                borderWidth: 2
+            }
+        }
+    }
 };
+
+// ==================
+// Graphique de consommation
+// ==================
+let consumptionChart = null;
+
+function initConsumptionChart() {
+    const ctx = document.getElementById('consumptionChart');
+    if (!ctx) return;
+    
+    const clientId = document.getElementById('chartClient').value || '';
+    const granularity = document.getElementById('chartGranularity').value || 'month';
+    
+    const dataKey = `by${granularity.charAt(0).toUpperCase() + granularity.slice(1)}`;
+    const chartData = mockData.consommation[dataKey][clientId];
+    
+    if (!chartData) return;
+    
+    const config = {
+        type: clientId === '' ? 'bar' : 'line',
+        data: clientId === '' 
+            ? {
+                labels: chartData.labels,
+                datasets: chartData.datasets
+            }
+            : {
+                labels: chartData.labels,
+                datasets: [{
+                    label: mockData.consommation.clients.find(c => c.id === clientId)?.name || 'Consommation',
+                    data: chartData.data,
+                    backgroundColor: chartData.backgroundColor,
+                    borderColor: chartData.borderColor,
+                    borderWidth: chartData.borderWidth,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 15,
+                        font: {
+                            family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: {
+                        size: 14,
+                        weight: 'bold'
+                    },
+                    bodyFont: {
+                        size: 13
+                    },
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value.toLocaleString('fr-FR');
+                        },
+                        font: {
+                            family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                            size: 11
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        font: {
+                            family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                            size: 11
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    };
+    
+    if (consumptionChart) {
+        consumptionChart.destroy();
+    }
+    
+    consumptionChart = new Chart(ctx, config);
+}
+
+function updateConsumptionChart() {
+    initConsumptionChart();
+}
+
+// Initialisation du graphe au chargement
+document.addEventListener('DOMContentLoaded', () => {
+    initConsumptionChart();
+    
+    // Écouter les changements de client et granularité
+    document.getElementById('chartClient').addEventListener('change', updateConsumptionChart);
+    document.getElementById('chartGranularity').addEventListener('change', updateConsumptionChart);
+});
 
 // ==================
 // Gestion des onglets
