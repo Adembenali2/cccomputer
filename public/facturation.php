@@ -23,6 +23,8 @@ ensureCsrfToken();
     <link rel="stylesheet" href="/assets/css/facturation.css">
     <!-- Chart.js pour les graphiques -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- SheetJS pour l'export Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body class="page-facturation">
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -694,49 +696,51 @@ ensureCsrfToken();
         <div class="modal-body">
             <form class="standard-form" id="formExport">
                 <!-- Choix du client (optionnel) -->
-                <div class="form-group">
-                    <label for="exportClientSearch">Client (optionnel)</label>
-                    <div class="client-search-container">
-                        <div class="client-search-input-wrapper">
-                            <svg class="client-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="11" cy="11" r="8"/>
-                                <path d="m21 21-4.35-4.35"/>
-                            </svg>
-                            <input 
-                                type="text" 
-                                id="exportClientSearch" 
-                                class="client-search-input" 
-                                placeholder="Rechercher un client (nom, prénom, raison sociale, référence client…)"
-                                autocomplete="off"
-                            >
+                <div class="form-section">
+                    <h4 class="form-section-title">Client <span class="form-section-optional">(optionnel)</span></h4>
+                    <div class="form-group">
+                        <div class="client-search-container">
+                            <div class="client-search-input-wrapper">
+                                <svg class="client-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/>
+                                    <path d="m21 21-4.35-4.35"/>
+                                </svg>
+                                <input 
+                                    type="text" 
+                                    id="exportClientSearch" 
+                                    class="client-search-input" 
+                                    placeholder="Rechercher un client (nom, prénom, raison sociale, référence client…)"
+                                    autocomplete="off"
+                                >
+                            </div>
+                            <div id="exportClientSearchDropdown" class="client-search-dropdown" style="display:none;"></div>
                         </div>
-                        <div id="exportClientSearchDropdown" class="client-search-dropdown" style="display:none;"></div>
+                        <div id="exportSelectedClientDisplay" class="selected-client-display" style="display:none;">
+                            <span class="selected-client-name"></span>
+                            <button type="button" class="btn-remove-client" id="btnRemoveExportClient" aria-label="Retirer la sélection">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <small class="form-hint">Si aucun client n'est sélectionné, l'export portera sur tous les clients.</small>
                     </div>
-                    <div id="exportSelectedClientDisplay" class="selected-client-display" style="display:none;">
-                        <span class="selected-client-name"></span>
-                        <button type="button" class="btn-remove-client" id="btnRemoveExportClient" aria-label="Retirer la sélection">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <small class="form-hint">Si aucun client n'est sélectionné, l'export portera sur tous les clients.</small>
                 </div>
 
                 <!-- Choix de la période (obligatoire) -->
-                <div class="form-group">
-                    <label>Période <span class="required">*</span></label>
-                    <div class="radio-group">
-                        <label class="radio-label">
-                            <input type="radio" name="exportPeriodType" value="year" id="exportPeriodYear" checked>
-                            <span>Année</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="exportPeriodType" value="month" id="exportPeriodMonth">
-                            <span>Mois (20 → 20)</span>
-                        </label>
-                    </div>
+                <div class="form-section">
+                    <h4 class="form-section-title">Période <span class="required">*</span></h4>
+                    <div class="form-group">
+                        <div class="button-group" role="group" aria-label="Type de période">
+                            <button type="button" class="button-group-item active" data-value="year" id="btnPeriodYear">
+                                Année
+                            </button>
+                            <button type="button" class="button-group-item" data-value="month" id="btnPeriodMonth">
+                                Mois (20 → 20)
+                            </button>
+                        </div>
+                        <input type="hidden" name="exportPeriodType" id="exportPeriodType" value="year">
                     
                     <!-- Contrôles pour l'année -->
                     <div id="exportYearControls" class="form-group" style="margin-top: 0.75rem;">
@@ -788,21 +792,21 @@ ensureCsrfToken();
                 </div>
 
                 <!-- Type de consommation -->
-                <div class="form-group">
-                    <label>Type de consommation</label>
-                    <div class="radio-group">
-                        <label class="radio-label">
-                            <input type="radio" name="exportConsumptionType" value="nb" id="exportTypeNB">
-                            <span>Noir & Blanc</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="exportConsumptionType" value="color" id="exportTypeColor">
-                            <span>Couleur</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="exportConsumptionType" value="both" id="exportTypeBoth" checked>
-                            <span>Les deux (Total)</span>
-                        </label>
+                <div class="form-section">
+                    <h4 class="form-section-title">Type de consommation</h4>
+                    <div class="form-group">
+                        <div class="button-group" role="group" aria-label="Type de consommation">
+                            <button type="button" class="button-group-item" data-value="nb" id="btnTypeNB">
+                                Noir & Blanc
+                            </button>
+                            <button type="button" class="button-group-item" data-value="color" id="btnTypeColor">
+                                Couleur
+                            </button>
+                            <button type="button" class="button-group-item active" data-value="both" id="btnTypeBoth">
+                                Les deux (Total)
+                            </button>
+                        </div>
+                        <input type="hidden" name="exportConsumptionType" id="exportConsumptionType" value="both">
                     </div>
                 </div>
 
@@ -1516,6 +1520,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialiser la recherche de client pour l'export
     initExportClientSearch();
+    initButtonGroups();
     updateExportPeriodControls();
     
     // Initialiser les valeurs par défaut
@@ -1786,7 +1791,16 @@ function openExportModal() {
         document.getElementById('formExport').reset();
         exportSelectedClientId = null;
         document.getElementById('exportSelectedClientDisplay').style.display = 'none';
-        document.getElementById('exportPeriodYear').checked = true;
+        
+        // Réinitialiser les button groups
+        document.querySelectorAll('#btnPeriodYear, #btnPeriodMonth').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('btnPeriodYear').classList.add('active');
+        document.getElementById('exportPeriodType').value = 'year';
+        
+        document.querySelectorAll('#btnTypeNB, #btnTypeColor, #btnTypeBoth').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('btnTypeBoth').classList.add('active');
+        document.getElementById('exportConsumptionType').value = 'both';
+        
         updateExportPeriodControls();
         // Réinitialiser les valeurs par défaut
         const now = new Date();
@@ -1795,7 +1809,6 @@ function openExportModal() {
         document.getElementById('exportYear').value = currentYear;
         document.getElementById('exportMonthYear').value = currentYear;
         document.getElementById('exportMonth').value = currentMonth;
-        document.getElementById('exportTypeBoth').checked = true;
         updateExportMonthPeriodHint();
     }
 }
@@ -1818,9 +1831,35 @@ document.getElementById('modalExport').addEventListener('click', (e) => {
     }
 });
 
+// Gérer les button groups
+function initButtonGroups() {
+    // Button group pour la période
+    const periodButtons = document.querySelectorAll('#btnPeriodYear, #btnPeriodMonth');
+    periodButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const value = btn.dataset.value;
+            document.getElementById('exportPeriodType').value = value;
+            updateExportPeriodControls();
+        });
+    });
+    
+    // Button group pour le type de consommation
+    const consumptionButtons = document.querySelectorAll('#btnTypeNB, #btnTypeColor, #btnTypeBoth');
+    consumptionButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            consumptionButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const value = btn.dataset.value;
+            document.getElementById('exportConsumptionType').value = value;
+        });
+    });
+}
+
 // Gérer les contrôles de période
 function updateExportPeriodControls() {
-    const periodType = document.querySelector('input[name="exportPeriodType"]:checked').value;
+    const periodType = document.getElementById('exportPeriodType').value;
     const yearControls = document.getElementById('exportYearControls');
     const monthControls = document.getElementById('exportMonthControls');
     
@@ -1865,10 +1904,7 @@ function updateExportMonthPeriodHint() {
     }
 }
 
-// Écouter les changements de type de période
-document.querySelectorAll('input[name="exportPeriodType"]').forEach(radio => {
-    radio.addEventListener('change', updateExportPeriodControls);
-});
+// Les button groups sont initialisés dans initButtonGroups()
 
 // Écouter les changements de mois/année pour mettre à jour l'indication
 document.getElementById('exportMonth').addEventListener('change', updateExportMonthPeriodHint);
@@ -2015,12 +2051,143 @@ function clearExportClientSelection() {
     }
 }
 
+// Générer le fichier Excel
+function generateExcelFile(exportParams) {
+    // Préparer les données pour l'export
+    const data = [];
+    
+    // En-têtes
+    const headers = ['Client', 'Période', 'Type', 'Pages N&B', 'Pages Couleur', 'Total Pages', 'Montant N&B (€)', 'Montant Couleur (€)', 'Total (€)'];
+    data.push(headers);
+    
+    // Obtenir les clients à exporter
+    const clientsToExport = exportSelectedClientId 
+        ? [mockData.consommation.clients.find(c => c.id === exportSelectedClientId)]
+        : mockData.consommation.clients;
+    
+    const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    
+    // Générer les données selon la période
+    if (exportParams.period.type === 'year') {
+        const year = exportParams.period.year;
+        const periodLabels = monthNames.map(m => `${m} ${year}`);
+        
+        clientsToExport.forEach(client => {
+            const clientData = mockData.consommation.generateClientData(client.id, 'year', { year: year });
+            
+            periodLabels.forEach((label, index) => {
+                const nbPages = clientData.nbData[index] || 0;
+                const colorPages = clientData.colorData[index] || 0;
+                const totalPages = nbPages + colorPages;
+                const nbAmount = nbPages * 0.05;
+                const colorAmount = colorPages * 0.15;
+                const totalAmount = nbAmount + colorAmount;
+                
+                // Filtrer selon le type de consommation
+                if (exportParams.consumptionType === 'nb' && nbPages === 0) return;
+                if (exportParams.consumptionType === 'color' && colorPages === 0) return;
+                
+                const row = [
+                    client.raisonSociale,
+                    label,
+                    exportParams.consumptionType === 'nb' ? 'N&B' : exportParams.consumptionType === 'color' ? 'Couleur' : 'Total',
+                    exportParams.consumptionType === 'nb' || exportParams.consumptionType === 'both' ? nbPages : '',
+                    exportParams.consumptionType === 'color' || exportParams.consumptionType === 'both' ? colorPages : '',
+                    exportParams.consumptionType === 'both' ? totalPages : (exportParams.consumptionType === 'nb' ? nbPages : colorPages),
+                    exportParams.consumptionType === 'nb' || exportParams.consumptionType === 'both' ? nbAmount.toFixed(2) : '',
+                    exportParams.consumptionType === 'color' || exportParams.consumptionType === 'both' ? colorAmount.toFixed(2) : '',
+                    totalAmount.toFixed(2)
+                ];
+                data.push(row);
+            });
+        });
+    } else {
+        // Période mois (20→20)
+        const year = exportParams.period.year;
+        const month = exportParams.period.month;
+        const monthName = monthNames[month];
+        const nextMonth = (month + 1) % 12;
+        const nextMonthName = monthNames[nextMonth];
+        const nextYear = month === 11 ? year + 1 : year;
+        const periodLabel = `${monthName} ${year} (20 → 20)`;
+        
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        clientsToExport.forEach(client => {
+            const clientData = mockData.consommation.generateClientData(client.id, 'month', { year: year, month: month });
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const index = day - 1;
+                const nbPages = clientData.nbData[index] || 0;
+                const colorPages = clientData.colorData[index] || 0;
+                const totalPages = nbPages + colorPages;
+                const nbAmount = nbPages * 0.05;
+                const colorAmount = colorPages * 0.15;
+                const totalAmount = nbAmount + colorAmount;
+                
+                // Filtrer selon le type de consommation
+                if (exportParams.consumptionType === 'nb' && nbPages === 0) continue;
+                if (exportParams.consumptionType === 'color' && colorPages === 0) continue;
+                
+                const row = [
+                    client.raisonSociale,
+                    `${periodLabel} - Jour ${day}`,
+                    exportParams.consumptionType === 'nb' ? 'N&B' : exportParams.consumptionType === 'color' ? 'Couleur' : 'Total',
+                    exportParams.consumptionType === 'nb' || exportParams.consumptionType === 'both' ? nbPages : '',
+                    exportParams.consumptionType === 'color' || exportParams.consumptionType === 'both' ? colorPages : '',
+                    exportParams.consumptionType === 'both' ? totalPages : (exportParams.consumptionType === 'nb' ? nbPages : colorPages),
+                    exportParams.consumptionType === 'nb' || exportParams.consumptionType === 'both' ? nbAmount.toFixed(2) : '',
+                    exportParams.consumptionType === 'color' || exportParams.consumptionType === 'both' ? colorAmount.toFixed(2) : '',
+                    totalAmount.toFixed(2)
+                ];
+                data.push(row);
+            }
+        });
+    }
+    
+    // Créer le workbook
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    
+    // Ajuster la largeur des colonnes
+    const colWidths = [
+        { wch: 25 }, // Client
+        { wch: 20 }, // Période
+        { wch: 10 }, // Type
+        { wch: 12 }, // Pages N&B
+        { wch: 14 }, // Pages Couleur
+        { wch: 12 }, // Total Pages
+        { wch: 15 }, // Montant N&B
+        { wch: 17 }, // Montant Couleur
+        { wch: 12 }  // Total
+    ];
+    ws['!cols'] = colWidths;
+    
+    // Ajouter la feuille au workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Consommation');
+    
+    // Générer le nom du fichier
+    let filename = 'export-consommation';
+    if (exportParams.client) {
+        filename += `-${exportParams.client.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
+    }
+    if (exportParams.period.type === 'year') {
+        filename += `-${exportParams.period.year}`;
+    } else {
+        filename += `-${monthNames[exportParams.period.month]}-${exportParams.period.year}`;
+    }
+    filename += '.xlsx';
+    
+    // Télécharger le fichier
+    XLSX.writeFile(wb, filename);
+}
+
 // Validation et soumission du formulaire d'export
 document.getElementById('formExport').addEventListener('submit', (e) => {
     e.preventDefault();
     
-    const periodType = document.querySelector('input[name="exportPeriodType"]:checked').value;
-    const consumptionType = document.querySelector('input[name="exportConsumptionType"]:checked').value;
+    const periodType = document.getElementById('exportPeriodType').value;
+    const consumptionType = document.getElementById('exportConsumptionType').value;
     
     let period = null;
     let periodError = document.getElementById('exportPeriodError');
@@ -2072,18 +2239,23 @@ document.getElementById('formExport').addEventListener('submit', (e) => {
         consumptionType: consumptionType
     };
     
-    // Simuler l'export (mock)
-    console.log('Export simulé avec les paramètres:', exportParams);
-    
-    // Afficher une notification de succès
-    showExportNotification(exportParams);
-    
-    // Fermer le modal
-    closeExportModal();
+    // Générer et télécharger le fichier Excel
+    try {
+        generateExcelFile(exportParams);
+        
+        // Afficher une notification de succès
+        showExportNotification(exportParams, true);
+        
+        // Fermer le modal
+        closeExportModal();
+    } catch (error) {
+        console.error('Erreur lors de la génération du fichier Excel:', error);
+        alert('Une erreur est survenue lors de la génération du fichier Excel.');
+    }
 });
 
 // Afficher une notification de succès
-function showExportNotification(params) {
+function showExportNotification(params, isRealExport = false) {
     // Créer un élément de notification
     const notification = document.createElement('div');
     notification.className = 'export-notification';
@@ -2123,7 +2295,7 @@ function showExportNotification(params) {
                 <polyline points="22 4 12 14.01 9 11.01"/>
             </svg>
             <div>
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">Export simulé (mock)</div>
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">${isRealExport ? 'Export Excel généré' : 'Export simulé (mock)'}</div>
                 <div style="font-size: 0.85rem; color: var(--text-secondary);">
                     Client: ${clientText}<br>
                     Période: ${periodText}<br>
@@ -2146,7 +2318,7 @@ function showExportNotification(params) {
     }, 5000);
 }
 
-// Initialiser la recherche de client au chargement (sera appelé dans le DOMContentLoaded principal)
+// Les button groups sont initialisés dans le DOMContentLoaded principal
 
 // ==================
 // Modal paiement
