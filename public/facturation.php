@@ -1308,25 +1308,28 @@ function initClientSearch() {
 }
 
 // Effectuer la recherche de clients
-function performClientSearch(query, dropdown) {
-    const queryLower = query.toLowerCase();
+async function performClientSearch(query, dropdown) {
+    dropdown.innerHTML = '<div class="dropdown-item empty-state">Recherche...</div>';
+    dropdown.style.display = 'block';
     
-    const filtered = mockData.consommation.clients.filter(client =>
-        client.searchText.includes(queryLower)
-    ).slice(0, 10); // Limiter à 10 résultats
-    
-    dropdown.innerHTML = '';
-    
-    if (filtered.length === 0) {
-        dropdown.innerHTML = '<div class="dropdown-item empty-state">Aucun client trouvé</div>';
-    } else {
-        filtered.forEach(client => {
+    try {
+        const response = await fetch(`/API/facturation_search_clients.php?q=${encodeURIComponent(query)}&limit=10`);
+        const result = await response.json();
+        
+        dropdown.innerHTML = '';
+        
+        if (!result.ok || !result.data || result.data.length === 0) {
+            dropdown.innerHTML = '<div class="dropdown-item empty-state">Aucun client trouvé</div>';
+            return;
+        }
+        
+        result.data.forEach(client => {
             const item = document.createElement('div');
             item.className = 'dropdown-item';
             
             // Mettre en évidence les correspondances
-            const name = highlightMatch(client.raisonSociale, query);
-            const details = `${client.prenom} ${client.nom} • ${client.reference}`;
+            const name = highlightMatch(client.raison_sociale || client.name, query);
+            const details = `${client.prenom || ''} ${client.nom || ''} • ${client.reference || client.numero_client || ''}`.trim();
             
             item.innerHTML = `
                 <div class="dropdown-item-main">${name}</div>
@@ -1334,7 +1337,7 @@ function performClientSearch(query, dropdown) {
             `;
             
             item.addEventListener('click', () => {
-                selectClient(client.id, client.raisonSociale);
+                selectClient(client.id, client.raison_sociale || client.name);
                 document.getElementById('clientSearchInput').value = '';
                 dropdown.style.display = 'none';
             });
@@ -1346,9 +1349,10 @@ function performClientSearch(query, dropdown) {
             
             dropdown.appendChild(item);
         });
+    } catch (error) {
+        console.error('Erreur recherche clients:', error);
+        dropdown.innerHTML = '<div class="dropdown-item empty-state">Erreur de recherche</div>';
     }
-    
-    dropdown.style.display = 'block';
 }
 
 // Mettre en évidence les correspondances dans le texte
@@ -1426,7 +1430,7 @@ function getPeriodParams() {
 }
 
 // Initialiser le graphe
-function initConsumptionChart() {
+async function initConsumptionChart() {
     const ctx = document.getElementById('consumptionChart');
     if (!ctx) return;
     
@@ -1434,27 +1438,51 @@ function initConsumptionChart() {
     const periodParams = getPeriodParams();
     const isAllClients = selectedClientId === null;
     
-    // Obtenir les données
-    let chartData;
-    if (isAllClients) {
-        chartData = mockData.consommation.getAggregatedData(granularityType, periodParams);
-    } else {
-        chartData = mockData.consommation.getClientsData([selectedClientId], granularityType, periodParams);
-    }
-    
-    // Vérifier si toutes les données sont à zéro (aucun relevé)
-    const hasData = chartData.nbData.some(val => val > 0) || chartData.colorData.some(val => val > 0);
+    // Afficher un indicateur de chargement
     const noDataMessage = document.getElementById('chartNoDataMessage');
     const chartContainer = document.querySelector('.chart-container');
-    
-    // Afficher le message si aucune donnée, mais toujours afficher le graphique (avec valeurs à zéro)
     if (noDataMessage) {
-        noDataMessage.style.display = hasData ? 'none' : 'block';
+        noDataMessage.style.display = 'block';
+        noDataMessage.textContent = 'Chargement des données...';
     }
-    // Le graphique s'affiche toujours, même avec des valeurs à zéro
     if (chartContainer) {
-        chartContainer.style.display = 'block';
+        chartContainer.style.display = 'none';
     }
+    
+    try {
+        // Construire l'URL de l'API
+        const params = new URLSearchParams({
+            granularity: granularityType,
+            year: periodParams.year || new Date().getFullYear()
+        });
+        if (granularityType === 'month' && periodParams.month !== undefined) {
+            params.append('month', periodParams.month);
+        }
+        if (!isAllClients) {
+            params.append('client_id', selectedClientId);
+        }
+        
+        const response = await fetch(`/API/facturation_consumption_chart.php?${params.toString()}`);
+        const result = await response.json();
+        
+        if (!result.ok || !result.data) {
+            throw new Error(result.error || 'Erreur lors du chargement des données');
+        }
+        
+        const chartData = result.data;
+        
+        // Vérifier si toutes les données sont à zéro (aucun relevé)
+        const hasData = chartData.nbData.some(val => val > 0) || chartData.colorData.some(val => val > 0);
+        
+        // Afficher le message si aucune donnée, mais toujours afficher le graphique (avec valeurs à zéro)
+        if (noDataMessage) {
+            noDataMessage.style.display = hasData ? 'none' : 'block';
+            noDataMessage.textContent = 'Aucun relevé pour cette période.';
+        }
+        // Le graphique s'affiche toujours, même avec des valeurs à zéro
+        if (chartContainer) {
+            chartContainer.style.display = 'block';
+        }
     
     // Créer les 3 datasets pour N&B, Couleur et Total (line chart) - version esthétique améliorée
     const datasets = [
@@ -1623,11 +1651,21 @@ function initConsumptionChart() {
         }
     };
     
-    if (consumptionChart) {
-        consumptionChart.destroy();
+        if (consumptionChart) {
+            consumptionChart.destroy();
+        }
+        
+        consumptionChart = new Chart(ctx, config);
+    } catch (error) {
+        console.error('Erreur chargement graphique:', error);
+        if (noDataMessage) {
+            noDataMessage.style.display = 'block';
+            noDataMessage.textContent = 'Erreur lors du chargement des données.';
+        }
+        if (chartContainer) {
+            chartContainer.style.display = 'none';
+        }
     }
-    
-    consumptionChart = new Chart(ctx, config);
 }
 
 function updateConsumptionChart() {
@@ -1755,9 +1793,35 @@ tabButtons.forEach(btn => {
 // ==================
 // Mise à jour du tableau de consommation
 // ==================
-function updateTableConsommation() {
+async function updateTableConsommation() {
     const tbody = document.getElementById('tableConsommationBody');
-    if (!tbody || !mockData.imprimantes) return;
+    if (!tbody) return;
+    
+    // Afficher un indicateur de chargement
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Chargement des données...</td></tr>';
+    
+    try {
+        // Construire l'URL de l'API
+        const params = new URLSearchParams({
+            months: '3'
+        });
+        if (selectedClientId) {
+            params.append('client_id', selectedClientId);
+        }
+        
+        const response = await fetch(`/API/facturation_consumption_table.php?${params.toString()}`);
+        const result = await response.json();
+        
+        if (!result.ok || !result.data) {
+            throw new Error(result.error || 'Erreur lors du chargement des données');
+        }
+        
+        const imprimantes = result.data;
+        
+        if (imprimantes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Aucune donnée de consommation disponible.</td></tr>';
+            return;
+        }
     
     // Calculer les 3 derniers mois (périodes 20→20)
     const now = new Date();
@@ -1806,71 +1870,69 @@ function updateTableConsommation() {
         });
     }
     
-    // Vider le tbody
-    tbody.innerHTML = '';
-    
-    // Pour chaque imprimante, générer les lignes pour les mois disponibles
-    mockData.imprimantes.forEach(imprimante => {
-        // Filtrer les consommations pour ne garder que les 3 derniers mois
-        const consommationsFiltrees = imprimante.consommations
-            .filter(cons => derniersMois.some(m => m.key === cons.mois))
-            .sort((a, b) => {
-                // Trier par ordre décroissant (plus récent en premier)
-                return b.mois.localeCompare(a.mois);
-            });
+        // Vider le tbody
+        tbody.innerHTML = '';
         
-        // Si aucune consommation pour les 3 derniers mois, on passe à l'imprimante suivante
-        if (consommationsFiltrees.length === 0) return;
-        
-        // Créer une ligne pour chaque mois de consommation
-        consommationsFiltrees.forEach((consommation, index) => {
-            const moisInfo = derniersMois.find(m => m.key === consommation.mois);
-            const periode = moisInfo ? moisInfo.periode : consommation.periode;
+        // Pour chaque imprimante, générer les lignes pour les mois disponibles
+        imprimantes.forEach(imprimante => {
+            // Les consommations sont déjà filtrées et triées par le backend
+            const consommationsFiltrees = imprimante.consommations || [];
+            
+            // Si aucune consommation, on passe à l'imprimante suivante
+            if (consommationsFiltrees.length === 0) return;
+            
+            // Créer une ligne pour chaque mois de consommation
+            consommationsFiltrees.forEach((consommation, index) => {
+                const periode = consommation.periode || consommation.mois;
             
             const tr = document.createElement('tr');
             
-            // Colonne Imprimante (uniquement sur la première ligne)
-            if (index === 0) {
-                const tdImprimante = document.createElement('td');
-                tdImprimante.setAttribute('rowspan', consommationsFiltrees.length);
-                tdImprimante.innerHTML = `
-                    <div>${imprimante.nom}</div>
-                    <small>Modèle ${imprimante.modele}</small>
-                `;
-                tr.appendChild(tdImprimante);
-            }
-            
-            // Colonne MAC address (uniquement sur la première ligne)
-            if (index === 0) {
-                const tdMac = document.createElement('td');
-                tdMac.setAttribute('rowspan', consommationsFiltrees.length);
-                tdMac.textContent = imprimante.macAddress;
-                tr.appendChild(tdMac);
-            }
-            
-            // Colonne Pages N&B
-            const tdNb = document.createElement('td');
-            tdNb.textContent = consommation.pagesNB.toLocaleString('fr-FR').replace(/,/g, ' ');
-            tr.appendChild(tdNb);
-            
-            // Colonne Pages couleur
-            const tdColor = document.createElement('td');
-            tdColor.textContent = consommation.pagesCouleur.toLocaleString('fr-FR').replace(/,/g, ' ');
-            tr.appendChild(tdColor);
-            
-            // Colonne Total pages
-            const tdTotal = document.createElement('td');
-            tdTotal.textContent = consommation.totalPages.toLocaleString('fr-FR').replace(/,/g, ' ');
-            tr.appendChild(tdTotal);
-            
-            // Colonne Mois (20 → 20)
-            const tdMois = document.createElement('td');
-            tdMois.textContent = periode;
-            tr.appendChild(tdMois);
-            
-            tbody.appendChild(tr);
+                // Colonne Imprimante (uniquement sur la première ligne)
+                if (index === 0) {
+                    const tdImprimante = document.createElement('td');
+                    tdImprimante.setAttribute('rowspan', consommationsFiltrees.length);
+                    tdImprimante.innerHTML = `
+                        <div>${imprimante.nom || 'Inconnu'}</div>
+                        <small>Modèle ${imprimante.modele || 'Inconnu'}</small>
+                    `;
+                    tr.appendChild(tdImprimante);
+                }
+                
+                // Colonne MAC address (uniquement sur la première ligne)
+                if (index === 0) {
+                    const tdMac = document.createElement('td');
+                    tdMac.setAttribute('rowspan', consommationsFiltrees.length);
+                    tdMac.textContent = imprimante.macAddress || '';
+                    tr.appendChild(tdMac);
+                }
+                
+                // Colonne Pages N&B
+                const tdNb = document.createElement('td');
+                tdNb.textContent = (consommation.pagesNB || 0).toLocaleString('fr-FR').replace(/,/g, ' ');
+                tr.appendChild(tdNb);
+                
+                // Colonne Pages couleur
+                const tdColor = document.createElement('td');
+                tdColor.textContent = (consommation.pagesCouleur || 0).toLocaleString('fr-FR').replace(/,/g, ' ');
+                tr.appendChild(tdColor);
+                
+                // Colonne Total pages
+                const tdTotal = document.createElement('td');
+                tdTotal.textContent = (consommation.totalPages || 0).toLocaleString('fr-FR').replace(/,/g, ' ');
+                tr.appendChild(tdTotal);
+                
+                // Colonne Mois (20 → 20)
+                const tdMois = document.createElement('td');
+                tdMois.textContent = periode;
+                tr.appendChild(tdMois);
+                
+                tbody.appendChild(tr);
+            });
         });
-    });
+    } catch (error) {
+        console.error('Erreur chargement tableau consommation:', error);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #ef4444;">Erreur lors du chargement des données.</td></tr>';
+    }
 }
 
 // ==================
@@ -2030,17 +2092,27 @@ let factureGeneree = false; // État mock : false par défaut (facture non gén�
 // ==================
 // Mise à jour de la facture en cours
 // ==================
-function updateFactureEnCours() {
+async function updateFactureEnCours() {
+    if (!selectedClientId) {
+        // Pas de client sélectionné, masquer la facture
+        return;
+    }
+    
     const now = new Date();
     const currentDay = now.getDate();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
     
-    // Calculer la date de début : toujours le 20 du mois précédent
-    const startDate = new Date(currentYear, currentMonth - 1, 20);
+    // Calculer la période de facturation (20 du mois précédent → 20 du mois courant)
+    let periodStartMonth = currentMonth - 1;
+    let periodStartYear = currentYear;
+    if (periodStartMonth < 0) {
+        periodStartMonth = 11;
+        periodStartYear--;
+    }
     
-    // Date de fin : aujourd'hui
-    const endDate = new Date(currentYear, currentMonth, currentDay);
+    const periodStart = new Date(periodStartYear, periodStartMonth, 20);
+    const periodEnd = new Date(currentYear, currentMonth, 20);
     
     // Formater les dates en format français (DD/MM/YYYY)
     const formatDate = (date) => {
@@ -2050,51 +2122,72 @@ function updateFactureEnCours() {
         return `${day}/${month}/${year}`;
     };
     
-    // Mettre à jour la période affichée (période fixe pour la facture en cours)
+    // Mettre à jour la période affichée
     const periodEl = document.getElementById('facturePeriod');
     if (periodEl) {
-        periodEl.textContent = 'Période : 20/11/2025 – 05/12/2025';
+        periodEl.textContent = `Période : ${formatDate(periodStart)} – ${formatDate(periodEnd)}`;
     }
     
-    // Générer le numéro de facture (mock - format sans #)
+    // Générer le numéro de facture
     const factureNumEl = document.getElementById('factureNum');
     if (factureNumEl) {
-        factureNumEl.textContent = 'Facture 2025-12 (brouillon)';
+        const monthStr = String(currentMonth + 1).padStart(2, '0');
+        factureNumEl.textContent = `Facture ${currentYear}-${monthStr} (brouillon)`;
     }
     
-    // Calculer la consommation N&B et couleur (mock - basé sur les données des imprimantes)
-    const consoNBEl = document.getElementById('factureConsoNB');
-    const consoCouleurEl = document.getElementById('factureConsoCouleur');
-    if (consoNBEl && consoCouleurEl) {
-        // Calculer la consommation totale pour la période (mock)
-        let totalNB = 0;
-        let totalCouleur = 0;
-        
-        // Utiliser les données mock des imprimantes pour calculer la consommation
-        mockData.imprimantes.forEach(imprimante => {
-            // Prendre la consommation du mois le plus récent (mock)
-            if (imprimante.consommations && imprimante.consommations.length > 0) {
-                const derniereConso = imprimante.consommations[imprimante.consommations.length - 1];
-                totalNB += derniereConso.pagesNB || 0;
-                totalCouleur += derniereConso.pagesCouleur || 0;
-            }
+    try {
+        // Récupérer les données de facture depuis l'API
+        const params = new URLSearchParams({
+            client_id: selectedClientId,
+            period_start: periodStart.toISOString().split('T')[0],
+            period_end: periodEnd.toISOString().split('T')[0]
         });
         
-        // Valeurs mock cohérentes pour la facture en cours
-        const consoNB = 10200; // Mock value
-        const consoCouleur = 2100; // Mock value
+        const response = await fetch(`/API/facturation_invoice.php?${params.toString()}`);
+        const result = await response.json();
         
-        consoNBEl.textContent = `${consoNB.toLocaleString('fr-FR')} pages`;
-        consoCouleurEl.textContent = `${consoCouleur.toLocaleString('fr-FR')} pages`;
-    }
-    
-    // Calculer le montant TTC (mock - cohérent avec la consommation)
-    const montantTTCEl = document.getElementById('factureMontantTTC');
-    if (montantTTCEl) {
-        // Montant mock cohérent avec la consommation
-        const montantTTC = 845.20; // Mock value
-        const formatted = montantTTC.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-        montantTTCEl.textContent = formatted + ' €';
+        if (!result.ok || !result.data) {
+            throw new Error(result.error || 'Erreur lors du chargement des données');
+        }
+        
+        const invoiceData = result.data;
+        
+        // Mettre à jour la consommation N&B et couleur
+        const consoNBEl = document.getElementById('factureConsoNB');
+        const consoCouleurEl = document.getElementById('factureConsoCouleur');
+        if (consoNBEl && consoCouleurEl) {
+            const total = invoiceData.total || {};
+            const consoNB = total.nb || 0;
+            const consoCouleur = total.color || 0;
+            
+            consoNBEl.textContent = `${consoNB.toLocaleString('fr-FR')} pages`;
+            consoCouleurEl.textContent = `${consoCouleur.toLocaleString('fr-FR')} pages`;
+        }
+        
+        // Calculer le montant TTC (à adapter selon vos tarifs)
+        const montantTTCEl = document.getElementById('factureMontantTTC');
+        if (montantTTCEl) {
+            // TODO: Adapter selon vos tarifs réels
+            // Exemple: 0.05€ par page N&B, 0.15€ par page couleur
+            const prixNB = 0.05;
+            const prixCouleur = 0.15;
+            const total = invoiceData.total || {};
+            const montantHT = (total.nb || 0) * prixNB + (total.color || 0) * prixCouleur;
+            const tva = montantHT * 0.20; // TVA 20%
+            const montantTTC = montantHT + tva;
+            
+            const formatted = montantTTC.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+            montantTTCEl.textContent = formatted + ' €';
+        }
+    } catch (error) {
+        console.error('Erreur chargement facture:', error);
+        // En cas d'erreur, afficher des valeurs par défaut
+        const consoNBEl = document.getElementById('factureConsoNB');
+        const consoCouleurEl = document.getElementById('factureConsoCouleur');
+        if (consoNBEl && consoCouleurEl) {
+            consoNBEl.textContent = '0 pages';
+            consoCouleurEl.textContent = '0 pages';
+        }
     }
     
     // Gérer la visibilité et l'activation des boutons selon l'état
