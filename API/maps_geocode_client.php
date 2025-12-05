@@ -41,6 +41,21 @@ if (!$clientId || empty($address)) {
     jsonResponse(['ok' => false, 'error' => 'Paramètres manquants'], 400);
 }
 
+// Nettoyer l'adresse : supprimer les emails, tabulations et autres caractères indésirables
+// Garder uniquement l'adresse postale
+$address = preg_replace('/\s+/', ' ', $address); // Remplacer tous les espaces multiples par un seul espace
+$address = preg_replace('/\t+/', ' ', $address); // Remplacer les tabulations par des espaces
+$address = preg_replace('/[^\w\s\-\.,\(\)]/u', '', $address); // Supprimer les caractères spéciaux sauf ceux utiles pour les adresses
+$address = trim($address);
+
+// Supprimer les emails si présents (format: texte@domaine.ext)
+$address = preg_replace('/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/', '', $address);
+$address = trim($address);
+
+if (empty($address)) {
+    jsonResponse(['ok' => false, 'error' => 'Adresse invalide après nettoyage'], 400);
+}
+
 // Vérifier le cache (24h de validité)
 $cacheDir = __DIR__ . '/../cache';
 if (!is_dir($cacheDir)) {
