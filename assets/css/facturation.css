@@ -1249,6 +1249,10 @@
     overflow-y: auto;
 }
 
+.modal-export {
+    max-width: 700px;
+}
+
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -1286,6 +1290,124 @@
 
 .modal-body {
     padding: 1.5rem;
+}
+
+/* ====== Formulaire d'export ====== */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.form-group .required {
+    color: #ef4444;
+}
+
+.form-hint {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+.form-error {
+    display: block;
+    font-size: 0.85rem;
+    color: #ef4444;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-sm);
+}
+
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.2s ease;
+}
+
+.radio-label:hover {
+    background-color: var(--bg-secondary);
+}
+
+.radio-label input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent-primary);
+}
+
+.radio-label span {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    user-select: none;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.form-actions .btn-primary {
+    display: inline-flex;
+    align-items: center;
+}
+
+.form-actions .btn-primary svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* ====== Notification d'export ====== */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+.export-notification {
+    animation: slideIn 0.3s ease;
 }
 
 /* ====== Responsive ====== */
@@ -1439,5 +1561,27 @@
         font-size: 0.85rem;
         flex: 1;
         min-width: 0;
+    }
+    
+    /* Modal d'export - très petits écrans */
+    .modal-export {
+        width: 95%;
+        max-width: 100%;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .form-actions button {
+        width: 100%;
+    }
+    
+    #exportMonthControls > div {
+        grid-template-columns: 1fr !important;
     }
 }
