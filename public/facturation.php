@@ -427,8 +427,10 @@ ensureCsrfToken();
                         <h3>Historique des paiements</h3>
                     </div>
                     <div class="card-body">
-                        <div class="paiements-timeline" id="paiementsTimeline" style="max-height: 500px; overflow-y: auto;">
-                            <!-- Les paiements seront générés dynamiquement par JavaScript -->
+                        <div class="paiements-timeline-wrapper">
+                            <div class="paiements-timeline" id="paiementsTimeline">
+                                <!-- Les paiements seront générés dynamiquement par JavaScript -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2530,7 +2532,7 @@ function updatePaiementsDisplay() {
             `;
         } else {
             summary.innerHTML = `
-                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                <div class="paiement-summary-empty">
                     <p>Aucune facture impayée</p>
                 </div>
             `;
