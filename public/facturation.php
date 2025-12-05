@@ -217,33 +217,13 @@ ensureCsrfToken();
                     <div class="card-body">
                         <div class="facture-current">
                             <div class="facture-info">
-                                <div class="facture-num" id="factureNum">Facture #2025-12 (brouillon)</div>
+                                <div class="facture-num" id="factureNum">Facture #2025-001</div>
                                 <div class="facture-status">
-                                    <span class="badge badge-draft">BROUILLON</span>
+                                    <span class="badge badge-draft">Brouillon</span>
                                 </div>
-                                <div class="facture-period" id="facturePeriod"><strong>Période :</strong> 20/11/2025 – 05/12/2025</div>
-                                <div class="facture-consumption">
-                                    <div class="facture-consumption-item">
-                                        <span>Consommation N&B :</span>
-                                        <strong id="factureConsoNB">8 450</strong> pages
-                                    </div>
-                                    <div class="facture-consumption-item">
-                                        <span>Consommation couleur :</span>
-                                        <strong id="factureConsoCouleur">2 100</strong> pages
-                                    </div>
-                                    <div class="facture-consumption-item facture-consumption-total">
-                                        <span>Total du mois :</span>
-                                        <strong id="factureConsoTotal">10 550</strong> pages
-                                    </div>
-                                </div>
-                                <div class="facture-amount facture-amount-ttc">
-                                    <span>Total TTC :</span>
-                                    <strong id="factureMontantTTC">845,20 €</strong>
-                                </div>
-                                <div class="facture-amount">
-                                    <span>Montant collecté :</span>
-                                    <strong id="factureMontantCollecte">425,30 €</strong>
-                                </div>
+                                <div class="facture-amount">Montant TTC : <strong id="factureMontantTTC">845,20 €</strong></div>
+                                <div class="facture-amount">Montant collecté : <strong id="factureMontantCollecte">425,30 €</strong></div>
+                                <div class="facture-period" id="facturePeriod">Période : 20/01/2025 - 07/02/2025</div>
                             </div>
                             <div class="facture-actions">
                                 <button type="button" class="btn-secondary" id="btnOuvrirFacture" style="display:none;">Ouvrir la facture</button>
@@ -268,7 +248,7 @@ ensureCsrfToken();
                                 <div class="paiement-user">Admin CCComputer</div>
                                 <div class="paiement-mode">Virement</div>
                                 <div class="paiement-etat">
-                                    <span class="badge badge-recu">Reçu</span>
+                                    <span class="badge badge-success">Reçu</span>
                                 </div>
                             </div>
                             <div class="paiement-item">
@@ -277,7 +257,7 @@ ensureCsrfToken();
                                 <div class="paiement-user">Utilisateur X</div>
                                 <div class="paiement-mode">Carte bancaire</div>
                                 <div class="paiement-etat">
-                                    <span class="badge badge-en-cours">En cours de traitement</span>
+                                    <span class="badge badge-warning">En cours de traitement</span>
                                 </div>
                             </div>
                             <div class="paiement-item">
@@ -286,25 +266,7 @@ ensureCsrfToken();
                                 <div class="paiement-user">Admin CCComputer</div>
                                 <div class="paiement-mode">Espèces</div>
                                 <div class="paiement-etat">
-                                    <span class="badge badge-recu">Reçu</span>
-                                </div>
-                            </div>
-                            <div class="paiement-item">
-                                <div class="paiement-date">28/12/2024</div>
-                                <div class="paiement-amount">320,50 €</div>
-                                <div class="paiement-user">Utilisateur Y</div>
-                                <div class="paiement-mode">Virement</div>
-                                <div class="paiement-etat">
-                                    <span class="badge badge-pas-recu">Pas reçu</span>
-                                </div>
-                            </div>
-                            <div class="paiement-item">
-                                <div class="paiement-date">20/12/2024</div>
-                                <div class="paiement-amount">150,00 €</div>
-                                <div class="paiement-user">Admin CCComputer</div>
-                                <div class="paiement-mode">Carte bancaire</div>
-                                <div class="paiement-etat">
-                                    <span class="badge badge-echec">Échec</span>
+                                    <span class="badge badge-danger">Pas reçu</span>
                                 </div>
                             </div>
                         </div>
@@ -1071,8 +1033,7 @@ const mockData = {
             consommations: [
                 { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 8450, pagesCouleur: 0, totalPages: 8450 },
                 { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 9200, pagesCouleur: 150, totalPages: 9350 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 8750, pagesCouleur: 0, totalPages: 8750 },
-                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 9100, pagesCouleur: 200, totalPages: 9300 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 8750, pagesCouleur: 0, totalPages: 8750 }
             ]
         },
         {
@@ -1083,8 +1044,7 @@ const mockData = {
             consommations: [
                 { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 1750, pagesCouleur: 2100, totalPages: 3850 },
                 { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 2100, pagesCouleur: 2400, totalPages: 4500 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 1950, pagesCouleur: 2200, totalPages: 4150 },
-                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 2250, pagesCouleur: 2600, totalPages: 4850 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 1950, pagesCouleur: 2200, totalPages: 4150 }
             ]
         },
         {
@@ -1094,8 +1054,7 @@ const mockData = {
             macAddress: 'AB:CD:EF:12:34:58',
             consommations: [
                 { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 0, pagesCouleur: 1110, totalPages: 1110 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 500, pagesCouleur: 1250, totalPages: 1750 },
-                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 600, pagesCouleur: 1400, totalPages: 2000 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 500, pagesCouleur: 1250, totalPages: 1750 }
             ]
         },
         {
@@ -1106,8 +1065,7 @@ const mockData = {
             consommations: [
                 { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 3200, pagesCouleur: 800, totalPages: 4000 },
                 { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 3500, pagesCouleur: 950, totalPages: 4450 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 3100, pagesCouleur: 750, totalPages: 3850 },
-                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 3400, pagesCouleur: 900, totalPages: 4300 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 3100, pagesCouleur: 750, totalPages: 3850 }
             ]
         },
         {
@@ -1116,19 +1074,7 @@ const mockData = {
             modele: 'MP C5503',
             macAddress: 'AB:CD:EF:12:34:60',
             consommations: [
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 4500, pagesCouleur: 1800, totalPages: 6300 },
-                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 4800, pagesCouleur: 2000, totalPages: 6800 }
-            ]
-        },
-        {
-            id: 6,
-            nom: 'Epson WorkForce Pro',
-            modele: 'WF-7820',
-            macAddress: 'AB:CD:EF:12:34:61',
-            consommations: [
-                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 1200, pagesCouleur: 800, totalPages: 2000 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 1350, pagesCouleur: 950, totalPages: 2300 },
-                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 1400, pagesCouleur: 1000, totalPages: 2400 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 4500, pagesCouleur: 1800, totalPages: 6300 }
             ]
         }
     ],
@@ -1911,20 +1857,14 @@ function updateTableConsommation() {
     });
 }
 
+// ==================
 // Export Excel du tableau de consommation
 // ==================
 function exportTableConsommation() {
     if (!mockData.imprimantes || mockData.imprimantes.length === 0) {
-        alert('Aucune donnée à exporter');
+        alert('Aucune donnée à exporter.');
         return;
     }
-    
-    // Préparer les données pour l'export
-    const data = [];
-    
-    // En-têtes
-    const headers = ['Imprimante', 'MAC address', 'Pages N&B', 'Pages couleur', 'Total pages', 'Mois (20 → 20)'];
-    data.push(headers);
     
     // Calculer les 3 derniers mois (même logique que updateTableConsommation)
     const now = new Date();
@@ -1950,7 +1890,6 @@ function exportTableConsommation() {
         const moisKey = `${annee}-${String(mois + 1).padStart(2, '0')}`;
         const moisSuivant = (mois + 1) % 12;
         const anneeSuivante = mois === 11 ? annee + 1 : annee;
-        
         const moisNoms = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
         const moisNom = moisNoms[mois];
         const periode = `${moisNom} ${annee} (20/${String(mois + 1).padStart(2, '0')} → 20/${String(moisSuivant + 1).padStart(2, '0')})`;
@@ -1963,13 +1902,17 @@ function exportTableConsommation() {
         });
     }
     
-    // Récupérer les données des imprimantes (même logique que le tableau)
+    // Préparer les données pour l'export
+    const data = [];
+    
+    // En-têtes
+    data.push(['Imprimante', 'MAC address', 'Pages N&B', 'Pages couleur', 'Total pages', 'Mois (20 → 20)']);
+    
+    // Données
     mockData.imprimantes.forEach(imprimante => {
         const consommationsFiltrees = imprimante.consommations
             .filter(cons => derniersMois.some(m => m.key === cons.mois))
-            .sort((a, b) => {
-                return b.mois.localeCompare(a.mois);
-            });
+            .sort((a, b) => b.mois.localeCompare(a.mois));
         
         if (consommationsFiltrees.length === 0) return;
         
@@ -1977,36 +1920,57 @@ function exportTableConsommation() {
             const moisInfo = derniersMois.find(m => m.key === consommation.mois);
             const periode = moisInfo ? moisInfo.periode : consommation.periode;
             
-            const row = [
-                index === 0 ? `${imprimante.nom} (Modèle ${imprimante.modele})` : '', // Imprimante (uniquement première ligne)
-                index === 0 ? imprimante.macAddress : '', // MAC address (uniquement première ligne)
-                consommation.pagesNB,
-                consommation.pagesCouleur,
-                consommation.totalPages,
-                periode
-            ];
+            const row = [];
+            
+            // Imprimante (uniquement sur la première ligne)
+            if (index === 0) {
+                row.push(`${imprimante.nom} (Modèle ${imprimante.modele})`);
+            } else {
+                row.push(''); // Cellule vide pour le rowspan
+            }
+            
+            // MAC address (uniquement sur la première ligne)
+            if (index === 0) {
+                row.push(imprimante.macAddress);
+            } else {
+                row.push(''); // Cellule vide pour le rowspan
+            }
+            
+            // Pages N&B
+            row.push(consommation.pagesNB);
+            
+            // Pages couleur
+            row.push(consommation.pagesCouleur);
+            
+            // Total pages
+            row.push(consommation.totalPages);
+            
+            // Mois
+            row.push(periode);
             
             data.push(row);
         });
     });
     
-    // Créer le workbook Excel
+    // Créer le workbook et la feuille
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(data);
     
     // Ajuster la largeur des colonnes
-    ws['!cols'] = [
+    const colWidths = [
         { wch: 30 }, // Imprimante
         { wch: 18 }, // MAC address
         { wch: 12 }, // Pages N&B
-        { wch: 15 }, // Pages couleur
+        { wch: 14 }, // Pages couleur
         { wch: 12 }, // Total pages
         { wch: 30 }  // Mois
     ];
+    ws['!cols'] = colWidths;
     
+    // Ajouter la feuille au workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Consommation');
     
-    // Générer le nom de fichier avec la date
+    // Générer le nom du fichier avec la date actuelle
     const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
     const filename = `consommation-client-${dateStr}.xlsx`;
     
@@ -2070,53 +2034,22 @@ function updateFactureEnCours() {
         return `${day}/${month}/${year}`;
     };
     
-    // Mettre à jour la période affichée (mock : période du 20/11 au 05/12)
+    // Mettre à jour la période affichée
     const periodEl = document.getElementById('facturePeriod');
     if (periodEl) {
-        // Mock : période fixe pour l'exemple
-        periodEl.innerHTML = `<strong>Période :</strong> 20/11/2025 – 05/12/2025`;
+        periodEl.textContent = `Période : ${formatDate(startDate)} - ${formatDate(endDate)}`;
     }
     
     // Générer le numéro de facture (mock)
     const factureNumEl = document.getElementById('factureNum');
     if (factureNumEl && factureGeneree) {
         // Si la facture est générée, utiliser un numéro fixe basé sur la période
-        factureNumEl.textContent = `Facture #2025-12`;
+        const monthStr = String(currentMonth + 1).padStart(2, '0');
+        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}`;
     } else if (factureNumEl) {
-        // Sinon, afficher un numéro temporaire avec (brouillon)
-        factureNumEl.textContent = `Facture #2025-12 (brouillon)`;
-    }
-    
-    // Calculer les consommations pour la période (mock)
-    // Pour la période du 20 du mois précédent au jour courant
-    const consoNB = 8450; // Mock : pages N&B pour la période
-    const consoCouleur = 2100; // Mock : pages couleur pour la période
-    const consoTotal = consoNB + consoCouleur; // Total pages
-    
-    // Mettre à jour les consommations affichées
-    const factureConsoNB = document.getElementById('factureConsoNB');
-    const factureConsoCouleur = document.getElementById('factureConsoCouleur');
-    const factureConsoTotal = document.getElementById('factureConsoTotal');
-    
-    if (factureConsoNB) {
-        factureConsoNB.textContent = consoNB.toLocaleString('fr-FR').replace(/,/g, ' ');
-    }
-    if (factureConsoCouleur) {
-        factureConsoCouleur.textContent = consoCouleur.toLocaleString('fr-FR').replace(/,/g, ' ');
-    }
-    if (factureConsoTotal) {
-        factureConsoTotal.textContent = consoTotal.toLocaleString('fr-FR').replace(/,/g, ' ');
-    }
-    
-    // Calculer le montant TTC (mock - valeur fixe pour cohérence avec le résumé)
-    // Le montant TTC est calculé à partir des consommations + maintenance/service
-    // Pour simplifier, on utilise une valeur mock fixe cohérente
-    const montantTTC = 845.20; // Mock value (cohérent avec les cartes de résumé)
-    
-    const factureMontantTTC = document.getElementById('factureMontantTTC');
-    if (factureMontantTTC) {
-        const formatted = montantTTC.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-        factureMontantTTC.textContent = formatted + ' €';
+        // Sinon, afficher un numéro temporaire
+        const monthStr = String(currentMonth + 1).padStart(2, '0');
+        factureNumEl.textContent = `Facture #${currentYear}-${monthStr} (brouillon)`;
     }
     
     // Calculer le montant collecté (mock - somme des paiements de la facture en cours)
@@ -2196,10 +2129,13 @@ function genererFacture() {
     // Mettre à jour l'état
     factureGeneree = true;
     
-    // Mettre à jour le numéro de facture (mock : #2025-12)
+    // Mettre à jour le numéro de facture
     const factureNumEl = document.getElementById('factureNum');
     if (factureNumEl) {
-        factureNumEl.textContent = `Facture #2025-12`;
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const monthStr = String(currentMonth + 1).padStart(2, '0');
+        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}`;
     }
     
     // Mettre à jour l'UI
@@ -2362,18 +2298,13 @@ document.getElementById('formAddPayment').addEventListener('submit', (e) => {
     const paiementsList = document.querySelector('.paiements-list');
     const newPayment = document.createElement('div');
     newPayment.className = 'paiement-item';
-    
-    // Déterminer l'état par défaut (pour les nouveaux paiements, on met "En cours de traitement")
-    const etat = 'En cours de traitement';
-    const etatClass = 'badge-en-cours';
-    
     newPayment.innerHTML = `
         <div class="paiement-date">${new Date(date).toLocaleDateString('fr-FR')}</div>
         <div class="paiement-amount">${amount.toFixed(2)} €</div>
         <div class="paiement-user">Admin CCComputer</div>
         <div class="paiement-mode">${mode}</div>
         <div class="paiement-etat">
-            <span class="badge ${etatClass}">${etat}</span>
+            <span class="badge badge-warning">En cours de traitement</span>
         </div>
     `;
     paiementsList.insertBefore(newPayment, paiementsList.firstChild);
