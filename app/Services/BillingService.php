@@ -51,8 +51,18 @@ class BillingService
     public function getConsumptionChartData(?int $clientId, string $granularity, array $periodParams): array
     {
         // Charger les helpers de paiements pour utiliser calculatePeriodConsumption
+        // Le chemin est relatif depuis app/Services/ vers API/includes/
         if (!function_exists('calculatePeriodConsumption')) {
-            require_once __DIR__ . '/../../API/includes/paiements_helpers.php';
+            $helpersPath = __DIR__ . '/../../API/includes/paiements_helpers.php';
+            if (!file_exists($helpersPath)) {
+                // Essayer un chemin alternatif
+                $helpersPath = __DIR__ . '/../../../API/includes/paiements_helpers.php';
+            }
+            if (file_exists($helpersPath)) {
+                require_once $helpersPath;
+            } else {
+                throw new \RuntimeException("Impossible de charger paiements_helpers.php. Chemin testé: " . __DIR__ . '/../../API/includes/paiements_helpers.php');
+            }
         }
         
         // Récupérer les MAC des photocopieurs du client (ou tous si clientId est null)
@@ -122,7 +132,15 @@ class BillingService
     {
         // Charger les helpers de paiements
         if (!function_exists('calculatePeriodConsumption')) {
-            require_once __DIR__ . '/../../API/includes/paiements_helpers.php';
+            $helpersPath = __DIR__ . '/../../API/includes/paiements_helpers.php';
+            if (!file_exists($helpersPath)) {
+                $helpersPath = __DIR__ . '/../../../API/includes/paiements_helpers.php';
+            }
+            if (file_exists($helpersPath)) {
+                require_once $helpersPath;
+            } else {
+                throw new \RuntimeException("Impossible de charger paiements_helpers.php");
+            }
         }
         
         // Récupérer les photocopieurs du client
@@ -221,7 +239,15 @@ class BillingService
     {
         // Charger les helpers de paiements
         if (!function_exists('calculatePeriodConsumption')) {
-            require_once __DIR__ . '/../../API/includes/paiements_helpers.php';
+            $helpersPath = __DIR__ . '/../../API/includes/paiements_helpers.php';
+            if (!file_exists($helpersPath)) {
+                $helpersPath = __DIR__ . '/../../../API/includes/paiements_helpers.php';
+            }
+            if (file_exists($helpersPath)) {
+                require_once $helpersPath;
+            } else {
+                throw new \RuntimeException("Impossible de charger paiements_helpers.php");
+            }
         }
         
         // Récupérer le client
@@ -339,52 +365,68 @@ class BillingService
     /**
      * Récupère les photocopieurs d'un client avec leurs informations
      * 
+     * Utilise une sous-requête compatible MySQL 5.7+ (sans ROW_NUMBER() window function)
+     * pour récupérer le dernier Model et Nom par mac_norm depuis les deux tables de relevés.
+     * 
      * @param int|null $clientId ID du client (null pour tous les clients)
      * @return array Liste des photocopieurs
      */
     private function getClientPhotocopieurs(?int $clientId): array
     {
-        if ($clientId === null) {
-            $sql = "
+        // Requête compatible MySQL 5.7+ : utiliser une sous-requête avec MAX(Timestamp)
+        // au lieu de ROW_NUMBER() OVER qui nécessite MySQL 8.0+
+        // On unifie les deux tables (compteur_relevee et compteur_relevee_ancien) pour trouver le dernier relevé
+        $whereClause = $clientId === null 
+            ? "WHERE pc.mac_norm IS NOT NULL AND pc.mac_norm != ''"
+            : "WHERE pc.id_client = :client_id AND pc.mac_norm IS NOT NULL AND pc.mac_norm != ''";
+        
+        // Requête optimisée : une seule sous-requête pour récupérer Model et Nom ensemble
+        $sql = "
+            SELECT 
+                pc.id,
+                pc.mac_norm,
+                pc.MacAddress as mac_address,
+                pc.SerialNumber as serial_number,
+                COALESCE(r.Model, 'Inconnu') as model,
+                COALESCE(r.Nom, 'Inconnu') as nom
+            FROM photocopieurs_clients pc
+            LEFT JOIN (
                 SELECT 
-                    pc.id,
-                    pc.mac_norm,
-                    pc.MacAddress as mac_address,
-                    pc.SerialNumber as serial_number,
-                    COALESCE(r.Model, 'Inconnu') as model,
-                    COALESCE(r.Nom, 'Inconnu') as nom
-                FROM photocopieurs_clients pc
-                LEFT JOIN (
-                    SELECT mac_norm, Model, Nom,
-                           ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) as rn
+                    r1.mac_norm,
+                    r1.Model,
+                    r1.Nom
+                FROM (
+                    SELECT mac_norm, Model, Nom, Timestamp
                     FROM compteur_relevee
-                ) r ON r.mac_norm = pc.mac_norm AND r.rn = 1
-                WHERE pc.mac_norm IS NOT NULL AND pc.mac_norm != ''
-                ORDER BY pc.id
-            ";
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute();
-        } else {
-            $sql = "
-                SELECT 
-                    pc.id,
-                    pc.mac_norm,
-                    pc.MacAddress as mac_address,
-                    pc.SerialNumber as serial_number,
-                    COALESCE(r.Model, 'Inconnu') as model,
-                    COALESCE(r.Nom, 'Inconnu') as nom
-                FROM photocopieurs_clients pc
-                LEFT JOIN (
-                    SELECT mac_norm, Model, Nom,
-                           ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) as rn
-                    FROM compteur_relevee
-                ) r ON r.mac_norm = pc.mac_norm AND r.rn = 1
-                WHERE pc.id_client = :client_id
-                  AND pc.mac_norm IS NOT NULL AND pc.mac_norm != ''
-                ORDER BY pc.id
-            ";
-            $stmt = $this->pdo->prepare($sql);
+                    WHERE mac_norm IS NOT NULL AND mac_norm != ''
+                    UNION ALL
+                    SELECT mac_norm, Model, Nom, Timestamp
+                    FROM compteur_relevee_ancien
+                    WHERE mac_norm IS NOT NULL AND mac_norm != ''
+                ) r1
+                INNER JOIN (
+                    SELECT mac_norm, MAX(Timestamp) as max_ts
+                    FROM (
+                        SELECT mac_norm, Timestamp
+                        FROM compteur_relevee
+                        WHERE mac_norm IS NOT NULL AND mac_norm != ''
+                        UNION ALL
+                        SELECT mac_norm, Timestamp
+                        FROM compteur_relevee_ancien
+                        WHERE mac_norm IS NOT NULL AND mac_norm != ''
+                    ) combined
+                    GROUP BY mac_norm
+                ) r2 ON r1.mac_norm = r2.mac_norm AND r1.Timestamp = r2.max_ts
+            ) r ON r.mac_norm = pc.mac_norm
+            $whereClause
+            ORDER BY pc.id
+        ";
+        
+        $stmt = $this->pdo->prepare($sql);
+        if ($clientId !== null) {
             $stmt->execute([':client_id' => $clientId]);
+        } else {
+            $stmt->execute();
         }
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -418,7 +460,14 @@ class BillingService
         } else {
             // granularity === 'month'
             $year = $periodParams['year'] ?? (int)date('Y');
-            $month = $periodParams['month'] ?? (int)date('m');
+            $month = $periodParams['month'] ?? null;
+            
+            // Le frontend envoie month comme 0-11 (index JavaScript), convertir en 1-12
+            if ($month !== null) {
+                $month = $month + 1; // Convertir 0-11 en 1-12
+            } else {
+                $month = (int)date('m');
+            }
             
             // Pour un mois, on peut afficher les périodes 20→20 des 12 derniers mois
             // ou les jours du mois. Ici, on affiche les périodes 20→20 des 12 derniers mois
