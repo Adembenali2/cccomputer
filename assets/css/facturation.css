@@ -1,0 +1,1007 @@
+/* Styles spécifiques à la page de facturation /facturation.php */
+
+.page-facturation {
+    background-color: var(--bg-secondary);
+}
+
+/* ====== Header de page ====== */
+.facturation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 1.5rem;
+}
+
+.facturation-header .page-sub {
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.btn-export {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-export:hover {
+    background-color: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-export svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* ====== Bandeau filtres ====== */
+.filters-bar {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.filter-select,
+.filter-date {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-select:focus,
+.filter-date:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.date-range {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.date-range span {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.quick-filters {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.quick-filter-btn {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.quick-filter-btn:hover {
+    background-color: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+.filter-apply {
+    align-items: flex-end;
+}
+
+.btn-primary {
+    padding: 0.625rem 1.25rem;
+    background-color: var(--accent-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.btn-primary:hover {
+    background-color: var(--accent-secondary);
+}
+
+.btn-secondary {
+    padding: 0.625rem 1.25rem;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+    background-color: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+}
+
+.btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+}
+
+.filters-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.summary-item {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.summary-item strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* ====== Système d'onglets ====== */
+.tabs-section {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.tabs-nav {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-secondary);
+    overflow-x: auto;
+}
+
+.tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.tab-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.tab-btn:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    background-color: var(--accent-primary);
+    color: #fff;
+}
+
+.tab-content {
+    display: none;
+    padding: 1.5rem;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ====== KPI Cards ====== */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.kpi-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+}
+
+.kpi-card:hover {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-md);
+}
+
+.kpi-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.kpi-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+}
+
+/* ====== Content Cards ====== */
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.content-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.card-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* ====== Facture en cours ====== */
+.facture-current {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.facture-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.facture-num {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+}
+
+.facture-amount {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.facture-period {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.facture-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ====== Paiements list ====== */
+.paiements-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.paiement-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    padding: 0.75rem;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.paiement-date {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.paiement-amount {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.paiement-mode {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+/* ====== Table ====== */
+.table-wrapper {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    background: var(--bg-primary);
+}
+
+.table th,
+.table td {
+    border: 1px solid var(--border-color);
+    padding: 0.65rem 0.75rem;
+    text-align: left;
+}
+
+.table th {
+    background: var(--bg-tertiary);
+    font-weight: 700;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background: var(--bg-secondary);
+}
+
+.table tbody tr.row-alert {
+    border-left: 3px solid #ef4444;
+}
+
+.table tfoot {
+    background-color: var(--bg-tertiary);
+}
+
+.table tfoot .total-row {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.table-alert-note {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.table-compact {
+    font-size: 0.8rem;
+}
+
+.table-compact th,
+.table-compact td {
+    padding: 0.5rem 0.65rem;
+}
+
+/* ====== Badges ====== */
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-draft {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+.badge-sent {
+    background-color: #dbeafe;
+    color: #1d4ed8;
+}
+
+.badge-paid {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.badge-overdue {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+.badge-partial {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+.badge-warning {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+.badge-error {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+[data-theme="dark"] .badge-draft {
+    background-color: #92400e;
+    color: #fef3c7;
+}
+
+[data-theme="dark"] .badge-sent {
+    background-color: #1e3a8a;
+    color: #dbeafe;
+}
+
+[data-theme="dark"] .badge-paid {
+    background-color: #065f46;
+    color: #d1fae5;
+}
+
+[data-theme="dark"] .badge-overdue {
+    background-color: #991b1b;
+    color: #fee2e2;
+}
+
+[data-theme="dark"] .badge-partial {
+    background-color: #92400e;
+    color: #fef3c7;
+}
+
+[data-theme="dark"] .badge-warning {
+    background-color: #92400e;
+    color: #fef3c7;
+}
+
+[data-theme="dark"] .badge-error {
+    background-color: #991b1b;
+    color: #fee2e2;
+}
+
+/* ====== Factures layout ====== */
+.factures-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.factures-table-wrapper {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.facture-row {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.facture-row:hover {
+    background-color: var(--bg-secondary);
+}
+
+.facture-detail-placeholder {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+/* ====== Facture detail ====== */
+.facture-detail-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.detail-section h4 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.detail-field {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.detail-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 100px;
+}
+
+.detail-value {
+    color: var(--text-primary);
+}
+
+.detail-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.detail-table-wrapper {
+    margin-bottom: 1rem;
+}
+
+.detail-link {
+    text-align: right;
+}
+
+.detail-link a {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.detail-link a:hover {
+    color: var(--accent-secondary);
+    text-decoration: underline;
+}
+
+/* ====== Paiements ====== */
+.paiement-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.summary-row:last-child {
+    border-bottom: none;
+}
+
+.text-success {
+    color: #16a34a;
+}
+
+.text-warning {
+    color: #d97706;
+}
+
+.paiements-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.timeline-item {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.timeline-date {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    min-width: 100px;
+}
+
+.timeline-content {
+    flex: 1;
+}
+
+.timeline-amount {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+    margin-bottom: 0.25rem;
+}
+
+.timeline-mode {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.timeline-comment {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* ====== Emails & Docs ====== */
+.filter-type {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.filter-type-btn {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter-type-btn:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.filter-type-btn.active {
+    background-color: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+.emails-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.email-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+}
+
+.email-item:hover {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.email-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.email-icon-facture {
+    background-color: #dbeafe;
+    color: #1d4ed8;
+}
+
+.email-icon-recu {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.email-icon-contrat {
+    background-color: #ede9fe;
+    color: #7c3aed;
+}
+
+.email-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.email-type {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.email-date {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.email-recipient {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.email-status {
+    flex-shrink: 0;
+}
+
+.email-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.btn-icon,
+.btn-icon-small {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-icon-small {
+    width: 28px;
+    height: 28px;
+}
+
+.btn-icon:hover,
+.btn-icon-small:hover {
+    background-color: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+.btn-export-small {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-export-small:hover {
+    background-color: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+/* ====== Modal ====== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    background-color: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+/* ====== Responsive ====== */
+@media (max-width: 1024px) {
+    .factures-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .facturation-header {
+        flex-direction: column;
+    }
+    
+    .filters-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .filter-apply {
+        align-items: stretch;
+    }
+    
+    .btn-primary {
+        width: 100%;
+    }
+    
+    .tabs-nav {
+        padding: 0.75rem;
+    }
+    
+    .tab-btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
+    
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .facture-actions {
+        flex-direction: column;
+    }
+    
+    .facture-actions button {
+        width: 100%;
+    }
+    
+    .detail-actions {
+        flex-direction: column;
+    }
+    
+    .detail-actions button {
+        width: 100%;
+    }
+    
+    .email-item {
+        flex-wrap: wrap;
+    }
+    
+    .email-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 480px) {
+    .page-container {
+        padding: 1rem;
+    }
+    
+    .filters-bar {
+        padding: 1rem;
+    }
+    
+    .tab-content {
+        padding: 1rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .table {
+        font-size: 0.75rem;
+    }
+    
+    .table th,
+    .table td {
+        padding: 0.5rem;
+    }
+}
+
