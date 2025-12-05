@@ -104,11 +104,26 @@ if (!$cachedCoords) {
 
     $data = json_decode($response, true);
 
+    // Si aucun résultat ou résultat invalide, retourner success:false avec HTTP 200
     if (!is_array($data) || empty($data)) {
-        jsonResponse(['ok' => false, 'error' => 'Adresse non trouvée'], 404);
+        jsonResponse([
+            'success' => false,
+            'reason' => 'ADDRESS_NOT_FOUND',
+            'client_id' => $clientId
+        ], 200);
     }
 
     $result = $data[0];
+    
+    // Vérifier si le résultat a un statut d'erreur
+    if (isset($result['error']) || (isset($result['status']) && $result['status'] !== 'OK')) {
+        jsonResponse([
+            'success' => false,
+            'reason' => 'ADDRESS_NOT_FOUND',
+            'client_id' => $clientId
+        ], 200);
+    }
+    
     $cachedCoords = [
         'ok' => true,
         'lat' => (float)$result['lat'],
@@ -144,9 +159,10 @@ try {
     ]);
     
     jsonResponse([
-        'ok' => true,
+        'success' => true,
         'lat' => $cachedCoords['lat'],
         'lng' => $cachedCoords['lng'],
+        'client_id' => $clientId,
         'display_name' => $cachedCoords['display_name']
     ]);
     

@@ -452,3 +452,51 @@
 .maps-message.success {
   color: #16a34a;
 }
+
+/* Clients non trouvés */
+.not-found-clients {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  padding: 0.4rem 0.5rem;
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 0.5rem;
+}
+
+.not-found-client-item {
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  margin-bottom: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.not-found-client-item:last-child {
+  margin-bottom: 0;
+}
+
+.not-found-client-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.not-found-client-info strong {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.not-found-client-code {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.not-found-client-address {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}

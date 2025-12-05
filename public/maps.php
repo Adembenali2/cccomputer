@@ -98,6 +98,17 @@ try {
                 </div>
             </div>
 
+            <!-- Clients non trouvés -->
+            <div id="notFoundClientsSection" style="display:none;">
+                <div class="section-title">Clients non trouvés</div>
+                <p class="hint">
+                    Les clients suivants n'ont pas pu être géolocalisés. Vérifiez leurs adresses.
+                </p>
+                <div class="not-found-clients" id="notFoundClients">
+                    <!-- Rempli dynamiquement -->
+                </div>
+            </div>
+
             <!-- 3. Calcul itinéraire -->
             <div>
                 <div class="section-title">3. Calculer l’itinéraire</div>
@@ -210,6 +221,11 @@ const routeTurnsEl = document.getElementById('routeTurns');
 const btnGoogle = document.getElementById('btnGoogle');
 const optimizeOrderCheckbox = document.getElementById('optimizeOrder');
 
+// Clients non trouvés
+const notFoundClientsSection = document.getElementById('notFoundClientsSection');
+const notFoundClientsContainer = document.getElementById('notFoundClients');
+const notFoundClientsSet = new Set(); // Pour éviter les doublons
+
 // Charger tous les clients depuis la base de données au démarrage
 let clientsLoaded = false;
 async function loadAllClients() {
@@ -271,10 +287,45 @@ async function loadAllClients() {
     }
 }
 
+// Fonction pour ajouter un client à la liste "Clients non trouvés"
+function addClientToNotFoundList(client) {
+    if (notFoundClientsSet.has(client.id)) {
+        return; // Déjà dans la liste
+    }
+    
+    notFoundClientsSet.add(client.id);
+    
+    // Afficher la section si elle était cachée
+    notFoundClientsSection.style.display = 'block';
+    
+    // Créer l'élément pour ce client
+    const item = document.createElement('div');
+    item.className = 'not-found-client-item';
+    item.setAttribute('data-client-id', client.id);
+    
+    // Afficher l'adresse utilisée pour le géocodage
+    const addressToShow = client.address_geocode || client.address || 
+        `${client.adresse || ''} ${client.code_postal || ''} ${client.ville || ''}`.trim();
+    
+    item.innerHTML = `
+        <div class="not-found-client-info">
+            <strong>${escapeHtml(client.name)}</strong>
+            <span class="not-found-client-code">Code : ${escapeHtml(client.code)}</span>
+        </div>
+        <div class="not-found-client-address">
+            <small>Adresse : ${escapeHtml(addressToShow)}</small>
+        </div>
+    `;
+    
+    notFoundClientsContainer.appendChild(item);
+}
+
 // Géocoder les clients en arrière-plan (par lots)
 async function geocodeClientsInBackground(clientsToGeocode) {
     const batchSize = 3; // Géocoder 3 clients à la fois
     let processed = 0;
+    let found = 0;
+    let notFound = 0;
     
     for (let i = 0; i < clientsToGeocode.length; i += batchSize) {
         const batch = clientsToGeocode.slice(i, i + batchSize);
@@ -283,9 +334,18 @@ async function geocodeClientsInBackground(clientsToGeocode) {
         const geocodePromises = batch.map(async (client) => {
             try {
                 const response = await fetch(`/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(client.address_geocode)}`);
+                
+                // Si response.ok est false, c'est une erreur réseau/serveur, on ignore silencieusement
+                if (!response.ok) {
+                    console.warn('Erreur HTTP lors du géocodage du client', client.id, ':', response.status);
+                    addClientToNotFoundList(client);
+                    return false;
+                }
+                
                 const data = await response.json();
                 
-                if (data.ok && data.lat && data.lng) {
+                // Vérifier le nouveau format de réponse
+                if (data.success === true && data.lat && data.lng) {
                     // Mettre à jour le cache
                     const updatedClient = {
                         ...client,
@@ -297,11 +357,24 @@ async function geocodeClientsInBackground(clientsToGeocode) {
                     
                     // Ajouter à la carte
                     addClientToMap(updatedClient, false);
+                    found++;
                     return true;
+                } else if (data.success === false) {
+                    // Adresse non trouvée, ajouter à la liste des clients non trouvés
+                    addClientToNotFoundList(client);
+                    notFound++;
+                    return false;
+                } else {
+                    // Format de réponse inattendu, traiter comme non trouvé
+                    addClientToNotFoundList(client);
+                    notFound++;
+                    return false;
                 }
-                return false;
             } catch (err) {
-                console.error('Erreur géocodage client', client.id, err);
+                // Erreur réseau ou autre, ne pas bloquer mais ajouter à la liste non trouvés
+                console.warn('Erreur géocodage client', client.id, ':', err.message);
+                addClientToNotFoundList(client);
+                notFound++;
                 return false;
             }
         });
@@ -315,7 +388,7 @@ async function geocodeClientsInBackground(clientsToGeocode) {
         }
     }
     
-    console.log(`Géocodage terminé : ${processed} client(s) traités en arrière-plan`);
+    console.log(`Géocodage terminé : ${found} trouvé(s), ${notFound} non trouvé(s) sur ${processed} client(s) traités`);
 }
 
 // ==================
@@ -394,30 +467,47 @@ async function loadClientWithGeocode(client) {
     // Utiliser address_geocode si disponible (adresse de livraison), sinon address (adresse principale)
     const addressToGeocode = client.address_geocode || client.address;
     
-    const coords = await geocodeAddress(addressToGeocode);
-    if (!coords) {
-        console.warn('Impossible de géocoder:', addressToGeocode);
+    // Appeler directement l'API client qui géocode et sauvegarde
+    try {
+        const response = await fetch(`/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(addressToGeocode)}`);
+        
+        // Si response.ok est false, c'est une erreur réseau/serveur
+        if (!response.ok) {
+            console.warn('Erreur HTTP lors du géocodage du client', client.id, ':', response.status);
+            addClientToNotFoundList(client);
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        // Vérifier le nouveau format de réponse
+        if (data.success === true && data.lat && data.lng) {
+            const clientWithCoords = {
+                ...client,
+                lat: data.lat,
+                lng: data.lng,
+                needsGeocode: false,
+                // Conserver l'adresse originale de la BDD pour l'affichage
+                displayAddress: client.address
+            };
+            
+            clientsCache.set(client.id, clientWithCoords);
+            return clientWithCoords;
+        } else if (data.success === false) {
+            // Adresse non trouvée, ajouter à la liste des clients non trouvés
+            addClientToNotFoundList(client);
+            return null;
+        } else {
+            // Format de réponse inattendu, traiter comme non trouvé
+            addClientToNotFoundList(client);
+            return null;
+        }
+    } catch (err) {
+        // Erreur réseau ou autre, ne pas bloquer mais ajouter à la liste non trouvés
+        console.warn('Erreur géocodage client', client.id, ':', err.message);
+        addClientToNotFoundList(client);
         return null;
     }
-    
-    const clientWithCoords = {
-        ...client,
-        lat: coords.lat,
-        lng: coords.lng,
-        // Conserver l'adresse originale de la BDD pour l'affichage
-        displayAddress: client.address
-    };
-    
-    clientsCache.set(client.id, clientWithCoords);
-    
-    // Sauvegarder en base de données via l'API
-    try {
-        await fetch(`/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(addressToGeocode)}`);
-    } catch (err) {
-        console.error('Erreur sauvegarde géocodage:', err);
-    }
-    
-    return clientWithCoords;
 }
 
 // Fonction pour ajouter un client sur la carte
