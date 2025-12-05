@@ -196,7 +196,10 @@ try {
         
         // Calculer le hash de l'adresse pour vérifier si le géocodage est à jour
         $addressHash = md5($addressForGeocode);
-        $needsGeocode = empty($c['lat']) || empty($c['lng']) || ($c['address_hash'] !== $addressHash);
+        // Utiliser des vérifications explicites de null (pas empty() car 0 est une coordonnée valide)
+        $needsGeocode = !isset($c['lat']) || $c['lat'] === null || 
+                        !isset($c['lng']) || $c['lng'] === null || 
+                        ($c['address_hash'] !== $addressHash);
         
         $nomDirigeant = trim(($c['prenom_dirigeant'] ?? '') . ' ' . ($c['nom_dirigeant'] ?? ''));
         $nomDirigeant = $nomDirigeant ?: null;
@@ -230,8 +233,9 @@ try {
             'livraison_identique' => (bool)($c['livraison_identique'] ?? false),
             'telephone' => $c['telephone1'],
             'email' => $c['email'],
-            'lat' => $c['lat'] ? (float)$c['lat'] : null,
-            'lng' => $c['lng'] ? (float)$c['lng'] : null,
+            // Convertir en float seulement si la valeur n'est pas null (0 est une coordonnée valide)
+            'lat' => (isset($c['lat']) && $c['lat'] !== null) ? (float)$c['lat'] : null,
+            'lng' => (isset($c['lng']) && $c['lng'] !== null) ? (float)$c['lng'] : null,
             'needsGeocode' => $needsGeocode,
             'markerType' => $markerType,
             'hasLivraison' => $hasLivraison,

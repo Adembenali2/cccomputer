@@ -176,4 +176,3 @@ try {
     error_log('maps_get_all_clients.php error file: ' . $e->getFile() . ':' . $e->getLine());
     jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
 }
-
