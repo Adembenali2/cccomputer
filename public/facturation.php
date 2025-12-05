@@ -217,13 +217,33 @@ ensureCsrfToken();
                     <div class="card-body">
                         <div class="facture-current">
                             <div class="facture-info">
-                                <div class="facture-num" id="factureNum">Facture #2025-001</div>
+                                <div class="facture-num" id="factureNum">Facture #2025-12 (brouillon)</div>
                                 <div class="facture-status">
-                                    <span class="badge badge-draft">Brouillon</span>
+                                    <span class="badge badge-draft">BROUILLON</span>
                                 </div>
-                                <div class="facture-amount">Montant TTC : <strong id="factureMontantTTC">845,20 €</strong></div>
-                                <div class="facture-amount">Montant collecté : <strong id="factureMontantCollecte">425,30 €</strong></div>
-                                <div class="facture-period" id="facturePeriod">Période : 20/01/2025 - 07/02/2025</div>
+                                <div class="facture-period" id="facturePeriod"><strong>Période :</strong> 20/11/2025 – 05/12/2025</div>
+                                <div class="facture-consumption">
+                                    <div class="facture-consumption-item">
+                                        <span>Consommation N&B :</span>
+                                        <strong id="factureConsoNB">8 450</strong> pages
+                                    </div>
+                                    <div class="facture-consumption-item">
+                                        <span>Consommation couleur :</span>
+                                        <strong id="factureConsoCouleur">2 100</strong> pages
+                                    </div>
+                                    <div class="facture-consumption-item facture-consumption-total">
+                                        <span>Total du mois :</span>
+                                        <strong id="factureConsoTotal">10 550</strong> pages
+                                    </div>
+                                </div>
+                                <div class="facture-amount facture-amount-ttc">
+                                    <span>Total TTC :</span>
+                                    <strong id="factureMontantTTC">845,20 €</strong>
+                                </div>
+                                <div class="facture-amount">
+                                    <span>Montant collecté :</span>
+                                    <strong id="factureMontantCollecte">425,30 €</strong>
+                                </div>
                             </div>
                             <div class="facture-actions">
                                 <button type="button" class="btn-secondary" id="btnOuvrirFacture" style="display:none;">Ouvrir la facture</button>
@@ -2050,22 +2070,53 @@ function updateFactureEnCours() {
         return `${day}/${month}/${year}`;
     };
     
-    // Mettre à jour la période affichée
+    // Mettre à jour la période affichée (mock : période du 20/11 au 05/12)
     const periodEl = document.getElementById('facturePeriod');
     if (periodEl) {
-        periodEl.textContent = `Période : ${formatDate(startDate)} - ${formatDate(endDate)}`;
+        // Mock : période fixe pour l'exemple
+        periodEl.innerHTML = `<strong>Période :</strong> 20/11/2025 – 05/12/2025`;
     }
     
     // Générer le numéro de facture (mock)
     const factureNumEl = document.getElementById('factureNum');
     if (factureNumEl && factureGeneree) {
         // Si la facture est générée, utiliser un numéro fixe basé sur la période
-        const monthStr = String(currentMonth + 1).padStart(2, '0');
-        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}`;
+        factureNumEl.textContent = `Facture #2025-12`;
     } else if (factureNumEl) {
-        // Sinon, afficher un numéro temporaire
-        const monthStr = String(currentMonth + 1).padStart(2, '0');
-        factureNumEl.textContent = `Facture #${currentYear}-${monthStr} (brouillon)`;
+        // Sinon, afficher un numéro temporaire avec (brouillon)
+        factureNumEl.textContent = `Facture #2025-12 (brouillon)`;
+    }
+    
+    // Calculer les consommations pour la période (mock)
+    // Pour la période du 20 du mois précédent au jour courant
+    const consoNB = 8450; // Mock : pages N&B pour la période
+    const consoCouleur = 2100; // Mock : pages couleur pour la période
+    const consoTotal = consoNB + consoCouleur; // Total pages
+    
+    // Mettre à jour les consommations affichées
+    const factureConsoNB = document.getElementById('factureConsoNB');
+    const factureConsoCouleur = document.getElementById('factureConsoCouleur');
+    const factureConsoTotal = document.getElementById('factureConsoTotal');
+    
+    if (factureConsoNB) {
+        factureConsoNB.textContent = consoNB.toLocaleString('fr-FR').replace(/,/g, ' ');
+    }
+    if (factureConsoCouleur) {
+        factureConsoCouleur.textContent = consoCouleur.toLocaleString('fr-FR').replace(/,/g, ' ');
+    }
+    if (factureConsoTotal) {
+        factureConsoTotal.textContent = consoTotal.toLocaleString('fr-FR').replace(/,/g, ' ');
+    }
+    
+    // Calculer le montant TTC (mock - valeur fixe pour cohérence avec le résumé)
+    // Le montant TTC est calculé à partir des consommations + maintenance/service
+    // Pour simplifier, on utilise une valeur mock fixe cohérente
+    const montantTTC = 845.20; // Mock value (cohérent avec les cartes de résumé)
+    
+    const factureMontantTTC = document.getElementById('factureMontantTTC');
+    if (factureMontantTTC) {
+        const formatted = montantTTC.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        factureMontantTTC.textContent = formatted + ' €';
     }
     
     // Calculer le montant collecté (mock - somme des paiements de la facture en cours)
@@ -2145,13 +2196,10 @@ function genererFacture() {
     // Mettre à jour l'état
     factureGeneree = true;
     
-    // Mettre à jour le numéro de facture
+    // Mettre à jour le numéro de facture (mock : #2025-12)
     const factureNumEl = document.getElementById('factureNum');
     if (factureNumEl) {
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const monthStr = String(currentMonth + 1).padStart(2, '0');
-        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}`;
+        factureNumEl.textContent = `Facture #2025-12`;
     }
     
     // Mettre à jour l'UI
