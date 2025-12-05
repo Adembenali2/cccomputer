@@ -148,7 +148,7 @@ ensureCsrfToken();
     </section>
 
     <!-- Système d'onglets -->
-    <section class="tabs-section">
+    <section class="tabs-section" id="tabsSection" style="display:none;">
         <div class="tabs-nav" role="tablist">
             <button class="tab-btn active" data-tab="resume" role="tab" aria-selected="true" aria-controls="tab-resume">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -193,19 +193,19 @@ ensureCsrfToken();
             <div class="kpi-grid">
                 <div class="kpi-card">
                     <div class="kpi-label">Total à facturer</div>
-                    <div class="kpi-value">1 245,30 €</div>
+                    <div class="kpi-value" id="kpiTotalFacturer">1 245,30 €</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Factures en attente</div>
-                    <div class="kpi-value">3 factures – 820,00 €</div>
+                    <div class="kpi-label">Montant non payé</div>
+                    <div class="kpi-value" id="kpiMontantNonPaye">820,00 €</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-label">Montant payé</div>
-                    <div class="kpi-value">425,30 €</div>
+                    <div class="kpi-value" id="kpiMontantPaye">425,30 €</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Conso pages</div>
-                    <div class="kpi-value">N&B : 10 200 | Couleur : 2 100</div>
+                    <div class="kpi-label">Consommation pages</div>
+                    <div class="kpi-value" id="kpiConsoPages">N&B : 10 200 | Couleur : 2 100</div>
                 </div>
             </div>
 
@@ -1223,7 +1223,14 @@ function selectClient(clientId, clientName) {
     selectedName.textContent = clientName;
     selectedDisplay.style.display = 'flex';
     
+    // Afficher la section des onglets
+    const tabsSection = document.getElementById('tabsSection');
+    if (tabsSection) {
+        tabsSection.style.display = 'block';
+    }
+    
     updateConsumptionChart();
+    updateResumeKPIs();
 }
 
 // Réinitialiser la sélection (afficher tous les clients)
@@ -1238,6 +1245,12 @@ function clearClientSelection() {
     const searchInput = document.getElementById('clientSearchInput');
     if (searchInput) {
         searchInput.value = '';
+    }
+    
+    // Masquer la section des onglets
+    const tabsSection = document.getElementById('tabsSection');
+    if (tabsSection) {
+        tabsSection.style.display = 'none';
     }
     
     updateConsumptionChart();
@@ -1531,6 +1544,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     initConsumptionChart();
     
+    // Initialiser le calcul du montant non payé
+    updateResumeKPIs();
+    
     // Écouter les changements de granularité
     const granularityTypeSelect = document.getElementById('chartGranularity');
     if (granularityTypeSelect) {
@@ -1584,6 +1600,30 @@ tabButtons.forEach(btn => {
 // ==================
 // Mise à jour du résumé (mock)
 // ==================
+function updateResumeKPIs() {
+    // Récupérer les valeurs des KPI
+    const totalFacturerEl = document.getElementById('kpiTotalFacturer');
+    const montantPayeEl = document.getElementById('kpiMontantPaye');
+    const montantNonPayeEl = document.getElementById('kpiMontantNonPaye');
+    
+    if (!totalFacturerEl || !montantPayeEl || !montantNonPayeEl) return;
+    
+    // Extraire les valeurs numériques (enlever les espaces, €, etc.)
+    // Format attendu: "1 245,30 €" -> 1245.30
+    const parseFrenchNumber = (text) => {
+        return parseFloat(text.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, ''));
+    };
+    
+    const totalFacturer = parseFrenchNumber(totalFacturerEl.textContent);
+    const montantPaye = parseFrenchNumber(montantPayeEl.textContent);
+    
+    // Calculer le montant non payé
+    const montantNonPaye = totalFacturer - montantPaye;
+    
+    // Formater et afficher le montant non payé (format français avec espaces)
+    const formatted = montantNonPaye.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    montantNonPayeEl.textContent = formatted + ' €';
+}
 
 // ==================
 // Gestion des factures
