@@ -226,9 +226,8 @@ ensureCsrfToken();
                                 <div class="facture-period" id="facturePeriod">Période : 20/01/2025 - 07/02/2025</div>
                             </div>
                             <div class="facture-actions">
-                                <button type="button" class="btn-secondary" id="btnOuvrirFacture">Ouvrir la facture</button>
-                                <button type="button" class="btn-secondary" id="btnGenererPDF" onclick="alert('Générer PDF')">Générer PDF</button>
-                                <button type="button" class="btn-primary" id="btnEnvoyerClient" onclick="alert('Envoyer au client')">Envoyer au client</button>
+                                <button type="button" class="btn-secondary" id="btnOuvrirFacture" style="display:none;">Ouvrir la facture</button>
+                                <button type="button" class="btn-primary" id="btnGenererFacture" style="display:none;">Générer la facture</button>
                                 <div id="factureRestrictionMessage" class="facture-restriction-message" style="display:none; margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
                                     La génération de la facture n'est possible que le 20 de chaque mois.
                                 </div>
@@ -1878,6 +1877,11 @@ function updateResumeKPIs() {
 }
 
 // ==================
+// État de la facture en cours
+// ==================
+let factureGeneree = false; // État mock : false par défaut (facture non générée)
+
+// ==================
 // Mise à jour de la facture en cours
 // ==================
 function updateFactureEnCours() {
@@ -1908,9 +1912,14 @@ function updateFactureEnCours() {
     
     // Générer le numéro de facture (mock)
     const factureNumEl = document.getElementById('factureNum');
-    if (factureNumEl) {
+    if (factureNumEl && factureGeneree) {
+        // Si la facture est générée, utiliser un numéro fixe basé sur la période
         const monthStr = String(currentMonth + 1).padStart(2, '0');
-        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}${String(currentDay).padStart(2, '0')}`;
+        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}`;
+    } else if (factureNumEl) {
+        // Sinon, afficher un numéro temporaire
+        const monthStr = String(currentMonth + 1).padStart(2, '0');
+        factureNumEl.textContent = `Facture #${currentYear}-${monthStr} (brouillon)`;
     }
     
     // Calculer le montant collecté (mock - somme des paiements de la facture en cours)
@@ -1922,34 +1931,88 @@ function updateFactureEnCours() {
         montantCollecteEl.textContent = formatted + ' €';
     }
     
-    // Gérer l'activation/désactivation des boutons selon le jour du mois
-    const btnGenererPDF = document.getElementById('btnGenererPDF');
-    const btnEnvoyerClient = document.getElementById('btnEnvoyerClient');
+    // Gérer la visibilité et l'activation des boutons selon l'état
+    const btnOuvrirFacture = document.getElementById('btnOuvrirFacture');
+    const btnGenererFacture = document.getElementById('btnGenererFacture');
     const restrictionMessage = document.getElementById('factureRestrictionMessage');
     
     const isDay20 = currentDay === 20;
     
-    if (btnGenererPDF && btnEnvoyerClient && restrictionMessage) {
-        if (isDay20) {
-            // Activer les boutons
-            btnGenererPDF.disabled = false;
-            btnEnvoyerClient.disabled = false;
-            btnGenererPDF.style.opacity = '1';
-            btnEnvoyerClient.style.opacity = '1';
-            btnGenererPDF.style.cursor = 'pointer';
-            btnEnvoyerClient.style.cursor = 'pointer';
+    if (factureGeneree) {
+        // Facture déjà générée : afficher "Ouvrir la facture", cacher "Générer la facture"
+        if (btnOuvrirFacture) {
+            btnOuvrirFacture.style.display = 'inline-flex';
+        }
+        if (btnGenererFacture) {
+            btnGenererFacture.style.display = 'none';
+        }
+        if (restrictionMessage) {
             restrictionMessage.style.display = 'none';
-        } else {
-            // Désactiver les boutons
-            btnGenererPDF.disabled = true;
-            btnEnvoyerClient.disabled = true;
-            btnGenererPDF.style.opacity = '0.5';
-            btnEnvoyerClient.style.opacity = '0.5';
-            btnGenererPDF.style.cursor = 'not-allowed';
-            btnEnvoyerClient.style.cursor = 'not-allowed';
-            restrictionMessage.style.display = 'block';
+        }
+    } else {
+        // Facture non générée : afficher "Générer la facture", cacher "Ouvrir la facture"
+        if (btnOuvrirFacture) {
+            btnOuvrirFacture.style.display = 'none';
+        }
+        // Facture non générée : afficher "Générer la facture", cacher "Ouvrir la facture"
+        if (btnOuvrirFacture) {
+            btnOuvrirFacture.style.display = 'none';
+        }
+        if (btnGenererFacture) {
+            btnGenererFacture.style.display = 'inline-flex';
+            
+            // Gérer l'activation selon le jour du mois
+            if (isDay20) {
+                // Activer le bouton le 20
+                btnGenererFacture.disabled = false;
+                btnGenererFacture.style.opacity = '1';
+                btnGenererFacture.style.cursor = 'pointer';
+                if (restrictionMessage) {
+                    restrictionMessage.style.display = 'none';
+                }
+            } else {
+                // Désactiver le bouton si ce n'est pas le 20
+                btnGenererFacture.disabled = true;
+                btnGenererFacture.style.opacity = '0.5';
+                btnGenererFacture.style.cursor = 'not-allowed';
+                if (restrictionMessage) {
+                    restrictionMessage.style.display = 'block';
+                }
+            }
         }
     }
+}
+
+// ==================
+// Générer la facture
+// ==================
+function genererFacture() {
+    const now = new Date();
+    const currentDay = now.getDate();
+    
+    // Vérifier que c'est bien le 20
+    if (currentDay !== 20) {
+        alert('La génération de la facture n\'est possible que le 20 de chaque mois.');
+        return;
+    }
+    
+    // Mettre à jour l'état
+    factureGeneree = true;
+    
+    // Mettre à jour le numéro de facture
+    const factureNumEl = document.getElementById('factureNum');
+    if (factureNumEl) {
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const monthStr = String(currentMonth + 1).padStart(2, '0');
+        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}`;
+    }
+    
+    // Mettre à jour l'UI
+    updateFactureEnCours();
+    
+    // Message de confirmation (mock)
+    alert('Facture générée avec succès !');
 }
 
 // ==================
@@ -2771,6 +2834,12 @@ function closeFactureApercu() {
 const btnOuvrirFacture = document.getElementById('btnOuvrirFacture');
 if (btnOuvrirFacture) {
     btnOuvrirFacture.addEventListener('click', openFactureApercu);
+}
+
+// Écouter le clic sur le bouton "Générer la facture"
+const btnGenererFacture = document.getElementById('btnGenererFacture');
+if (btnGenererFacture) {
+    btnGenererFacture.addEventListener('click', genererFacture);
 }
 
 // Fermer la modale
