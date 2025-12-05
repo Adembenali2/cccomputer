@@ -88,11 +88,10 @@ ensureCsrfToken();
                 </div>
                 <div class="chart-controls">
                     <div class="chart-control-group">
-                        <label for="chartGranularityType">Type de granularité</label>
-                        <select id="chartGranularityType" class="filter-select chart-select">
+                        <label for="chartGranularity">Granularité</label>
+                        <select id="chartGranularity" class="filter-select chart-select">
                             <option value="year">Année</option>
                             <option value="month" selected>Mois</option>
-                            <option value="day">Jour</option>
                         </select>
                     </div>
                     <!-- Contrôles conditionnels pour la granularité -->
@@ -130,40 +129,6 @@ ensureCsrfToken();
                                 <option value="9">Octobre</option>
                                 <option value="10">Novembre</option>
                                 <option value="11">Décembre</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="granularityDayControls" class="chart-control-group" style="display:none;">
-                        <div class="chart-control-group">
-                            <label for="chartDayYear">Année</label>
-                            <select id="chartDayYear" class="filter-select chart-select">
-                                <option value="2022">2022</option>
-                                <option value="2023">2023</option>
-                                <option value="2024">2024</option>
-                                <option value="2025" selected>2025</option>
-                            </select>
-                        </div>
-                        <div class="chart-control-group">
-                            <label for="chartDayMonth">Mois</label>
-                            <select id="chartDayMonth" class="filter-select chart-select">
-                                <option value="0">Janvier</option>
-                                <option value="1">Février</option>
-                                <option value="2">Mars</option>
-                                <option value="3">Avril</option>
-                                <option value="4">Mai</option>
-                                <option value="5">Juin</option>
-                                <option value="6">Juillet</option>
-                                <option value="7">Août</option>
-                                <option value="8">Septembre</option>
-                                <option value="9">Octobre</option>
-                                <option value="10">Novembre</option>
-                                <option value="11">Décembre</option>
-                            </select>
-                        </div>
-                        <div class="chart-control-group">
-                            <label for="chartDay">Jour</label>
-                            <select id="chartDay" class="filter-select chart-select">
-                                <!-- Sera rempli dynamiquement selon le mois sélectionné -->
                             </select>
                         </div>
                     </div>
@@ -889,20 +854,10 @@ const mockData = {
                 // Afficher les jours du mois sélectionné
                 const year = periodParams.year || 2025;
                 const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
-                const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
                 nbData = labels.map(() => Math.floor((baseNb / daysInMonth) * (1 + (Math.random() - 0.5) * variation)));
                 colorData = labels.map(() => Math.floor((baseColor / daysInMonth) * (1 + (Math.random() - 0.5) * variation)));
-            } else { // day
-                // Afficher un seul point pour le jour sélectionné
-                const year = periodParams.year || 2025;
-                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
-                const day = periodParams.day !== undefined ? parseInt(periodParams.day) : 1;
-                const dateStr = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
-                labels = [dateStr];
-                nbData = [Math.floor(baseNb * (1 + (Math.random() - 0.5) * variation))];
-                colorData = [Math.floor(baseColor * (1 + (Math.random() - 0.5) * variation))];
             }
             
             return { labels, nbData, colorData };
@@ -923,12 +878,6 @@ const mockData = {
                 const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
-            } else { // day
-                const year = periodParams.year || 2025;
-                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
-                const day = periodParams.day !== undefined ? parseInt(periodParams.day) : 1;
-                const dateStr = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
-                labels = [dateStr];
             }
             
             const nbData = labels.map(() => 0);
@@ -964,12 +913,6 @@ const mockData = {
                 const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
-            } else { // day
-                const year = periodParams.year || 2025;
-                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
-                const day = periodParams.day !== undefined ? parseInt(periodParams.day) : 1;
-                const dateStr = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
-                labels = [dateStr];
             }
             
             const nbData = labels.map(() => 0);
@@ -1159,7 +1102,7 @@ function clearClientSelection() {
 
 // Obtenir les paramètres de période depuis les contrôles
 function getPeriodParams() {
-    const granularityType = document.getElementById('chartGranularityType').value || 'month';
+    const granularityType = document.getElementById('chartGranularity').value || 'month';
     const params = {};
     
     if (granularityType === 'year') {
@@ -1172,13 +1115,6 @@ function getPeriodParams() {
         const monthSelect = document.getElementById('chartMonth');
         if (yearSelect) params.year = parseInt(yearSelect.value);
         if (monthSelect) params.month = parseInt(monthSelect.value);
-    } else if (granularityType === 'day') {
-        const yearSelect = document.getElementById('chartDayYear');
-        const monthSelect = document.getElementById('chartDayMonth');
-        const daySelect = document.getElementById('chartDay');
-        if (yearSelect) params.year = parseInt(yearSelect.value);
-        if (monthSelect) params.month = parseInt(monthSelect.value);
-        if (daySelect) params.day = parseInt(daySelect.value);
     }
     
     return params;
@@ -1189,7 +1125,7 @@ function initConsumptionChart() {
     const ctx = document.getElementById('consumptionChart');
     if (!ctx) return;
     
-    const granularityType = document.getElementById('chartGranularityType').value || 'month';
+    const granularityType = document.getElementById('chartGranularity').value || 'month';
     const periodParams = getPeriodParams();
     const isAllClients = selectedClientId === null;
     
@@ -1206,11 +1142,13 @@ function initConsumptionChart() {
     const noDataMessage = document.getElementById('chartNoDataMessage');
     const chartContainer = document.querySelector('.chart-container');
     
+    // Afficher le message si aucune donnée, mais toujours afficher le graphique (avec valeurs à zéro)
     if (noDataMessage) {
         noDataMessage.style.display = hasData ? 'none' : 'block';
     }
+    // Le graphique s'affiche toujours, même avec des valeurs à zéro
     if (chartContainer) {
-        chartContainer.style.display = hasData ? 'block' : 'none';
+        chartContainer.style.display = 'block';
     }
     
     // Créer les 3 datasets pour N&B, Couleur et Total (line chart) - version esthétique améliorée
@@ -1393,65 +1331,31 @@ function updateConsumptionChart() {
 
 // Gérer l'affichage des contrôles conditionnels selon le type de granularité
 function updateGranularityControls() {
-    const granularityType = document.getElementById('chartGranularityType').value || 'month';
+    const granularityType = document.getElementById('chartGranularity').value || 'month';
     const yearControls = document.getElementById('granularityYearControls');
     const monthControls = document.getElementById('granularityMonthControls');
-    const dayControls = document.getElementById('granularityDayControls');
     
     // Masquer tous les contrôles
     if (yearControls) yearControls.style.display = 'none';
     if (monthControls) monthControls.style.display = 'none';
-    if (dayControls) dayControls.style.display = 'none';
     
     // Afficher les contrôles appropriés
     if (granularityType === 'year' && yearControls) {
         yearControls.style.display = 'flex';
     } else if (granularityType === 'month' && monthControls) {
         monthControls.style.display = 'flex';
-    } else if (granularityType === 'day' && dayControls) {
-        dayControls.style.display = 'flex';
-        // Remplir les jours selon le mois sélectionné
-        updateDayOptions();
     }
 }
 
-// Remplir dynamiquement les options de jours selon le mois sélectionné
-function updateDayOptions() {
-    const yearSelect = document.getElementById('chartDayYear');
-    const monthSelect = document.getElementById('chartDayMonth');
-    const daySelect = document.getElementById('chartDay');
-    
-    if (!yearSelect || !monthSelect || !daySelect) return;
-    
-    const year = parseInt(yearSelect.value) || 2025;
-    const month = parseInt(monthSelect.value) || 0;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    // Sauvegarder la valeur actuelle
-    const currentDay = parseInt(daySelect.value) || 1;
-    
-    // Vider et remplir les options
-    daySelect.innerHTML = '';
-    for (let i = 1; i <= daysInMonth; i++) {
-        const option = document.createElement('option');
-        option.value = i;
-        option.textContent = i;
-        if (i === currentDay || (currentDay > daysInMonth && i === daysInMonth)) {
-            option.selected = true;
-        }
-        daySelect.appendChild(option);
-    }
-}
 
 // Initialiser les valeurs par défaut des contrôles de période
 function initDefaultPeriodValues() {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-11
-    const currentDay = now.getDate();
     
     // Initialiser l'année pour tous les contrôles
-    ['chartYear', 'chartMonthYear', 'chartDayYear'].forEach(selectId => {
+    ['chartYear', 'chartMonthYear'].forEach(selectId => {
         const select = document.getElementById(selectId);
         if (select) {
             const option = select.querySelector(`option[value="${currentYear}"]`);
@@ -1459,16 +1363,12 @@ function initDefaultPeriodValues() {
         }
     });
     
-    // Initialiser le mois pour les contrôles mois et jour
-    ['chartMonth', 'chartDayMonth'].forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (select) {
-            const option = select.querySelector(`option[value="${currentMonth}"]`);
-            if (option) option.selected = true;
-        }
-    });
-    
-    // Initialiser le jour (sera fait après updateDayOptions)
+    // Initialiser le mois pour le contrôle mois
+    const monthSelect = document.getElementById('chartMonth');
+    if (monthSelect) {
+        const option = monthSelect.querySelector(`option[value="${currentMonth}"]`);
+        if (option) option.selected = true;
+    }
 }
 
 // Initialisation au chargement
@@ -1481,22 +1381,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialiser les contrôles de granularité
     updateGranularityControls();
     
-    // Remplir les jours au chargement (après avoir initialisé les valeurs par défaut)
-    updateDayOptions();
-    
-    // Sélectionner le jour actuel après avoir rempli les options
-    const daySelect = document.getElementById('chartDay');
-    if (daySelect) {
-        const now = new Date();
-        const currentDay = now.getDate();
-        const option = daySelect.querySelector(`option[value="${currentDay}"]`);
-        if (option) option.selected = true;
-    }
-    
     initConsumptionChart();
     
     // Écouter les changements de granularité
-    const granularityTypeSelect = document.getElementById('chartGranularityType');
+    const granularityTypeSelect = document.getElementById('chartGranularity');
     if (granularityTypeSelect) {
         granularityTypeSelect.addEventListener('change', () => {
             updateGranularityControls();
@@ -1506,18 +1394,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Écouter les changements des contrôles de période
     const periodControls = [
-        'chartYear', 'chartMonthYear', 'chartMonth', 
-        'chartDayYear', 'chartDayMonth', 'chartDay'
+        'chartYear', 'chartMonthYear', 'chartMonth'
     ];
     
     periodControls.forEach(controlId => {
         const control = document.getElementById(controlId);
         if (control) {
             control.addEventListener('change', () => {
-                // Si c'est un changement de mois ou d'année pour le jour, mettre à jour les jours
-                if (controlId === 'chartDayMonth' || controlId === 'chartDayYear') {
-                    updateDayOptions();
-                }
                 updateConsumptionChart();
             });
         }
