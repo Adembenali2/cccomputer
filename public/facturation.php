@@ -217,17 +217,21 @@ ensureCsrfToken();
                     <div class="card-body">
                         <div class="facture-current">
                             <div class="facture-info">
-                                <div class="facture-num">Facture #2025-001</div>
+                                <div class="facture-num" id="factureNum">Facture #2025-001</div>
                                 <div class="facture-status">
                                     <span class="badge badge-draft">Brouillon</span>
                                 </div>
-                                <div class="facture-amount">Montant TTC : <strong>845,20 €</strong></div>
-                                <div class="facture-period">Période : 01/01/2025 - 31/01/2025</div>
+                                <div class="facture-amount">Montant TTC : <strong id="factureMontantTTC">845,20 €</strong></div>
+                                <div class="facture-amount">Montant collecté : <strong id="factureMontantCollecte">425,30 €</strong></div>
+                                <div class="facture-period" id="facturePeriod">Période : 20/01/2025 - 07/02/2025</div>
                             </div>
                             <div class="facture-actions">
                                 <button type="button" class="btn-secondary" onclick="alert('Ouvrir la facture')">Ouvrir la facture</button>
-                                <button type="button" class="btn-secondary" onclick="alert('Générer PDF')">Générer PDF</button>
-                                <button type="button" class="btn-primary" onclick="alert('Envoyer au client')">Envoyer au client</button>
+                                <button type="button" class="btn-secondary" id="btnGenererPDF" onclick="alert('Générer PDF')">Générer PDF</button>
+                                <button type="button" class="btn-primary" id="btnEnvoyerClient" onclick="alert('Envoyer au client')">Envoyer au client</button>
+                                <div id="factureRestrictionMessage" class="facture-restriction-message" style="display:none; margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+                                    La génération de la facture n'est possible que le 20 de chaque mois.
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -236,28 +240,25 @@ ensureCsrfToken();
                 <div class="content-card">
                     <div class="card-header">
                         <h3>Derniers paiements</h3>
-                        <button type="button" class="btn-icon" id="btnAddPayment" aria-label="Ajouter un paiement">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="5" x2="12" y2="19"/>
-                                <line x1="5" y1="12" x2="19" y2="12"/>
-                            </svg>
-                        </button>
                     </div>
                     <div class="card-body">
-                        <div class="paiements-list">
+                        <div class="paiements-list" id="paiementsList">
                             <div class="paiement-item">
                                 <div class="paiement-date">15/01/2025</div>
                                 <div class="paiement-amount">250,00 €</div>
+                                <div class="paiement-user">Admin CCComputer</div>
                                 <div class="paiement-mode">Virement</div>
                             </div>
                             <div class="paiement-item">
                                 <div class="paiement-date">10/01/2025</div>
                                 <div class="paiement-amount">175,30 €</div>
+                                <div class="paiement-user">Utilisateur X</div>
                                 <div class="paiement-mode">Carte bancaire</div>
                             </div>
                             <div class="paiement-item">
                                 <div class="paiement-date">05/01/2025</div>
                                 <div class="paiement-amount">100,00 €</div>
+                                <div class="paiement-user">Admin CCComputer</div>
                                 <div class="paiement-mode">Espèces</div>
                             </div>
                         </div>
@@ -1231,6 +1232,7 @@ function selectClient(clientId, clientName) {
     
     updateConsumptionChart();
     updateResumeKPIs();
+    updateFactureEnCours();
 }
 
 // Réinitialiser la sélection (afficher tous les clients)
@@ -1547,6 +1549,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialiser le calcul du montant non payé
     updateResumeKPIs();
     
+    // Initialiser la facture en cours
+    updateFactureEnCours();
+    
     // Écouter les changements de granularité
     const granularityTypeSelect = document.getElementById('chartGranularity');
     if (granularityTypeSelect) {
@@ -1623,6 +1628,81 @@ function updateResumeKPIs() {
     // Formater et afficher le montant non payé (format français avec espaces)
     const formatted = montantNonPaye.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     montantNonPayeEl.textContent = formatted + ' €';
+}
+
+// ==================
+// Mise à jour de la facture en cours
+// ==================
+function updateFactureEnCours() {
+    const now = new Date();
+    const currentDay = now.getDate();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    // Calculer la date de début : toujours le 20 du mois précédent
+    const startDate = new Date(currentYear, currentMonth - 1, 20);
+    
+    // Date de fin : aujourd'hui
+    const endDate = new Date(currentYear, currentMonth, currentDay);
+    
+    // Formater les dates en format français (DD/MM/YYYY)
+    const formatDate = (date) => {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
+    
+    // Mettre à jour la période affichée
+    const periodEl = document.getElementById('facturePeriod');
+    if (periodEl) {
+        periodEl.textContent = `Période : ${formatDate(startDate)} - ${formatDate(endDate)}`;
+    }
+    
+    // Générer le numéro de facture (mock)
+    const factureNumEl = document.getElementById('factureNum');
+    if (factureNumEl) {
+        const monthStr = String(currentMonth + 1).padStart(2, '0');
+        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}${String(currentDay).padStart(2, '0')}`;
+    }
+    
+    // Calculer le montant collecté (mock - somme des paiements de la facture en cours)
+    const montantCollecteEl = document.getElementById('factureMontantCollecte');
+    if (montantCollecteEl) {
+        // Mock : montant collecté (peut être calculé depuis les paiements réels plus tard)
+        const montantCollecte = 425.30; // Mock value
+        const formatted = montantCollecte.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        montantCollecteEl.textContent = formatted + ' €';
+    }
+    
+    // Gérer l'activation/désactivation des boutons selon le jour du mois
+    const btnGenererPDF = document.getElementById('btnGenererPDF');
+    const btnEnvoyerClient = document.getElementById('btnEnvoyerClient');
+    const restrictionMessage = document.getElementById('factureRestrictionMessage');
+    
+    const isDay20 = currentDay === 20;
+    
+    if (btnGenererPDF && btnEnvoyerClient && restrictionMessage) {
+        if (isDay20) {
+            // Activer les boutons
+            btnGenererPDF.disabled = false;
+            btnEnvoyerClient.disabled = false;
+            btnGenererPDF.style.opacity = '1';
+            btnEnvoyerClient.style.opacity = '1';
+            btnGenererPDF.style.cursor = 'pointer';
+            btnEnvoyerClient.style.cursor = 'pointer';
+            restrictionMessage.style.display = 'none';
+        } else {
+            // Désactiver les boutons
+            btnGenererPDF.disabled = true;
+            btnEnvoyerClient.disabled = true;
+            btnGenererPDF.style.opacity = '0.5';
+            btnEnvoyerClient.style.opacity = '0.5';
+            btnGenererPDF.style.cursor = 'not-allowed';
+            btnEnvoyerClient.style.cursor = 'not-allowed';
+            restrictionMessage.style.display = 'block';
+        }
+    }
 }
 
 // ==================
@@ -2361,19 +2441,12 @@ function showExportNotification(params, isRealExport = false) {
 // Les button groups sont initialisés dans le DOMContentLoaded principal
 
 // ==================
-// Modal paiement
+// Modal paiement (conservé pour d'autres usages si nécessaire)
 // ==================
-const btnAddPayment = document.getElementById('btnAddPayment');
 const modalAddPayment = document.getElementById('modalAddPayment');
 const modalClose = document.querySelector('.modal-close');
 
-if (btnAddPayment && modalAddPayment) {
-    btnAddPayment.addEventListener('click', () => {
-        modalAddPayment.style.display = 'flex';
-    });
-}
-
-if (modalClose) {
+if (modalClose && modalAddPayment) {
     modalClose.addEventListener('click', () => {
         modalAddPayment.style.display = 'none';
     });

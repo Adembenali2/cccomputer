@@ -754,7 +754,7 @@
 
 .paiement-item {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     gap: 1rem;
     padding: 0.75rem;
     background-color: var(--bg-primary);
@@ -772,10 +772,22 @@
     color: var(--text-primary);
 }
 
+.paiement-user {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
 .paiement-mode {
     font-size: 0.85rem;
     color: var(--text-secondary);
     text-align: right;
+}
+
+.facture-restriction-message {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-style: italic;
 }
 
 /* ====== Table ====== */
