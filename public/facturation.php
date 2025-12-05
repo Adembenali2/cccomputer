@@ -44,44 +44,29 @@ ensureCsrfToken();
         </button>
     </header>
 
-    <!-- Bandeau filtres -->
+    <!-- Barre de recherche client -->
     <section class="filters-bar">
-        <div class="filters-grid">
-            <div class="filter-group">
-                <label for="filterClient">Client</label>
-                <select id="filterClient" class="filter-select">
-                    <option value="">Tous les clients</option>
-                    <option value="1">Entreprise ABC</option>
-                    <option value="2">Société XYZ</option>
-                    <option value="3">Compagnie DEF</option>
-                    <option value="4">Groupe GHI</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label for="filterContrat">Contrat</label>
-                <select id="filterContrat" class="filter-select">
-                    <option value="">Tous les contrats</option>
-                    <option value="1">Contrat Copie N&B – Mensuel</option>
-                    <option value="2">Contrat Couleur – Pro</option>
-                    <option value="3">Contrat Mixte – Annuel</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label for="filterDateDebut">Période</label>
-                <div class="date-range">
-                    <input type="date" id="filterDateDebut" class="filter-date" value="<?= date('Y-m-01') ?>">
-                    <span>au</span>
-                    <input type="date" id="filterDateFin" class="filter-date" value="<?= date('Y-m-t') ?>">
+        <div class="client-search-section">
+            <div class="client-search-wrapper">
+                <label for="clientSearchInput">Rechercher un client</label>
+                <div class="client-search-container">
+                    <input 
+                        type="text" 
+                        id="clientSearchInput" 
+                        class="client-search-input" 
+                        placeholder="Rechercher un client (nom, prénom, raison sociale, référence client…)"
+                        autocomplete="off"
+                    >
+                    <div id="clientSearchDropdown" class="client-search-dropdown" style="display:none;"></div>
                 </div>
-            </div>
-            <div class="filter-group filter-actions">
-                <label>&nbsp;</label>
-                <div class="filter-actions-group">
-                    <div class="quick-filters">
-                        <button type="button" class="quick-filter-btn" data-period="month">Ce mois-ci</button>
-                        <button type="button" class="quick-filter-btn" data-period="last-month">Dernier mois</button>
-                    </div>
-                    <button type="button" class="btn-primary" id="btnApplyFilters">Appliquer</button>
+                <div id="selectedClientDisplay" class="selected-client-display" style="display:none;">
+                    <span class="selected-client-name"></span>
+                    <button type="button" class="btn-remove-client" id="btnRemoveClient" aria-label="Retirer la sélection">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -101,15 +86,6 @@ ensureCsrfToken();
                     <p class="card-subtitle">Vue globale de la consommation par période</p>
                 </div>
                 <div class="chart-controls">
-                    <div class="chart-control-group chart-control-client">
-                        <label for="chartClientSearch">Client(s)</label>
-                        <div class="client-select-wrapper">
-                            <input type="text" id="chartClientSearch" class="filter-select chart-select" placeholder="Rechercher un client..." autocomplete="off">
-                            <div id="chartClientDropdown" class="client-dropdown" style="display:none;"></div>
-                        </div>
-                        <div id="selectedClientsList" class="selected-clients-list"></div>
-                        <small class="chart-hint">Sélectionnez jusqu'à 5 clients maximum. Par défaut : "Tous les clients (agrégé)".</small>
-                    </div>
                     <div class="chart-control-group">
                         <label for="chartGranularity">Granularité</label>
                         <select id="chartGranularity" class="filter-select chart-select">
@@ -895,48 +871,39 @@ const mockData = {
 // Graphique de consommation
 // ==================
 let consumptionChart = null;
-let selectedClientIds = [];
-const MAX_SELECTED_CLIENTS = 5;
+let selectedClientId = null; // Un seul client sélectionné via la barre de recherche
 
-// Initialisation de la recherche de clients
+// Initialisation de la barre de recherche client
 function initClientSearch() {
-    const searchInput = document.getElementById('chartClientSearch');
-    const dropdown = document.getElementById('chartClientDropdown');
+    const searchInput = document.getElementById('clientSearchInput');
+    const dropdown = document.getElementById('clientSearchDropdown');
+    const selectedDisplay = document.getElementById('selectedClientDisplay');
+    const selectedName = selectedDisplay.querySelector('.selected-client-name');
+    const btnRemove = document.getElementById('btnRemoveClient');
     
     if (!searchInput || !dropdown) return;
     
-    // Recherche de clients
+    let searchTimeout = null;
+    
+    // Recherche de clients avec debounce
     searchInput.addEventListener('input', (e) => {
-        const query = e.target.value.toLowerCase().trim();
+        const query = e.target.value.trim();
         
-        if (query.length < 2) {
+        clearTimeout(searchTimeout);
+        
+        if (query.length < 1) {
             dropdown.style.display = 'none';
+            // Si le champ est vide et qu'un client était sélectionné, réinitialiser
+            if (selectedClientId) {
+                clearClientSelection();
+            }
             return;
         }
         
-        const filtered = mockData.consommation.clients.filter(client =>
-            client.name.toLowerCase().includes(query)
-        ).slice(0, 10); // Limiter à 10 résultats
-        
-        dropdown.innerHTML = '';
-        
-        if (filtered.length === 0) {
-            dropdown.innerHTML = '<div class="dropdown-item">Aucun client trouvé</div>';
-        } else {
-            filtered.forEach(client => {
-                const item = document.createElement('div');
-                item.className = 'dropdown-item';
-                item.textContent = client.name;
-                item.addEventListener('click', () => {
-                    addClientToSelection(client.id, client.name);
-                    searchInput.value = '';
-                    dropdown.style.display = 'none';
-                });
-                dropdown.appendChild(item);
-            });
-        }
-        
-        dropdown.style.display = 'block';
+        // Debounce de 200ms pour éviter trop de recherches
+        searchTimeout = setTimeout(() => {
+            performClientSearch(query, dropdown);
+        }, 200);
     });
     
     // Fermer le dropdown en cliquant ailleurs
@@ -945,65 +912,120 @@ function initClientSearch() {
             dropdown.style.display = 'none';
         }
     });
-}
-
-// Ajouter un client à la sélection
-function addClientToSelection(clientId, clientName) {
-    if (selectedClientIds.includes(clientId)) return;
     
-    if (selectedClientIds.length >= MAX_SELECTED_CLIENTS) {
-        alert(`Vous ne pouvez sélectionner que ${MAX_SELECTED_CLIENTS} clients maximum.`);
-        return;
-    }
-    
-    selectedClientIds.push(clientId);
-    updateSelectedClientsList();
-    updateConsumptionChart();
-}
-
-// Retirer un client de la sélection
-function removeClientFromSelection(clientId) {
-    selectedClientIds = selectedClientIds.filter(id => id !== clientId);
-    updateSelectedClientsList();
-    updateConsumptionChart();
-}
-
-// Basculer "Tous les clients" (retirer tous les clients sélectionnés)
-function toggleAllClients() {
-    selectedClientIds = [];
-    updateSelectedClientsList();
-    updateConsumptionChart();
-}
-
-// Mettre à jour la liste des clients sélectionnés
-function updateSelectedClientsList() {
-    const listContainer = document.getElementById('selectedClientsList');
-    if (!listContainer) return;
-    
-    listContainer.innerHTML = '';
-    
-    if (selectedClientIds.length === 0) {
-        const allItem = document.createElement('div');
-        allItem.className = 'selected-client-chip active';
-        allItem.innerHTML = `
-            <span>◼ Tous les clients (agrégé)</span>
-            <button type="button" class="chip-remove" onclick="toggleAllClients()" aria-label="Désélectionner">✕</button>
-        `;
-        listContainer.appendChild(allItem);
-    } else {
-        selectedClientIds.forEach(clientId => {
-            const client = mockData.consommation.clients.find(c => c.id === clientId);
-            if (!client) return;
-            
-            const chip = document.createElement('div');
-            chip.className = 'selected-client-chip';
-            chip.innerHTML = `
-                <span>${client.name}</span>
-                <button type="button" class="chip-remove" onclick="removeClientFromSelection('${clientId}')" aria-label="Retirer ${client.name}">✕</button>
-            `;
-            listContainer.appendChild(chip);
+    // Retirer la sélection du client
+    if (btnRemove) {
+        btnRemove.addEventListener('click', () => {
+            clearClientSelection();
         });
     }
+    
+    // Navigation clavier dans le dropdown
+    searchInput.addEventListener('keydown', (e) => {
+        const items = dropdown.querySelectorAll('.dropdown-item');
+        if (items.length === 0) return;
+        
+        const currentIndex = Array.from(items).findIndex(item => item.classList.contains('highlighted'));
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+            items.forEach((item, idx) => {
+                item.classList.toggle('highlighted', idx === nextIndex);
+            });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prevIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+            items.forEach((item, idx) => {
+                item.classList.toggle('highlighted', idx === prevIndex);
+            });
+        } else if (e.key === 'Enter' && currentIndex >= 0) {
+            e.preventDefault();
+            items[currentIndex].click();
+        } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+            searchInput.blur();
+        }
+    });
+}
+
+// Effectuer la recherche de clients
+function performClientSearch(query, dropdown) {
+    const queryLower = query.toLowerCase();
+    
+    const filtered = mockData.consommation.clients.filter(client =>
+        client.searchText.includes(queryLower)
+    ).slice(0, 10); // Limiter à 10 résultats
+    
+    dropdown.innerHTML = '';
+    
+    if (filtered.length === 0) {
+        dropdown.innerHTML = '<div class="dropdown-item">Aucun client trouvé</div>';
+    } else {
+        filtered.forEach(client => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            
+            // Mettre en évidence les correspondances
+            const name = highlightMatch(client.raisonSociale, query);
+            const details = `${client.prenom} ${client.nom} • ${client.reference}`;
+            
+            item.innerHTML = `
+                <div class="dropdown-item-main">${name}</div>
+                <div class="dropdown-item-sub">${details}</div>
+            `;
+            
+            item.addEventListener('click', () => {
+                selectClient(client.id, client.raisonSociale);
+                document.getElementById('clientSearchInput').value = '';
+                dropdown.style.display = 'none';
+            });
+            
+            item.addEventListener('mouseenter', () => {
+                dropdown.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('highlighted'));
+                item.classList.add('highlighted');
+            });
+            
+            dropdown.appendChild(item);
+        });
+    }
+    
+    dropdown.style.display = 'block';
+}
+
+// Mettre en évidence les correspondances dans le texte
+function highlightMatch(text, query) {
+    if (!query) return text;
+    const regex = new RegExp(`(${query})`, 'gi');
+    return text.replace(regex, '<strong>$1</strong>');
+}
+
+// Sélectionner un client
+function selectClient(clientId, clientName) {
+    selectedClientId = clientId;
+    
+    const selectedDisplay = document.getElementById('selectedClientDisplay');
+    const selectedName = selectedDisplay.querySelector('.selected-client-name');
+    
+    selectedName.textContent = clientName;
+    selectedDisplay.style.display = 'flex';
+    
+    updateConsumptionChart();
+}
+
+// Réinitialiser la sélection (afficher tous les clients)
+function clearClientSelection() {
+    selectedClientId = null;
+    
+    const selectedDisplay = document.getElementById('selectedClientDisplay');
+    selectedDisplay.style.display = 'none';
+    
+    const searchInput = document.getElementById('clientSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    updateConsumptionChart();
 }
 
 // Initialiser le graphe
@@ -1012,14 +1034,14 @@ function initConsumptionChart() {
     if (!ctx) return;
     
     const granularity = document.getElementById('chartGranularity').value || 'month';
-    const isAllClients = selectedClientIds.length === 0;
+    const isAllClients = selectedClientId === null;
     
     // Obtenir les données
     let chartData;
     if (isAllClients) {
         chartData = mockData.consommation.getAggregatedData(granularity);
     } else {
-        chartData = mockData.consommation.getClientsData(selectedClientIds, granularity);
+        chartData = mockData.consommation.getClientsData([selectedClientId], granularity);
     }
     
     // Créer les 3 datasets pour N&B, Couleur et Total (line chart) - version esthétique améliorée
@@ -1198,12 +1220,12 @@ function initConsumptionChart() {
 
 function updateConsumptionChart() {
     initConsumptionChart();
+    updateFiltersSummary();
 }
 
 // Initialisation au chargement
 document.addEventListener('DOMContentLoaded', () => {
     initClientSearch();
-    updateSelectedClientsList();
     initConsumptionChart();
     
     // Écouter les changements de granularité
@@ -1237,49 +1259,28 @@ tabButtons.forEach(btn => {
 });
 
 // ==================
-// Gestion des filtres
+// Mise à jour du résumé (mock)
 // ==================
-document.getElementById('btnApplyFilters').addEventListener('click', () => {
-    const client = document.getElementById('filterClient').value;
-    const contrat = document.getElementById('filterContrat').value;
-    const dateDebut = document.getElementById('filterDateDebut').value;
-    const dateFin = document.getElementById('filterDateFin').value;
-    
-    // Simuler la mise à jour des données (mock)
-    console.log('Filtres appliqués:', { client, contrat, dateDebut, dateFin });
-    
-    // Mettre à jour le résumé (mock)
-    updateFiltersSummary();
-});
-
-// Quick filters
-document.querySelectorAll('.quick-filter-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const period = btn.dataset.period;
-        const today = new Date();
-        let dateDebut, dateFin;
-        
-        if (period === 'month') {
-            dateDebut = new Date(today.getFullYear(), today.getMonth(), 1);
-            dateFin = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        } else if (period === 'last-month') {
-            dateDebut = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            dateFin = new Date(today.getFullYear(), today.getMonth(), 0);
-        }
-        
-        document.getElementById('filterDateDebut').value = dateDebut.toISOString().split('T')[0];
-        document.getElementById('filterDateFin').value = dateFin.toISOString().split('T')[0];
-    });
-});
-
 function updateFiltersSummary() {
-    // Mock data pour le résumé
+    // Mock data pour le résumé - se met à jour selon le client sélectionné
     const summary = document.getElementById('filtersSummary');
-    summary.innerHTML = `
-        <span class="summary-item">Conso N&B : <strong>12 430 pages</strong></span>
-        <span class="summary-item">Couleur : <strong>3 210 pages</strong></span>
-        <span class="summary-item">Montant estimé : <strong>845,20 €</strong></span>
-    `;
+    if (!summary) return;
+    
+    // Simuler des valeurs différentes selon si un client est sélectionné
+    if (selectedClientId) {
+        const client = mockData.consommation.clients.find(c => c.id === selectedClientId);
+        summary.innerHTML = `
+            <span class="summary-item">Conso N&B : <strong>8 450 pages</strong></span>
+            <span class="summary-item">Couleur : <strong>2 100 pages</strong></span>
+            <span class="summary-item">Montant estimé : <strong>645,20 €</strong></span>
+        `;
+    } else {
+        summary.innerHTML = `
+            <span class="summary-item">Conso N&B : <strong>12 430 pages</strong></span>
+            <span class="summary-item">Couleur : <strong>3 210 pages</strong></span>
+            <span class="summary-item">Montant estimé : <strong>845,20 €</strong></span>
+        `;
+    }
 }
 
 // ==================
