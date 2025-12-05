@@ -27,6 +27,77 @@ try {
     error_log('messagerie.php - Erreur vérification table: ' . $e->getMessage());
 }
 
+// Supprimer automatiquement les messages de plus de 24 heures
+if ($tableExists) {
+    try {
+        // Vérifier si la colonne image_path existe
+        $hasImagePath = false;
+        try {
+            $checkColumn = $pdo->prepare("
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = 'chatroom_messages' 
+                AND COLUMN_NAME = 'image_path'
+            ");
+            $checkColumn->execute();
+            $hasImagePath = (int)$checkColumn->fetchColumn() > 0;
+        } catch (PDOException $e) {
+            // Si la vérification échoue, on continue sans image_path
+        }
+
+        // Construire la requête selon la présence de la colonne image_path
+        $selectColumns = $hasImagePath ? 'id, image_path' : 'id';
+        $stmt = $pdo->prepare("
+            SELECT {$selectColumns}
+            FROM chatroom_messages 
+            WHERE date_envoi < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        ");
+        $stmt->execute();
+        $oldMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $deletedCount = 0;
+        $deletedImages = 0;
+
+        foreach ($oldMessages as $msg) {
+            // Supprimer l'image associée si elle existe et si la colonne existe
+            if ($hasImagePath && !empty($msg['image_path'])) {
+                $imagePath = dirname(__DIR__) . $msg['image_path'];
+                if (file_exists($imagePath)) {
+                    @unlink($imagePath);
+                    $deletedImages++;
+                }
+            }
+
+            // Supprimer le message
+            $deleteStmt = $pdo->prepare("DELETE FROM chatroom_messages WHERE id = :id");
+            $deleteStmt->execute([':id' => $msg['id']]);
+            $deletedCount++;
+        }
+
+        // Supprimer aussi les notifications orphelines (associées aux messages supprimés)
+        if ($deletedCount > 0) {
+            try {
+                $pdo->exec("
+                    DELETE FROM chatroom_notifications 
+                    WHERE id_message NOT IN (SELECT id FROM chatroom_messages)
+                ");
+            } catch (PDOException $e) {
+                // Ignorer les erreurs sur la table notifications (peut ne pas exister)
+                error_log('messagerie.php - Erreur nettoyage notifications: ' . $e->getMessage());
+            }
+        }
+
+        // Log uniquement si des messages ont été supprimés (pour éviter de surcharger les logs)
+        if ($deletedCount > 0) {
+            error_log("messagerie.php - Nettoyage automatique: {$deletedCount} message(s) supprimé(s)" . ($hasImagePath ? ", {$deletedImages} image(s) supprimée(s)" : ""));
+        }
+    } catch (PDOException $e) {
+        // Erreur silencieuse pour ne pas perturber l'utilisateur
+        error_log('messagerie.php - Erreur nettoyage automatique messages: ' . $e->getMessage());
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="fr">
