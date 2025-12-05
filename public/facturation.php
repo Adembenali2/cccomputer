@@ -283,64 +283,21 @@ ensureCsrfToken();
                 </div>
                 <div class="card-body">
                     <div class="table-wrapper">
-                        <table class="table">
+                        <table class="table" id="tableConsommation">
                             <thead>
                                 <tr>
                                     <th>Imprimante</th>
-                                    <th>N° série / MAC</th>
+                                    <th>MAC address</th>
                                     <th>Pages N&B</th>
                                     <th>Pages couleur</th>
                                     <th>Total pages</th>
-                                    <th>Montant N&B</th>
-                                    <th>Montant couleur</th>
-                                    <th>Total €</th>
+                                    <th>Mois (20 → 20)</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td>
-                                        <div>HP LaserJet Pro</div>
-                                        <small>Modèle M404dn</small>
-                                    </td>
-                                    <td>SN-12345678</td>
-                                    <td>8 450</td>
-                                    <td>0</td>
-                                    <td>8 450</td>
-                                    <td>422,50 €</td>
-                                    <td>0,00 €</td>
-                                    <td><strong>422,50 €</strong></td>
-                                </tr>
-                                <tr class="row-alert">
-                                    <td>
-                                        <div>Canon imageRUNNER</div>
-                                        <small>Modèle ADV C5235i</small>
-                                    </td>
-                                    <td>MAC-AB:CD:EF:12</td>
-                                    <td>1 750</td>
-                                    <td>2 100</td>
-                                    <td>3 850</td>
-                                    <td>87,50 €</td>
-                                    <td>315,00 €</td>
-                                    <td><strong>402,50 €</strong></td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div>Xerox VersaLink</div>
-                                        <small>Modèle C405</small>
-                                    </td>
-                                    <td>SN-87654321</td>
-                                    <td>0</td>
-                                    <td>1 110</td>
-                                    <td>1 110</td>
-                                    <td>0,00 €</td>
-                                    <td>166,50 €</td>
-                                    <td><strong>166,50 €</strong></td>
-                                </tr>
+                            <tbody id="tableConsommationBody">
+                                <!-- Les lignes seront générées dynamiquement par JavaScript -->
                             </tbody>
                         </table>
-                        <div class="table-alert-note">
-                            <span class="badge badge-warning">⚠️ Toner faible</span> indique un niveau de toner inférieur à 20%
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1058,6 +1015,61 @@ const mockData = {
         { id: 4, factureId: 3, date: '2024-12-08', montant: 450.00, mode: 'Chèque', reference: 'CHQ-2024-123' },
         { id: 5, factureId: 5, date: '2024-11-20', montant: 320.00, mode: 'Carte bancaire', reference: 'CB-2024-234' }
     ],
+    // Mock data pour les imprimantes et leurs consommations mensuelles (20→20)
+    imprimantes: [
+        {
+            id: 1,
+            nom: 'HP LaserJet Pro',
+            modele: 'M404dn',
+            macAddress: 'AB:CD:EF:12:34:56',
+            consommations: [
+                { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 8450, pagesCouleur: 0, totalPages: 8450 },
+                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 9200, pagesCouleur: 150, totalPages: 9350 },
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 8750, pagesCouleur: 0, totalPages: 8750 }
+            ]
+        },
+        {
+            id: 2,
+            nom: 'Canon imageRUNNER',
+            modele: 'ADV C5235i',
+            macAddress: 'AB:CD:EF:12:34:57',
+            consommations: [
+                { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 1750, pagesCouleur: 2100, totalPages: 3850 },
+                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 2100, pagesCouleur: 2400, totalPages: 4500 },
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 1950, pagesCouleur: 2200, totalPages: 4150 }
+            ]
+        },
+        {
+            id: 3,
+            nom: 'Xerox VersaLink',
+            modele: 'C405',
+            macAddress: 'AB:CD:EF:12:34:58',
+            consommations: [
+                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 0, pagesCouleur: 1110, totalPages: 1110 },
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 500, pagesCouleur: 1250, totalPages: 1750 }
+            ]
+        },
+        {
+            id: 4,
+            nom: 'Brother MFC-L3770CDW',
+            modele: 'MFC-L3770CDW',
+            macAddress: 'AB:CD:EF:12:34:59',
+            consommations: [
+                { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 3200, pagesCouleur: 800, totalPages: 4000 },
+                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 3500, pagesCouleur: 950, totalPages: 4450 },
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 3100, pagesCouleur: 750, totalPages: 3850 }
+            ]
+        },
+        {
+            id: 5,
+            nom: 'Ricoh MP C5503',
+            modele: 'MP C5503',
+            macAddress: 'AB:CD:EF:12:34:60',
+            consommations: [
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 4500, pagesCouleur: 1800, totalPages: 6300 }
+            ]
+        }
+    ],
     // Mock data pour la consommation (150+ clients avec N&B et Couleur)
     consommation: {
         // Génération de 150+ clients mock
@@ -1663,6 +1675,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialiser la facture en cours
     updateFactureEnCours();
     
+    // Initialiser le tableau de consommation
+    updateTableConsommation();
+    
     // Écouter les changements de granularité
     const granularityTypeSelect = document.getElementById('chartGranularity');
     if (granularityTypeSelect) {
@@ -1712,6 +1727,127 @@ tabButtons.forEach(btn => {
         document.getElementById(`tab-${targetTab}`).classList.add('active');
     });
 });
+
+// ==================
+// Mise à jour du tableau de consommation
+// ==================
+function updateTableConsommation() {
+    const tbody = document.getElementById('tableConsommationBody');
+    if (!tbody || !mockData.imprimantes) return;
+    
+    // Calculer les 3 derniers mois (périodes 20→20)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11
+    const currentDay = now.getDate();
+    
+    // Si on est avant le 20, le mois en cours n'est pas encore terminé
+    // On commence donc par le mois précédent
+    let moisDebut = currentMonth;
+    if (currentDay < 20) {
+        moisDebut = currentMonth - 1;
+    }
+    
+    // Générer les 3 derniers mois contractuels
+    const derniersMois = [];
+    for (let i = 0; i < 3; i++) {
+        let mois = moisDebut - i;
+        let annee = currentYear;
+        
+        // Gérer le passage d'année
+        if (mois < 0) {
+            mois += 12;
+            annee--;
+        }
+        
+        // Créer la clé de mois au format 'YYYY-MM'
+        const moisKey = `${annee}-${String(mois + 1).padStart(2, '0')}`;
+        
+        // Calculer la période (20 du mois → 20 du mois suivant)
+        const moisSuivant = (mois + 1) % 12;
+        const anneeSuivante = mois === 11 ? annee + 1 : annee;
+        
+        // Noms des mois en français
+        const moisNoms = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+        const moisNom = moisNoms[mois];
+        
+        // Format de la période : "Janvier 2025 (20/01 → 20/02)"
+        const periode = `${moisNom} ${annee} (20/${String(mois + 1).padStart(2, '0')} → 20/${String(moisSuivant + 1).padStart(2, '0')})`;
+        
+        derniersMois.push({
+            key: moisKey,
+            periode: periode,
+            mois: mois,
+            annee: annee
+        });
+    }
+    
+    // Vider le tbody
+    tbody.innerHTML = '';
+    
+    // Pour chaque imprimante, générer les lignes pour les mois disponibles
+    mockData.imprimantes.forEach(imprimante => {
+        // Filtrer les consommations pour ne garder que les 3 derniers mois
+        const consommationsFiltrees = imprimante.consommations
+            .filter(cons => derniersMois.some(m => m.key === cons.mois))
+            .sort((a, b) => {
+                // Trier par ordre décroissant (plus récent en premier)
+                return b.mois.localeCompare(a.mois);
+            });
+        
+        // Si aucune consommation pour les 3 derniers mois, on passe à l'imprimante suivante
+        if (consommationsFiltrees.length === 0) return;
+        
+        // Créer une ligne pour chaque mois de consommation
+        consommationsFiltrees.forEach((consommation, index) => {
+            const moisInfo = derniersMois.find(m => m.key === consommation.mois);
+            const periode = moisInfo ? moisInfo.periode : consommation.periode;
+            
+            const tr = document.createElement('tr');
+            
+            // Colonne Imprimante (uniquement sur la première ligne)
+            if (index === 0) {
+                const tdImprimante = document.createElement('td');
+                tdImprimante.setAttribute('rowspan', consommationsFiltrees.length);
+                tdImprimante.innerHTML = `
+                    <div>${imprimante.nom}</div>
+                    <small>Modèle ${imprimante.modele}</small>
+                `;
+                tr.appendChild(tdImprimante);
+            }
+            
+            // Colonne MAC address (uniquement sur la première ligne)
+            if (index === 0) {
+                const tdMac = document.createElement('td');
+                tdMac.setAttribute('rowspan', consommationsFiltrees.length);
+                tdMac.textContent = imprimante.macAddress;
+                tr.appendChild(tdMac);
+            }
+            
+            // Colonne Pages N&B
+            const tdNb = document.createElement('td');
+            tdNb.textContent = consommation.pagesNB.toLocaleString('fr-FR').replace(/,/g, ' ');
+            tr.appendChild(tdNb);
+            
+            // Colonne Pages couleur
+            const tdColor = document.createElement('td');
+            tdColor.textContent = consommation.pagesCouleur.toLocaleString('fr-FR').replace(/,/g, ' ');
+            tr.appendChild(tdColor);
+            
+            // Colonne Total pages
+            const tdTotal = document.createElement('td');
+            tdTotal.textContent = consommation.totalPages.toLocaleString('fr-FR').replace(/,/g, ' ');
+            tr.appendChild(tdTotal);
+            
+            // Colonne Mois (20 → 20)
+            const tdMois = document.createElement('td');
+            tdMois.textContent = periode;
+            tr.appendChild(tdMois);
+            
+            tbody.appendChild(tr);
+        });
+    });
+}
 
 // ==================
 // Mise à jour du résumé (mock)
