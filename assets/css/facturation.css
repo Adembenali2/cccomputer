@@ -145,6 +145,21 @@
     width: 100%;
 }
 
+.chart-no-data-message {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.chart-no-data-message p {
+    margin: 0;
+    font-style: italic;
+}
+
 @media (max-width: 768px) {
     .chart-controls {
         flex-direction: column;

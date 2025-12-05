@@ -76,11 +76,6 @@ ensureCsrfToken();
                 </div>
             </div>
         </div>
-        <div class="filters-summary" id="filtersSummary">
-            <span class="summary-item">Conso N&B : <strong>12 430 pages</strong></span>
-            <span class="summary-item">Couleur : <strong>3 210 pages</strong></span>
-            <span class="summary-item">Montant estimé : <strong>845,20 €</strong></span>
-        </div>
     </section>
 
     <!-- Graphique de consommation -->
@@ -93,16 +88,91 @@ ensureCsrfToken();
                 </div>
                 <div class="chart-controls">
                     <div class="chart-control-group">
-                        <label for="chartGranularity">Granularité</label>
-                        <select id="chartGranularity" class="filter-select chart-select">
+                        <label for="chartGranularityType">Type de granularité</label>
+                        <select id="chartGranularityType" class="filter-select chart-select">
                             <option value="year">Année</option>
                             <option value="month" selected>Mois</option>
                             <option value="day">Jour</option>
                         </select>
                     </div>
+                    <!-- Contrôles conditionnels pour la granularité -->
+                    <div id="granularityYearControls" class="chart-control-group" style="display:none;">
+                        <label for="chartYear">Année</label>
+                        <select id="chartYear" class="filter-select chart-select">
+                            <option value="2022">2022</option>
+                            <option value="2023">2023</option>
+                            <option value="2024">2024</option>
+                            <option value="2025" selected>2025</option>
+                        </select>
+                    </div>
+                    <div id="granularityMonthControls" class="chart-control-group" style="display:flex;">
+                        <div class="chart-control-group">
+                            <label for="chartMonthYear">Année</label>
+                            <select id="chartMonthYear" class="filter-select chart-select">
+                                <option value="2022">2022</option>
+                                <option value="2023">2023</option>
+                                <option value="2024">2024</option>
+                                <option value="2025" selected>2025</option>
+                            </select>
+                        </div>
+                        <div class="chart-control-group">
+                            <label for="chartMonth">Mois</label>
+                            <select id="chartMonth" class="filter-select chart-select">
+                                <option value="0">Janvier</option>
+                                <option value="1">Février</option>
+                                <option value="2">Mars</option>
+                                <option value="3">Avril</option>
+                                <option value="4">Mai</option>
+                                <option value="5">Juin</option>
+                                <option value="6">Juillet</option>
+                                <option value="7">Août</option>
+                                <option value="8">Septembre</option>
+                                <option value="9">Octobre</option>
+                                <option value="10">Novembre</option>
+                                <option value="11">Décembre</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="granularityDayControls" class="chart-control-group" style="display:none;">
+                        <div class="chart-control-group">
+                            <label for="chartDayYear">Année</label>
+                            <select id="chartDayYear" class="filter-select chart-select">
+                                <option value="2022">2022</option>
+                                <option value="2023">2023</option>
+                                <option value="2024">2024</option>
+                                <option value="2025" selected>2025</option>
+                            </select>
+                        </div>
+                        <div class="chart-control-group">
+                            <label for="chartDayMonth">Mois</label>
+                            <select id="chartDayMonth" class="filter-select chart-select">
+                                <option value="0">Janvier</option>
+                                <option value="1">Février</option>
+                                <option value="2">Mars</option>
+                                <option value="3">Avril</option>
+                                <option value="4">Mai</option>
+                                <option value="5">Juin</option>
+                                <option value="6">Juillet</option>
+                                <option value="7">Août</option>
+                                <option value="8">Septembre</option>
+                                <option value="9">Octobre</option>
+                                <option value="10">Novembre</option>
+                                <option value="11">Décembre</option>
+                            </select>
+                        </div>
+                        <div class="chart-control-group">
+                            <label for="chartDay">Jour</label>
+                            <select id="chartDay" class="filter-select chart-select">
+                                <!-- Sera rempli dynamiquement selon le mois sélectionné -->
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="card-body">
+                <div id="chartNoDataMessage" class="chart-no-data-message" style="display:none;">
+                    <p>Aucun relevé pour cette période.</p>
+                </div>
                 <div class="chart-container">
                     <canvas id="consumptionChart"></canvas>
                 </div>
@@ -801,41 +871,64 @@ const mockData = {
             return clients;
         })(),
         // Fonction pour générer des données de consommation pour un client
-        generateClientData: function(clientId, granularity) {
+        generateClientData: function(clientId, granularityType, periodParams) {
             const baseNb = 3000 + (parseInt(clientId) * 50);
             const baseColor = 500 + (parseInt(clientId) * 20);
             const variation = 0.15;
             
             let labels, nbData, colorData;
             
-            if (granularity === 'year') {
-                labels = ['2022', '2023', '2024', '2025'];
-                nbData = labels.map((_, i) => Math.floor(baseNb * (1 + i * 0.1) * (1 + (Math.random() - 0.5) * variation)));
-                colorData = labels.map((_, i) => Math.floor(baseColor * (1 + i * 0.15) * (1 + (Math.random() - 0.5) * variation)));
-            } else if (granularity === 'month') {
-                labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+            if (granularityType === 'year') {
+                // Afficher les 12 mois de l'année sélectionnée
+                const year = periodParams.year || 2025;
+                const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+                labels = monthNames.map(m => `${m} ${year}`);
                 nbData = labels.map(() => Math.floor(baseNb * (1 + (Math.random() - 0.5) * variation)));
                 colorData = labels.map(() => Math.floor(baseColor * (1 + (Math.random() - 0.5) * variation)));
+            } else if (granularityType === 'month') {
+                // Afficher les jours du mois sélectionné
+                const year = periodParams.year || 2025;
+                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
+                const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
+                nbData = labels.map(() => Math.floor((baseNb / daysInMonth) * (1 + (Math.random() - 0.5) * variation)));
+                colorData = labels.map(() => Math.floor((baseColor / daysInMonth) * (1 + (Math.random() - 0.5) * variation)));
             } else { // day
-                labels = Array.from({length: 30}, (_, i) => (i + 1).toString());
-                nbData = labels.map(() => Math.floor((baseNb / 30) * (1 + (Math.random() - 0.5) * variation)));
-                colorData = labels.map(() => Math.floor((baseColor / 30) * (1 + (Math.random() - 0.5) * variation)));
+                // Afficher un seul point pour le jour sélectionné
+                const year = periodParams.year || 2025;
+                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
+                const day = periodParams.day !== undefined ? parseInt(periodParams.day) : 1;
+                const dateStr = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
+                labels = [dateStr];
+                nbData = [Math.floor(baseNb * (1 + (Math.random() - 0.5) * variation))];
+                colorData = [Math.floor(baseColor * (1 + (Math.random() - 0.5) * variation))];
             }
             
             return { labels, nbData, colorData };
         },
         
         // Fonction pour obtenir les données agrégées (tous les clients)
-        getAggregatedData: function(granularity) {
+        getAggregatedData: function(granularityType, periodParams) {
             const allClients = this.clients;
-            let labels;
             
-            if (granularity === 'year') {
-                labels = ['2022', '2023', '2024', '2025'];
-            } else if (granularity === 'month') {
-                labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-            } else {
-                labels = Array.from({length: 30}, (_, i) => (i + 1).toString());
+            // Générer les labels et initialiser les tableaux de données
+            let labels;
+            if (granularityType === 'year') {
+                const year = periodParams.year || 2025;
+                const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+                labels = monthNames.map(m => `${m} ${year}`);
+            } else if (granularityType === 'month') {
+                const year = periodParams.year || 2025;
+                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
+            } else { // day
+                const year = periodParams.year || 2025;
+                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
+                const day = periodParams.day !== undefined ? parseInt(periodParams.day) : 1;
+                const dateStr = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
+                labels = [dateStr];
             }
             
             const nbData = labels.map(() => 0);
@@ -843,7 +936,7 @@ const mockData = {
             
             // Agréger les données de tous les clients
             allClients.forEach(client => {
-                const clientData = this.generateClientData(client.id, granularity);
+                const clientData = this.generateClientData(client.id, granularityType, periodParams);
                 clientData.nbData.forEach((val, i) => nbData[i] += val);
                 clientData.colorData.forEach((val, i) => colorData[i] += val);
             });
@@ -855,25 +948,35 @@ const mockData = {
         },
         
         // Fonction pour obtenir les données d'un ou plusieurs clients
-        getClientsData: function(clientIds, granularity) {
+        getClientsData: function(clientIds, granularityType, periodParams) {
             if (!clientIds || clientIds.length === 0) {
-                return this.getAggregatedData(granularity);
+                return this.getAggregatedData(granularityType, periodParams);
             }
             
+            // Générer les labels et initialiser les tableaux de données
             let labels;
-            if (granularity === 'year') {
-                labels = ['2022', '2023', '2024', '2025'];
-            } else if (granularity === 'month') {
-                labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-            } else {
-                labels = Array.from({length: 30}, (_, i) => (i + 1).toString());
+            if (granularityType === 'year') {
+                const year = periodParams.year || 2025;
+                const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+                labels = monthNames.map(m => `${m} ${year}`);
+            } else if (granularityType === 'month') {
+                const year = periodParams.year || 2025;
+                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
+            } else { // day
+                const year = periodParams.year || 2025;
+                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
+                const day = periodParams.day !== undefined ? parseInt(periodParams.day) : 1;
+                const dateStr = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
+                labels = [dateStr];
             }
             
             const nbData = labels.map(() => 0);
             const colorData = labels.map(() => 0);
             
             clientIds.forEach(clientId => {
-                const clientData = this.generateClientData(clientId, granularity);
+                const clientData = this.generateClientData(clientId, granularityType, periodParams);
                 clientData.nbData.forEach((val, i) => nbData[i] += val);
                 clientData.colorData.forEach((val, i) => colorData[i] += val);
             });
@@ -1054,20 +1157,60 @@ function clearClientSelection() {
     updateConsumptionChart();
 }
 
+// Obtenir les paramètres de période depuis les contrôles
+function getPeriodParams() {
+    const granularityType = document.getElementById('chartGranularityType').value || 'month';
+    const params = {};
+    
+    if (granularityType === 'year') {
+        const yearSelect = document.getElementById('chartYear');
+        if (yearSelect) {
+            params.year = parseInt(yearSelect.value);
+        }
+    } else if (granularityType === 'month') {
+        const yearSelect = document.getElementById('chartMonthYear');
+        const monthSelect = document.getElementById('chartMonth');
+        if (yearSelect) params.year = parseInt(yearSelect.value);
+        if (monthSelect) params.month = parseInt(monthSelect.value);
+    } else if (granularityType === 'day') {
+        const yearSelect = document.getElementById('chartDayYear');
+        const monthSelect = document.getElementById('chartDayMonth');
+        const daySelect = document.getElementById('chartDay');
+        if (yearSelect) params.year = parseInt(yearSelect.value);
+        if (monthSelect) params.month = parseInt(monthSelect.value);
+        if (daySelect) params.day = parseInt(daySelect.value);
+    }
+    
+    return params;
+}
+
 // Initialiser le graphe
 function initConsumptionChart() {
     const ctx = document.getElementById('consumptionChart');
     if (!ctx) return;
     
-    const granularity = document.getElementById('chartGranularity').value || 'month';
+    const granularityType = document.getElementById('chartGranularityType').value || 'month';
+    const periodParams = getPeriodParams();
     const isAllClients = selectedClientId === null;
     
     // Obtenir les données
     let chartData;
     if (isAllClients) {
-        chartData = mockData.consommation.getAggregatedData(granularity);
+        chartData = mockData.consommation.getAggregatedData(granularityType, periodParams);
     } else {
-        chartData = mockData.consommation.getClientsData([selectedClientId], granularity);
+        chartData = mockData.consommation.getClientsData([selectedClientId], granularityType, periodParams);
+    }
+    
+    // Vérifier si toutes les données sont à zéro (aucun relevé)
+    const hasData = chartData.nbData.some(val => val > 0) || chartData.colorData.some(val => val > 0);
+    const noDataMessage = document.getElementById('chartNoDataMessage');
+    const chartContainer = document.querySelector('.chart-container');
+    
+    if (noDataMessage) {
+        noDataMessage.style.display = hasData ? 'none' : 'block';
+    }
+    if (chartContainer) {
+        chartContainer.style.display = hasData ? 'block' : 'none';
     }
     
     // Créer les 3 datasets pour N&B, Couleur et Total (line chart) - version esthétique améliorée
@@ -1246,16 +1389,139 @@ function initConsumptionChart() {
 
 function updateConsumptionChart() {
     initConsumptionChart();
-    updateFiltersSummary();
+}
+
+// Gérer l'affichage des contrôles conditionnels selon le type de granularité
+function updateGranularityControls() {
+    const granularityType = document.getElementById('chartGranularityType').value || 'month';
+    const yearControls = document.getElementById('granularityYearControls');
+    const monthControls = document.getElementById('granularityMonthControls');
+    const dayControls = document.getElementById('granularityDayControls');
+    
+    // Masquer tous les contrôles
+    if (yearControls) yearControls.style.display = 'none';
+    if (monthControls) monthControls.style.display = 'none';
+    if (dayControls) dayControls.style.display = 'none';
+    
+    // Afficher les contrôles appropriés
+    if (granularityType === 'year' && yearControls) {
+        yearControls.style.display = 'flex';
+    } else if (granularityType === 'month' && monthControls) {
+        monthControls.style.display = 'flex';
+    } else if (granularityType === 'day' && dayControls) {
+        dayControls.style.display = 'flex';
+        // Remplir les jours selon le mois sélectionné
+        updateDayOptions();
+    }
+}
+
+// Remplir dynamiquement les options de jours selon le mois sélectionné
+function updateDayOptions() {
+    const yearSelect = document.getElementById('chartDayYear');
+    const monthSelect = document.getElementById('chartDayMonth');
+    const daySelect = document.getElementById('chartDay');
+    
+    if (!yearSelect || !monthSelect || !daySelect) return;
+    
+    const year = parseInt(yearSelect.value) || 2025;
+    const month = parseInt(monthSelect.value) || 0;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Sauvegarder la valeur actuelle
+    const currentDay = parseInt(daySelect.value) || 1;
+    
+    // Vider et remplir les options
+    daySelect.innerHTML = '';
+    for (let i = 1; i <= daysInMonth; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = i;
+        if (i === currentDay || (currentDay > daysInMonth && i === daysInMonth)) {
+            option.selected = true;
+        }
+        daySelect.appendChild(option);
+    }
+}
+
+// Initialiser les valeurs par défaut des contrôles de période
+function initDefaultPeriodValues() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11
+    const currentDay = now.getDate();
+    
+    // Initialiser l'année pour tous les contrôles
+    ['chartYear', 'chartMonthYear', 'chartDayYear'].forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (select) {
+            const option = select.querySelector(`option[value="${currentYear}"]`);
+            if (option) option.selected = true;
+        }
+    });
+    
+    // Initialiser le mois pour les contrôles mois et jour
+    ['chartMonth', 'chartDayMonth'].forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (select) {
+            const option = select.querySelector(`option[value="${currentMonth}"]`);
+            if (option) option.selected = true;
+        }
+    });
+    
+    // Initialiser le jour (sera fait après updateDayOptions)
 }
 
 // Initialisation au chargement
 document.addEventListener('DOMContentLoaded', () => {
     initClientSearch();
+    
+    // Initialiser les valeurs par défaut
+    initDefaultPeriodValues();
+    
+    // Initialiser les contrôles de granularité
+    updateGranularityControls();
+    
+    // Remplir les jours au chargement (après avoir initialisé les valeurs par défaut)
+    updateDayOptions();
+    
+    // Sélectionner le jour actuel après avoir rempli les options
+    const daySelect = document.getElementById('chartDay');
+    if (daySelect) {
+        const now = new Date();
+        const currentDay = now.getDate();
+        const option = daySelect.querySelector(`option[value="${currentDay}"]`);
+        if (option) option.selected = true;
+    }
+    
     initConsumptionChart();
     
     // Écouter les changements de granularité
-    document.getElementById('chartGranularity').addEventListener('change', updateConsumptionChart);
+    const granularityTypeSelect = document.getElementById('chartGranularityType');
+    if (granularityTypeSelect) {
+        granularityTypeSelect.addEventListener('change', () => {
+            updateGranularityControls();
+            updateConsumptionChart();
+        });
+    }
+    
+    // Écouter les changements des contrôles de période
+    const periodControls = [
+        'chartYear', 'chartMonthYear', 'chartMonth', 
+        'chartDayYear', 'chartDayMonth', 'chartDay'
+    ];
+    
+    periodControls.forEach(controlId => {
+        const control = document.getElementById(controlId);
+        if (control) {
+            control.addEventListener('change', () => {
+                // Si c'est un changement de mois ou d'année pour le jour, mettre à jour les jours
+                if (controlId === 'chartDayMonth' || controlId === 'chartDayYear') {
+                    updateDayOptions();
+                }
+                updateConsumptionChart();
+            });
+        }
+    });
 });
 
 // ==================
@@ -1287,27 +1553,6 @@ tabButtons.forEach(btn => {
 // ==================
 // Mise à jour du résumé (mock)
 // ==================
-function updateFiltersSummary() {
-    // Mock data pour le résumé - se met à jour selon le client sélectionné
-    const summary = document.getElementById('filtersSummary');
-    if (!summary) return;
-    
-    // Simuler des valeurs différentes selon si un client est sélectionné
-    if (selectedClientId) {
-        const client = mockData.consommation.clients.find(c => c.id === selectedClientId);
-        summary.innerHTML = `
-            <span class="summary-item">Conso N&B : <strong>8 450 pages</strong></span>
-            <span class="summary-item">Couleur : <strong>2 100 pages</strong></span>
-            <span class="summary-item">Montant estimé : <strong>645,20 €</strong></span>
-        `;
-    } else {
-        summary.innerHTML = `
-            <span class="summary-item">Conso N&B : <strong>12 430 pages</strong></span>
-            <span class="summary-item">Couleur : <strong>3 210 pages</strong></span>
-            <span class="summary-item">Montant estimé : <strong>845,20 €</strong></span>
-        `;
-    }
-}
 
 // ==================
 // Gestion des factures
