@@ -226,7 +226,7 @@ ensureCsrfToken();
                                 <div class="facture-period" id="facturePeriod">Période : 20/01/2025 - 07/02/2025</div>
                             </div>
                             <div class="facture-actions">
-                                <button type="button" class="btn-secondary" onclick="alert('Ouvrir la facture')">Ouvrir la facture</button>
+                                <button type="button" class="btn-secondary" id="btnOuvrirFacture">Ouvrir la facture</button>
                                 <button type="button" class="btn-secondary" id="btnGenererPDF" onclick="alert('Générer PDF')">Générer PDF</button>
                                 <button type="button" class="btn-primary" id="btnEnvoyerClient" onclick="alert('Envoyer au client')">Envoyer au client</button>
                                 <div id="factureRestrictionMessage" class="facture-restriction-message" style="display:none; margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
@@ -837,6 +837,117 @@ ensureCsrfToken();
         </div>
         <div class="modal-body">
             <!-- Le formulaire est déjà dans l'onglet Paiements, on peut le réutiliser ou créer un nouveau -->
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour l'aperçu de facture -->
+<div class="modal-overlay" id="modalFactureApercu" style="display:none;">
+    <div class="modal-content modal-facture">
+        <div class="modal-header">
+            <h3>Aperçu de la facture</h3>
+            <button type="button" class="modal-close" id="btnCloseFactureApercu" aria-label="Fermer">&times;</button>
+        </div>
+        <div class="modal-body facture-preview-body">
+            <div class="facture-preview" id="facturePreview">
+                <!-- Badge BROUILLON -->
+                <div class="facture-brouillon-badge">
+                    <span class="badge badge-draft">BROUILLON</span>
+                </div>
+                
+                <!-- En-tête facture -->
+                <div class="facture-header">
+                    <div class="facture-entreprise">
+                        <h2 class="facture-entreprise-name">CCComputer</h2>
+                        <div class="facture-entreprise-details">
+                            <div>123 Rue de l'Exemple</div>
+                            <div>75000 Paris</div>
+                            <div>Tél: 01 23 45 67 89</div>
+                            <div>Email: contact@cccomputer.fr</div>
+                        </div>
+                    </div>
+                    <div class="facture-header-right">
+                        <div class="facture-title">FACTURE</div>
+                        <div class="facture-numero" id="facturePreviewNum">Facture #2025-001</div>
+                        <div class="facture-date" id="facturePreviewDate">Date : 07/02/2025</div>
+                    </div>
+                </div>
+                
+                <!-- Informations client -->
+                <div class="facture-client-section">
+                    <div class="facture-section-label">Client :</div>
+                    <div class="facture-client-info" id="facturePreviewClient">
+                        <div class="facture-client-name">Entreprise ABC</div>
+                        <div>123 Rue Example</div>
+                        <div>75000 Paris</div>
+                        <div>contact@entreprise-abc.fr</div>
+                    </div>
+                </div>
+                
+                <!-- Période de consommation -->
+                <div class="facture-period-section" id="facturePreviewPeriod">
+                    <strong>Période de consommation :</strong> 20/01/2025 – 07/02/2025
+                </div>
+                
+                <!-- Tableau des lignes -->
+                <div class="facture-lignes">
+                    <table class="facture-table">
+                        <thead>
+                            <tr>
+                                <th class="facture-col-desc">Description</th>
+                                <th class="facture-col-qty">Qté</th>
+                                <th class="facture-col-pu">Prix unitaire HT</th>
+                                <th class="facture-col-total">Total HT</th>
+                            </tr>
+                        </thead>
+                        <tbody id="facturePreviewLignes">
+                            <tr>
+                                <td>Pages N&B</td>
+                                <td class="text-right">8 450</td>
+                                <td class="text-right">0,05 €</td>
+                                <td class="text-right">422,50 €</td>
+                            </tr>
+                            <tr>
+                                <td>Pages Couleur</td>
+                                <td class="text-right">2 100</td>
+                                <td class="text-right">0,15 €</td>
+                                <td class="text-right">315,00 €</td>
+                            </tr>
+                            <tr>
+                                <td>Maintenance</td>
+                                <td class="text-right">1</td>
+                                <td class="text-right">107,70 €</td>
+                                <td class="text-right">107,70 €</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Totaux -->
+                <div class="facture-totaux">
+                    <div class="facture-totaux-row">
+                        <div class="facture-totaux-label">Sous-total HT :</div>
+                        <div class="facture-totaux-value" id="facturePreviewHT">845,20 €</div>
+                    </div>
+                    <div class="facture-totaux-row">
+                        <div class="facture-totaux-label">TVA (20%) :</div>
+                        <div class="facture-totaux-value" id="facturePreviewTVA">169,04 €</div>
+                    </div>
+                    <div class="facture-totaux-row facture-totaux-total">
+                        <div class="facture-totaux-label">Total TTC :</div>
+                        <div class="facture-totaux-value" id="facturePreviewTTC">1 014,24 €</div>
+                    </div>
+                </div>
+                
+                <!-- Pied de page -->
+                <div class="facture-footer">
+                    <div class="facture-footer-text">
+                        <p><strong>Conditions de paiement :</strong> Paiement à réception de facture, délai de paiement 30 jours.</p>
+                        <p><strong>Mentions légales :</strong> CCComputer - SIRET: 123 456 789 00012 - RCS Paris B 123 456 789</p>
+                        <p>En cas de retard de paiement, des pénalités de 3 fois le taux d'intérêt légal seront appliquées.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -2456,6 +2567,88 @@ if (modalAddPayment) {
     modalAddPayment.addEventListener('click', (e) => {
         if (e.target === modalAddPayment) {
             modalAddPayment.style.display = 'none';
+        }
+    });
+}
+
+// ==================
+// Modal aperçu de facture
+// ==================
+function openFactureApercu() {
+    const modal = document.getElementById('modalFactureApercu');
+    if (!modal) return;
+    
+    // Récupérer les données de la facture en cours
+    const factureNum = document.getElementById('factureNum')?.textContent || 'Facture #2025-001';
+    const facturePeriod = document.getElementById('facturePeriod')?.textContent.replace('Période : ', '') || '20/01/2025 - 07/02/2025';
+    const factureMontantTTC = document.getElementById('factureMontantTTC')?.textContent || '845,20 €';
+    
+    // Extraire le montant TTC pour calculer HT et TVA
+    const parseFrenchNumber = (text) => {
+        return parseFloat(text.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, ''));
+    };
+    
+    const montantTTC = parseFrenchNumber(factureMontantTTC);
+    const montantHT = montantTTC / 1.20; // TVA à 20%
+    const montantTVA = montantTTC - montantHT;
+    
+    // Formater un nombre en format français
+    const formatFrenchNumber = (num) => {
+        return num.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €';
+    };
+    
+    // Date actuelle
+    const now = new Date();
+    const dateFacture = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    // Mettre à jour le contenu de l'aperçu
+    const facturePreviewNum = document.getElementById('facturePreviewNum');
+    const facturePreviewDate = document.getElementById('facturePreviewDate');
+    const facturePreviewPeriod = document.getElementById('facturePreviewPeriod');
+    const facturePreviewHT = document.getElementById('facturePreviewHT');
+    const facturePreviewTVA = document.getElementById('facturePreviewTVA');
+    const facturePreviewTTC = document.getElementById('facturePreviewTTC');
+    
+    if (facturePreviewNum) facturePreviewNum.textContent = factureNum;
+    if (facturePreviewDate) facturePreviewDate.textContent = `Date : ${dateFacture}`;
+    if (facturePreviewPeriod) {
+        facturePreviewPeriod.innerHTML = `<strong>Période de consommation :</strong> ${facturePeriod}`;
+    }
+    if (facturePreviewHT) facturePreviewHT.textContent = formatFrenchNumber(montantHT);
+    if (facturePreviewTVA) facturePreviewTVA.textContent = formatFrenchNumber(montantTVA);
+    if (facturePreviewTTC) facturePreviewTTC.textContent = formatFrenchNumber(montantTTC);
+    
+    // Ouvrir la modale
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeFactureApercu() {
+    const modal = document.getElementById('modalFactureApercu');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
+
+// Écouter le clic sur le bouton "Ouvrir la facture"
+const btnOuvrirFacture = document.getElementById('btnOuvrirFacture');
+if (btnOuvrirFacture) {
+    btnOuvrirFacture.addEventListener('click', openFactureApercu);
+}
+
+// Fermer la modale
+const btnCloseFactureApercu = document.getElementById('btnCloseFactureApercu');
+if (btnCloseFactureApercu) {
+    btnCloseFactureApercu.addEventListener('click', closeFactureApercu);
+}
+
+// Fermer en cliquant sur l'overlay
+const modalFactureApercu = document.getElementById('modalFactureApercu');
+if (modalFactureApercu) {
+    modalFactureApercu.addEventListener('click', (e) => {
+        if (e.target.id === 'modalFactureApercu') {
+            closeFactureApercu();
         }
     });
 }

@@ -1666,3 +1666,297 @@
         padding: 0.625rem 1.5rem;
     }
 }
+
+/* ====== Modal aperçu de facture ====== */
+.modal-facture {
+    max-width: 900px;
+    width: 95%;
+}
+
+.facture-preview-body {
+    padding: 0;
+    background-color: var(--bg-secondary);
+}
+
+.facture-preview {
+    background-color: var(--bg-primary);
+    padding: 2.5rem;
+    margin: 0;
+    position: relative;
+    min-height: 100%;
+}
+
+.facture-brouillon-badge {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 10;
+}
+
+.facture-brouillon-badge .badge {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* En-tête facture */
+.facture-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.facture-entreprise {
+    flex: 1;
+}
+
+.facture-entreprise-name {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+    margin: 0 0 0.75rem 0;
+}
+
+.facture-entreprise-details {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.facture-entreprise-details div {
+    margin-bottom: 0.25rem;
+}
+
+.facture-header-right {
+    text-align: right;
+}
+
+.facture-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.facture-numero {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+    margin-bottom: 0.5rem;
+}
+
+.facture-date {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Section client */
+.facture-client-section {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.facture-section-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 80px;
+}
+
+.facture-client-info {
+    flex: 1;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.facture-client-name {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Période de consommation */
+.facture-period-section {
+    margin-bottom: 1.5rem;
+    padding: 0.75rem 1rem;
+    background-color: var(--bg-secondary);
+    border-left: 4px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+/* Tableau des lignes */
+.facture-lignes {
+    margin-bottom: 1.5rem;
+}
+
+.facture-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.facture-table thead {
+    background-color: var(--bg-tertiary);
+}
+
+.facture-table th {
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-color);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.facture-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.facture-table tbody tr:hover {
+    background-color: var(--bg-secondary);
+}
+
+.facture-col-desc {
+    width: 50%;
+}
+
+.facture-col-qty {
+    width: 15%;
+}
+
+.facture-col-pu {
+    width: 20%;
+}
+
+.facture-col-total {
+    width: 15%;
+}
+
+.text-right {
+    text-align: right;
+}
+
+/* Totaux */
+.facture-totaux {
+    margin-top: 1.5rem;
+    margin-left: auto;
+    width: 350px;
+    border-top: 2px solid var(--border-color);
+    padding-top: 1rem;
+}
+
+.facture-totaux-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+}
+
+.facture-totaux-label {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.facture-totaux-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.facture-totaux-total {
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 1.1rem;
+}
+
+.facture-totaux-total .facture-totaux-label {
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.facture-totaux-total .facture-totaux-value {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--accent-primary);
+}
+
+/* Pied de page */
+.facture-footer {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.facture-footer-text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.facture-footer-text p {
+    margin: 0.5rem 0;
+}
+
+.facture-footer-text strong {
+    color: var(--text-primary);
+}
+
+/* Responsive pour la modale facture */
+@media (max-width: 768px) {
+    .modal-facture {
+        width: 98%;
+        max-height: 95vh;
+    }
+    
+    .facture-preview {
+        padding: 1.5rem;
+    }
+    
+    .facture-header {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .facture-header-right {
+        text-align: left;
+    }
+    
+    .facture-client-section {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .facture-totaux {
+        width: 100%;
+    }
+    
+    .facture-table {
+        font-size: 0.8rem;
+    }
+    
+    .facture-table th,
+    .facture-table td {
+        padding: 0.5rem;
+    }
+    
+    .facture-brouillon-badge {
+        position: static;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+}
