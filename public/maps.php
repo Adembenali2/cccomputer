@@ -220,40 +220,29 @@ async function loadAllClients() {
         const data = await response.json();
         
         if (data.ok && data.clients) {
-            // Géocoder les clients par lots pour éviter de surcharger le service
-            const batchSize = 5; // Géocoder 5 clients à la fois
             const totalClients = data.clients.length;
-            let processed = 0;
+            let clientsWithCoords = 0;
+            let clientsToGeocode = [];
             
-            routeMessageEl.textContent = `Chargement de ${totalClients} client(s) et géocodage des adresses en cours…`;
+            routeMessageEl.textContent = `Chargement de ${totalClients} client(s)…`;
             routeMessageEl.className = 'maps-message hint';
             
-            for (let i = 0; i < data.clients.length; i += batchSize) {
-                const batch = data.clients.slice(i, i + batchSize);
+            // Traiter tous les clients : ceux avec coordonnées et ceux à géocoder
+            for (const client of data.clients) {
+                // Stocker dans le cache
+                clientsCache.set(client.id, client);
                 
-                // Géocoder chaque client du lot en parallèle
-                const geocodePromises = batch.map(async (client) => {
-                    const clientWithCoords = await loadClientWithGeocode(client);
-                    if (clientWithCoords && clientWithCoords.lat && clientWithCoords.lng) {
-                        addClientToMap(clientWithCoords, false); // false = ne pas ajuster la vue à chaque ajout
-                        return true;
-                    }
-                    return false;
-                });
-                
-                await Promise.all(geocodePromises);
-                processed += batch.length;
-                
-                // Mettre à jour le message de progression
-                routeMessageEl.textContent = `Géocodage en cours : ${processed}/${totalClients} client(s) traités…`;
-                
-                // Attendre un peu entre les lots pour respecter la limite de Nominatim (1 req/sec)
-                if (i + batchSize < data.clients.length) {
-                    await new Promise(resolve => setTimeout(resolve, 1200)); // 1.2 secondes entre les lots
+                // Si le client a déjà des coordonnées, l'ajouter directement à la carte
+                if (client.lat && client.lng) {
+                    addClientToMap(client, false);
+                    clientsWithCoords++;
+                } else if (client.needsGeocode) {
+                    // Ajouter à la liste des clients à géocoder en arrière-plan
+                    clientsToGeocode.push(client);
                 }
             }
             
-            // Ajuster la vue pour inclure tous les clients chargés
+            // Ajuster la vue pour inclure tous les clients avec coordonnées
             const allCoords = Array.from(clientsCache.values())
                 .filter(c => c.lat && c.lng)
                 .map(c => [c.lat, c.lng]);
@@ -263,9 +252,14 @@ async function loadAllClients() {
                 map.fitBounds(bounds, { padding: [40, 40] });
             }
             
-            routeMessageEl.textContent = `${processed} client(s) chargé(s) et affiché(s) sur la carte.`;
+            routeMessageEl.textContent = `${clientsWithCoords} client(s) chargé(s) et affiché(s) sur la carte.${clientsToGeocode.length > 0 ? ' Géocodage en arrière-plan des autres clients…' : ''}`;
             routeMessageEl.className = 'maps-message success';
             clientsLoaded = true;
+            
+            // Géocoder les clients sans coordonnées en arrière-plan (par lots pour respecter la limite Nominatim)
+            if (clientsToGeocode.length > 0) {
+                geocodeClientsInBackground(clientsToGeocode);
+            }
         } else {
             routeMessageEl.textContent = "Erreur lors du chargement des clients : " + (data.error || 'Erreur inconnue');
             routeMessageEl.className = 'maps-message alert';
@@ -275,6 +269,53 @@ async function loadAllClients() {
         routeMessageEl.textContent = "Erreur lors du chargement des clients : " + err.message;
         routeMessageEl.className = 'maps-message alert';
     }
+}
+
+// Géocoder les clients en arrière-plan (par lots)
+async function geocodeClientsInBackground(clientsToGeocode) {
+    const batchSize = 3; // Géocoder 3 clients à la fois
+    let processed = 0;
+    
+    for (let i = 0; i < clientsToGeocode.length; i += batchSize) {
+        const batch = clientsToGeocode.slice(i, i + batchSize);
+        
+        // Géocoder chaque client du lot en parallèle
+        const geocodePromises = batch.map(async (client) => {
+            try {
+                const response = await fetch(`/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(client.address_geocode)}`);
+                const data = await response.json();
+                
+                if (data.ok && data.lat && data.lng) {
+                    // Mettre à jour le cache
+                    const updatedClient = {
+                        ...client,
+                        lat: data.lat,
+                        lng: data.lng,
+                        needsGeocode: false
+                    };
+                    clientsCache.set(client.id, updatedClient);
+                    
+                    // Ajouter à la carte
+                    addClientToMap(updatedClient, false);
+                    return true;
+                }
+                return false;
+            } catch (err) {
+                console.error('Erreur géocodage client', client.id, err);
+                return false;
+            }
+        });
+        
+        await Promise.all(geocodePromises);
+        processed += batch.length;
+        
+        // Attendre entre les lots pour respecter la limite de Nominatim (1 req/sec)
+        if (i + batchSize < clientsToGeocode.length) {
+            await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 secondes entre les lots
+        }
+    }
+    
+    console.log(`Géocodage terminé : ${processed} client(s) traités en arrière-plan`);
 }
 
 // ==================
@@ -288,21 +329,31 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
 }).addTo(map);
 
-// === Icônes de priorité ===
-function getPriorityColor(priority) {
-    if (priority >= 3) return '#ef4444'; // rouge
-    if (priority === 2) return '#f97316'; // orange
-    return '#16a34a'; // vert
+// === Icônes selon type de marqueur (SAV/livraison) ===
+function getMarkerColor(markerType) {
+    switch(markerType) {
+        case 'both': return '#ef4444'; // Rouge : SAV + livraison
+        case 'livraison': return '#3b82f6'; // Bleu : livraison uniquement
+        case 'sav': return '#eab308'; // Jaune : SAV uniquement
+        default: return '#16a34a'; // Vert : normal
+    }
 }
 
-function createPriorityIcon(priority) {
-    const color = getPriorityColor(priority);
+function createMarkerIcon(markerType) {
+    const color = getMarkerColor(markerType);
     return L.divIcon({
         className: 'priority-marker',
         html: `<div class="priority-dot" style="background:${color};"></div>`,
         iconSize: [18, 18],
         iconAnchor: [9, 9]
     });
+}
+
+// Fonction pour compatibilité avec l'ancien système de priorité
+function createPriorityIcon(priority) {
+    if (priority >= 3) return createMarkerIcon('both');
+    if (priority === 2) return createMarkerIcon('sav');
+    return createMarkerIcon('normal');
 }
 
 // Initialiser la carte sur la France par défaut
@@ -329,11 +380,15 @@ async function geocodeAddress(address) {
     }
 }
 
-// Fonction pour charger un client avec géocodage
+// Fonction pour charger un client avec géocodage (utilisée uniquement pour la recherche)
 // Utilise l'adresse exacte de la base de données (ou adresse de livraison si différente)
 async function loadClientWithGeocode(client) {
     if (clientsCache.has(client.id)) {
-        return clientsCache.get(client.id);
+        const cached = clientsCache.get(client.id);
+        // Si le client a déjà des coordonnées, les retourner
+        if (cached.lat && cached.lng) {
+            return cached;
+        }
     }
     
     // Utiliser address_geocode si disponible (adresse de livraison), sinon address (adresse principale)
@@ -354,6 +409,14 @@ async function loadClientWithGeocode(client) {
     };
     
     clientsCache.set(client.id, clientWithCoords);
+    
+    // Sauvegarder en base de données via l'API
+    try {
+        await fetch(`/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(addressToGeocode)}`);
+    } catch (err) {
+        console.error('Erreur sauvegarde géocodage:', err);
+    }
+    
     return clientWithCoords;
 }
 
@@ -365,23 +428,47 @@ function addClientToMap(client, autoFit = true) {
         return false; // Retourner false si pas de coordonnées
     }
     
+    // Déterminer le type de marqueur (utiliser markerType du client ou calculer depuis hasLivraison/hasSav)
+    let markerType = client.markerType || 'normal';
+    if (!client.markerType) {
+        const hasLivraison = client.hasLivraison || false;
+        const hasSav = client.hasSav || false;
+        if (hasLivraison && hasSav) {
+            markerType = 'both';
+        } else if (hasLivraison) {
+            markerType = 'livraison';
+        } else if (hasSav) {
+            markerType = 'sav';
+        }
+    }
+    
     // Si le marqueur existe déjà, juste le mettre à jour
     if (clientMarkers[client.id]) {
         // Mettre à jour la position et l'icône si nécessaire
         const marker = clientMarkers[client.id];
         marker.setLatLng([client.lat, client.lng]);
-        marker.setIcon(createPriorityIcon(client.basePriority || 1));
+        marker.setIcon(createMarkerIcon(markerType));
         return true;
     }
     
-    // Créer un nouveau marqueur
+    // Créer un nouveau marqueur avec la bonne couleur
     const marker = L.marker([client.lat, client.lng], {
-        icon: createPriorityIcon(client.basePriority || 1)
+        icon: createMarkerIcon(markerType)
     }).addTo(map);
     
     // Afficher l'adresse exacte de la base de données
     const displayAddress = client.displayAddress || client.address || 
         `${escapeHtml(client.adresse || '')} ${escapeHtml(client.code_postal || '')} ${escapeHtml(client.ville || '')}`.trim();
+    
+    // Construire le contenu du popup avec les infos SAV/livraisons
+    let popupInfo = '';
+    if (client.hasLivraison && client.hasSav) {
+        popupInfo = '<br><small style="color:#ef4444;">⚠️ SAV + Livraison en cours</small>';
+    } else if (client.hasLivraison) {
+        popupInfo = '<br><small style="color:#3b82f6;">📦 Livraison en cours</small>';
+    } else if (client.hasSav) {
+        popupInfo = '<br><small style="color:#eab308;">🔧 SAV en cours</small>';
+    }
     
     const popupContent = `
         <strong>${escapeHtml(client.name)}</strong><br>
@@ -389,6 +476,7 @@ function addClientToMap(client, autoFit = true) {
         <small>Code : ${escapeHtml(client.code)}</small>
         ${client.telephone ? `<br><small>Tel: ${escapeHtml(client.telephone)}</small>` : ''}
         ${client.adresse_livraison && !client.livraison_identique ? `<br><small style="color:#666;">Livraison: ${escapeHtml(client.adresse_livraison)}</small>` : ''}
+        ${popupInfo}
     `;
     
     marker.bindPopup(popupContent);
@@ -473,7 +561,9 @@ function renderSelectedClients() {
             sel.priority = parseInt(select.value, 10) || 1;
             const marker = clientMarkers[client.id];
             if (marker) {
-                marker.setIcon(createPriorityIcon(sel.priority));
+                // Utiliser le markerType du client plutôt que la priorité pour la couleur
+                const markerType = client.markerType || 'normal';
+                marker.setIcon(createMarkerIcon(markerType));
             }
         });
 

@@ -76,42 +76,62 @@ try {
     
     // Requête SQL optimisée - recherche dans tous les champs pertinents directement en SQL
     // Note: PDO ne permet pas de réutiliser le même paramètre nommé, donc on utilise des placeholders positionnels
+    // Utiliser des sous-requêtes pour éviter les problèmes de GROUP BY
     $sql = "
         SELECT 
-            id,
-            numero_client,
-            raison_sociale,
-            adresse,
-            code_postal,
-            ville,
-            adresse_livraison,
-            livraison_identique,
-            nom_dirigeant,
-            prenom_dirigeant,
-            telephone1,
-            email
-        FROM clients
+            c.id,
+            c.numero_client,
+            c.raison_sociale,
+            c.adresse,
+            c.code_postal,
+            c.ville,
+            c.adresse_livraison,
+            c.livraison_identique,
+            c.nom_dirigeant,
+            c.prenom_dirigeant,
+            c.telephone1,
+            c.email,
+            cg.lat,
+            cg.lng,
+            cg.display_name as geocode_display_name,
+            cg.address_hash,
+            -- Compter les livraisons actives (non livrées, non annulées)
+            COALESCE((
+                SELECT COUNT(*)
+                FROM livraisons l
+                WHERE l.id_client = c.id
+                  AND l.statut NOT IN ('livree', 'annulee')
+            ), 0) as has_livraison,
+            -- Compter les SAV actifs (non résolus, non annulés)
+            COALESCE((
+                SELECT COUNT(*)
+                FROM sav s
+                WHERE s.id_client = c.id
+                  AND s.statut NOT IN ('resolu', 'annule')
+            ), 0) as has_sav
+        FROM clients c
+        LEFT JOIN client_geocode cg ON c.id = cg.id_client
         WHERE 
-            raison_sociale LIKE ?
-            OR numero_client LIKE ?
-            OR nom_dirigeant LIKE ?
-            OR prenom_dirigeant LIKE ?
-            OR adresse LIKE ?
-            OR ville LIKE ?
-            OR code_postal LIKE ?
-            OR adresse_livraison LIKE ?
-            OR CONCAT(COALESCE(nom_dirigeant, ''), ' ', COALESCE(prenom_dirigeant, '')) LIKE ?
-            OR CONCAT(COALESCE(prenom_dirigeant, ''), ' ', COALESCE(nom_dirigeant, '')) LIKE ?
-            OR CONCAT(COALESCE(adresse, ''), ' ', COALESCE(code_postal, ''), ' ', COALESCE(ville, '')) LIKE ?
+            c.raison_sociale LIKE ?
+            OR c.numero_client LIKE ?
+            OR c.nom_dirigeant LIKE ?
+            OR c.prenom_dirigeant LIKE ?
+            OR c.adresse LIKE ?
+            OR c.ville LIKE ?
+            OR c.code_postal LIKE ?
+            OR c.adresse_livraison LIKE ?
+            OR CONCAT(COALESCE(c.nom_dirigeant, ''), ' ', COALESCE(c.prenom_dirigeant, '')) LIKE ?
+            OR CONCAT(COALESCE(c.prenom_dirigeant, ''), ' ', COALESCE(c.nom_dirigeant, '')) LIKE ?
+            OR CONCAT(COALESCE(c.adresse, ''), ' ', COALESCE(c.code_postal, ''), ' ', COALESCE(c.ville, '')) LIKE ?
         ORDER BY 
             CASE 
-                WHEN raison_sociale LIKE ? THEN 1
-                WHEN numero_client LIKE ? THEN 2
-                WHEN raison_sociale LIKE ? THEN 3
-                WHEN numero_client LIKE ? THEN 4
+                WHEN c.raison_sociale LIKE ? THEN 1
+                WHEN c.numero_client LIKE ? THEN 2
+                WHEN c.raison_sociale LIKE ? THEN 3
+                WHEN c.numero_client LIKE ? THEN 4
                 ELSE 5
             END,
-            raison_sociale ASC
+            c.raison_sociale ASC
         LIMIT ?
     ";
     
@@ -174,8 +194,25 @@ try {
             $addressForGeocode = trim($c['adresse_livraison'] . ' ' . $codePostal . ' ' . $ville);
         }
         
+        // Calculer le hash de l'adresse pour vérifier si le géocodage est à jour
+        $addressHash = md5($addressForGeocode);
+        $needsGeocode = empty($c['lat']) || empty($c['lng']) || ($c['address_hash'] !== $addressHash);
+        
         $nomDirigeant = trim(($c['prenom_dirigeant'] ?? '') . ' ' . ($c['nom_dirigeant'] ?? ''));
         $nomDirigeant = $nomDirigeant ?: null;
+        
+        // Déterminer le type de marqueur selon SAV/livraisons
+        $hasLivraison = (int)($c['has_livraison'] ?? 0) > 0;
+        $hasSav = (int)($c['has_sav'] ?? 0) > 0;
+        
+        $markerType = 'normal'; // Par défaut (vert)
+        if ($hasLivraison && $hasSav) {
+            $markerType = 'both'; // Rouge
+        } elseif ($hasLivraison) {
+            $markerType = 'livraison'; // Bleu
+        } elseif ($hasSav) {
+            $markerType = 'sav'; // Jaune
+        }
         
         $formatted[] = [
             'id' => (int)$c['id'],
@@ -193,7 +230,13 @@ try {
             'livraison_identique' => (bool)($c['livraison_identique'] ?? false),
             'telephone' => $c['telephone1'],
             'email' => $c['email'],
-            'basePriority' => 1 // Par défaut, peut être basé sur livraisons en attente plus tard
+            'lat' => $c['lat'] ? (float)$c['lat'] : null,
+            'lng' => $c['lng'] ? (float)$c['lng'] : null,
+            'needsGeocode' => $needsGeocode,
+            'markerType' => $markerType,
+            'hasLivraison' => $hasLivraison,
+            'hasSav' => $hasSav,
+            'basePriority' => 1
         ];
     }
     
