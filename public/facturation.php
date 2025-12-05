@@ -247,18 +247,45 @@ ensureCsrfToken();
                                 <div class="paiement-amount">250,00 €</div>
                                 <div class="paiement-user">Admin CCComputer</div>
                                 <div class="paiement-mode">Virement</div>
+                                <div class="paiement-etat">
+                                    <span class="badge badge-recu">Reçu</span>
+                                </div>
                             </div>
                             <div class="paiement-item">
                                 <div class="paiement-date">10/01/2025</div>
                                 <div class="paiement-amount">175,30 €</div>
                                 <div class="paiement-user">Utilisateur X</div>
                                 <div class="paiement-mode">Carte bancaire</div>
+                                <div class="paiement-etat">
+                                    <span class="badge badge-en-cours">En cours de traitement</span>
+                                </div>
                             </div>
                             <div class="paiement-item">
                                 <div class="paiement-date">05/01/2025</div>
                                 <div class="paiement-amount">100,00 €</div>
                                 <div class="paiement-user">Admin CCComputer</div>
                                 <div class="paiement-mode">Espèces</div>
+                                <div class="paiement-etat">
+                                    <span class="badge badge-recu">Reçu</span>
+                                </div>
+                            </div>
+                            <div class="paiement-item">
+                                <div class="paiement-date">28/12/2024</div>
+                                <div class="paiement-amount">320,50 €</div>
+                                <div class="paiement-user">Utilisateur Y</div>
+                                <div class="paiement-mode">Virement</div>
+                                <div class="paiement-etat">
+                                    <span class="badge badge-pas-recu">Pas reçu</span>
+                                </div>
+                            </div>
+                            <div class="paiement-item">
+                                <div class="paiement-date">20/12/2024</div>
+                                <div class="paiement-amount">150,00 €</div>
+                                <div class="paiement-user">Admin CCComputer</div>
+                                <div class="paiement-mode">Carte bancaire</div>
+                                <div class="paiement-etat">
+                                    <span class="badge badge-echec">Échec</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -271,7 +298,7 @@ ensureCsrfToken();
             <div class="content-card">
                 <div class="card-header">
                     <h3>Détail de la consommation</h3>
-                    <button type="button" class="btn-export-small" onclick="alert('Exporter en Excel')">
+                    <button type="button" class="btn-export-small" id="btnExportConsommation" onclick="exportTableConsommation()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                             <polyline points="7 10 12 15 17 10"/>
@@ -1024,7 +1051,8 @@ const mockData = {
             consommations: [
                 { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 8450, pagesCouleur: 0, totalPages: 8450 },
                 { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 9200, pagesCouleur: 150, totalPages: 9350 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 8750, pagesCouleur: 0, totalPages: 8750 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 8750, pagesCouleur: 0, totalPages: 8750 },
+                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 9100, pagesCouleur: 200, totalPages: 9300 }
             ]
         },
         {
@@ -1035,7 +1063,8 @@ const mockData = {
             consommations: [
                 { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 1750, pagesCouleur: 2100, totalPages: 3850 },
                 { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 2100, pagesCouleur: 2400, totalPages: 4500 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 1950, pagesCouleur: 2200, totalPages: 4150 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 1950, pagesCouleur: 2200, totalPages: 4150 },
+                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 2250, pagesCouleur: 2600, totalPages: 4850 }
             ]
         },
         {
@@ -1045,7 +1074,8 @@ const mockData = {
             macAddress: 'AB:CD:EF:12:34:58',
             consommations: [
                 { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 0, pagesCouleur: 1110, totalPages: 1110 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 500, pagesCouleur: 1250, totalPages: 1750 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 500, pagesCouleur: 1250, totalPages: 1750 },
+                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 600, pagesCouleur: 1400, totalPages: 2000 }
             ]
         },
         {
@@ -1056,7 +1086,8 @@ const mockData = {
             consommations: [
                 { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 3200, pagesCouleur: 800, totalPages: 4000 },
                 { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 3500, pagesCouleur: 950, totalPages: 4450 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 3100, pagesCouleur: 750, totalPages: 3850 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 3100, pagesCouleur: 750, totalPages: 3850 },
+                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 3400, pagesCouleur: 900, totalPages: 4300 }
             ]
         },
         {
@@ -1065,7 +1096,19 @@ const mockData = {
             modele: 'MP C5503',
             macAddress: 'AB:CD:EF:12:34:60',
             consommations: [
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 4500, pagesCouleur: 1800, totalPages: 6300 }
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 4500, pagesCouleur: 1800, totalPages: 6300 },
+                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 4800, pagesCouleur: 2000, totalPages: 6800 }
+            ]
+        },
+        {
+            id: 6,
+            nom: 'Epson WorkForce Pro',
+            modele: 'WF-7820',
+            macAddress: 'AB:CD:EF:12:34:61',
+            consommations: [
+                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 1200, pagesCouleur: 800, totalPages: 2000 },
+                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 1350, pagesCouleur: 950, totalPages: 2300 },
+                { mois: '2025-02', periode: '20/02 → 20/03', pagesNB: 1400, pagesCouleur: 1000, totalPages: 2400 }
             ]
         }
     ],
@@ -1848,6 +1891,109 @@ function updateTableConsommation() {
     });
 }
 
+// Export Excel du tableau de consommation
+// ==================
+function exportTableConsommation() {
+    if (!mockData.imprimantes || mockData.imprimantes.length === 0) {
+        alert('Aucune donnée à exporter');
+        return;
+    }
+    
+    // Préparer les données pour l'export
+    const data = [];
+    
+    // En-têtes
+    const headers = ['Imprimante', 'MAC address', 'Pages N&B', 'Pages couleur', 'Total pages', 'Mois (20 → 20)'];
+    data.push(headers);
+    
+    // Calculer les 3 derniers mois (même logique que updateTableConsommation)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDay = now.getDate();
+    
+    let moisDebut = currentMonth;
+    if (currentDay < 20) {
+        moisDebut = currentMonth - 1;
+    }
+    
+    const derniersMois = [];
+    for (let i = 0; i < 3; i++) {
+        let mois = moisDebut - i;
+        let annee = currentYear;
+        
+        if (mois < 0) {
+            mois += 12;
+            annee--;
+        }
+        
+        const moisKey = `${annee}-${String(mois + 1).padStart(2, '0')}`;
+        const moisSuivant = (mois + 1) % 12;
+        const anneeSuivante = mois === 11 ? annee + 1 : annee;
+        
+        const moisNoms = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+        const moisNom = moisNoms[mois];
+        const periode = `${moisNom} ${annee} (20/${String(mois + 1).padStart(2, '0')} → 20/${String(moisSuivant + 1).padStart(2, '0')})`;
+        
+        derniersMois.push({
+            key: moisKey,
+            periode: periode,
+            mois: mois,
+            annee: annee
+        });
+    }
+    
+    // Récupérer les données des imprimantes (même logique que le tableau)
+    mockData.imprimantes.forEach(imprimante => {
+        const consommationsFiltrees = imprimante.consommations
+            .filter(cons => derniersMois.some(m => m.key === cons.mois))
+            .sort((a, b) => {
+                return b.mois.localeCompare(a.mois);
+            });
+        
+        if (consommationsFiltrees.length === 0) return;
+        
+        consommationsFiltrees.forEach((consommation, index) => {
+            const moisInfo = derniersMois.find(m => m.key === consommation.mois);
+            const periode = moisInfo ? moisInfo.periode : consommation.periode;
+            
+            const row = [
+                index === 0 ? `${imprimante.nom} (Modèle ${imprimante.modele})` : '', // Imprimante (uniquement première ligne)
+                index === 0 ? imprimante.macAddress : '', // MAC address (uniquement première ligne)
+                consommation.pagesNB,
+                consommation.pagesCouleur,
+                consommation.totalPages,
+                periode
+            ];
+            
+            data.push(row);
+        });
+    });
+    
+    // Créer le workbook Excel
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    
+    // Ajuster la largeur des colonnes
+    ws['!cols'] = [
+        { wch: 30 }, // Imprimante
+        { wch: 18 }, // MAC address
+        { wch: 12 }, // Pages N&B
+        { wch: 15 }, // Pages couleur
+        { wch: 12 }, // Total pages
+        { wch: 30 }  // Mois
+    ];
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Consommation');
+    
+    // Générer le nom de fichier avec la date
+    const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const filename = `consommation-client-${dateStr}.xlsx`;
+    
+    // Télécharger le fichier
+    XLSX.writeFile(wb, filename);
+}
+
 // ==================
 // Mise à jour du résumé (mock)
 // ==================
@@ -2168,10 +2314,19 @@ document.getElementById('formAddPayment').addEventListener('submit', (e) => {
     const paiementsList = document.querySelector('.paiements-list');
     const newPayment = document.createElement('div');
     newPayment.className = 'paiement-item';
+    
+    // Déterminer l'état par défaut (pour les nouveaux paiements, on met "En cours de traitement")
+    const etat = 'En cours de traitement';
+    const etatClass = 'badge-en-cours';
+    
     newPayment.innerHTML = `
         <div class="paiement-date">${new Date(date).toLocaleDateString('fr-FR')}</div>
         <div class="paiement-amount">${amount.toFixed(2)} €</div>
+        <div class="paiement-user">Admin CCComputer</div>
         <div class="paiement-mode">${mode}</div>
+        <div class="paiement-etat">
+            <span class="badge ${etatClass}">${etat}</span>
+        </div>
     `;
     paiementsList.insertBefore(newPayment, paiementsList.firstChild);
     
