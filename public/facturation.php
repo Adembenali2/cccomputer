@@ -74,15 +74,15 @@ ensureCsrfToken();
                     <input type="date" id="filterDateFin" class="filter-date" value="<?= date('Y-m-t') ?>">
                 </div>
             </div>
-            <div class="filter-group filter-quick">
-                <label>Raccourcis</label>
-                <div class="quick-filters">
-                    <button type="button" class="quick-filter-btn" data-period="month">Ce mois-ci</button>
-                    <button type="button" class="quick-filter-btn" data-period="last-month">Dernier mois</button>
+            <div class="filter-group filter-actions">
+                <label>&nbsp;</label>
+                <div class="filter-actions-group">
+                    <div class="quick-filters">
+                        <button type="button" class="quick-filter-btn" data-period="month">Ce mois-ci</button>
+                        <button type="button" class="quick-filter-btn" data-period="last-month">Dernier mois</button>
+                    </div>
+                    <button type="button" class="btn-primary" id="btnApplyFilters">Appliquer</button>
                 </div>
-            </div>
-            <div class="filter-group filter-apply">
-                <button type="button" class="btn-primary" id="btnApplyFilters">Appliquer</button>
             </div>
         </div>
         <div class="filters-summary" id="filtersSummary">

@@ -268,14 +268,17 @@
     font-size: 0.85rem;
 }
 
-.quick-filters {
+.filter-actions-group {
     display: flex;
+    align-items: center;
     gap: 0.75rem;
     flex-wrap: wrap;
 }
 
-.quick-filter-btn {
-    margin-right: 0;
+.quick-filters {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .quick-filter-btn {
@@ -296,7 +299,7 @@
     border-color: var(--accent-primary);
 }
 
-.filter-apply {
+.filter-actions {
     align-items: flex-end;
 }
 
