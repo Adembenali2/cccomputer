@@ -1022,50 +1022,56 @@ function initConsumptionChart() {
         chartData = mockData.consommation.getClientsData(selectedClientIds, granularity);
     }
     
-    // Créer les 3 datasets pour N&B, Couleur et Total (line chart)
+    // Créer les 3 datasets pour N&B, Couleur et Total (line chart) - version esthétique améliorée
     const datasets = [
         {
             label: 'Noir & Blanc',
             data: chartData.nbData,
             borderColor: 'rgb(30, 41, 59)', // Gris foncé (slate-800) - cohérent avec le projet
-            backgroundColor: 'rgba(30, 41, 59, 0.1)',
-            borderWidth: 3,
-            fill: false,
-            tension: 0.4,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            backgroundColor: 'rgba(30, 41, 59, 0.08)', // Gradient léger sous la courbe
+            borderWidth: 2.5,
+            fill: true,
+            tension: 0.3, // Courbes plus lissées
+            pointRadius: 4.5,
+            pointHoverRadius: 7,
             pointBackgroundColor: 'rgb(30, 41, 59)',
             pointBorderColor: '#fff',
-            pointBorderWidth: 2
+            pointBorderWidth: 2.5,
+            pointHoverBorderWidth: 3,
+            pointHoverBackgroundColor: 'rgb(30, 41, 59)'
         },
         {
             label: 'Couleur',
             data: chartData.colorData,
             borderColor: 'rgb(139, 92, 246)', // Violet (violet-500) - cohérent avec le projet
-            backgroundColor: 'rgba(139, 92, 246, 0.1)',
-            borderWidth: 3,
-            fill: false,
-            tension: 0.4,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            backgroundColor: 'rgba(139, 92, 246, 0.08)', // Gradient léger sous la courbe
+            borderWidth: 2.5,
+            fill: true,
+            tension: 0.3, // Courbes plus lissées
+            pointRadius: 4.5,
+            pointHoverRadius: 7,
             pointBackgroundColor: 'rgb(139, 92, 246)',
             pointBorderColor: '#fff',
-            pointBorderWidth: 2
+            pointBorderWidth: 2.5,
+            pointHoverBorderWidth: 3,
+            pointHoverBackgroundColor: 'rgb(139, 92, 246)'
         },
         {
             label: 'Total',
             data: chartData.totalData,
             borderColor: 'rgb(59, 130, 246)', // Bleu (blue-500) - accent principal du projet
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            borderWidth: 3,
-            fill: false,
-            tension: 0.4,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            backgroundColor: 'rgba(59, 130, 246, 0.08)', // Gradient léger sous la courbe
+            borderWidth: 2.5,
+            fill: true,
+            tension: 0.3, // Courbes plus lissées
+            pointRadius: 4.5,
+            pointHoverRadius: 7,
             pointBackgroundColor: 'rgb(59, 130, 246)',
             pointBorderColor: '#fff',
-            pointBorderWidth: 2,
-            borderDash: [5, 5] // Ligne en pointillés pour différencier la courbe Total
+            pointBorderWidth: 2.5,
+            pointHoverBorderWidth: 3,
+            pointHoverBackgroundColor: 'rgb(59, 130, 246)',
+            borderDash: [6, 4] // Ligne en pointillés pour différencier la courbe Total
         }
     ];
     
@@ -1078,6 +1084,10 @@ function initConsumptionChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 1200,
+                easing: 'easeInOutQuart'
+            },
             interaction: {
                 mode: 'index',
                 intersect: false
@@ -1153,10 +1163,13 @@ function initConsumptionChart() {
                         font: {
                             family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
                             size: 11
-                        }
+                        },
+                        padding: 8
                     },
                     grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
+                        color: 'rgba(0, 0, 0, 0.04)',
+                        drawBorder: false,
+                        lineWidth: 1
                     }
                 },
                 x: {
@@ -1164,10 +1177,12 @@ function initConsumptionChart() {
                         font: {
                             family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
                             size: 11
-                        }
+                        },
+                        padding: 8
                     },
                     grid: {
-                        display: false
+                        display: false,
+                        drawBorder: false
                     }
                 }
             }
