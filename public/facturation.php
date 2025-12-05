@@ -217,13 +217,14 @@ ensureCsrfToken();
                     <div class="card-body">
                         <div class="facture-current">
                             <div class="facture-info">
-                                <div class="facture-num" id="factureNum">Facture #2025-001</div>
+                                <div class="facture-num" id="factureNum">Facture 2025-12 (brouillon)</div>
                                 <div class="facture-status">
-                                    <span class="badge badge-draft">Brouillon</span>
+                                    <span class="badge badge-draft">BROUILLON</span>
                                 </div>
-                                <div class="facture-amount">Montant TTC : <strong id="factureMontantTTC">845,20 €</strong></div>
-                                <div class="facture-amount">Montant collecté : <strong id="factureMontantCollecte">425,30 €</strong></div>
-                                <div class="facture-period" id="facturePeriod">Période : 20/01/2025 - 07/02/2025</div>
+                                <div class="facture-amount">Consommation N&B : <strong id="factureConsoNB">XXX pages</strong></div>
+                                <div class="facture-amount">Consommation couleur : <strong id="factureConsoCouleur">YYY pages</strong></div>
+                                <div class="facture-amount">Montant TTC : <strong id="factureMontantTTC">ZZZ,00 €</strong></div>
+                                <div class="facture-period" id="facturePeriod">Période : 20/11/2025 – 05/12/2025</div>
                             </div>
                             <div class="facture-actions">
                                 <button type="button" class="btn-secondary" id="btnOuvrirFacture" style="display:none;">Ouvrir la facture</button>
@@ -257,7 +258,7 @@ ensureCsrfToken();
                                 <div class="paiement-user">Utilisateur X</div>
                                 <div class="paiement-mode">Carte bancaire</div>
                                 <div class="paiement-etat">
-                                    <span class="badge badge-warning">En cours de traitement</span>
+                                    <span class="badge badge-warning">EN COURS</span>
                                 </div>
                             </div>
                             <div class="paiement-item">
@@ -338,7 +339,7 @@ ensureCsrfToken();
                                     </thead>
                                     <tbody id="facturesListBody">
                                         <tr class="facture-row" data-facture-id="1">
-                                            <td>#2025-001</td>
+                                            <td>2025-001</td>
                                             <td>15/01/2025</td>
                                             <td>01/01 - 31/01</td>
                                             <td>Consommation</td>
@@ -346,7 +347,7 @@ ensureCsrfToken();
                                             <td><span class="badge badge-draft">Brouillon</span></td>
                                         </tr>
                                         <tr class="facture-row" data-facture-id="2">
-                                            <td>#2024-125</td>
+                                            <td>2024-125</td>
                                             <td>10/12/2024</td>
                                             <td>01/12 - 31/12</td>
                                             <td>Consommation</td>
@@ -354,7 +355,7 @@ ensureCsrfToken();
                                             <td><span class="badge badge-sent">Envoyée</span></td>
                                         </tr>
                                         <tr class="facture-row" data-facture-id="3">
-                                            <td>#2024-124</td>
+                                            <td>2024-124</td>
                                             <td>05/12/2024</td>
                                             <td>—</td>
                                             <td>Achat</td>
@@ -362,7 +363,7 @@ ensureCsrfToken();
                                             <td><span class="badge badge-paid">Payée</span></td>
                                         </tr>
                                         <tr class="facture-row" data-facture-id="4">
-                                            <td>#2024-123</td>
+                                            <td>2024-123</td>
                                             <td>20/11/2024</td>
                                             <td>01/11 - 30/11</td>
                                             <td>Consommation</td>
@@ -370,7 +371,7 @@ ensureCsrfToken();
                                             <td><span class="badge badge-overdue">En retard</span></td>
                                         </tr>
                                         <tr class="facture-row" data-facture-id="5">
-                                            <td>#2024-122</td>
+                                            <td>2024-122</td>
                                             <td>15/11/2024</td>
                                             <td>—</td>
                                             <td>Service</td>
@@ -379,6 +380,15 @@ ensureCsrfToken();
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                            <div style="text-align: right; margin-top: 1rem;">
+                                <button type="button" class="btn-secondary btn-small" id="btnVoirHistoriqueFactures" onclick="ouvrirHistoriqueFactures()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem;">
+                                        <line x1="12" y1="5" x2="12" y2="19"/>
+                                        <line x1="5" y1="12" x2="19" y2="12"/>
+                                    </svg>
+                                    Voir l'historique
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -406,27 +416,8 @@ ensureCsrfToken();
                         <h3>Résumé de la facture</h3>
                     </div>
                     <div class="card-body">
-                        <div class="paiement-summary">
-                            <div class="summary-row">
-                                <span>Numéro facture :</span>
-                                <strong>#2025-001</strong>
-                            </div>
-                            <div class="summary-row">
-                                <span>Montant TTC :</span>
-                                <strong>845,20 €</strong>
-                            </div>
-                            <div class="summary-row">
-                                <span>Total payé :</span>
-                                <strong class="text-success">425,30 €</strong>
-                            </div>
-                            <div class="summary-row">
-                                <span>Solde restant :</span>
-                                <strong class="text-warning">419,90 €</strong>
-                            </div>
-                            <div class="summary-row">
-                                <span>Statut paiement :</span>
-                                <span class="badge badge-partial">Partiellement payé</span>
-                            </div>
+                        <div class="paiement-summary" id="paiementSummary">
+                            <!-- Le résumé sera généré dynamiquement par JavaScript -->
                         </div>
                     </div>
                 </div>
@@ -436,22 +427,8 @@ ensureCsrfToken();
                         <h3>Historique des paiements</h3>
                     </div>
                     <div class="card-body">
-                        <div class="paiements-timeline">
-                            <div class="timeline-item">
-                                <div class="timeline-date">15/01/2025</div>
-                                <div class="timeline-content">
-                                    <div class="timeline-amount">250,00 €</div>
-                                    <div class="timeline-mode">Virement - Réf: VIR-2025-001</div>
-                                    <div class="timeline-comment">Paiement partiel</div>
-                                </div>
-                            </div>
-                            <div class="timeline-item">
-                                <div class="timeline-date">10/01/2025</div>
-                                <div class="timeline-content">
-                                    <div class="timeline-amount">175,30 €</div>
-                                    <div class="timeline-mode">Carte bancaire - Réf: CB-2025-045</div>
-                                </div>
-                            </div>
+                        <div class="paiements-timeline" id="paiementsTimeline" style="max-height: 500px; overflow-y: auto;">
+                            <!-- Les paiements seront générés dynamiquement par JavaScript -->
                         </div>
                     </div>
                 </div>
@@ -806,6 +783,35 @@ ensureCsrfToken();
     </div>
 </div>
 
+<!-- Modal pour l'historique des factures -->
+<div class="modal-overlay" id="modalHistoriqueFactures" style="display:none;">
+    <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-header">
+            <h3>Historique des factures</h3>
+            <button type="button" class="modal-close" id="btnCloseHistoriqueFactures" aria-label="Fermer">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Numéro</th>
+                            <th>Date</th>
+                            <th>Période</th>
+                            <th>Type</th>
+                            <th>Montant TTC</th>
+                            <th>Statut</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historiqueFacturesBody">
+                        <!-- Les lignes seront générées dynamiquement par JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal pour l'aperçu de facture -->
 <div class="modal-overlay" id="modalFactureApercu" style="display:none;">
     <div class="modal-content modal-facture">
@@ -936,7 +942,7 @@ const mockData = {
     factures: [
         {
             id: 1,
-            numero: '#2025-001',
+            numero: '2025-001',
             date: '2025-01-15',
             periode: { debut: '2025-01-01', fin: '2025-01-31' },
             type: 'Consommation',
@@ -944,6 +950,7 @@ const mockData = {
             tva: 140.87,
             montantTTC: 845.20,
             statut: 'brouillon',
+            pdfGenere: false,
             client: { nom: 'Entreprise ABC', adresse: '123 Rue Example', email: 'contact@entreprise-abc.fr' },
             lignes: [
                 { description: 'Pages N&B', type: 'N&B', quantite: 8450, prixUnitaire: 0.05, total: 422.50 },
@@ -953,7 +960,7 @@ const mockData = {
         },
         {
             id: 2,
-            numero: '#2024-125',
+            numero: '2024-125',
             date: '2024-12-10',
             periode: { debut: '2024-12-01', fin: '2024-12-31' },
             type: 'Consommation',
@@ -961,6 +968,7 @@ const mockData = {
             tva: 186.75,
             montantTTC: 1120.50,
             statut: 'envoyee',
+            pdfGenere: true,
             client: { nom: 'Société XYZ', adresse: '456 Avenue Test', email: 'comptabilite@societe-xyz.fr' },
             lignes: [
                 { description: 'Pages N&B', type: 'N&B', quantite: 12000, prixUnitaire: 0.05, total: 600.00 },
@@ -970,7 +978,7 @@ const mockData = {
         },
         {
             id: 3,
-            numero: '#2024-124',
+            numero: '2024-124',
             date: '2024-12-05',
             periode: null,
             type: 'Achat',
@@ -978,6 +986,7 @@ const mockData = {
             tva: 75.00,
             montantTTC: 450.00,
             statut: 'payee',
+            pdfGenere: true,
             client: { nom: 'Compagnie DEF', adresse: '789 Boulevard Demo', email: 'direction@compagnie-def.fr' },
             lignes: [
                 { description: 'Imprimante HP LaserJet', type: 'Produit', quantite: 1, prixUnitaire: 375.00, total: 375.00 }
@@ -985,7 +994,7 @@ const mockData = {
         },
         {
             id: 4,
-            numero: '#2024-123',
+            numero: '2024-123',
             date: '2024-11-20',
             periode: { debut: '2024-11-01', fin: '2024-11-30' },
             type: 'Consommation',
@@ -993,6 +1002,7 @@ const mockData = {
             tva: 163.38,
             montantTTC: 980.30,
             statut: 'en_retard',
+            pdfGenere: true,
             client: { nom: 'Groupe GHI', adresse: '321 Rue Sample', email: 'compta@groupe-ghi.fr' },
             lignes: [
                 { description: 'Pages N&B', type: 'N&B', quantite: 10000, prixUnitaire: 0.05, total: 500.00 },
@@ -1002,7 +1012,7 @@ const mockData = {
         },
         {
             id: 5,
-            numero: '#2024-122',
+            numero: '2024-122',
             date: '2024-11-15',
             periode: null,
             type: 'Service',
@@ -1010,6 +1020,7 @@ const mockData = {
             tva: 53.33,
             montantTTC: 320.00,
             statut: 'payee',
+            pdfGenere: true,
             client: { nom: 'Entreprise ABC', adresse: '123 Rue Example', email: 'contact@entreprise-abc.fr' },
             lignes: [
                 { description: 'Intervention technique', type: 'Service', quantite: 2, prixUnitaire: 133.33, total: 266.67 }
@@ -1021,7 +1032,10 @@ const mockData = {
         { id: 2, factureId: 1, date: '2025-01-10', montant: 175.30, mode: 'Carte bancaire', reference: 'CB-2025-045' },
         { id: 3, factureId: 2, date: '2024-12-20', montant: 1120.50, mode: 'Virement', reference: 'VIR-2024-089' },
         { id: 4, factureId: 3, date: '2024-12-08', montant: 450.00, mode: 'Chèque', reference: 'CHQ-2024-123' },
-        { id: 5, factureId: 5, date: '2024-11-20', montant: 320.00, mode: 'Carte bancaire', reference: 'CB-2024-234' }
+        { id: 5, factureId: 5, date: '2024-11-20', montant: 320.00, mode: 'Carte bancaire', reference: 'CB-2024-234' },
+        { id: 6, factureId: 1, date: '2025-01-05', montant: 100.00, mode: 'Espèces', reference: 'ESP-2025-001', commentaire: 'Acompte' },
+        { id: 7, factureId: 4, date: '2024-12-15', montant: 500.00, mode: 'Virement', reference: 'VIR-2024-090', commentaire: 'Paiement partiel' },
+        { id: 8, factureId: 4, date: '2024-12-10', montant: 300.00, mode: 'Chèque', reference: 'CHQ-2024-124' }
     ],
     // Mock data pour les imprimantes et leurs consommations mensuelles (20→20)
     imprimantes: [
@@ -2034,31 +2048,51 @@ function updateFactureEnCours() {
         return `${day}/${month}/${year}`;
     };
     
-    // Mettre à jour la période affichée
+    // Mettre à jour la période affichée (période fixe pour la facture en cours)
     const periodEl = document.getElementById('facturePeriod');
     if (periodEl) {
-        periodEl.textContent = `Période : ${formatDate(startDate)} - ${formatDate(endDate)}`;
+        periodEl.textContent = 'Période : 20/11/2025 – 05/12/2025';
     }
     
-    // Générer le numéro de facture (mock)
+    // Générer le numéro de facture (mock - format sans #)
     const factureNumEl = document.getElementById('factureNum');
-    if (factureNumEl && factureGeneree) {
-        // Si la facture est générée, utiliser un numéro fixe basé sur la période
-        const monthStr = String(currentMonth + 1).padStart(2, '0');
-        factureNumEl.textContent = `Facture #${currentYear}-${monthStr}`;
-    } else if (factureNumEl) {
-        // Sinon, afficher un numéro temporaire
-        const monthStr = String(currentMonth + 1).padStart(2, '0');
-        factureNumEl.textContent = `Facture #${currentYear}-${monthStr} (brouillon)`;
+    if (factureNumEl) {
+        factureNumEl.textContent = 'Facture 2025-12 (brouillon)';
     }
     
-    // Calculer le montant collecté (mock - somme des paiements de la facture en cours)
-    const montantCollecteEl = document.getElementById('factureMontantCollecte');
-    if (montantCollecteEl) {
-        // Mock : montant collecté (peut être calculé depuis les paiements réels plus tard)
-        const montantCollecte = 425.30; // Mock value
-        const formatted = montantCollecte.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-        montantCollecteEl.textContent = formatted + ' €';
+    // Calculer la consommation N&B et couleur (mock - basé sur les données des imprimantes)
+    const consoNBEl = document.getElementById('factureConsoNB');
+    const consoCouleurEl = document.getElementById('factureConsoCouleur');
+    if (consoNBEl && consoCouleurEl) {
+        // Calculer la consommation totale pour la période (mock)
+        let totalNB = 0;
+        let totalCouleur = 0;
+        
+        // Utiliser les données mock des imprimantes pour calculer la consommation
+        mockData.imprimantes.forEach(imprimante => {
+            // Prendre la consommation du mois le plus récent (mock)
+            if (imprimante.consommations && imprimante.consommations.length > 0) {
+                const derniereConso = imprimante.consommations[imprimante.consommations.length - 1];
+                totalNB += derniereConso.pagesNB || 0;
+                totalCouleur += derniereConso.pagesCouleur || 0;
+            }
+        });
+        
+        // Valeurs mock cohérentes pour la facture en cours
+        const consoNB = 10200; // Mock value
+        const consoCouleur = 2100; // Mock value
+        
+        consoNBEl.textContent = `${consoNB.toLocaleString('fr-FR')} pages`;
+        consoCouleurEl.textContent = `${consoCouleur.toLocaleString('fr-FR')} pages`;
+    }
+    
+    // Calculer le montant TTC (mock - cohérent avec la consommation)
+    const montantTTCEl = document.getElementById('factureMontantTTC');
+    if (montantTTCEl) {
+        // Montant mock cohérent avec la consommation
+        const montantTTC = 845.20; // Mock value
+        const formatted = montantTTC.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        montantTTCEl.textContent = formatted + ' €';
     }
     
     // Gérer la visibilité et l'activation des boutons selon l'état
@@ -2236,8 +2270,10 @@ function displayFactureDetail(facture) {
                     </div>
                 </div>
                 <div class="detail-actions">
-                    <button type="button" class="btn-secondary" onclick="alert('Modifier')">Modifier</button>
-                    <button type="button" class="btn-secondary" onclick="alert('Générer PDF')">Générer PDF</button>
+                    ${facture.pdfGenere 
+                        ? `<button type="button" class="btn-secondary" onclick="alert('Voir facture')">Voir facture</button>`
+                        : `<button type="button" class="btn-secondary" onclick="alert('Générer PDF')">Générer PDF</button>`
+                    }
                     <button type="button" class="btn-primary" onclick="alert('Envoyer au client')">Envoyer au client</button>
                 </div>
                 <div class="detail-table-wrapper">
@@ -2279,6 +2315,88 @@ function displayFactureDetail(facture) {
 }
 
 // ==================
+// Gestion de l'historique des factures
+// ==================
+function ouvrirHistoriqueFactures() {
+    const modal = document.getElementById('modalHistoriqueFactures');
+    const tbody = document.getElementById('historiqueFacturesBody');
+    
+    if (!modal || !tbody) return;
+    
+    // Générer le tableau avec toutes les factures
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '—';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('fr-FR');
+    };
+    
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+    };
+    
+    const statutBadge = {
+        'brouillon': '<span class="badge badge-draft">Brouillon</span>',
+        'envoyee': '<span class="badge badge-sent">Envoyée</span>',
+        'payee': '<span class="badge badge-paid">Payée</span>',
+        'en_retard': '<span class="badge badge-overdue">En retard</span>'
+    };
+    
+    let rowsHtml = mockData.factures.map(facture => {
+        let periodeHtml = '—';
+        if (facture.periode) {
+            periodeHtml = `${formatDate(facture.periode.debut)} - ${formatDate(facture.periode.fin)}`;
+        }
+        
+        return `
+            <tr class="facture-row" data-facture-id="${facture.id}" style="cursor: pointer;">
+                <td>${facture.numero}</td>
+                <td>${formatDate(facture.date)}</td>
+                <td>${periodeHtml}</td>
+                <td>${facture.type}</td>
+                <td>${formatCurrency(facture.montantTTC)}</td>
+                <td>${statutBadge[facture.statut] || ''}</td>
+            </tr>
+        `;
+    }).join('');
+    
+    tbody.innerHTML = rowsHtml;
+    
+    // Ajouter les event listeners pour la sélection de facture
+    tbody.querySelectorAll('.facture-row').forEach(row => {
+        row.addEventListener('click', () => {
+            const factureId = parseInt(row.dataset.factureId);
+            const facture = mockData.factures.find(f => f.id === factureId);
+            if (facture) {
+                displayFactureDetail(facture);
+                fermerHistoriqueFactures();
+                // Basculer vers l'onglet Factures si nécessaire
+                const tabFactures = document.querySelector('[data-tab=factures]');
+                if (tabFactures) {
+                    tabFactures.click();
+                }
+            }
+        });
+    });
+    
+    modal.style.display = 'flex';
+}
+
+function fermerHistoriqueFactures() {
+    const modal = document.getElementById('modalHistoriqueFactures');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Gestion de la fermeture du modal
+document.getElementById('btnCloseHistoriqueFactures')?.addEventListener('click', fermerHistoriqueFactures);
+document.getElementById('modalHistoriqueFactures')?.addEventListener('click', (e) => {
+    if (e.target.id === 'modalHistoriqueFactures') {
+        fermerHistoriqueFactures();
+    }
+});
+
+// ==================
 // Gestion des paiements
 // ==================
 document.getElementById('formAddPayment').addEventListener('submit', (e) => {
@@ -2304,7 +2422,7 @@ document.getElementById('formAddPayment').addEventListener('submit', (e) => {
         <div class="paiement-user">Admin CCComputer</div>
         <div class="paiement-mode">${mode}</div>
         <div class="paiement-etat">
-            <span class="badge badge-warning">En cours de traitement</span>
+            <span class="badge badge-warning">EN COURS</span>
         </div>
     `;
     paiementsList.insertBefore(newPayment, paiementsList.firstChild);
@@ -2314,6 +2432,115 @@ document.getElementById('formAddPayment').addEventListener('submit', (e) => {
     document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
     
     alert('Paiement enregistré (simulation)');
+    
+    // Mettre à jour l'affichage
+    updatePaiementsDisplay();
+});
+
+// ==================
+// Mise à jour de l'affichage des paiements
+// ==================
+function updatePaiementsDisplay() {
+    // Mettre à jour l'historique des paiements
+    const timeline = document.getElementById('paiementsTimeline');
+    if (timeline) {
+        const formatDate = (dateStr) => {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('fr-FR');
+        };
+        
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+        };
+        
+        // Trier les paiements par date décroissante
+        const paiementsSorted = [...mockData.paiements].sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        let timelineHtml = paiementsSorted.map(paiement => {
+            let modeText = paiement.mode;
+            if (paiement.reference) {
+                modeText += ` - Réf: ${paiement.reference}`;
+            }
+            
+            return `
+                <div class="timeline-item">
+                    <div class="timeline-date">${formatDate(paiement.date)}</div>
+                    <div class="timeline-content">
+                        <div class="timeline-amount">${formatCurrency(paiement.montant)}</div>
+                        <div class="timeline-mode">${modeText}</div>
+                        ${paiement.commentaire ? `<div class="timeline-comment">${paiement.commentaire}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        timeline.innerHTML = timelineHtml;
+    }
+    
+    // Mettre à jour le résumé de la facture (factures non payées)
+    const summary = document.getElementById('paiementSummary');
+    if (summary) {
+        // Trouver la première facture non payée ou partiellement payée
+        const factureNonPayee = mockData.factures.find(f => {
+            const paiementsFacture = mockData.paiements.filter(p => p.factureId === f.id);
+            const totalPaye = paiementsFacture.reduce((sum, p) => sum + p.montant, 0);
+            return totalPaye < f.montantTTC;
+        });
+        
+        if (factureNonPayee) {
+            const paiementsFacture = mockData.paiements.filter(p => p.factureId === factureNonPayee.id);
+            const totalPaye = paiementsFacture.reduce((sum, p) => sum + p.montant, 0);
+            const soldeRestant = factureNonPayee.montantTTC - totalPaye;
+            
+            let statutPaiement = '';
+            let badgeClass = '';
+            if (totalPaye === 0) {
+                statutPaiement = 'NON PAYÉ';
+                badgeClass = 'badge-danger';
+            } else if (soldeRestant > 0) {
+                statutPaiement = 'PARTIELLEMENT PAYÉ';
+                badgeClass = 'badge-partial';
+            }
+            
+            const formatCurrency = (amount) => {
+                return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+            };
+            
+            summary.innerHTML = `
+                <div class="summary-row">
+                    <span>Numéro facture :</span>
+                    <strong>${factureNonPayee.numero}</strong>
+                </div>
+                <div class="summary-row">
+                    <span>Montant TTC :</span>
+                    <strong>${formatCurrency(factureNonPayee.montantTTC)}</strong>
+                </div>
+                <div class="summary-row">
+                    <span>Total payé :</span>
+                    <strong class="text-success">${formatCurrency(totalPaye)}</strong>
+                </div>
+                <div class="summary-row">
+                    <span>Solde restant :</span>
+                    <strong class="text-warning">${formatCurrency(soldeRestant)}</strong>
+                </div>
+                <div class="summary-row">
+                    <span>Statut paiement :</span>
+                    <span class="badge ${badgeClass}">${statutPaiement}</span>
+                </div>
+            `;
+        } else {
+            summary.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <p>Aucune facture impayée</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// Initialiser l'affichage des paiements au chargement
+document.addEventListener('DOMContentLoaded', () => {
+    updatePaiementsDisplay();
 });
 
 // ==================
