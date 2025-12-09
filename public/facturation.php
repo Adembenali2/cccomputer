@@ -1045,7 +1045,8 @@ function selectClient(clientId, clientName) {
         tabsSection.style.display = 'block';
     }
     
-    updateConsumptionChart();
+    // WIRED: When client is selected, reload all billing data
+    reloadBillingData();
     updateResumeKPIs().catch(err => console.error('Erreur updateResumeKPIs:', err));
     updateFactureEnCours().catch(err => console.error('Erreur updateFactureEnCours:', err));
     updatePaiementsDisplay().catch(err => console.error('Erreur updatePaiementsDisplay:', err));
@@ -1072,7 +1073,8 @@ function clearClientSelection() {
         tabsSection.style.display = 'none';
     }
     
-    updateConsumptionChart();
+    // WIRED: When client selection is cleared, reload billing data for all clients
+    reloadBillingData();
 }
 
 // Obtenir les paramètres de période depuis les contrôles
@@ -1154,7 +1156,8 @@ async function initConsumptionChart() {
         const chartData = result.data;
         
         // Vérifier si toutes les données sont à zéro (aucun relevé)
-        const hasData = chartData.nbData.some(val => val > 0) || chartData.colorData.some(val => val > 0);
+        const hasData = chartData.nbData && chartData.colorData && 
+            (chartData.nbData.some(val => val > 0) || chartData.colorData.some(val => val > 0));
         
         // Afficher le message si aucune donnée, mais toujours afficher le graphique (avec valeurs à zéro)
         if (noDataMessage) {
@@ -1338,11 +1341,17 @@ async function initConsumptionChart() {
         }
         
         consumptionChart = new Chart(ctx, config);
+        
+        // Hide loading message and show chart on success (hasData was already checked above)
+        // The noDataMessage visibility is already handled above based on hasData
+        if (chartContainer) {
+            chartContainer.style.display = 'block';
+        }
     } catch (error) {
         console.error('Erreur chargement graphique:', error);
         if (noDataMessage) {
             noDataMessage.style.display = 'block';
-            noDataMessage.textContent = 'Erreur lors du chargement des données.';
+            noDataMessage.textContent = `Erreur lors du chargement des données: ${error.message}`;
         }
         if (chartContainer) {
             chartContainer.style.display = 'none';
@@ -1350,6 +1359,40 @@ async function initConsumptionChart() {
     }
 }
 
+// ==================
+// WIRED: Central function to reload all billing data based on current filters
+// This function reads all filter values and updates both chart and table
+// ==================
+async function reloadBillingData() {
+    // Show loading states
+    const chartNoDataMessage = document.getElementById('chartNoDataMessage');
+    const chartContainer = document.querySelector('.chart-container');
+    if (chartNoDataMessage) {
+        chartNoDataMessage.style.display = 'block';
+        chartNoDataMessage.textContent = 'Chargement des données...';
+    }
+    if (chartContainer) {
+        chartContainer.style.display = 'none';
+    }
+    
+    const tbody = document.getElementById('tableConsommationBody');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Chargement des données...</td></tr>';
+    }
+    
+    // Reload chart and table in parallel
+    try {
+        await Promise.all([
+            initConsumptionChart(),
+            updateTableConsommation()
+        ]);
+    } catch (error) {
+        console.error('Erreur lors du rechargement des données:', error);
+        // Error handling is done in individual functions
+    }
+}
+
+// Legacy function name for backward compatibility
 function updateConsumptionChart() {
     initConsumptionChart();
 }
@@ -1422,16 +1465,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialiser le tableau de consommation
     updateTableConsommation();
     
-    // Écouter les changements de granularité
+    // ==================
+    // WIRED: Event listeners for all filter controls
+    // ==================
+    // Wire granularity selector to update chart and table
     const granularityTypeSelect = document.getElementById('chartGranularity');
     if (granularityTypeSelect) {
         granularityTypeSelect.addEventListener('change', () => {
             updateGranularityControls();
-            updateConsumptionChart();
+            reloadBillingData(); // Reload both chart and table
         });
     }
     
-    // Écouter les changements des contrôles de période
+    // Wire period controls (year, month) to update chart and table
     const periodControls = [
         'chartYear', 'chartMonthYear', 'chartMonth'
     ];
@@ -1440,7 +1486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const control = document.getElementById(controlId);
         if (control) {
             control.addEventListener('change', () => {
-                updateConsumptionChart();
+                reloadBillingData(); // Reload both chart and table when period changes
             });
         }
     });
@@ -1485,7 +1531,7 @@ async function updateTableConsommation() {
     if (!tbody) return;
     
     // Afficher un indicateur de chargement
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Chargement des données...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Chargement des données...</td></tr>';
     
     try {
         // Construire l'URL de l'API
@@ -1522,7 +1568,7 @@ async function updateTableConsommation() {
         const imprimantes = result.data;
         
         if (imprimantes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Aucune donnée de consommation disponible.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Aucune donnée de consommation disponible pour cette période.</td></tr>';
             return;
         }
     
@@ -1634,7 +1680,7 @@ async function updateTableConsommation() {
         });
     } catch (error) {
         console.error('Erreur chargement tableau consommation:', error);
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #ef4444;">Erreur lors du chargement des données.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #ef4444;">Erreur lors du chargement des données: ${error.message}</td></tr>`;
     }
 }
 
