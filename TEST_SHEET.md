@@ -21,7 +21,6 @@
 | [ ] | Navigate to Agenda | /public/agenda.php | 1. Click "Agenda" in the header menu. | Agenda page loads showing SAV and deliveries scheduled. |
 | [ ] | Navigate to Clients | /public/clients.php | 1. Click "Clients" in the header menu (if visible). | Clients list page loads showing all clients. |
 | [ ] | Navigate to Stock | /public/stock.php | 1. Click "Stock" in the header menu (if visible). | Stock page loads showing products inventory. |
-| [ ] | Navigate to Facturation | /public/facturation.php | 1. Click "Facturation" in the header menu (if visible for authorized roles). | Facturation page loads showing billing and payment information. |
 | [ ] | Navigate to Maps | /public/maps.php | 1. Click "Cartes" in the header menu. | Maps page loads showing client locations on a map. |
 | [ ] | Navigate to Profile | /public/profil.php | 1. Click "Profil" in the header menu. | Profile page loads showing user management interface. |
 | [ ] | Toggle theme (dark/light) | Any page | 1. Click the theme toggle button in the header. | The page theme switches between dark and light mode. |
@@ -75,21 +74,6 @@
 | [ ] | Change date in agenda | /public/agenda.php | 1. Use the date picker to select a different date. | The agenda updates to show events for the selected date. |
 | [ ] | View SAV in agenda | /public/agenda.php | 1. Navigate to the agenda. | SAV entries are displayed with their reference, client, and scheduled intervention date. |
 | [ ] | View deliveries in agenda | /public/agenda.php | 1. Navigate to the agenda. | Delivery entries are displayed with their reference, client, and scheduled date. |
-
-## Facturation (Billing & Payments)
-
-| ✅ | Feature | Page / URL | What to do (steps) | Expected result |
-|----|---------|------------|--------------------|-----------------|
-| [ ] | View billing page | /public/facturation.php | 1. Navigate to the facturation page (requires Admin, Dirigeant, or Chargé relation clients role). | Billing dashboard loads showing consumption charts and payment information. |
-| [ ] | Search client for billing | /public/facturation.php | 1. Use the client search box. 2. Type a client name or reference. 3. Select a client from the dropdown. | Client is selected and their billing information is displayed. |
-| [ ] | View consumption chart | /public/facturation.php | 1. Select a client (if required). 2. View the consumption chart section. | A chart displays consumption data (monthly or yearly view). |
-| [ ] | Change chart granularity | /public/facturation.php | 1. Use the granularity dropdown (Month/Year). 2. Select a different option. | The chart updates to show data in the selected time period. |
-| [ ] | View consumption table | /public/facturation.php | 1. Scroll to the consumption table section. | A table shows detailed consumption data with dates and amounts. |
-| [ ] | View invoices list | /public/facturation.php | 1. Navigate to the invoices section. | A list of invoices is displayed with their status (draft, sent, paid, overdue, cancelled). |
-| [ ] | View payments list | /public/facturation.php | 1. Navigate to the payments section. | A list of payments is displayed with amounts, dates, and payment methods. |
-| [ ] | Create new payment | /public/facturation.php | 1. Click the button to create a payment. 2. Fill in payment details (client, amount, date, method). 3. Submit. | A new payment is created and appears in the payments list. |
-| [ ] | Export payments to Excel | /public/facturation.php | 1. Click the "Exporter en Excel" button. | An Excel file is downloaded with payment data. |
-| [ ] | View payment summary | /public/facturation.php | 1. View the summary section. | Summary statistics show total amounts, pending payments, and debts. |
 
 ## Maps & Route Planning
 
@@ -229,4 +213,5 @@
 | [ ] | Access denied for unauthorized role | Restricted pages | 1. Log in with a user role that doesn't have access to a specific page. 2. Try to access that page directly via URL. | An access denied message is displayed or user is redirected to an authorized page. |
 | [ ] | Form validation | Any form page | 1. Try to submit a form with empty required fields. | Error messages appear indicating which fields are required or invalid. |
 | [ ] | CSRF protection | Any form page | 1. Try to submit a form with an invalid or missing CSRF token. | Form submission is rejected with a security error message. |
+
 
