@@ -127,8 +127,17 @@ echo "✅ Connexion à la base établie.\n";
 
 // ---------- 2) Connexion SFTP avec timeout et gestion d'erreurs ----------
 debugLog("Étape 2: Chargement de la bibliothèque SFTP");
-$vendorPath = __DIR__ . '/../vendor/autoload.php';
-debugLog("Chemin vendor/autoload.php", ['path' => $vendorPath, 'exists' => is_file($vendorPath)]);
+// Le script est dans API/scripts/, donc il faut remonter de 2 niveaux pour atteindre la racine
+$vendorPath = __DIR__ . '/../../vendor/autoload.php';
+debugLog("Chemin vendor/autoload.php", [
+    'path' => $vendorPath,
+    'exists' => is_file($vendorPath),
+    'current_dir' => __DIR__,
+    'alternative_paths' => [
+        __DIR__ . '/../vendor/autoload.php' => is_file(__DIR__ . '/../vendor/autoload.php'),
+        __DIR__ . '/../../vendor/autoload.php' => is_file(__DIR__ . '/../../vendor/autoload.php')
+    ]
+]);
 
 if (!is_file($vendorPath)) {
     $errorMsg = "Fichier vendor/autoload.php introuvable: $vendorPath";
