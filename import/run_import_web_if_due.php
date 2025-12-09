@@ -56,7 +56,17 @@ $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
 
 // Exécuter le script d'import
 $php = PHP_BINARY ?: 'php';
-$cmd = escapeshellcmd($php) . ' ' . escapeshellarg(__DIR__ . '/import_ancien_http.php');
+$scriptPath = __DIR__ . '/import_ancien_http.php';
+if (!is_file($scriptPath)) {
+  echo json_encode([
+    'ran' => false,
+    'error' => 'Script import_ancien_http.php introuvable',
+    'path' => $scriptPath
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
+
+$cmd = escapeshellcmd($php) . ' ' . escapeshellarg($scriptPath);
 $desc = [
   1 => ['pipe', 'w'],
   2 => ['pipe', 'w'],
@@ -65,7 +75,7 @@ $desc = [
 // Passer les variables d'environnement
 $env = $_ENV + $_SERVER;
 
-$proc = proc_open($cmd, $desc, $pipes, __DIR__, $env);
+$proc = proc_open($cmd, $desc, $pipes, $projectRoot, $env);
 $out = $err = '';
 $code = null;
 
@@ -73,6 +83,15 @@ if (is_resource($proc)) {
   $out  = stream_get_contents($pipes[1]); fclose($pipes[1]);
   $err  = stream_get_contents($pipes[2]); fclose($pipes[2]);
   $code = proc_close($proc);
+} else {
+  $err = 'Impossible de créer le processus';
+  $code = -1;
+}
+
+// Vérifier si le processus a échoué
+$success = ($code === 0 || $code === null);
+if (!$success && empty($err)) {
+  $err = "Processus terminé avec le code de sortie: $code";
 }
 
 echo json_encode([
@@ -80,6 +99,7 @@ echo json_encode([
   'stdout'   => trim($out),
   'stderr'   => trim($err),
   'last_run' => date('Y-m-d H:i:s'),
-  'code'     => $code
+  'code'     => $code,
+  'success'  => $success
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 

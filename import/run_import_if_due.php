@@ -35,7 +35,18 @@ $limit = (int)($_POST['limit'] ?? $_GET['limit'] ?? 10);
 if ($limit <= 0) $limit = 10;
 
 $php = PHP_BINARY ?: 'php';
-$cmd = escapeshellcmd($php) . ' ' . escapeshellarg(__DIR__ . '/upload_compteur.php');
+// CORRECTION : Le fichier upload_compteur.php se trouve dans API/scripts/, pas dans import/
+$scriptPath = $projectRoot . '/API/scripts/upload_compteur.php';
+if (!is_file($scriptPath)) {
+  echo json_encode([
+    'ran' => false,
+    'error' => 'Script upload_compteur.php introuvable',
+    'path' => $scriptPath
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
+
+$cmd = escapeshellcmd($php) . ' ' . escapeshellarg($scriptPath);
 $desc = [
   1 => ['pipe', 'w'],
   2 => ['pipe', 'w'],
@@ -44,7 +55,7 @@ $desc = [
 // passe le batch au worker SFTP
 $env = $_ENV + $_SERVER + ['SFTP_BATCH_LIMIT' => (string)$limit];
 
-$proc = proc_open($cmd, $desc, $pipes, __DIR__, $env);
+$proc = proc_open($cmd, $desc, $pipes, $projectRoot, $env);
 $out = $err = '';
 $code = null;
 
@@ -52,6 +63,15 @@ if (is_resource($proc)) {
   $out  = stream_get_contents($pipes[1]); fclose($pipes[1]);
   $err  = stream_get_contents($pipes[2]); fclose($pipes[2]);
   $code = proc_close($proc);
+} else {
+  $err = 'Impossible de créer le processus';
+  $code = -1;
+}
+
+// Vérifier si le processus a échoué
+$success = ($code === 0 || $code === null);
+if (!$success && empty($err)) {
+  $err = "Processus terminé avec le code de sortie: $code";
 }
 
 echo json_encode([
@@ -59,5 +79,6 @@ echo json_encode([
   'stdout'   => trim($out),
   'stderr'   => trim($err),
   'last_run' => date('Y-m-d H:i:s'),
-  'code'     => $code
+  'code'     => $code,
+  'success'  => $success
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
