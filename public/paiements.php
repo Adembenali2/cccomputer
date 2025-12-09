@@ -997,9 +997,9 @@
             }
 
             consumptionChart = new Chart(ctx, {
-                type: 'bar',
+                type: 'line',
                 data: {
-                    labels: ['Noir & Blanc', 'Couleur'],
+                    labels: [],
                     datasets: []
                 },
                 options: {
@@ -1007,7 +1007,18 @@
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            display: false
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    family: 'Inter, system-ui, sans-serif',
+                                    size: 13,
+                                    weight: '500'
+                                },
+                                color: '#475569'
+                            }
                         },
                         tooltip: {
                             backgroundColor: 'rgba(15, 23, 42, 0.95)',
@@ -1067,10 +1078,19 @@
                         }
                     },
                     elements: {
-                        bar: {
-                            borderRadius: 8,
-                            borderSkipped: false
+                        point: {
+                            radius: 4,
+                            hoverRadius: 6,
+                            borderWidth: 2
+                        },
+                        line: {
+                            tension: 0.4,
+                            borderWidth: 3
                         }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
                     }
                 }
             });
@@ -1084,41 +1104,7 @@
             const chartTitle = document.getElementById('chartTitle');
             const chartSubtitle = document.getElementById('chartSubtitle');
             
-            // Vérifier si les 3 conditions sont réunies
-            if (!selectedClient || !selectedMonth || !selectedYear) {
-                // Afficher le message d'état
-                if (canvas) {
-                    canvas.style.display = 'none';
-                }
-                if (chartWrapper) {
-                    let messageDiv = chartWrapper.querySelector('.chart-message');
-                    if (!messageDiv) {
-                        messageDiv = document.createElement('div');
-                        messageDiv.className = 'chart-message';
-                        chartWrapper.appendChild(messageDiv);
-                    }
-                    messageDiv.innerHTML = `
-                        <div style="text-align: center; padding: 3rem 2rem; color: #64748b;">
-                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 1rem; opacity: 0.5;">
-                                <path d="M9 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM19 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
-                                <path d="M13 16.5V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10.5a1 1 0 0 0 1 1h1m8-1a1 1 0 0 1-1 1H9m4-1v-8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v8m-6 1h6"/>
-                            </svg>
-                            <p style="font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem; color: #475569;">Veuillez sélectionner un client et une période</p>
-                            <p style="font-size: 0.9rem; color: #94a3b8;">Sélectionnez un client via la recherche, puis choisissez un mois et une année pour afficher la consommation.</p>
-                        </div>
-                    `;
-                }
-                if (chartTitle) {
-                    chartTitle.textContent = 'Consommation par mois';
-                }
-                if (chartSubtitle) {
-                    chartSubtitle.textContent = '';
-                    chartSubtitle.style.display = 'none';
-                }
-                return;
-            }
-
-            // Les 3 conditions sont réunies → afficher le graphique
+            // S'assurer que le canvas est visible
             if (chartWrapper) {
                 const messageDiv = chartWrapper.querySelector('.chart-message');
                 if (messageDiv) {
@@ -1134,40 +1120,125 @@
                 return;
             }
 
-            // Récupérer les données pour le client, mois et année sélectionnés
-            const periodKey = `${selectedYear}-${selectedMonth}`;
-            const clientData = FAKE_CONSO[selectedClient];
-            
-            if (!clientData || !clientData[periodKey]) {
-                // Pas de données pour cette période
-                consumptionChart.data.labels = ['Noir & Blanc', 'Couleur'];
-                consumptionChart.data.datasets = [{
-                    label: 'Consommation',
-                    data: [0, 0],
-                    backgroundColor: ['#1e293b', '#3b82f6']
-                }];
-            } else {
-                const data = clientData[periodKey];
-                consumptionChart.data.labels = ['Noir & Blanc', 'Couleur'];
-                consumptionChart.data.datasets = [{
-                    label: 'Consommation',
-                    data: [data.noir, data.couleur],
-                    backgroundColor: ['#1e293b', '#3b82f6']
-                }];
-            }
-
-            // Mettre à jour le titre
+            // Utiliser le mois et l'année sélectionnés, ou les valeurs par défaut
+            const month = selectedMonth || String(new Date().getMonth() + 1).padStart(2, '0');
+            const year = selectedYear || String(new Date().getFullYear());
             const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
                                'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-            const monthName = monthNames[parseInt(selectedMonth) - 1];
-            
-            if (chartTitle) {
-                chartTitle.textContent = `Consommation - ${selectedClient}`;
+            const monthName = monthNames[parseInt(month) - 1];
+
+            let dataNB = [];
+            let dataColor = [];
+            let labels = [];
+
+            // Si un client est sélectionné, afficher ses données pour la période
+            if (selectedClient) {
+                const periodKey = `${year}-${month}`;
+                const clientData = FAKE_CONSO[selectedClient];
+                
+                if (clientData && clientData[periodKey]) {
+                    const data = clientData[periodKey];
+                    // Pour un mois spécifique, on peut afficher les jours du mois ou juste les 2 valeurs
+                    // Ici, on va créer une courbe avec les jours du mois (données fictives basées sur la valeur totale)
+                    const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+                    const avgNbPerDay = Math.round(data.noir / daysInMonth);
+                    const avgColorPerDay = Math.round(data.couleur / daysInMonth);
+                    
+                    // Générer des données quotidiennes avec variation
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const variation = Math.floor(Math.random() * 20) - 10; // Variation de ±10
+                        dataNB.push(Math.max(0, avgNbPerDay + variation));
+                        dataColor.push(Math.max(0, avgColorPerDay + Math.floor(variation / 3)));
+                        labels.push(day);
+                    }
+                } else {
+                    // Pas de données pour cette période
+                    const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        dataNB.push(0);
+                        dataColor.push(0);
+                        labels.push(day);
+                    }
+                }
+                
+                // Mettre à jour le titre
+                if (chartTitle) {
+                    chartTitle.textContent = `Consommation - ${selectedClient}`;
+                }
+                if (chartSubtitle) {
+                    chartSubtitle.textContent = `${monthName} ${year}`;
+                    chartSubtitle.style.display = 'inline';
+                }
+            } else {
+                // Aucun client sélectionné → afficher la moyenne de tous les clients pour le mois sélectionné
+                const periodKey = `${year}-${month}`;
+                let totalNB = 0;
+                let totalColor = 0;
+                let count = 0;
+                
+                // Calculer la moyenne de tous les clients pour ce mois
+                for (let clientName in FAKE_CONSO) {
+                    const clientData = FAKE_CONSO[clientName];
+                    if (clientData && clientData[periodKey]) {
+                        totalNB += clientData[periodKey].noir;
+                        totalColor += clientData[periodKey].couleur;
+                        count++;
+                    }
+                }
+                
+                const avgNB = count > 0 ? Math.round(totalNB / count) : 0;
+                const avgColor = count > 0 ? Math.round(totalColor / count) : 0;
+                
+                // Générer des données quotidiennes pour le mois
+                const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+                const avgNbPerDay = Math.round(avgNB / daysInMonth);
+                const avgColorPerDay = Math.round(avgColor / daysInMonth);
+                
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const variation = Math.floor(Math.random() * 20) - 10;
+                    dataNB.push(Math.max(0, avgNbPerDay + variation));
+                    dataColor.push(Math.max(0, avgColorPerDay + Math.floor(variation / 3)));
+                    labels.push(day);
+                }
+                
+                // Mettre à jour le titre
+                if (chartTitle) {
+                    chartTitle.textContent = 'Consommation - Tous les clients';
+                }
+                if (chartSubtitle) {
+                    chartSubtitle.textContent = `${monthName} ${year} (moyenne)`;
+                    chartSubtitle.style.display = 'inline';
+                }
             }
-            if (chartSubtitle) {
-                chartSubtitle.textContent = `${monthName} ${selectedYear}`;
-                chartSubtitle.style.display = 'inline';
-            }
+
+            // Mettre à jour le graphique
+            consumptionChart.data.labels = labels.map(d => `J${d}`);
+            consumptionChart.data.datasets = [
+                {
+                    label: 'Noir & Blanc',
+                    data: dataNB,
+                    borderColor: '#1e293b',
+                    backgroundColor: 'rgba(30, 41, 59, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#1e293b',
+                    pointBorderColor: '#ffffff',
+                    pointHoverBackgroundColor: '#0f172a',
+                    pointHoverBorderColor: '#ffffff'
+                },
+                {
+                    label: 'Couleur',
+                    data: dataColor,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#ffffff',
+                    pointHoverBackgroundColor: '#2563eb',
+                    pointHoverBorderColor: '#ffffff'
+                }
+            ];
 
             consumptionChart.update('active');
         }
