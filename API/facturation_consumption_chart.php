@@ -24,7 +24,52 @@
 
 require_once __DIR__ . '/../includes/api_helpers.php';
 require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../vendor/autoload.php';
+
+// Charger l'autoloader Composer AVANT les use statements
+// Le chemin est relatif depuis API/ vers la racine du projet
+$autoloadPath = __DIR__ . '/../vendor/autoload.php';
+if (!file_exists($autoloadPath)) {
+    // Essayer un chemin alternatif si nécessaire
+    $autoloadPath = dirname(__DIR__, 2) . '/vendor/autoload.php';
+}
+
+if (file_exists($autoloadPath)) {
+    // Charger l'autoloader Composer
+    require_once $autoloadPath;
+} else {
+    // Fallback: charger les classes manuellement si l'autoloader n'existe pas
+    // Charger d'abord les modèles (dépendances)
+    require_once __DIR__ . '/../app/Models/Client.php';
+    require_once __DIR__ . '/../app/Models/Releve.php';
+    // Puis les repositories
+    require_once __DIR__ . '/../app/Repositories/ClientRepository.php';
+    require_once __DIR__ . '/../app/Repositories/CompteurRepository.php';
+    // Puis les services
+    require_once __DIR__ . '/../app/Services/ConsumptionService.php';
+    require_once __DIR__ . '/../app/Services/BillingService.php';
+}
+
+// Vérifier que les classes sont disponibles après chargement de l'autoloader
+// Si elles n'existent pas, les charger manuellement (fallback)
+if (!class_exists('App\Repositories\ClientRepository', true)) {
+    // Si l'autoloader n'a pas pu charger la classe, charger manuellement
+    if (!class_exists('App\Models\Client', false)) {
+        require_once __DIR__ . '/../app/Models/Client.php';
+    }
+    require_once __DIR__ . '/../app/Repositories/ClientRepository.php';
+}
+if (!class_exists('App\Repositories\CompteurRepository', true)) {
+    if (!class_exists('App\Models\Releve', false)) {
+        require_once __DIR__ . '/../app/Models/Releve.php';
+    }
+    require_once __DIR__ . '/../app/Repositories/CompteurRepository.php';
+}
+if (!class_exists('App\Services\ConsumptionService', true)) {
+    require_once __DIR__ . '/../app/Services/ConsumptionService.php';
+}
+if (!class_exists('App\Services\BillingService', true)) {
+    require_once __DIR__ . '/../app/Services/BillingService.php';
+}
 
 use App\Services\BillingService;
 use App\Repositories\ClientRepository;
