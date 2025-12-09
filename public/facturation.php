@@ -1167,7 +1167,116 @@ let factureGeneree = false;
 let consumptionChart = null;
 let selectedClientId = null;
 
-// Initialisation de la barre de recherche client
+// ==================
+// MOCK API FUNCTIONS - Simulate API calls with static data
+// ==================
+
+// REMOVED: Real API call to /API/facturation_search_clients.php
+// REPLACED: Static client search function
+function mockSearchClients(query, limit = 10) {
+    const queryLower = query.toLowerCase();
+    return staticClients.filter(client => {
+        const searchText = `${client.raison_sociale} ${client.nom} ${client.prenom} ${client.reference}`.toLowerCase();
+        return searchText.includes(queryLower);
+    }).slice(0, limit);
+}
+
+// REMOVED: Real API call to /API/facturation_consumption_chart.php
+// REPLACED: Static chart data function
+function mockGetChartData(clientId, granularity, periodParams) {
+    const dataKey = clientId || null;
+    const year = periodParams.year || new Date().getFullYear();
+    const month = periodParams.month;
+    
+    if (granularity === 'year') {
+        const yearData = staticChartData[dataKey]?.year?.[year];
+        if (yearData) {
+            return yearData;
+        }
+        // Fallback to all clients data
+        return staticChartData[null]?.year?.[year] || {
+            labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+            nbData: Array(12).fill(0),
+            colorData: Array(12).fill(0),
+            totalData: Array(12).fill(0)
+        };
+    } else if (granularity === 'month' && month !== undefined) {
+        const monthData = staticChartData[dataKey]?.month?.[year]?.[month];
+        if (monthData) {
+            return monthData;
+        }
+        // Generate default daily data for the month
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        return {
+            labels: Array.from({length: daysInMonth}, (_, i) => `${i+1}`),
+            nbData: Array.from({length: daysInMonth}, () => Math.floor(Math.random() * 100) + 50),
+            colorData: Array.from({length: daysInMonth}, () => Math.floor(Math.random() * 30) + 10),
+            totalData: Array.from({length: daysInMonth}, (_, i) => (Math.floor(Math.random() * 100) + 50) + (Math.floor(Math.random() * 30) + 10))
+        };
+    }
+    
+    // Default empty data
+    return {
+        labels: [],
+        nbData: [],
+        colorData: [],
+        totalData: []
+    };
+}
+
+// REMOVED: Real API call to /API/facturation_consumption_table.php
+// REPLACED: Static table data function
+function mockGetTableData(clientId, months = 3) {
+    const dataKey = clientId || null;
+    return staticTableData[dataKey] || staticTableData[null] || [];
+}
+
+// REMOVED: Real API call to /API/facturation_summary.php
+// REPLACED: Static summary data function
+function mockGetSummaryData(clientId) {
+    return staticSummaryData[clientId] || {
+        total_a_facturer: 0,
+        montant_paye: 0,
+        montant_non_paye: 0,
+        consommation_pages: { nb: 0, color: 0, total: 0 },
+        facture_en_cours: null
+    };
+}
+
+// REMOVED: Real API call to /API/facturation_factures_list.php
+// REPLACED: Static invoices list function
+function mockGetInvoicesList(clientId) {
+    return staticInvoicesData[clientId] || [];
+}
+
+// REMOVED: Real API call to /API/facturation_facture_detail.php
+// REPLACED: Static invoice detail function
+function mockGetInvoiceDetail(factureId) {
+    return staticInvoiceDetailData[factureId] || null;
+}
+
+// REMOVED: Real API call to /API/facturation_payments_list.php
+// REPLACED: Static payments list function
+function mockGetPaymentsList(clientId) {
+    return staticPaymentsData[clientId] || [];
+}
+
+// REMOVED: Real API call to /API/facturation_invoice.php
+// REPLACED: Static invoice data function (for current invoice)
+function mockGetInvoiceData(clientId, periodStart, periodEnd) {
+    // Return mock consumption data for the period
+    return {
+        total: {
+            nb: 8900,
+            color: 200,
+            total: 9100
+        }
+    };
+}
+
+// ==================
+// CLIENT SEARCH FUNCTIONS
+// ==================
 function initClientSearch() {
     const searchInput = document.getElementById('clientSearchInput');
     const dropdown = document.getElementById('clientSearchDropdown');
@@ -1181,7 +1290,7 @@ function initClientSearch() {
     
     let searchTimeout = null;
     
-    // Recherche de clients avec debounce
+    // REMOVED: Real API call, REPLACED: Static client search
     searchInput.addEventListener('input', (e) => {
         const query = e.target.value.trim();
         
@@ -1189,34 +1298,29 @@ function initClientSearch() {
         
         if (query.length < 1) {
             dropdown.style.display = 'none';
-            // Si le champ est vide et qu'un client était sélectionné, réinitialiser
             if (selectedClientId) {
                 clearClientSelection();
             }
             return;
         }
         
-        // Debounce de 200ms pour éviter trop de recherches
         searchTimeout = setTimeout(() => {
             performClientSearch(query, dropdown);
         }, 200);
     });
     
-    // Fermer le dropdown en cliquant ailleurs
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
             dropdown.style.display = 'none';
         }
     });
     
-    // Retirer la sélection du client
     if (btnRemove) {
         btnRemove.addEventListener('click', () => {
             clearClientSelection();
         });
     }
     
-    // Navigation clavier dans le dropdown
     searchInput.addEventListener('keydown', (e) => {
         const items = dropdown.querySelectorAll('.dropdown-item');
         if (items.length === 0) return;
@@ -1245,14 +1349,15 @@ function initClientSearch() {
     });
 }
 
-// Effectuer la recherche de clients
-async function performClientSearch(query, dropdown) {
+// REMOVED: Real API call to /API/facturation_search_clients.php
+// REPLACED: Static client search using mockSearchClients
+function performClientSearch(query, dropdown) {
     dropdown.innerHTML = '<div class="dropdown-item empty-state">Recherche...</div>';
     dropdown.style.display = 'block';
     
-    try {
-        const response = await fetch(`/API/facturation_search_clients.php?q=${encodeURIComponent(query)}&limit=10`);
-        const result = await response.json();
+    // Simulate API delay
+    setTimeout(() => {
+        const clients = mockSearchClients(query, 10);
         
         dropdown.innerHTML = '';
         
@@ -1392,44 +1497,13 @@ async function initConsumptionChart() {
     }
     
     try {
-        // Construire l'URL de l'API
-        const params = new URLSearchParams({
-            granularity: granularityType,
-            year: periodParams.year || new Date().getFullYear()
-        });
-        if (granularityType === 'month' && periodParams.month !== undefined) {
-            params.append('month', periodParams.month);
-        }
-        if (!isAllClients) {
-            params.append('client_id', selectedClientId);
-        }
+        // REMOVED: fetch('/API/facturation_consumption_chart.php?...')
+        // REPLACED: Get static demo data
+        const chartData = mockGetChartData(selectedClientId, granularityType, periodParams);
         
-        const response = await fetch(`/API/facturation_consumption_chart.php?${params.toString()}`);
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Vérifier le statut HTTP avant de parser le JSON
-        if (!response.ok) {
-            // Si la réponse n'est pas OK, essayer de parser le JSON pour obtenir le message d'erreur
-            let errorMessage = `Erreur HTTP ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.error || errorData.message || errorMessage;
-            } catch (e) {
-                // Si ce n'est pas du JSON, utiliser le texte brut
-                const text = await response.text();
-                errorMessage = text || errorMessage;
-            }
-            throw new Error(errorMessage);
-        }
-        
-        const result = await response.json();
-        
-        if (!result.ok || !result.data) {
-            throw new Error(result.error || 'Erreur lors du chargement des données');
-        }
-        
-        const chartData = result.data;
-        
-        // Vérifier si toutes les données sont à zéro (aucun relevé)
         const hasData = chartData.nbData && chartData.colorData && 
             (chartData.nbData.some(val => val > 0) || chartData.colorData.some(val => val > 0));
         
@@ -1810,38 +1884,12 @@ async function updateTableConsommation() {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Chargement des données...</td></tr>';
     
     try {
-        // Construire l'URL de l'API
-        const params = new URLSearchParams({
-            months: '3'
-        });
-        if (selectedClientId) {
-            params.append('client_id', selectedClientId);
-        }
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        const response = await fetch(`/API/facturation_consumption_table.php?${params.toString()}`);
-        
-        // Vérifier le statut HTTP avant de parser le JSON
-        if (!response.ok) {
-            // Si la réponse n'est pas OK, essayer de parser le JSON pour obtenir le message d'erreur
-            let errorMessage = `Erreur HTTP ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.error || errorData.message || errorMessage;
-            } catch (e) {
-                // Si ce n'est pas du JSON, utiliser le texte brut
-                const text = await response.text();
-                errorMessage = text || errorMessage;
-            }
-            throw new Error(errorMessage);
-        }
-        
-        const result = await response.json();
-        
-        if (!result.ok || !result.data) {
-            throw new Error(result.error || 'Erreur lors du chargement des données');
-        }
-        
-        const imprimantes = result.data;
+        // REMOVED: fetch('/API/facturation_consumption_table.php?...')
+        // REPLACED: Get static demo data
+        const imprimantes = mockGetTableData(selectedClientId, 3);
         
         if (imprimantes.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Aucune donnée de consommation disponible pour cette période.</td></tr>';
@@ -1978,15 +2026,9 @@ async function exportTableConsommation() {
     }
     
     try {
-        // Récupérer les données depuis l'API pour l'export
-        const response = await fetch(`/API/facturation_consumption_table.php?months=3&client_id=${selectedClientId}`);
-        const result = await response.json();
-        
-        if (!response.ok || !result.ok || !result.data) {
-            throw new Error(result.error || 'Erreur lors du chargement des données');
-        }
-        
-        const imprimantes = result.data;
+        // REMOVED: fetch('/API/facturation_consumption_table.php?...')
+        // REPLACED: Get static demo data
+        const imprimantes = mockGetTableData(selectedClientId, 3);
         
         if (!imprimantes || imprimantes.length === 0) {
             alert('Aucune donnée à exporter.');
@@ -2107,14 +2149,9 @@ async function updateResumeKPIs() {
     }
     
     try {
-        const response = await fetch(`/API/facturation_summary.php?client_id=${selectedClientId}`);
-        const result = await response.json();
-        
-        if (!result.ok || !result.data) {
-            throw new Error(result.error || 'Erreur lors du chargement du résumé');
-        }
-        
-        const data = result.data;
+        // REMOVED: fetch('/API/facturation_summary.php?...')
+        // REPLACED: Get static demo data
+        const data = mockGetSummaryData(selectedClientId);
         
         // Formater un montant en format français
         const formatCurrency = (amount) => {
@@ -2198,21 +2235,9 @@ async function updateFactureEnCours() {
     }
     
     try {
-        // Récupérer les données de facture depuis l'API
-        const params = new URLSearchParams({
-            client_id: selectedClientId,
-            period_start: periodStart.toISOString().split('T')[0],
-            period_end: periodEnd.toISOString().split('T')[0]
-        });
-        
-        const response = await fetch(`/API/facturation_invoice.php?${params.toString()}`);
-        const result = await response.json();
-        
-        if (!result.ok || !result.data) {
-            throw new Error(result.error || 'Erreur lors du chargement des données');
-        }
-        
-        const invoiceData = result.data;
+        // REMOVED: fetch('/API/facturation_invoice.php?...')
+        // REPLACED: Get static demo data
+        const invoiceData = mockGetInvoiceData(selectedClientId, periodStart, periodEnd);
         
         // Mettre à jour la consommation N&B et couleur
         const consoNBEl = document.getElementById('factureConsoNB');
@@ -2355,14 +2380,12 @@ async function updateFacturesList() {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Chargement des factures...</td></tr>';
     
     try {
-        const response = await fetch(`/API/facturation_factures_list.php?client_id=${selectedClientId}&limit=50`);
-        const result = await response.json();
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        if (!response.ok || !result.ok || !result.data) {
-            throw new Error(result.error || `Erreur serveur (${response.status})`);
-        }
-        
-        const factures = result.data;
+        // REMOVED: fetch('/API/facturation_factures_list.php?...')
+        // REPLACED: Get static demo data
+        const factures = mockGetInvoicesList(selectedClientId);
         
         if (factures.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Aucune facture trouvée</td></tr>';
@@ -2429,14 +2452,16 @@ async function displayFactureDetail(factureId) {
     detailPanel.innerHTML = '<div class="content-card"><div class="card-body"><p>Chargement...</p></div></div>';
     
     try {
-        const response = await fetch(`/API/facturation_facture_detail.php?facture_id=${factureId}`);
-        const result = await response.json();
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        if (!response.ok || !result.ok || !result.data) {
-            throw new Error(result.error || `Erreur serveur (${response.status})`);
+        // REMOVED: fetch('/API/facturation_facture_detail.php?...')
+        // REPLACED: Get static demo data
+        const facture = mockGetInvoiceDetail(factureId);
+        
+        if (!facture) {
+            throw new Error('Facture non trouvée');
         }
-        
-        const facture = result.data;
         
         const formatDate = (dateStr) => {
             if (!dateStr) return '—';
@@ -2688,44 +2713,35 @@ document.getElementById('formAddPayment').addEventListener('submit', async (e) =
     submitBtn.textContent = 'Enregistrement...';
     
     try {
-        // Récupérer le token CSRF
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
-                         document.querySelector('input[name="csrf_token"]')?.value ||
-                         '';
+        // REMOVED: fetch('/API/facturation_payment_create.php', ...)
+        // REPLACED: Mock payment creation - just add to static data
+        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
         
-        const response = await fetch('/API/facturation_payment_create.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': csrfToken
-            },
-            body: JSON.stringify({
-                client_id: selectedClientId,
-                montant: amount,
-                date_paiement: date,
-                mode_paiement: mode,
-                reference: ref,
-                commentaire: comment,
-                send_receipt: sendReceipt,
-                csrf_token: csrfToken
-            })
+        // Add payment to static data (for demo purposes)
+        if (!staticPaymentsData[selectedClientId]) {
+            staticPaymentsData[selectedClientId] = [];
+        }
+        staticPaymentsData[selectedClientId].unshift({
+            id: Date.now(),
+            facture_id: null,
+            facture_numero: null,
+            montant: amount,
+            date_paiement: date,
+            mode_paiement: mode,
+            reference: ref || '',
+            commentaire: comment || '',
+            statut: 'en_cours',
+            created_by_nom: 'Demo',
+            created_by_prenom: 'User'
         });
         
-        const result = await response.json();
-        
-        if (!result.ok) {
-            throw new Error(result.error || 'Erreur lors de la création du paiement');
-        }
-        
-        // Réinitialiser le formulaire
         document.getElementById('formAddPayment').reset();
         document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
         
-        // Mettre à jour l'affichage
         await updatePaiementsDisplay();
         await updateResumeKPIs();
         
-        alert('Paiement enregistré avec succès !');
+        alert('Paiement enregistré avec succès ! (Mode démo)');
         
     } catch (error) {
         console.error('Erreur création paiement:', error);
@@ -2746,14 +2762,12 @@ async function updatePaiementsDisplay() {
     
     try {
         // Récupérer la liste des paiements
-        const response = await fetch(`/API/facturation_payments_list.php?client_id=${selectedClientId}`);
-        const result = await response.json();
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        if (!result.ok || !result.data) {
-            throw new Error(result.error || 'Erreur lors du chargement des paiements');
-        }
-        
-        const paiements = result.data;
+        // REMOVED: fetch('/API/facturation_payments_list.php?...')
+        // REPLACED: Get static demo data
+        const paiements = mockGetPaymentsList(selectedClientId);
         
         // Mettre à jour l'historique des paiements
         const timeline = document.getElementById('paiementsTimeline');
@@ -2806,12 +2820,11 @@ async function updatePaiementsDisplay() {
         // Mettre à jour le résumé de la facture (première facture non payée)
         const summary = document.getElementById('paiementSummary');
         if (summary) {
-            // Récupérer les factures non payées depuis l'API summary
-            const summaryResponse = await fetch(`/API/facturation_summary.php?client_id=${selectedClientId}`);
-            const summaryResult = await summaryResponse.json();
+            // REMOVED: fetch('/API/facturation_summary.php?...')
+            // REPLACED: Get static summary data
+            const summaryData = mockGetSummaryData(selectedClientId);
             
-            if (summaryResult.ok && summaryResult.data) {
-                const summaryData = summaryResult.data;
+            if (summaryData) {
                 const formatCurrency = (amount) => {
                     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
                 };
