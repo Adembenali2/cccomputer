@@ -25,6 +25,8 @@ ensureCsrfToken();
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- SheetJS pour l'export Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- CSRF Token pour les requêtes API -->
+    <meta name="csrf-token" content="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
 </head>
 <body class="page-facturation">
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -1382,8 +1384,9 @@ function selectClient(clientId, clientName) {
     }
     
     updateConsumptionChart();
-    updateResumeKPIs();
-    updateFactureEnCours();
+    updateResumeKPIs().catch(err => console.error('Erreur updateResumeKPIs:', err));
+    updateFactureEnCours().catch(err => console.error('Erreur updateFactureEnCours:', err));
+    updatePaiementsDisplay().catch(err => console.error('Erreur updatePaiementsDisplay:', err));
 }
 
 // Réinitialiser la sélection (afficher tous les clients)
@@ -1731,11 +1734,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     initConsumptionChart();
     
-    // Initialiser le calcul du montant non payé
-    updateResumeKPIs();
+    // Initialiser le calcul du montant non payé (sera appelé après sélection d'un client)
+    // updateResumeKPIs() sera appelé automatiquement quand un client est sélectionné
     
-    // Initialiser la facture en cours
-    updateFactureEnCours();
+    // Initialiser la facture en cours (sera appelé après sélection d'un client)
+    // updateFactureEnCours() sera appelé automatiquement quand un client est sélectionné
     
     // Initialiser le tableau de consommation
     updateTableConsommation();
@@ -1787,6 +1790,11 @@ tabButtons.forEach(btn => {
         btn.classList.add('active');
         btn.setAttribute('aria-selected', 'true');
         document.getElementById(`tab-${targetTab}`).classList.add('active');
+        
+        // Si on passe à l'onglet Paiements, charger les données
+        if (targetTab === 'paiements' && selectedClientId) {
+            updatePaiementsDisplay().catch(err => console.error('Erreur updatePaiementsDisplay:', err));
+        }
     });
 });
 
@@ -2057,31 +2065,51 @@ function exportTableConsommation() {
 }
 
 // ==================
-// Mise à jour du résumé (mock)
+// Mise à jour du résumé (KPI)
 // ==================
-function updateResumeKPIs() {
-    // Récupérer les valeurs des KPI
-    const totalFacturerEl = document.getElementById('kpiTotalFacturer');
-    const montantPayeEl = document.getElementById('kpiMontantPaye');
-    const montantNonPayeEl = document.getElementById('kpiMontantNonPaye');
+async function updateResumeKPIs() {
+    if (!selectedClientId) {
+        return;
+    }
     
-    if (!totalFacturerEl || !montantPayeEl || !montantNonPayeEl) return;
-    
-    // Extraire les valeurs numériques (enlever les espaces, €, etc.)
-    // Format attendu: "1 245,30 €" -> 1245.30
-    const parseFrenchNumber = (text) => {
-        return parseFloat(text.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, ''));
-    };
-    
-    const totalFacturer = parseFrenchNumber(totalFacturerEl.textContent);
-    const montantPaye = parseFrenchNumber(montantPayeEl.textContent);
-    
-    // Calculer le montant non payé
-    const montantNonPaye = totalFacturer - montantPaye;
-    
-    // Formater et afficher le montant non payé (format français avec espaces)
-    const formatted = montantNonPaye.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-    montantNonPayeEl.textContent = formatted + ' €';
+    try {
+        const response = await fetch(`/API/facturation_summary.php?client_id=${selectedClientId}`);
+        const result = await response.json();
+        
+        if (!result.ok || !result.data) {
+            throw new Error(result.error || 'Erreur lors du chargement du résumé');
+        }
+        
+        const data = result.data;
+        
+        // Formater un montant en format français
+        const formatCurrency = (amount) => {
+            return amount.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €';
+        };
+        
+        // Mettre à jour les KPI
+        const totalFacturerEl = document.getElementById('kpiTotalFacturer');
+        const montantPayeEl = document.getElementById('kpiMontantPaye');
+        const montantNonPayeEl = document.getElementById('kpiMontantNonPaye');
+        const consoPagesEl = document.getElementById('kpiConsoPages');
+        
+        if (totalFacturerEl) {
+            totalFacturerEl.textContent = formatCurrency(data.total_a_facturer);
+        }
+        if (montantPayeEl) {
+            montantPayeEl.textContent = formatCurrency(data.montant_paye);
+        }
+        if (montantNonPayeEl) {
+            montantNonPayeEl.textContent = formatCurrency(data.montant_non_paye);
+        }
+        if (consoPagesEl && data.consommation_pages) {
+            const conso = data.consommation_pages;
+            consoPagesEl.textContent = `N&B : ${conso.nb.toLocaleString('fr-FR')} | Couleur : ${conso.color.toLocaleString('fr-FR')}`;
+        }
+        
+    } catch (error) {
+        console.error('Erreur chargement résumé:', error);
+    }
 }
 
 // ==================
@@ -2494,8 +2522,13 @@ document.getElementById('modalHistoriqueFactures')?.addEventListener('click', (e
 // ==================
 // Gestion des paiements
 // ==================
-document.getElementById('formAddPayment').addEventListener('submit', (e) => {
+document.getElementById('formAddPayment').addEventListener('submit', async (e) => {
     e.preventDefault();
+    
+    if (!selectedClientId) {
+        alert('Veuillez sélectionner un client d\'abord.');
+        return;
+    }
     
     const amount = parseFloat(document.getElementById('paymentAmount').value);
     const date = document.getElementById('paymentDate').value;
@@ -2504,139 +2537,246 @@ document.getElementById('formAddPayment').addEventListener('submit', (e) => {
     const comment = document.getElementById('paymentComment').value;
     const sendReceipt = document.getElementById('paymentSendReceipt').checked;
     
-    // Simuler l'ajout du paiement (mock)
-    console.log('Paiement ajouté:', { amount, date, mode, ref, comment, sendReceipt });
+    // Validation
+    if (isNaN(amount) || amount <= 0) {
+        alert('Montant invalide');
+        return;
+    }
+    if (!date) {
+        alert('Date de paiement requise');
+        return;
+    }
+    if (!mode) {
+        alert('Mode de paiement requis');
+        return;
+    }
     
-    // Mettre à jour la liste des paiements (mock)
-    const paiementsList = document.querySelector('.paiements-list');
-    const newPayment = document.createElement('div');
-    newPayment.className = 'paiement-item';
-    newPayment.innerHTML = `
-        <div class="paiement-date">${new Date(date).toLocaleDateString('fr-FR')}</div>
-        <div class="paiement-amount">${amount.toFixed(2)} €</div>
-        <div class="paiement-user">Admin CCComputer</div>
-        <div class="paiement-mode">${mode}</div>
-        <div class="paiement-etat">
-            <span class="badge badge-warning">EN COURS</span>
-        </div>
-    `;
-    paiementsList.insertBefore(newPayment, paiementsList.firstChild);
+    // Désactiver le bouton pendant l'envoi
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Enregistrement...';
     
-    // Réinitialiser le formulaire
-    document.getElementById('formAddPayment').reset();
-    document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
-    
-    alert('Paiement enregistré (simulation)');
-    
-    // Mettre à jour l'affichage
-    updatePaiementsDisplay();
+    try {
+        // Récupérer le token CSRF
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                         document.querySelector('input[name="csrf_token"]')?.value ||
+                         '';
+        
+        const response = await fetch('/API/facturation_payment_create.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({
+                client_id: selectedClientId,
+                montant: amount,
+                date_paiement: date,
+                mode_paiement: mode,
+                reference: ref,
+                commentaire: comment,
+                send_receipt: sendReceipt,
+                csrf_token: csrfToken
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.ok) {
+            throw new Error(result.error || 'Erreur lors de la création du paiement');
+        }
+        
+        // Réinitialiser le formulaire
+        document.getElementById('formAddPayment').reset();
+        document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
+        
+        // Mettre à jour l'affichage
+        await updatePaiementsDisplay();
+        await updateResumeKPIs();
+        
+        alert('Paiement enregistré avec succès !');
+        
+    } catch (error) {
+        console.error('Erreur création paiement:', error);
+        alert('Erreur: ' + error.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
 });
 
 // ==================
 // Mise à jour de l'affichage des paiements
 // ==================
-function updatePaiementsDisplay() {
-    // Mettre à jour l'historique des paiements
-    const timeline = document.getElementById('paiementsTimeline');
-    if (timeline) {
-        const formatDate = (dateStr) => {
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('fr-FR');
-        };
-        
-        const formatCurrency = (amount) => {
-            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
-        };
-        
-        // Trier les paiements par date décroissante
-        const paiementsSorted = [...mockData.paiements].sort((a, b) => new Date(b.date) - new Date(a.date));
-        
-        let timelineHtml = paiementsSorted.map(paiement => {
-            let modeText = paiement.mode;
-            if (paiement.reference) {
-                modeText += ` - Réf: ${paiement.reference}`;
-            }
-            
-            return `
-                <div class="timeline-item">
-                    <div class="timeline-date">${formatDate(paiement.date)}</div>
-                    <div class="timeline-content">
-                        <div class="timeline-amount">${formatCurrency(paiement.montant)}</div>
-                        <div class="timeline-mode">${modeText}</div>
-                        ${paiement.commentaire ? `<div class="timeline-comment">${paiement.commentaire}</div>` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-        timeline.innerHTML = timelineHtml;
+async function updatePaiementsDisplay() {
+    if (!selectedClientId) {
+        return;
     }
     
-    // Mettre à jour le résumé de la facture (factures non payées)
-    const summary = document.getElementById('paiementSummary');
-    if (summary) {
-        // Trouver la première facture non payée ou partiellement payée
-        const factureNonPayee = mockData.factures.find(f => {
-            const paiementsFacture = mockData.paiements.filter(p => p.factureId === f.id);
-            const totalPaye = paiementsFacture.reduce((sum, p) => sum + p.montant, 0);
-            return totalPaye < f.montantTTC;
-        });
+    try {
+        // Récupérer la liste des paiements
+        const response = await fetch(`/API/facturation_payments_list.php?client_id=${selectedClientId}`);
+        const result = await response.json();
         
-        if (factureNonPayee) {
-            const paiementsFacture = mockData.paiements.filter(p => p.factureId === factureNonPayee.id);
-            const totalPaye = paiementsFacture.reduce((sum, p) => sum + p.montant, 0);
-            const soldeRestant = factureNonPayee.montantTTC - totalPaye;
-            
-            let statutPaiement = '';
-            let badgeClass = '';
-            if (totalPaye === 0) {
-                statutPaiement = 'NON PAYÉ';
-                badgeClass = 'badge-danger';
-            } else if (soldeRestant > 0) {
-                statutPaiement = 'PARTIELLEMENT PAYÉ';
-                badgeClass = 'badge-partial';
-            }
+        if (!result.ok || !result.data) {
+            throw new Error(result.error || 'Erreur lors du chargement des paiements');
+        }
+        
+        const paiements = result.data;
+        
+        // Mettre à jour l'historique des paiements
+        const timeline = document.getElementById('paiementsTimeline');
+        if (timeline) {
+            const formatDate = (dateStr) => {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('fr-FR');
+            };
             
             const formatCurrency = (amount) => {
                 return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
             };
             
-            summary.innerHTML = `
-                <div class="summary-row">
-                    <span>Numéro facture :</span>
-                    <strong>${factureNonPayee.numero}</strong>
-                </div>
-                <div class="summary-row">
-                    <span>Montant TTC :</span>
-                    <strong>${formatCurrency(factureNonPayee.montantTTC)}</strong>
-                </div>
-                <div class="summary-row">
-                    <span>Total payé :</span>
-                    <strong class="text-success">${formatCurrency(totalPaye)}</strong>
-                </div>
-                <div class="summary-row">
-                    <span>Solde restant :</span>
-                    <strong class="text-warning">${formatCurrency(soldeRestant)}</strong>
-                </div>
-                <div class="summary-row">
-                    <span>Statut paiement :</span>
-                    <span class="badge ${badgeClass}">${statutPaiement}</span>
-                </div>
-            `;
-        } else {
-            summary.innerHTML = `
-                <div class="paiement-summary-empty">
-                    <p>Aucune facture impayée</p>
-                </div>
-            `;
+            const getStatutBadge = (statut) => {
+                const badges = {
+                    'en_cours': '<span class="badge badge-warning">EN COURS</span>',
+                    'recu': '<span class="badge badge-success">Reçu</span>',
+                    'refuse': '<span class="badge badge-danger">Refusé</span>',
+                    'annule': '<span class="badge badge-secondary">Annulé</span>'
+                };
+                return badges[statut] || badges['en_cours'];
+            };
+            
+            let timelineHtml = paiements.map(paiement => {
+                let modeText = paiement.mode_paiement;
+                if (paiement.reference) {
+                    modeText += ` - Réf: ${paiement.reference}`;
+                }
+                
+                return `
+                    <div class="timeline-item">
+                        <div class="timeline-date">${formatDate(paiement.date_paiement)}</div>
+                        <div class="timeline-content">
+                            <div class="timeline-amount">${formatCurrency(paiement.montant)}</div>
+                            <div class="timeline-mode">${modeText}</div>
+                            ${paiement.commentaire ? `<div class="timeline-comment">${paiement.commentaire}</div>` : ''}
+                            <div class="timeline-statut">${getStatutBadge(paiement.statut)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            if (paiements.length === 0) {
+                timelineHtml = '<div class="timeline-item"><div class="timeline-content">Aucun paiement enregistré</div></div>';
+            }
+            
+            timeline.innerHTML = timelineHtml;
+        }
+        
+        // Mettre à jour le résumé de la facture (première facture non payée)
+        const summary = document.getElementById('paiementSummary');
+        if (summary) {
+            // Récupérer les factures non payées depuis l'API summary
+            const summaryResponse = await fetch(`/API/facturation_summary.php?client_id=${selectedClientId}`);
+            const summaryResult = await summaryResponse.json();
+            
+            if (summaryResult.ok && summaryResult.data) {
+                const summaryData = summaryResult.data;
+                const formatCurrency = (amount) => {
+                    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+                };
+                
+                if (summaryData.montant_non_paye > 0) {
+                    summary.innerHTML = `
+                        <div class="summary-row">
+                            <span>Total à facturer :</span>
+                            <strong>${formatCurrency(summaryData.total_a_facturer)}</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>Total payé :</span>
+                            <strong class="text-success">${formatCurrency(summaryData.montant_paye)}</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>Solde restant :</span>
+                            <strong class="text-warning">${formatCurrency(summaryData.montant_non_paye)}</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>Statut paiement :</span>
+                            <span class="badge badge-warning">PARTIELLEMENT PAYÉ</span>
+                        </div>
+                    `;
+                } else {
+                    summary.innerHTML = `
+                        <div class="paiement-summary-empty">
+                            <p>Toutes les factures sont payées</p>
+                        </div>
+                    `;
+                }
+            } else {
+                summary.innerHTML = `
+                    <div class="paiement-summary-empty">
+                        <p>Aucune facture impayée</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Mettre à jour la liste des paiements dans l'onglet Résumé
+        const paiementsList = document.getElementById('paiementsList');
+        if (paiementsList) {
+            const formatDate = (dateStr) => {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('fr-FR');
+            };
+            
+            const formatCurrency = (amount) => {
+                return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+            };
+            
+            const getStatutBadge = (statut) => {
+                const badges = {
+                    'en_cours': '<span class="badge badge-warning">EN COURS</span>',
+                    'recu': '<span class="badge badge-success">Reçu</span>',
+                    'refuse': '<span class="badge badge-danger">Refusé</span>',
+                    'annule': '<span class="badge badge-secondary">Annulé</span>'
+                };
+                return badges[statut] || badges['en_cours'];
+            };
+            
+            let paiementsHtml = paiements.slice(0, 5).map(paiement => {
+                const userName = paiement.created_by_prenom && paiement.created_by_nom 
+                    ? `${paiement.created_by_prenom} ${paiement.created_by_nom}`
+                    : 'Admin CCComputer';
+                
+                return `
+                    <div class="paiement-item">
+                        <div class="paiement-date">${formatDate(paiement.date_paiement)}</div>
+                        <div class="paiement-amount">${formatCurrency(paiement.montant)}</div>
+                        <div class="paiement-user">${userName}</div>
+                        <div class="paiement-mode">${paiement.mode_paiement}</div>
+                        <div class="paiement-etat">${getStatutBadge(paiement.statut)}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            if (paiements.length === 0) {
+                paiementsHtml = '<div class="paiement-item"><div style="text-align: center; padding: 1rem;">Aucun paiement enregistré</div></div>';
+            }
+            
+            paiementsList.innerHTML = paiementsHtml;
+        }
+        
+    } catch (error) {
+        console.error('Erreur chargement paiements:', error);
+        const timeline = document.getElementById('paiementsTimeline');
+        if (timeline) {
+            timeline.innerHTML = '<div class="timeline-item"><div class="timeline-content" style="color: #ef4444;">Erreur lors du chargement des paiements</div></div>';
         }
     }
 }
 
-// Initialiser l'affichage des paiements au chargement
-document.addEventListener('DOMContentLoaded', () => {
-    updatePaiementsDisplay();
-});
+// Initialiser l'affichage des paiements au chargement (sera appelé après sélection d'un client)
+// updatePaiementsDisplay() sera appelé automatiquement quand un client est sélectionné
 
 // ==================
 // Gestion des emails/docs

@@ -491,6 +491,80 @@ CREATE TABLE `user_permissions` (
   CONSTRAINT `fk_user_permissions_user` FOREIGN KEY (`user_id`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=181 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+DROP TABLE IF EXISTS `factures`;
+CREATE TABLE `factures` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_client` int NOT NULL,
+  `numero` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `date_facture` date NOT NULL,
+  `date_debut_periode` date DEFAULT NULL COMMENT 'Date de début de période de consommation (20 du mois)',
+  `date_fin_periode` date DEFAULT NULL COMMENT 'Date de fin de période de consommation (20 du mois suivant)',
+  `type` enum('Consommation','Achat','Service') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Consommation',
+  `montant_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `tva` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `montant_ttc` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `statut` enum('brouillon','envoyee','payee','en_retard','annulee') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'brouillon',
+  `pdf_genere` tinyint(1) NOT NULL DEFAULT '0',
+  `pdf_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email_envoye` tinyint(1) NOT NULL DEFAULT '0',
+  `date_envoi_email` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL COMMENT 'ID de l''utilisateur qui a créé la facture',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_factures_numero` (`numero`),
+  KEY `idx_factures_client` (`id_client`),
+  KEY `idx_factures_date` (`date_facture`),
+  KEY `idx_factures_statut` (`statut`),
+  KEY `idx_factures_created_by` (`created_by`),
+  CONSTRAINT `fk_factures_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_factures_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `facture_lignes`;
+CREATE TABLE `facture_lignes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_facture` int NOT NULL,
+  `description` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `type` enum('N&B','Couleur','Service','Produit') COLLATE utf8mb4_general_ci NOT NULL,
+  `quantite` decimal(10,2) NOT NULL DEFAULT '1.00',
+  `prix_unitaire_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `total_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `ordre` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_facture_lignes_facture` (`id_facture`),
+  CONSTRAINT `fk_facture_lignes_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `paiements`;
+CREATE TABLE `paiements` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_facture` int DEFAULT NULL COMMENT 'ID de la facture liée (peut être NULL pour paiement sans facture)',
+  `id_client` int NOT NULL COMMENT 'ID du client',
+  `montant` decimal(10,2) NOT NULL,
+  `date_paiement` date NOT NULL,
+  `mode_paiement` enum('virement','cb','cheque','especes','autre') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'virement',
+  `reference` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Référence du paiement (ex: VIR-2025-001)',
+  `commentaire` text COLLATE utf8mb4_general_ci,
+  `statut` enum('en_cours','recu','refuse','annule') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'en_cours',
+  `recu_genere` tinyint(1) NOT NULL DEFAULT '0',
+  `recu_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email_envoye` tinyint(1) NOT NULL DEFAULT '0',
+  `date_envoi_email` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL COMMENT 'ID de l''utilisateur qui a créé le paiement',
+  PRIMARY KEY (`id`),
+  KEY `idx_paiements_facture` (`id_facture`),
+  KEY `idx_paiements_client` (`id_client`),
+  KEY `idx_paiements_date` (`date_paiement`),
+  KEY `idx_paiements_statut` (`statut`),
+  KEY `idx_paiements_created_by` (`created_by`),
+  CONSTRAINT `fk_paiements_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_paiements_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_paiements_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 DROP TABLE IF EXISTS `utilisateurs`;
 CREATE TABLE `utilisateurs` (
   `id` int NOT NULL AUTO_INCREMENT,
