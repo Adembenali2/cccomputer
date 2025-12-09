@@ -92,6 +92,49 @@
   box-shadow: var(--shadow-md);
 }
 
+/* Couleurs spécifiques pour les KPI */
+.paiements-kpi-card.kpi-dettes {
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.paiements-kpi-card.kpi-dettes .paiements-kpi-title,
+.paiements-kpi-card.kpi-dettes .paiements-kpi-subtitle {
+  color: #991b1b;
+}
+
+.paiements-kpi-card.kpi-dettes .paiements-kpi-amount {
+  color: #b91c1c;
+}
+
+.paiements-kpi-card.kpi-paye {
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.paiements-kpi-card.kpi-paye .paiements-kpi-title,
+.paiements-kpi-card.kpi-paye .paiements-kpi-subtitle {
+  color: #166534;
+}
+
+.paiements-kpi-card.kpi-paye .paiements-kpi-amount {
+  color: #15803d;
+}
+
+.paiements-kpi-card.kpi-a-payer {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.paiements-kpi-card.kpi-a-payer .paiements-kpi-title,
+.paiements-kpi-card.kpi-a-payer .paiements-kpi-subtitle {
+  color: #1e40af;
+}
+
+.paiements-kpi-card.kpi-a-payer .paiements-kpi-amount {
+  color: #1d4ed8;
+}
+
 .paiements-kpi-title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -242,6 +285,71 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
+/* Recherche client avec suggestions */
+.paiements-client-search-group {
+  position: relative;
+}
+
+.client-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  box-shadow: var(--shadow-md);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+  margin-top: -1px;
+}
+
+.client-suggestions.show {
+  display: block;
+}
+
+.client-suggestion-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.client-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.client-suggestion-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.client-suggestion-item.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.client-suggestion-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.client-suggestion-item.active .client-suggestion-name {
+  color: white;
+}
+
+.client-suggestion-details {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.client-suggestion-item.active .client-suggestion-details {
+  color: rgba(255, 255, 255, 0.9);
+}
+
 /* Boutons */
 .btn-primary {
   background: var(--accent-primary);
@@ -295,6 +403,7 @@
   padding: 2rem;
   margin-bottom: 1.5rem;
   box-shadow: var(--shadow-sm);
+  overflow: visible;
 }
 
 .paiements-chart-title {
@@ -306,8 +415,9 @@
 
 .paiements-chart-wrapper {
   position: relative;
-  height: 300px;
+  min-height: 300px;
   margin-top: 2rem;
+  overflow: visible;
 }
 
 .paiements-chart-legend {

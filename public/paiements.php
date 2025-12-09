@@ -32,17 +32,17 @@
         <!-- KPI Cards -->
         <div class="paiements-header">
             <div class="paiements-kpi-row">
-                <div class="paiements-kpi-card">
+                <div class="paiements-kpi-card kpi-dettes">
                     <div class="paiements-kpi-title">Dettes</div>
                     <div class="paiements-kpi-amount">12 430,50 €</div>
                     <div class="paiements-kpi-subtitle">Montant total restant dû</div>
                 </div>
-                <div class="paiements-kpi-card">
+                <div class="paiements-kpi-card kpi-paye">
                     <div class="paiements-kpi-title">Payé</div>
                     <div class="paiements-kpi-amount">45 230,00 €</div>
                     <div class="paiements-kpi-subtitle">Total encaissé sur la période</div>
                 </div>
-                <div class="paiements-kpi-card">
+                <div class="paiements-kpi-card kpi-a-payer">
                     <div class="paiements-kpi-title">À payer</div>
                     <div class="paiements-kpi-amount">8 750,25 €</div>
                     <div class="paiements-kpi-subtitle">Factures échues ou à échéance</div>
@@ -66,20 +66,37 @@
             <!-- Onglet 1: Consommation -->
             <div id="consommation" class="paiements-tab-content active">
                 <div class="paiements-filters-bar">
-                    <div class="paiements-filter-group">
+                    <div class="paiements-filter-group paiements-client-search-group">
                         <label>Rechercher un client</label>
-                        <input type="text" placeholder="Rechercher un client...">
+                        <input type="text" id="clientSearchInput" placeholder="Rechercher un client..." autocomplete="off">
+                        <div id="clientSuggestions" class="client-suggestions"></div>
                     </div>
                     <div class="paiements-filter-group">
-                        <label>Période</label>
-                        <select>
-                            <option>Ce mois-ci</option>
-                            <option>Cette année</option>
-                            <option>Personnalisée</option>
+                        <label>Mois</label>
+                        <select id="monthSelect">
+                            <option value="01">Janvier</option>
+                            <option value="02">Février</option>
+                            <option value="03">Mars</option>
+                            <option value="04">Avril</option>
+                            <option value="05">Mai</option>
+                            <option value="06">Juin</option>
+                            <option value="07">Juillet</option>
+                            <option value="08">Août</option>
+                            <option value="09">Septembre</option>
+                            <option value="10">Octobre</option>
+                            <option value="11">Novembre</option>
+                            <option value="12">Décembre</option>
                         </select>
                     </div>
-                    <button class="btn-primary">Rechercher</button>
-                    <button class="btn-secondary">Exporter en Excel</button>
+                    <div class="paiements-filter-group">
+                        <label>Année</label>
+                        <select id="yearSelect">
+                            <option value="2023">2023</option>
+                            <option value="2024">2024</option>
+                            <option value="2025" selected>2025</option>
+                        </select>
+                    </div>
+                    <button class="btn-secondary" id="exportCsvBtn">Exporter en CSV</button>
                 </div>
 
                 <div class="paiements-chart-container">
@@ -565,6 +582,20 @@
     </div>
 
     <script>
+        // Données fictives de clients
+        const clientsData = [
+            { raison_sociale: 'DUPONT SARL', nom: 'Dupont', prenom: 'Jean', id: 1 },
+            { raison_sociale: 'Durand Services', nom: 'Durand', prenom: 'Marie', id: 2 },
+            { raison_sociale: 'Martin & Fils', nom: 'Martin', prenom: 'Pierre', id: 3 },
+            { raison_sociale: 'Bernard Informatique', nom: 'Bernard', prenom: 'Sophie', id: 4 },
+            { raison_sociale: 'Dubois Consulting', nom: 'Dubois', prenom: 'Thomas', id: 5 },
+            { raison_sociale: 'Moreau Solutions', nom: 'Moreau', prenom: 'Claire', id: 6 },
+            { raison_sociale: 'Laurent Entreprise', nom: 'Laurent', prenom: 'David', id: 7 },
+            { raison_sociale: 'Simon Services', nom: 'Simon', prenom: 'Julie', id: 8 },
+            { raison_sociale: 'Michel & Associés', nom: 'Michel', prenom: 'Nicolas', id: 9 },
+            { raison_sociale: 'Garcia Industries', nom: 'Garcia', prenom: 'Laura', id: 10 }
+        ];
+
         // Gestion des onglets
         document.querySelectorAll('.paiements-tab').forEach(tab => {
             tab.addEventListener('click', function() {
@@ -579,6 +610,197 @@
                 document.getElementById(targetTab).classList.add('active');
             });
         });
+
+        // Recherche client automatique avec suggestions
+        (function() {
+            const searchInput = document.getElementById('clientSearchInput');
+            const suggestionsContainer = document.getElementById('clientSuggestions');
+            let selectedClientId = null;
+
+            if (!searchInput || !suggestionsContainer) return;
+
+            function formatClientName(client) {
+                return `${client.raison_sociale} (${client.prenom} ${client.nom})`;
+            }
+
+            function filterClients(query) {
+                if (!query || query.trim().length === 0) {
+                    return [];
+                }
+                const lowerQuery = query.toLowerCase();
+                return clientsData.filter(client => {
+                    return client.raison_sociale.toLowerCase().includes(lowerQuery) ||
+                           client.nom.toLowerCase().includes(lowerQuery) ||
+                           client.prenom.toLowerCase().includes(lowerQuery);
+                });
+            }
+
+            function displaySuggestions(clients) {
+                suggestionsContainer.innerHTML = '';
+                
+                if (clients.length === 0) {
+                    suggestionsContainer.classList.remove('show');
+                    return;
+                }
+
+                clients.forEach((client, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'client-suggestion-item';
+                    item.setAttribute('data-client-id', client.id);
+                    item.innerHTML = `
+                        <div class="client-suggestion-name">${client.raison_sociale}</div>
+                        <div class="client-suggestion-details">${client.prenom} ${client.nom}</div>
+                    `;
+                    
+                    item.addEventListener('click', function() {
+                        searchInput.value = formatClientName(client);
+                        selectedClientId = client.id;
+                        suggestionsContainer.classList.remove('show');
+                        console.log('Client sélectionné:', client);
+                        // Ici on pourra ajouter la logique pour filtrer la courbe
+                    });
+
+                    item.addEventListener('mouseenter', function() {
+                        suggestionsContainer.querySelectorAll('.client-suggestion-item').forEach(i => i.classList.remove('active'));
+                        this.classList.add('active');
+                    });
+
+                    suggestionsContainer.appendChild(item);
+                });
+
+                suggestionsContainer.classList.add('show');
+            }
+
+            searchInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                if (query.length === 0) {
+                    suggestionsContainer.classList.remove('show');
+                    selectedClientId = null;
+                    return;
+                }
+                const filtered = filterClients(query);
+                displaySuggestions(filtered);
+            });
+
+            // Fermer les suggestions en cliquant ailleurs
+            document.addEventListener('click', function(e) {
+                if (!searchInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+                    suggestionsContainer.classList.remove('show');
+                }
+            });
+
+            // Navigation clavier dans les suggestions
+            let selectedIndex = -1;
+            searchInput.addEventListener('keydown', function(e) {
+                const items = suggestionsContainer.querySelectorAll('.client-suggestion-item');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                    items.forEach((item, idx) => {
+                        item.classList.toggle('active', idx === selectedIndex);
+                    });
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, -1);
+                    items.forEach((item, idx) => {
+                        item.classList.toggle('active', idx === selectedIndex);
+                    });
+                } else if (e.key === 'Enter' && selectedIndex >= 0 && items[selectedIndex]) {
+                    e.preventDefault();
+                    items[selectedIndex].click();
+                } else if (e.key === 'Escape') {
+                    suggestionsContainer.classList.remove('show');
+                }
+            });
+        })();
+
+        // Sélecteurs de période (Mois et Année)
+        (function() {
+            const monthSelect = document.getElementById('monthSelect');
+            const yearSelect = document.getElementById('yearSelect');
+
+            // Définir le mois actuel par défaut
+            if (monthSelect) {
+                const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+                monthSelect.value = currentMonth;
+            }
+
+            if (monthSelect) {
+                monthSelect.addEventListener('change', function() {
+                    console.log('Mois sélectionné:', this.value, this.options[this.selectedIndex].text);
+                    // Ici on pourra ajouter la logique pour recalculer la courbe
+                });
+            }
+
+            if (yearSelect) {
+                yearSelect.addEventListener('change', function() {
+                    console.log('Année sélectionnée:', this.value);
+                    // Ici on pourra ajouter la logique pour recalculer la courbe
+                });
+            }
+        })();
+
+        // Export CSV
+        (function() {
+            const exportBtn = document.getElementById('exportCsvBtn');
+            if (!exportBtn) return;
+
+            // Données fictives de consommation (basées sur le graphique)
+            const consommationData = [
+                { mois: 'Janvier', nb_noir: 1200, nb_couleur: 300 },
+                { mois: 'Février', nb_noir: 1350, nb_couleur: 350 },
+                { mois: 'Mars', nb_noir: 1100, nb_couleur: 280 },
+                { mois: 'Avril', nb_noir: 1450, nb_couleur: 400 },
+                { mois: 'Mai', nb_noir: 1600, nb_couleur: 450 },
+                { mois: 'Juin', nb_noir: 1500, nb_couleur: 420 },
+                { mois: 'Juillet', nb_noir: 1700, nb_couleur: 500 },
+                { mois: 'Août', nb_noir: 1650, nb_couleur: 480 },
+                { mois: 'Septembre', nb_noir: 1800, nb_couleur: 520 },
+                { mois: 'Octobre', nb_noir: 1750, nb_couleur: 510 },
+                { mois: 'Novembre', nb_noir: 1900, nb_couleur: 550 },
+                { mois: 'Décembre', nb_noir: 2000, nb_couleur: 600 }
+            ];
+
+            function convertToCSV(data) {
+                // En-tête
+                const headers = ['Mois', 'Pages Noir & Blanc', 'Pages Couleur'];
+                const csvRows = [headers.join(';')];
+
+                // Données
+                data.forEach(row => {
+                    const values = [row.mois, row.nb_noir, row.nb_couleur];
+                    csvRows.push(values.join(';'));
+                });
+
+                return csvRows.join('\n');
+            }
+
+            function downloadCSV(csvContent, filename) {
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            exportBtn.addEventListener('click', function() {
+                const csvContent = convertToCSV(consommationData);
+                const monthSelect = document.getElementById('monthSelect');
+                const yearSelect = document.getElementById('yearSelect');
+                const month = monthSelect ? monthSelect.options[monthSelect.selectedIndex].text : '';
+                const year = yearSelect ? yearSelect.value : '';
+                const filename = `consommation_${month}_${year}.csv`.replace(/\s+/g, '_');
+                
+                downloadCSV(csvContent, filename);
+            });
+        })();
 
         // Graphique de consommation (simplifié avec Canvas)
         const canvas = document.getElementById('consumptionChart');
