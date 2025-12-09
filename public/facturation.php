@@ -870,28 +870,302 @@ ensureCsrfToken();
 
 <script>
 // ==================
-// REMOVED: Mock Data - Now using real API calls
-// All data is loaded from the database via API endpoints
+// STATIC DEMO DATA - Front-end only billing page
 // ==================
-// REMOVED: mockData object (previously lines 934-1180)
-// The following functions now use real API calls:
-// - updateResumeKPIs() -> /API/facturation_summary.php
-// - updateFactureEnCours() -> /API/facturation_invoice.php
-// - updatePaiementsDisplay() -> /API/facturation_payments_list.php
-// - updateFacturesList() -> /API/facturation_factures_list.php
-// - displayFactureDetail() -> /API/facturation_facture_detail.php
-// - updateTableConsommation() -> /API/facturation_consumption_table.php
-// - initConsumptionChart() -> /API/facturation_consumption_chart.php
+// REMOVED: All API calls to /API/facturation_*.php endpoints
+// REPLACED: All database/repository dependencies with static JavaScript data
 // ==================
 
-// Variable pour suivre l'état de la facture (sera mis à jour via API)
+// ==================
+// STATIC DEMO DATA - Clients
+// ==================
+const staticClients = [
+    { id: 1, raison_sociale: 'Entreprise ABC', nom: 'Dupont', prenom: 'Jean', reference: 'CLI-001', numero_client: '001' },
+    { id: 2, raison_sociale: 'Société XYZ', nom: 'Martin', prenom: 'Marie', reference: 'CLI-002', numero_client: '002' },
+    { id: 3, raison_sociale: 'Corporation DEF', nom: 'Bernard', prenom: 'Pierre', reference: 'CLI-003', numero_client: '003' },
+    { id: 4, raison_sociale: 'Groupe GHI', nom: 'Dubois', prenom: 'Sophie', reference: 'CLI-004', numero_client: '004' },
+    { id: 5, raison_sociale: 'Compagnie JKL', nom: 'Leroy', prenom: 'Thomas', reference: 'CLI-005', numero_client: '005' }
+];
+
+// ==================
+// STATIC DEMO DATA - Consumption Chart Data
+// ==================
+// Data structure: { clientId: { year: { labels, nbData, colorData, totalData }, month: { year: { month: { labels, nbData, colorData, totalData } } } } }
+const staticChartData = {
+    // All clients (null key)
+    null: {
+        year: {
+            2022: {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                nbData: [1200, 1350, 1100, 1400, 1300, 1250, 1500, 1450, 1600, 1550, 1700, 1800],
+                colorData: [200, 250, 180, 300, 280, 220, 350, 320, 400, 380, 450, 500],
+                totalData: [1400, 1600, 1280, 1700, 1580, 1470, 1850, 1770, 2000, 1930, 2150, 2300]
+            },
+            2023: {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                nbData: [1900, 2000, 1850, 2100, 2050, 1950, 2200, 2150, 2400, 2350, 2500, 2600],
+                colorData: [550, 600, 500, 650, 620, 580, 700, 680, 750, 720, 800, 850],
+                totalData: [2450, 2600, 2350, 2750, 2670, 2530, 2900, 2830, 3150, 3070, 3300, 3450]
+            },
+            2024: {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                nbData: [2700, 2800, 2650, 2900, 2850, 2750, 3000, 2950, 3200, 3150, 3300, 3400],
+                colorData: [900, 950, 850, 1000, 980, 920, 1100, 1050, 1200, 1150, 1300, 1350],
+                totalData: [3600, 3750, 3500, 3900, 3830, 3670, 4100, 4000, 4400, 4300, 4600, 4750]
+            },
+            2025: {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                nbData: [3500, 3600, 3400, 3700, 3650, 3550, 3800, 3750, 4000, 3950, 4100, 4200],
+                colorData: [1400, 1450, 1350, 1500, 1480, 1420, 1600, 1550, 1700, 1650, 1750, 1800],
+                totalData: [4900, 5050, 4750, 5200, 5130, 4970, 5400, 5300, 5700, 5600, 5850, 6000]
+            }
+        },
+        month: {
+            2025: {
+                0: { // January - daily data
+                    labels: Array.from({length: 31}, (_, i) => `${i+1}`),
+                    nbData: Array.from({length: 31}, () => Math.floor(Math.random() * 200) + 100),
+                    colorData: Array.from({length: 31}, () => Math.floor(Math.random() * 50) + 30),
+                    totalData: Array.from({length: 31}, (_, i) => (Math.floor(Math.random() * 200) + 100) + (Math.floor(Math.random() * 50) + 30))
+                },
+                10: { // November - daily data
+                    labels: Array.from({length: 30}, (_, i) => `${i+1}`),
+                    nbData: Array.from({length: 30}, () => Math.floor(Math.random() * 180) + 90),
+                    colorData: Array.from({length: 30}, () => Math.floor(Math.random() * 45) + 25),
+                    totalData: Array.from({length: 30}, (_, i) => (Math.floor(Math.random() * 180) + 90) + (Math.floor(Math.random() * 45) + 25))
+                },
+                11: { // December - daily data
+                    labels: Array.from({length: 31}, (_, i) => `${i+1}`),
+                    nbData: Array.from({length: 31}, () => Math.floor(Math.random() * 220) + 110),
+                    colorData: Array.from({length: 31}, () => Math.floor(Math.random() * 55) + 35),
+                    totalData: Array.from({length: 31}, (_, i) => (Math.floor(Math.random() * 220) + 110) + (Math.floor(Math.random() * 55) + 35))
+                }
+            }
+        }
+    },
+    // Client 1
+    1: {
+        year: {
+            2025: {
+                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                nbData: [1200, 1300, 1150, 1400, 1350, 1250, 1500, 1450, 1600, 1550, 1700, 1800],
+                colorData: [300, 350, 280, 400, 380, 320, 450, 420, 500, 480, 550, 600],
+                totalData: [1500, 1650, 1430, 1800, 1730, 1570, 1950, 1870, 2100, 2030, 2250, 2400]
+            }
+        },
+        month: {
+            2025: {
+                10: {
+                    labels: Array.from({length: 30}, (_, i) => `${i+1}`),
+                    nbData: Array.from({length: 30}, () => Math.floor(Math.random() * 60) + 40),
+                    colorData: Array.from({length: 30}, () => Math.floor(Math.random() * 20) + 10),
+                    totalData: Array.from({length: 30}, (_, i) => (Math.floor(Math.random() * 60) + 40) + (Math.floor(Math.random() * 20) + 10))
+                }
+            }
+        }
+    }
+};
+
+// ==================
+// STATIC DEMO DATA - Consumption Table Data
+// ==================
+const staticTableData = {
+    null: [ // All clients
+        {
+            id: 1,
+            nom: 'HP LaserJet Pro M404dn',
+            modele: 'M404dn',
+            macAddress: 'AB:CD:EF:12:34:56',
+            consommations: [
+                { mois: '2025-09', periode: 'Septembre 2025 (20/09 → 20/10)', pagesNB: 8750, pagesCouleur: 0, totalPages: 8750 },
+                { mois: '2025-10', periode: 'Octobre 2025 (20/10 → 20/11)', pagesNB: 9200, pagesCouleur: 150, totalPages: 9350 },
+                { mois: '2025-11', periode: 'Novembre 2025 (20/11 → 20/12)', pagesNB: 8900, pagesCouleur: 200, totalPages: 9100 }
+            ]
+        },
+        {
+            id: 2,
+            nom: 'Canon imageRUNNER ADVANCE C5535i',
+            modele: 'C5535i',
+            macAddress: '12:34:56:AB:CD:EF',
+            consommations: [
+                { mois: '2025-09', periode: 'Septembre 2025 (20/09 → 20/10)', pagesNB: 12000, pagesCouleur: 2500, totalPages: 14500 },
+                { mois: '2025-10', periode: 'Octobre 2025 (20/10 → 20/11)', pagesNB: 13500, pagesCouleur: 2800, totalPages: 16300 },
+                { mois: '2025-11', periode: 'Novembre 2025 (20/11 → 20/12)', pagesNB: 12800, pagesCouleur: 3000, totalPages: 15800 }
+            ]
+        }
+    ],
+    1: [ // Client 1
+        {
+            id: 1,
+            nom: 'HP LaserJet Pro M404dn',
+            modele: 'M404dn',
+            macAddress: 'AB:CD:EF:12:34:56',
+            consommations: [
+                { mois: '2025-09', periode: 'Septembre 2025 (20/09 → 20/10)', pagesNB: 8750, pagesCouleur: 0, totalPages: 8750 },
+                { mois: '2025-10', periode: 'Octobre 2025 (20/10 → 20/11)', pagesNB: 9200, pagesCouleur: 150, totalPages: 9350 },
+                { mois: '2025-11', periode: 'Novembre 2025 (20/11 → 20/12)', pagesNB: 8900, pagesCouleur: 200, totalPages: 9100 }
+            ]
+        }
+    ]
+};
+
+// ==================
+// STATIC DEMO DATA - Summary/KPI Data
+// ==================
+const staticSummaryData = {
+    1: {
+        total_a_facturer: 8450.50,
+        montant_paye: 3200.00,
+        montant_non_paye: 5250.50,
+        consommation_pages: { nb: 26850, color: 350, total: 27200 },
+        facture_en_cours: {
+            id: 101,
+            numero: '2025-11',
+            statut: 'brouillon',
+            montant_ttc: 1250.75,
+            periode: { debut: '2025-10-20', fin: '2025-11-20' }
+        }
+    },
+    2: {
+        total_a_facturer: 12500.00,
+        montant_paye: 8500.00,
+        montant_non_paye: 4000.00,
+        consommation_pages: { nb: 38300, color: 8300, total: 46600 },
+        facture_en_cours: null
+    }
+};
+
+// ==================
+// STATIC DEMO DATA - Invoices List
+// ==================
+const staticInvoicesData = {
+    1: [
+        {
+            id: 101,
+            numero: '2025-11',
+            date: '2025-11-15',
+            periode: { debut: '2025-10-20', fin: '2025-11-20' },
+            type: 'Consommation',
+            montantTTC: 1250.75,
+            statut: 'brouillon'
+        },
+        {
+            id: 100,
+            numero: '2025-10',
+            date: '2025-10-15',
+            periode: { debut: '2025-09-20', fin: '2025-10-20' },
+            type: 'Consommation',
+            montantTTC: 1180.50,
+            statut: 'envoyee'
+        },
+        {
+            id: 99,
+            numero: '2025-09',
+            date: '2025-09-15',
+            periode: { debut: '2025-08-20', fin: '2025-09-20' },
+            type: 'Consommation',
+            montantTTC: 1100.25,
+            statut: 'payee'
+        }
+    ],
+    2: [
+        {
+            id: 201,
+            numero: '2025-11',
+            date: '2025-11-15',
+            periode: { debut: '2025-10-20', fin: '2025-11-20' },
+            type: 'Consommation',
+            montantTTC: 2450.00,
+            statut: 'envoyee'
+        }
+    ]
+};
+
+// ==================
+// STATIC DEMO DATA - Invoice Detail
+// ==================
+const staticInvoiceDetailData = {
+    101: {
+        id: 101,
+        numero: '2025-11',
+        date_creation: '2025-11-15',
+        periode: { debut: '2025-10-20', fin: '2025-11-20' },
+        type: 'Consommation',
+        montant_ht: 1042.29,
+        tva: 208.46,
+        montant_ttc: 1250.75,
+        statut: 'brouillon',
+        pdf_genere: false,
+        client: {
+            id: 1,
+            raison_sociale: 'Entreprise ABC',
+            adresse: '123 Rue Example',
+            code_postal: '75001',
+            ville: 'Paris',
+            email: 'contact@entreprise-abc.fr'
+        },
+        lignes: [
+            { description: 'Pages N&B - Novembre 2025', type: 'Consommation', quantite: 8900, prixUnitaire: 0.05, total: 445.00 },
+            { description: 'Pages Couleur - Novembre 2025', type: 'Consommation', quantite: 200, prixUnitaire: 0.15, total: 30.00 }
+        ]
+    }
+};
+
+// ==================
+// STATIC DEMO DATA - Payments List
+// ==================
+const staticPaymentsData = {
+    1: [
+        {
+            id: 1,
+            facture_id: 99,
+            facture_numero: '2025-09',
+            montant: 1100.25,
+            date_paiement: '2025-09-25',
+            mode_paiement: 'Virement bancaire',
+            reference: 'VIR-2025-09-25-001',
+            commentaire: 'Paiement reçu',
+            statut: 'recu',
+            created_by_nom: 'Admin',
+            created_by_prenom: 'System'
+        },
+        {
+            id: 2,
+            facture_id: 100,
+            facture_numero: '2025-10',
+            montant: 1180.50,
+            date_paiement: '2025-10-28',
+            mode_paiement: 'Chèque',
+            reference: 'CHQ-2025-10-28-001',
+            commentaire: 'En attente d\'encaissement',
+            statut: 'en_cours',
+            created_by_nom: 'Martin',
+            created_by_prenom: 'Marie'
+        }
+    ],
+    2: [
+        {
+            id: 3,
+            facture_id: 201,
+            facture_numero: '2025-11',
+            montant: 2450.00,
+            date_paiement: '2025-11-20',
+            mode_paiement: 'Virement bancaire',
+            reference: 'VIR-2025-11-20-001',
+            commentaire: '',
+            statut: 'recu',
+            created_by_nom: 'Admin',
+            created_by_prenom: 'System'
+        }
+    ]
+};
+
+// ==================
+// GLOBAL VARIABLES
+// ==================
 let factureGeneree = false;
-
-// ==================
-// Graphique de consommation
-// ==================
 let consumptionChart = null;
-let selectedClientId = null; // Un seul client sélectionné via la barre de recherche
+let selectedClientId = null;
 
 // Initialisation de la barre de recherche client
 function initClientSearch() {
