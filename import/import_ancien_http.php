@@ -78,7 +78,7 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // ---------- Config ----------
 $URL = 'https://cccomputer.fr/test_compteur.php';
-$BATCH = 100; // Maximum 100 relevés par exécution
+$BATCH = 20; // Maximum 20 lignes par exécution (comme demandé)
 
 // ---------- Tables ----------
 $pdo->exec("CREATE TABLE IF NOT EXISTS import_run( id INT AUTO_INCREMENT PRIMARY KEY, ran_at DATETIME NOT NULL, imported INT NOT NULL, skipped INT NOT NULL, ok TINYINT(1) NOT NULL, msg TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -403,7 +403,7 @@ $msg = json_encode([
     'batch'=>$BATCH,
     'remaining_estimate'=>$remaining,
     'last_timestamp'=>$lastTimestamp,
-    'files'=>array_slice($added,0,100), // Limiter à 100 pour éviter un JSON trop gros
+    'files'=>array_slice($added,0,20), // Limiter à 20 pour éviter un JSON trop gros
     'errors'=>count($errors) > 0 ? array_slice($errors,0,10) : null // Limiter les erreurs affichées
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 

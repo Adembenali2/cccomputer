@@ -1639,7 +1639,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         }
 
         async function tick(){
-            await callJSON(SFTP_URL + '?limit=10'); // on ne déclenche QUE le SFTP
+            await callJSON(SFTP_URL + '?limit=20'); // Limite de 20 fichiers CSV maximum
             setTimeout(refresh, 1500);
         }
 

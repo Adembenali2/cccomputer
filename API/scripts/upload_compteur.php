@@ -135,20 +135,41 @@ try {
     echo "⚠️ [IMPORT_RUN] Erreur CREATE TABLE: " . $e->getMessage() . "\n";
 }
 
+// ---------- 4.5) Limite de fichiers ----------
+// Maximum 20 fichiers CSV par exécution (configurable via SFTP_BATCH_LIMIT)
+$MAX_FILES = (int)(getenv('SFTP_BATCH_LIMIT') ?: 20);
+if ($MAX_FILES <= 0) $MAX_FILES = 20;
+if ($MAX_FILES > 20) $MAX_FILES = 20; // Limite absolue de 20 fichiers
+
 $files_processed = 0;
 $compteurs_inserted = 0;
 $files_error = 0;
+$files_list = []; // Liste des fichiers traités pour le log
 
 // ---------- 5) Parcours fichiers ----------
 $files = $sftp->nlist('/');
 if ($files === false) {
-    echo "❌ Impossible d’ouvrir le dossier racine SFTP\n";
+    echo "❌ Impossible d'ouvrir le dossier racine SFTP\n";
 } else {
-    $found = false;
+    // Filtrer et trier les fichiers CSV valides
+    $csvFiles = [];
     foreach ($files as $entry) {
         if ($entry === '.' || $entry === '..') continue;
         if (!preg_match('/^COPIEUR_MAC-([A-F0-9\-]+)_(\d{8}_\d{6})\.csv$/i', $entry)) continue;
-
+        $csvFiles[] = $entry;
+    }
+    
+    // Trier par nom (pour traiter dans l'ordre chronologique si possible)
+    sort($csvFiles);
+    
+    // Limiter à MAX_FILES
+    if (count($csvFiles) > $MAX_FILES) {
+        $csvFiles = array_slice($csvFiles, 0, $MAX_FILES);
+        echo "ℹ️ Limitation à $MAX_FILES fichiers CSV (limite maximale)\n";
+    }
+    
+    $found = false;
+    foreach ($csvFiles as $entry) {
         $found = true;
         $files_processed++;
         $remote = '/' . $entry;
@@ -189,6 +210,9 @@ if ($files === false) {
 
             $pdo->commit();
 
+            // Ajouter à la liste des fichiers traités (même si le déplacement échoue)
+            $files_list[] = $entry;
+            
             [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
             if (!$okMove) {
                 echo "⚠️ Impossible de déplacer $entry vers /processed\n";
@@ -211,22 +235,30 @@ if ($files === false) {
 
 // ---------- 6) Journal du run ----------
 try {
-    $summary = sprintf(
-        "[upload_compteur] files=%d, errors=%d, cmp_inserted=%d",
-        $files_processed, $files_error, $compteurs_inserted
-    );
+    // Créer un message JSON structuré pour différencier les sources
+    $summaryData = [
+        'source' => 'SFTP',
+        'files_processed' => $files_processed,
+        'files_error' => $files_error,
+        'files_success' => max(0, $files_processed - $files_error),
+        'compteurs_inserted' => $compteurs_inserted,
+        'max_files_limit' => $MAX_FILES,
+        'files' => array_slice($files_list, 0, 20) // Limiter à 20 pour éviter un JSON trop gros
+    ];
+    
+    $summary = json_encode($summaryData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
     $stmt = $pdo->prepare("
         INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
         VALUES (NOW(), :imported, :skipped, :ok, :msg)
     ");
     $stmt->execute([
-        ':imported' => max(0, $files_processed - $files_error),
+        ':imported' => $compteurs_inserted, // Nombre de compteurs réellement insérés
         ':skipped'  => $files_error,
-        ':ok'       => ($files_error === 0 ? 1 : 0),
+        ':ok'       => ($files_error === 0 && $files_processed > 0 ? 1 : ($files_processed === 0 ? 1 : 0)),
         ':msg'      => $summary,
     ]);
-    echo "📝 [IMPORT_RUN] Ligne insérée: $summary\n";
+    echo "📝 [IMPORT_RUN] Ligne insérée: $files_processed fichiers traités, $compteurs_inserted compteurs insérés\n";
 } catch (Throwable $e) {
     echo "❌ [IMPORT_RUN] Erreur INSERT: " . $e->getMessage() . "\n";
 }
