@@ -2115,22 +2115,22 @@ async function updateFacturesList() {
             return badges[statut] || '';
         };
         
+        // FIXED: Template literal structure - ensure proper closing and data access
         tbody.innerHTML = factures.map(facture => {
             let periode = '—';
             if (facture.periode && facture.periode.debut && facture.periode.fin) {
                 periode = `${formatDate(facture.periode.debut)} - ${formatDate(facture.periode.fin)}`;
             }
             
-            return `
-                <tr class="facture-row" data-facture-id="${facture.id}" style="cursor: pointer;">
-                    <td>${facture.numero}</td>
+            // FIXED: Ensure all template literal expressions are properly escaped and closed
+            return `<tr class="facture-row" data-facture-id="${facture.id}" style="cursor: pointer;">
+                    <td>${facture.numero || '—'}</td>
                     <td>${formatDate(facture.date)}</td>
                     <td>${periode}</td>
-                    <td>${facture.type}</td>
-                    <td>${formatCurrency(facture.montantTTC)}</td>
+                    <td>${facture.type || '—'}</td>
+                    <td>${formatCurrency(facture.montantTTC || 0)}</td>
                     <td>${getStatutBadge(facture.statut)}</td>
-                </tr>
-            `;
+                </tr>`;
         }).join('');
         
         // Ajouter les event listeners aux nouvelles lignes
