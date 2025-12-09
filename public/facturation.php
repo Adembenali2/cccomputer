@@ -1168,11 +1168,12 @@ async function initConsumptionChart() {
         if (chartContainer) {
             chartContainer.style.display = 'block';
         }
-    
-    // Créer les 3 datasets pour N&B, Couleur et Total (line chart) - version esthétique améliorée
-    const datasets = [
-        {
-            label: 'Noir & Blanc',
+        
+        // FIXED: Chart creation code was outside the try block - moved it inside with proper indentation
+        // Créer les 3 datasets pour N&B, Couleur et Total (line chart) - version esthétique améliorée
+        const datasets = [
+            {
+                label: 'Noir & Blanc',
             data: chartData.nbData,
             borderColor: 'rgb(30, 41, 59)', // Gris foncé (slate-800) - cohérent avec le projet
             backgroundColor: 'rgba(30, 41, 59, 0.08)', // Gradient léger sous la courbe
@@ -1221,121 +1222,122 @@ async function initConsumptionChart() {
             borderDash: [6, 4] // Ligne en pointillés pour différencier la courbe Total
         }
     ];
-    
-    const config = {
-        type: 'line',
-        data: {
-            labels: chartData.labels,
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: {
-                duration: 1200,
-                easing: 'easeInOutQuart'
+        
+        const config = {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: datasets
             },
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        usePointStyle: true,
-                        padding: 15,
-                        font: {
-                            family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                            size: 12,
-                            weight: '500'
-                        },
-                        generateLabels: function(chart) {
-                            const original = Chart.defaults.plugins.legend.labels.generateLabels;
-                            const labels = original.call(this, chart);
-                            // Personnaliser les labels avec des carrés colorés
-                            labels.forEach((label, index) => {
-                                if (index === 0) {
-                                    label.text = '◼ Noir & Blanc';
-                                } else if (index === 1) {
-                                    label.text = '◼ Couleur';
-                                } else if (index === 2) {
-                                    label.text = '◼ Total';
-                                }
-                            });
-                            return labels;
-                        },
-                        onClick: function(e, legendItem, legend) {
-                            // Permettre de cliquer sur la légende pour masquer/afficher les courbes
-                            const index = legendItem.datasetIndex;
-                            const chart = legend.chart;
-                            const meta = chart.getDatasetMeta(index);
-                            meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
-                            chart.update();
-                        }
-                    }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 1200,
+                    easing: 'easeInOutQuart'
                 },
-                tooltip: {
+                interaction: {
                     mode: 'index',
-                    intersect: false,
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
-                    titleFont: {
-                        size: 14,
-                        weight: 'bold'
-                    },
-                    bodyFont: {
-                        size: 13
-                    },
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                                size: 12,
+                                weight: '500'
+                            },
+                            generateLabels: function(chart) {
+                                const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                                const labels = original.call(this, chart);
+                                // Personnaliser les labels avec des carrés colorés
+                                labels.forEach((label, index) => {
+                                    if (index === 0) {
+                                        label.text = '◼ Noir & Blanc';
+                                    } else if (index === 1) {
+                                        label.text = '◼ Couleur';
+                                    } else if (index === 2) {
+                                        label.text = '◼ Total';
+                                    }
+                                });
+                                return labels;
+                            },
+                            onClick: function(e, legendItem, legend) {
+                                // Permettre de cliquer sur la légende pour masquer/afficher les courbes
+                                const index = legendItem.datasetIndex;
+                                const chart = legend.chart;
+                                const meta = chart.getDatasetMeta(index);
+                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                                chart.update();
                             }
-                            label += context.parsed.y.toLocaleString('fr-FR') + ' pages';
-                            return label;
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        titleFont: {
+                            size: 14,
+                            weight: 'bold'
+                        },
+                        bodyFont: {
+                            size: 13
+                        },
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                                return label;
+                            }
                         }
                     }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString('fr-FR');
-                        },
-                        font: {
-                            family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                            size: 11
-                        },
-                        padding: 8
-                    },
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.04)',
-                        drawBorder: false,
-                        lineWidth: 1
-                    }
                 },
-                x: {
-                    ticks: {
-                        font: {
-                            family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                            size: 11
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString('fr-FR');
+                            },
+                            font: {
+                                family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                                size: 11
+                            },
+                            padding: 8
                         },
-                        padding: 8
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.04)',
+                            drawBorder: false,
+                            lineWidth: 1
+                        }
                     },
-                    grid: {
-                        display: false,
-                        drawBorder: false
+                    x: {
+                        ticks: {
+                            font: {
+                                family: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                                size: 11
+                            },
+                            padding: 8
+                        },
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        }
                     }
                 }
             }
-        }
-    };
+        };
     
+        // FIXED: Chart instantiation was outside try block - moved inside with proper indentation
         if (consumptionChart) {
             consumptionChart.destroy();
         }
@@ -1572,53 +1574,53 @@ async function updateTableConsommation() {
             return;
         }
     
-    // Calculer les 3 derniers mois (périodes 20→20)
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-11
-    const currentDay = now.getDate();
-    
-    // Si on est avant le 20, le mois en cours n'est pas encore terminé
-    // On commence donc par le mois précédent
-    let moisDebut = currentMonth;
-    if (currentDay < 20) {
-        moisDebut = currentMonth - 1;
-    }
-    
-    // Générer les 3 derniers mois contractuels
-    const derniersMois = [];
-    for (let i = 0; i < 3; i++) {
-        let mois = moisDebut - i;
-        let annee = currentYear;
+        // Calculer les 3 derniers mois (périodes 20→20)
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth(); // 0-11
+        const currentDay = now.getDate();
         
-        // Gérer le passage d'année
-        if (mois < 0) {
-            mois += 12;
-            annee--;
+        // Si on est avant le 20, le mois en cours n'est pas encore terminé
+        // On commence donc par le mois précédent
+        let moisDebut = currentMonth;
+        if (currentDay < 20) {
+            moisDebut = currentMonth - 1;
         }
         
-        // Créer la clé de mois au format 'YYYY-MM'
-        const moisKey = `${annee}-${String(mois + 1).padStart(2, '0')}`;
+        // Générer les 3 derniers mois contractuels
+        const derniersMois = [];
+        for (let i = 0; i < 3; i++) {
+            let mois = moisDebut - i;
+            let annee = currentYear;
+            
+            // Gérer le passage d'année
+            if (mois < 0) {
+                mois += 12;
+                annee--;
+            }
+            
+            // Créer la clé de mois au format 'YYYY-MM'
+            const moisKey = `${annee}-${String(mois + 1).padStart(2, '0')}`;
+            
+            // Calculer la période (20 du mois → 20 du mois suivant)
+            const moisSuivant = (mois + 1) % 12;
+            const anneeSuivante = mois === 11 ? annee + 1 : annee;
+            
+            // Noms des mois en français
+            const moisNoms = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+            const moisNom = moisNoms[mois];
+            
+            // Format de la période : "Janvier 2025 (20/01 → 20/02)"
+            const periode = `${moisNom} ${annee} (20/${String(mois + 1).padStart(2, '0')} → 20/${String(moisSuivant + 1).padStart(2, '0')})`;
+            
+            derniersMois.push({
+                key: moisKey,
+                periode: periode,
+                mois: mois,
+                annee: annee
+            });
+        }
         
-        // Calculer la période (20 du mois → 20 du mois suivant)
-        const moisSuivant = (mois + 1) % 12;
-        const anneeSuivante = mois === 11 ? annee + 1 : annee;
-        
-        // Noms des mois en français
-        const moisNoms = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-        const moisNom = moisNoms[mois];
-        
-        // Format de la période : "Janvier 2025 (20/01 → 20/02)"
-        const periode = `${moisNom} ${annee} (20/${String(mois + 1).padStart(2, '0')} → 20/${String(moisSuivant + 1).padStart(2, '0')})`;
-        
-        derniersMois.push({
-            key: moisKey,
-            periode: periode,
-            mois: mois,
-            annee: annee
-        });
-    }
-    
         // Vider le tbody
         tbody.innerHTML = '';
         
@@ -1633,9 +1635,9 @@ async function updateTableConsommation() {
             // Créer une ligne pour chaque mois de consommation
             consommationsFiltrees.forEach((consommation, index) => {
                 const periode = consommation.periode || consommation.mois;
-            
-            const tr = document.createElement('tr');
-            
+                
+                const tr = document.createElement('tr');
+                
                 // Colonne Imprimante (uniquement sur la première ligne)
                 if (index === 0) {
                     const tdImprimante = document.createElement('td');
