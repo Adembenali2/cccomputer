@@ -95,14 +95,94 @@ $CSRF = ensureCsrfToken();
             color: var(--text-muted);
         }
 
-        /* Main content area (empty for now) */
+        /* Results container */
+        #client-results {
+            margin-top: 1rem;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-primary);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .results-table thead {
+            background: var(--bg-tertiary);
+        }
+
+        .results-table th {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .results-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .results-table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        .results-table tbody tr:hover {
+            background: var(--bg-secondary);
+        }
+
+        .results-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .no-results-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1rem;
+            color: var(--text-muted);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Main content area */
         .content-area {
             background: var(--bg-primary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-lg);
             padding: 2rem;
             box-shadow: var(--shadow-sm);
-            min-height: 400px;
+            min-height: 200px;
         }
 
         /* Responsive */
@@ -142,7 +222,7 @@ $CSRF = ensureCsrfToken();
                 </svg>
                 <input 
                     type="text" 
-                    id="clientSearch" 
+                    id="client-search-input" 
                     class="search-input" 
                     placeholder="Rechercher par nom, raison sociale, prénom ou numéro client"
                     autocomplete="off"
@@ -152,33 +232,208 @@ $CSRF = ensureCsrfToken();
         </div>
 
         <div class="content-area">
-            <!-- Contenu à ajouter ultérieurement -->
+            <div id="client-results">
+                <!-- Les résultats de recherche s'afficheront ici -->
+            </div>
         </div>
     </div>
 
     <script>
-        // Placeholder pour la logique de recherche (à implémenter plus tard)
         document.addEventListener('DOMContentLoaded', () => {
-            const searchInput = document.getElementById('clientSearch');
-            
-            if (searchInput) {
-                // Écouter les changements dans le champ de recherche
-                searchInput.addEventListener('input', (e) => {
-                    const searchTerm = e.target.value.trim();
-                    // Logique de recherche à implémenter plus tard
-                    console.log('Recherche:', searchTerm);
+            const searchInput = document.getElementById('client-search-input');
+            const resultsContainer = document.getElementById('client-results');
+            let debounceTimer = null;
+            let currentController = null;
+
+            if (!searchInput || !resultsContainer) {
+                console.error('Éléments de recherche non trouvés');
+                return;
+            }
+
+            /**
+             * Fonction de debounce pour limiter les appels API
+             */
+            function debounce(func, delay) {
+                return function(...args) {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => func.apply(this, args), delay);
+                };
+            }
+
+            /**
+             * Affiche un message de chargement
+             */
+            function showLoading() {
+                resultsContainer.innerHTML = `
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 0.5rem;">Recherche en cours...</p>
+                    </div>
+                `;
+            }
+
+            /**
+             * Affiche un message "aucun résultat"
+             */
+            function showNoResults() {
+                resultsContainer.innerHTML = `
+                    <div class="no-results">
+                        <svg class="no-results-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <p>Aucun client trouvé pour cette recherche.</p>
+                    </div>
+                `;
+            }
+
+            /**
+             * Affiche les résultats dans un tableau
+             */
+            function renderResults(clients) {
+                if (!clients || clients.length === 0) {
+                    showNoResults();
+                    return;
+                }
+
+                let html = `
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>Numéro client</th>
+                                <th>Raison sociale</th>
+                                <th>Nom</th>
+                                <th>Prénom</th>
+                                <th>Ville</th>
+                                <th>Téléphone</th>
+                                <th>Email</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                clients.forEach(client => {
+                    html += `
+                        <tr>
+                            <td>${escapeHtml(client.numero_client || '')}</td>
+                            <td>${escapeHtml(client.raison_sociale || '')}</td>
+                            <td>${escapeHtml(client.nom_dirigeant || '')}</td>
+                            <td>${escapeHtml(client.prenom_dirigeant || '')}</td>
+                            <td>${escapeHtml(client.ville || '')}</td>
+                            <td>${escapeHtml(client.telephone1 || '')}</td>
+                            <td>${escapeHtml(client.email || '')}</td>
+                        </tr>
+                    `;
                 });
 
-                // Gérer la soumission avec Enter (optionnel)
-                searchInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const searchTerm = e.target.value.trim();
-                        // Logique de recherche à implémenter plus tard
-                        console.log('Recherche (Enter):', searchTerm);
-                    }
-                });
+                html += `
+                        </tbody>
+                    </table>
+                `;
+
+                resultsContainer.innerHTML = html;
             }
+
+            /**
+             * Échappe le HTML pour éviter les injections XSS
+             */
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            /**
+             * Effectue la recherche via l'API
+             */
+            async function performSearch(searchTerm) {
+                // Annuler la requête précédente si elle existe
+                if (currentController) {
+                    currentController.abort();
+                }
+
+                // Si le terme est vide, vider les résultats
+                if (!searchTerm || searchTerm.trim().length < 1) {
+                    resultsContainer.innerHTML = '';
+                    return;
+                }
+
+                // Afficher le chargement
+                showLoading();
+
+                // Créer un nouveau AbortController pour cette requête
+                currentController = new AbortController();
+
+                try {
+                    const response = await fetch(`/API/clients_search.php?q=${encodeURIComponent(searchTerm)}`, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                        signal: currentController.signal,
+                        credentials: 'same-origin'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    if (!data.ok) {
+                        throw new Error(data.error || 'Erreur lors de la recherche');
+                    }
+
+                    // Afficher les résultats
+                    renderResults(data.clients || []);
+
+                } catch (error) {
+                    // Ignorer les erreurs d'annulation
+                    if (error.name === 'AbortError') {
+                        return;
+                    }
+
+                    console.error('Erreur lors de la recherche:', error);
+                    resultsContainer.innerHTML = `
+                        <div class="no-results">
+                            <p style="color: var(--text-danger, #dc2626);">
+                                Erreur lors de la recherche. Veuillez réessayer.
+                            </p>
+                        </div>
+                    `;
+                } finally {
+                    currentController = null;
+                }
+            }
+
+            // Fonction de recherche avec debounce (300ms)
+            const debouncedSearch = debounce((searchTerm) => {
+                performSearch(searchTerm);
+            }, 300);
+
+            // Écouter les changements dans le champ de recherche
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.trim();
+                debouncedSearch(searchTerm);
+            });
+
+            // Gérer la soumission avec Enter (recherche immédiate)
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const searchTerm = e.target.value.trim();
+                    // Annuler le debounce et rechercher immédiatement
+                    clearTimeout(debounceTimer);
+                    performSearch(searchTerm);
+                }
+            });
+
+            // Nettoyer lors du déchargement de la page
+            window.addEventListener('beforeunload', () => {
+                if (currentController) {
+                    currentController.abort();
+                }
+            });
         });
     </script>
 </body>
