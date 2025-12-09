@@ -67,18 +67,26 @@ try {
     ]);
     
 } catch (Throwable $e) {
+    // Log l'erreur complète pour le débogage
     error_log('facturation_consumption_chart.php error: ' . $e->getMessage());
     error_log('facturation_consumption_chart.php File: ' . $e->getFile() . ' Line: ' . $e->getLine());
     error_log('facturation_consumption_chart.php trace: ' . $e->getTraceAsString());
     
+    // S'assurer qu'aucune sortie n'a été envoyée avant
+    if (ob_get_level() > 0) {
+        ob_clean();
+    }
+    
+    // Retourner une réponse JSON même en cas d'erreur
     jsonResponse([
         'ok' => false,
-        'error' => 'Erreur serveur',
+        'error' => 'Erreur serveur: ' . $e->getMessage(),
         'debug' => (defined('DEBUG_MODE') && DEBUG_MODE) ? [
             'message' => $e->getMessage(),
             'file' => basename($e->getFile()),
             'line' => $e->getLine(),
-            'type' => get_class($e)
+            'type' => get_class($e),
+            'trace' => $e->getTraceAsString()
         ] : null
     ], 500);
 }

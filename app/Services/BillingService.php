@@ -53,15 +53,34 @@ class BillingService
         // Charger les helpers de paiements pour utiliser calculatePeriodConsumption
         // Le chemin est relatif depuis app/Services/ vers API/includes/
         if (!function_exists('calculatePeriodConsumption')) {
-            $helpersPath = __DIR__ . '/../../API/includes/paiements_helpers.php';
-            if (!file_exists($helpersPath)) {
-                // Essayer un chemin alternatif
-                $helpersPath = __DIR__ . '/../../../API/includes/paiements_helpers.php';
+            // Essayer plusieurs chemins possibles
+            $possiblePaths = [
+                __DIR__ . '/../../API/includes/paiements_helpers.php',  // Depuis app/Services/
+                __DIR__ . '/../../../API/includes/paiements_helpers.php', // Depuis app/Services/ (si structure différente)
+                __DIR__ . '/../../../../API/includes/paiements_helpers.php', // Alternative
+            ];
+            
+            $loaded = false;
+            foreach ($possiblePaths as $helpersPath) {
+                if (file_exists($helpersPath)) {
+                    require_once $helpersPath;
+                    $loaded = true;
+                    break;
+                }
             }
-            if (file_exists($helpersPath)) {
-                require_once $helpersPath;
-            } else {
-                throw new \RuntimeException("Impossible de charger paiements_helpers.php. Chemin testé: " . __DIR__ . '/../../API/includes/paiements_helpers.php');
+            
+            if (!$loaded) {
+                // Dernier recours : chercher depuis la racine du projet
+                $rootPath = dirname(dirname(dirname(__DIR__)));
+                $rootHelpersPath = $rootPath . '/API/includes/paiements_helpers.php';
+                if (file_exists($rootHelpersPath)) {
+                    require_once $rootHelpersPath;
+                    $loaded = true;
+                }
+            }
+            
+            if (!$loaded || !function_exists('calculatePeriodConsumption')) {
+                throw new \RuntimeException("Impossible de charger paiements_helpers.php ou la fonction calculatePeriodConsumption n'existe pas. Chemins testés: " . implode(', ', $possiblePaths));
             }
         }
         
@@ -132,14 +151,33 @@ class BillingService
     {
         // Charger les helpers de paiements
         if (!function_exists('calculatePeriodConsumption')) {
-            $helpersPath = __DIR__ . '/../../API/includes/paiements_helpers.php';
-            if (!file_exists($helpersPath)) {
-                $helpersPath = __DIR__ . '/../../../API/includes/paiements_helpers.php';
+            // Essayer plusieurs chemins possibles
+            $possiblePaths = [
+                __DIR__ . '/../../API/includes/paiements_helpers.php',
+                __DIR__ . '/../../../API/includes/paiements_helpers.php',
+                __DIR__ . '/../../../../API/includes/paiements_helpers.php',
+            ];
+            
+            $loaded = false;
+            foreach ($possiblePaths as $helpersPath) {
+                if (file_exists($helpersPath)) {
+                    require_once $helpersPath;
+                    $loaded = true;
+                    break;
+                }
             }
-            if (file_exists($helpersPath)) {
-                require_once $helpersPath;
-            } else {
-                throw new \RuntimeException("Impossible de charger paiements_helpers.php");
+            
+            if (!$loaded) {
+                $rootPath = dirname(dirname(dirname(__DIR__)));
+                $rootHelpersPath = $rootPath . '/API/includes/paiements_helpers.php';
+                if (file_exists($rootHelpersPath)) {
+                    require_once $rootHelpersPath;
+                    $loaded = true;
+                }
+            }
+            
+            if (!$loaded || !function_exists('calculatePeriodConsumption')) {
+                throw new \RuntimeException("Impossible de charger paiements_helpers.php ou la fonction calculatePeriodConsumption n'existe pas");
             }
         }
         
@@ -239,14 +277,33 @@ class BillingService
     {
         // Charger les helpers de paiements
         if (!function_exists('calculatePeriodConsumption')) {
-            $helpersPath = __DIR__ . '/../../API/includes/paiements_helpers.php';
-            if (!file_exists($helpersPath)) {
-                $helpersPath = __DIR__ . '/../../../API/includes/paiements_helpers.php';
+            // Essayer plusieurs chemins possibles
+            $possiblePaths = [
+                __DIR__ . '/../../API/includes/paiements_helpers.php',
+                __DIR__ . '/../../../API/includes/paiements_helpers.php',
+                __DIR__ . '/../../../../API/includes/paiements_helpers.php',
+            ];
+            
+            $loaded = false;
+            foreach ($possiblePaths as $helpersPath) {
+                if (file_exists($helpersPath)) {
+                    require_once $helpersPath;
+                    $loaded = true;
+                    break;
+                }
             }
-            if (file_exists($helpersPath)) {
-                require_once $helpersPath;
-            } else {
-                throw new \RuntimeException("Impossible de charger paiements_helpers.php");
+            
+            if (!$loaded) {
+                $rootPath = dirname(dirname(dirname(__DIR__)));
+                $rootHelpersPath = $rootPath . '/API/includes/paiements_helpers.php';
+                if (file_exists($rootHelpersPath)) {
+                    require_once $rootHelpersPath;
+                    $loaded = true;
+                }
+            }
+            
+            if (!$loaded || !function_exists('calculatePeriodConsumption')) {
+                throw new \RuntimeException("Impossible de charger paiements_helpers.php ou la fonction calculatePeriodConsumption n'existe pas");
             }
         }
         

@@ -1466,6 +1466,22 @@ async function initConsumptionChart() {
         }
         
         const response = await fetch(`/API/facturation_consumption_chart.php?${params.toString()}`);
+        
+        // Vérifier le statut HTTP avant de parser le JSON
+        if (!response.ok) {
+            // Si la réponse n'est pas OK, essayer de parser le JSON pour obtenir le message d'erreur
+            let errorMessage = `Erreur HTTP ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorData.message || errorMessage;
+            } catch (e) {
+                // Si ce n'est pas du JSON, utiliser le texte brut
+                const text = await response.text();
+                errorMessage = text || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
+        
         const result = await response.json();
         
         if (!result.ok || !result.data) {
@@ -1818,6 +1834,22 @@ async function updateTableConsommation() {
         }
         
         const response = await fetch(`/API/facturation_consumption_table.php?${params.toString()}`);
+        
+        // Vérifier le statut HTTP avant de parser le JSON
+        if (!response.ok) {
+            // Si la réponse n'est pas OK, essayer de parser le JSON pour obtenir le message d'erreur
+            let errorMessage = `Erreur HTTP ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorData.message || errorMessage;
+            } catch (e) {
+                // Si ce n'est pas du JSON, utiliser le texte brut
+                const text = await response.text();
+                errorMessage = text || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
+        
         const result = await response.json();
         
         if (!result.ok || !result.data) {
