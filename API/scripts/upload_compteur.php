@@ -620,11 +620,46 @@ if (is_array($files) && count($files) > 0) {
             if (isset($pdo) && $pdo->inTransaction()) {
                 try {
                     $pdo->rollBack();
+                    debugLog("Transaction rollback effectué");
                 } catch (Throwable $rollbackErr) {
-                    // Ignorer les erreurs de rollback
+                    debugLog("Erreur lors du rollback", ['error' => $rollbackErr->getMessage()]);
                 }
             }
+            
+            // Log détaillé de l'erreur SQL
+            $errorDetails = [
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ];
+            
+            if ($e instanceof PDOException) {
+                $errorInfo = $e->errorInfo;
+                $errorDetails['sql_state'] = $errorInfo[0] ?? 'N/A';
+                $errorDetails['driver_code'] = $errorInfo[1] ?? 'N/A';
+                $errorDetails['driver_message'] = $errorInfo[2] ?? 'N/A';
+                
+                // Afficher la requête SQL avec les valeurs pour debug
+                $sqlDebug = $sql_compteur;
+                foreach ($binds as $key => $value) {
+                    $displayValue = is_null($value) ? 'NULL' : (is_string($value) ? "'$value'" : $value);
+                    $sqlDebug = str_replace($key, $displayValue, $sqlDebug);
+                }
+                $errorDetails['sql_debug'] = $sqlDebug;
+                
+                debugLog("ERREUR PDO DÉTAILLÉE", $errorDetails);
+            } else {
+                debugLog("ERREUR NON-PDO", $errorDetails);
+            }
+            
             echo "❌ [ERREUR PDO] " . $e->getMessage() . "\n";
+            if ($e instanceof PDOException && isset($errorInfo[2])) {
+                echo "   SQL Error: " . $errorInfo[2] . "\n";
+                echo "   SQL State: " . ($errorInfo[0] ?? 'N/A') . "\n";
+                echo "   Driver Code: " . ($errorInfo[1] ?? 'N/A') . "\n";
+            }
+            
             try {
                 sftp_safe_move($sftp, $remote, '/errors');
             } catch (Throwable $moveErr) {
