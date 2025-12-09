@@ -55,30 +55,116 @@ $desc = [
 // passe le batch au worker SFTP
 $env = $_ENV + $_SERVER + ['SFTP_BATCH_LIMIT' => (string)$limit];
 
+// Timeout maximum : 60 secondes pour éviter les blocages
+$TIMEOUT_SEC = 60;
+$startTime = time();
+
 $proc = proc_open($cmd, $desc, $pipes, $projectRoot, $env);
 $out = $err = '';
 $code = null;
+$timeoutReached = false;
 
 if (is_resource($proc)) {
-  $out  = stream_get_contents($pipes[1]); fclose($pipes[1]);
-  $err  = stream_get_contents($pipes[2]); fclose($pipes[2]);
-  $code = proc_close($proc);
+  // Configurer les pipes en mode non-bloquant
+  stream_set_blocking($pipes[1], false);
+  stream_set_blocking($pipes[2], false);
+  
+  $read = [$pipes[1], $pipes[2]];
+  $write = null;
+  $except = null;
+  
+  // Lire les pipes avec timeout
+  while (is_resource($proc)) {
+    $status = proc_get_status($proc);
+    
+    // Vérifier le timeout
+    if ((time() - $startTime) > $TIMEOUT_SEC) {
+      $timeoutReached = true;
+      proc_terminate($proc, SIGTERM);
+      // Attendre un peu pour que le processus se termine proprement
+      sleep(2);
+      if (proc_get_status($proc)['running']) {
+        proc_terminate($proc, SIGKILL);
+      }
+      $err = "TIMEOUT: Le processus a dépassé la limite de {$TIMEOUT_SEC} secondes";
+      $code = -1;
+      break;
+    }
+    
+    // Si le processus est terminé, lire les dernières données
+    if (!$status['running']) {
+      $code = $status['exitcode'];
+      break;
+    }
+    
+    // Lire les données disponibles (non-bloquant)
+    $changed = @stream_select($read, $write, $except, 1); // Timeout de 1 seconde
+    
+    if ($changed === false) {
+      // Erreur sur stream_select, continuer quand même
+      usleep(100000); // Attendre 100ms avant de réessayer
+      continue;
+    }
+    
+    if ($changed > 0) {
+      foreach ($read as $pipe) {
+        if ($pipe === $pipes[1]) {
+          $data = stream_get_contents($pipes[1]);
+          if ($data !== false && $data !== '') $out .= $data;
+        } elseif ($pipe === $pipes[2]) {
+          $data = stream_get_contents($pipes[2]);
+          if ($data !== false && $data !== '') $err .= $data;
+        }
+      }
+    } else {
+      // Aucune donnée disponible, attendre un peu
+      usleep(100000); // 100ms
+    }
+  }
+  
+  // Lire les dernières données restantes
+  $remainingOut = stream_get_contents($pipes[1]);
+  $remainingErr = stream_get_contents($pipes[2]);
+  if ($remainingOut !== false) $out .= $remainingOut;
+  if ($remainingErr !== false) $err .= $remainingErr;
+  
+  // Fermer les pipes
+  fclose($pipes[1]);
+  fclose($pipes[2]);
+  
+  // Fermer le processus si pas déjà fait
+  if (is_resource($proc)) {
+    $code = proc_close($proc);
+  }
 } else {
   $err = 'Impossible de créer le processus';
   $code = -1;
 }
 
 // Vérifier si le processus a échoué
-$success = ($code === 0 || $code === null);
-if (!$success && empty($err)) {
+$success = ($code === 0 && !$timeoutReached);
+if (!$success && empty($err) && !$timeoutReached) {
   $err = "Processus terminé avec le code de sortie: $code";
 }
 
+// Préparer le message d'erreur si nécessaire
+$errorMsg = null;
+if ($timeoutReached) {
+  $errorMsg = "TIMEOUT: Le processus d'import SFTP a dépassé la limite de {$TIMEOUT_SEC} secondes";
+} elseif (!$success && !empty($err)) {
+  $errorMsg = trim($err);
+} elseif ($code !== 0 && $code !== null) {
+  $errorMsg = "Le processus s'est terminé avec le code d'erreur: $code";
+}
+
 echo json_encode([
-  'ran'      => true,
-  'stdout'   => trim($out),
-  'stderr'   => trim($err),
-  'last_run' => date('Y-m-d H:i:s'),
-  'code'     => $code,
-  'success'  => $success
+  'ran'         => true,
+  'stdout'      => trim($out),
+  'stderr'      => trim($err),
+  'last_run'    => date('Y-m-d H:i:s'),
+  'code'        => $code,
+  'success'     => $success,
+  'timeout'     => $timeoutReached,
+  'error'       => $errorMsg,
+  'duration_sec' => time() - $startTime
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

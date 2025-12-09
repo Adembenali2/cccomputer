@@ -6,11 +6,18 @@ error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
 /**
- * upload_compteur.php (version avec logs détaillés)
- * - Connexion SFTP
+ * upload_compteur.php (version avec logs détaillés et gestion d'erreurs)
+ * - Connexion SFTP avec timeout
  * - Import CSV compteur_relevee
  * - Log dans import_run
+ * - Gestion complète des erreurs et timeouts
  */
+
+// ---------- Timeout global du script ----------
+// Maximum 50 secondes pour éviter les blocages (laisser 10s de marge avant le timeout du parent)
+set_time_limit(50);
+$scriptStartTime = time();
+$SCRIPT_TIMEOUT = 50;
 
 // ---------- 0) Normaliser les variables d'env pour db.php ----------
 (function (): void {
@@ -36,6 +43,7 @@ $paths = [
     __DIR__ . '/../../includes/db.php',
 ];
 $ok = false;
+$pdo = null;
 foreach ($paths as $p) {
     if (is_file($p)) {
         require_once $p;
@@ -44,38 +52,103 @@ foreach ($paths as $p) {
     }
 }
 if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
-    http_response_code(500);
-    exit("❌ Erreur: impossible de charger includes/db.php et obtenir \$pdo\n");
+    $errorMsg = "Impossible de charger includes/db.php et obtenir \$pdo";
+    echo "❌ Erreur: $errorMsg\n";
+    exit(1);
 }
 
 echo "✅ Connexion à la base établie.\n";
 
-// ---------- 2) Connexion SFTP ----------
+// ---------- 2) Connexion SFTP avec timeout et gestion d'erreurs ----------
 require __DIR__ . '/../vendor/autoload.php';
 use phpseclib3\Net\SFTP;
 
-// Utiliser uniquement les variables d'environnement pour la sécurité
-$sftp_host = getenv('SFTP_HOST') ?: '';
-$sftp_user = getenv('SFTP_USER') ?: '';
-$sftp_pass = getenv('SFTP_PASS') ?: '';
-$sftp_port = (int)(getenv('SFTP_PORT') ?: 22);
-
-if (empty($sftp_host) || empty($sftp_user) || empty($sftp_pass)) {
-    http_response_code(500);
-    exit("❌ Erreur: Variables d'environnement SFTP manquantes (SFTP_HOST, SFTP_USER, SFTP_PASS)\n");
+// Fonction pour vérifier le timeout
+function checkTimeout(int $startTime, int $maxSeconds): void {
+    if ((time() - $startTime) > $maxSeconds) {
+        throw new RuntimeException("TIMEOUT: Le script a dépassé la limite de {$maxSeconds} secondes");
+    }
 }
 
-$sftp = new SFTP($sftp_host, $sftp_port);
-if (!$sftp->login($sftp_user, $sftp_pass)) {
-    http_response_code(500);
-    exit("❌ Erreur de connexion SFTP\n");
+// Fonction pour logger les erreurs dans la base
+function logErrorToDB(?PDO $pdo, string $errorMsg): void {
+    if (!$pdo) return;
+    try {
+        $pdo->prepare("
+            INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
+            VALUES (NOW(), 0, 0, 0, :msg)
+        ")->execute([
+            ':msg' => json_encode([
+                'source' => 'SFTP',
+                'error' => $errorMsg,
+                'timestamp' => date('Y-m-d H:i:s')
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        ]);
+    } catch (Throwable $e) {
+        // Si on ne peut pas logger, on ignore (pour éviter les boucles)
+    }
 }
 
-echo "✅ Connexion SFTP établie.\n";
+$sftp = null;
 
-// ---------- Création dossiers SFTP ----------
-@$sftp->mkdir('/processed');
-@$sftp->mkdir('/errors');
+try {
+    checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
+    
+    // Utiliser uniquement les variables d'environnement pour la sécurité
+    $sftp_host = getenv('SFTP_HOST') ?: '';
+    $sftp_user = getenv('SFTP_USER') ?: '';
+    $sftp_pass = getenv('SFTP_PASS') ?: '';
+    $sftp_port = (int)(getenv('SFTP_PORT') ?: 22);
+    $sftp_timeout = (int)(getenv('SFTP_TIMEOUT') ?: 15); // Timeout de connexion SFTP
+
+    if (empty($sftp_host) || empty($sftp_user) || empty($sftp_pass)) {
+        $errorMsg = "Variables d'environnement SFTP manquantes (SFTP_HOST, SFTP_USER, SFTP_PASS)";
+        echo "❌ Erreur: $errorMsg\n";
+        logErrorToDB($pdo ?? null, $errorMsg);
+        exit(1);
+    }
+
+    echo "🔌 Tentative de connexion SFTP à $sftp_host:$sftp_port (timeout: {$sftp_timeout}s)...\n";
+    
+    // Créer la connexion SFTP avec timeout explicite
+    $sftp = new SFTP($sftp_host, $sftp_port, $sftp_timeout);
+    
+    // Tentative de login avec gestion d'erreur
+    $loginSuccess = false;
+    try {
+        $loginSuccess = $sftp->login($sftp_user, $sftp_pass);
+    } catch (Throwable $e) {
+        $errorMsg = "Erreur lors de la connexion SFTP: " . $e->getMessage();
+        echo "❌ $errorMsg\n";
+        logErrorToDB($pdo ?? null, $errorMsg);
+        exit(1);
+    }
+    
+    if (!$loginSuccess) {
+        $errorMsg = "Échec de l'authentification SFTP (vérifiez SFTP_USER et SFTP_PASS)";
+        echo "❌ Erreur: $errorMsg\n";
+        logErrorToDB($pdo ?? null, $errorMsg);
+        exit(1);
+    }
+
+    echo "✅ Connexion SFTP établie.\n";
+    
+} catch (Throwable $e) {
+    $errorMsg = "Erreur fatale lors de la connexion SFTP: " . $e->getMessage();
+    echo "❌ $errorMsg\n";
+    logErrorToDB($pdo ?? null, $errorMsg);
+    exit(1);
+}
+
+// ---------- Création dossiers SFTP avec gestion d'erreurs ----------
+try {
+    checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
+    @$sftp->mkdir('/processed');
+    @$sftp->mkdir('/errors');
+} catch (Throwable $e) {
+    echo "⚠️ Avertissement: Impossible de créer les dossiers SFTP: " . $e->getMessage() . "\n";
+    // On continue quand même, les dossiers peuvent déjà exister
+}
 
 function sftp_safe_move(SFTP $sftp, string $from, string $toDir): array {
     $basename = basename($from);
@@ -146,11 +219,30 @@ $compteurs_inserted = 0;
 $files_error = 0;
 $files_list = []; // Liste des fichiers traités pour le log
 
-// ---------- 5) Parcours fichiers ----------
-$files = $sftp->nlist('/');
-if ($files === false) {
-    echo "❌ Impossible d'ouvrir le dossier racine SFTP\n";
-} else {
+// ---------- 5) Parcours fichiers avec timeout et gestion d'erreurs ----------
+try {
+    checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
+    
+    echo "📂 Liste des fichiers sur le serveur SFTP...\n";
+    $files = $sftp->nlist('/');
+    
+    if ($files === false) {
+        $errorMsg = "Impossible de lister les fichiers du dossier racine SFTP";
+        echo "❌ Erreur: $errorMsg\n";
+        logErrorToDB($pdo ?? null, $errorMsg);
+        exit(1);
+    }
+    
+    echo "✅ " . count($files) . " entrées trouvées dans le dossier racine\n";
+    
+} catch (Throwable $e) {
+    $errorMsg = "Erreur lors de la liste des fichiers SFTP: " . $e->getMessage();
+    echo "❌ $errorMsg\n";
+    logErrorToDB($pdo ?? null, $errorMsg);
+    exit(1);
+}
+
+if (is_array($files) && count($files) > 0) {
     // Filtrer et trier les fichiers CSV valides
     $csvFiles = [];
     foreach ($files as $entry) {
@@ -170,14 +262,45 @@ if ($files === false) {
     
     $found = false;
     foreach ($csvFiles as $entry) {
-        $found = true;
-        $files_processed++;
-        $remote = '/' . $entry;
-        $tmp = tempnam(sys_get_temp_dir(), 'csv_');
-        if (!$sftp->get($remote, $tmp)) {
-            echo "❌ Erreur téléchargement $entry\n";
-            sftp_safe_move($sftp, $remote, '/errors');
-            @unlink($tmp);
+        try {
+            checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
+            
+            $found = true;
+            $files_processed++;
+            $remote = '/' . $entry;
+            
+            echo "📥 Téléchargement de $entry...\n";
+            $tmp = tempnam(sys_get_temp_dir(), 'csv_');
+            
+            // Tentative de téléchargement avec gestion d'erreur
+            $downloadSuccess = false;
+            try {
+                $downloadSuccess = $sftp->get($remote, $tmp);
+            } catch (Throwable $e) {
+                echo "❌ Exception lors du téléchargement de $entry: " . $e->getMessage() . "\n";
+                $downloadSuccess = false;
+            }
+            
+            if (!$downloadSuccess) {
+                echo "❌ Erreur téléchargement $entry\n";
+                try {
+                    sftp_safe_move($sftp, $remote, '/errors');
+                } catch (Throwable $e) {
+                    echo "⚠️ Impossible de déplacer $entry vers /errors: " . $e->getMessage() . "\n";
+                }
+                @unlink($tmp);
+                $files_error++;
+                continue;
+            }
+            
+            echo "✅ Téléchargement réussi: $entry\n";
+            
+        } catch (RuntimeException $e) {
+            // Timeout - arrêter le traitement
+            echo "⏱️ TIMEOUT: Arrêt du traitement des fichiers\n";
+            break;
+        } catch (Throwable $e) {
+            echo "❌ Erreur lors du traitement de $entry: " . $e->getMessage() . "\n";
             $files_error++;
             continue;
         }
@@ -213,17 +336,43 @@ if ($files === false) {
             // Ajouter à la liste des fichiers traités (même si le déplacement échoue)
             $files_list[] = $entry;
             
-            [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
-            if (!$okMove) {
-                echo "⚠️ Impossible de déplacer $entry vers /processed\n";
-            } else {
-                echo "📦 Archivé: $entry → /processed\n";
+            try {
+                [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
+                if (!$okMove) {
+                    echo "⚠️ Impossible de déplacer $entry vers /processed\n";
+                } else {
+                    echo "📦 Archivé: $entry → /processed\n";
+                }
+            } catch (Throwable $e) {
+                echo "⚠️ Erreur lors du déplacement de $entry: " . $e->getMessage() . "\n";
+                // On continue quand même, le fichier est déjà traité
             }
 
+        } catch (RuntimeException $e) {
+            // Timeout - arrêter le traitement
+            if (isset($pdo) && $pdo->inTransaction()) {
+                try {
+                    $pdo->rollBack();
+                } catch (Throwable $rollbackErr) {
+                    // Ignorer les erreurs de rollback
+                }
+            }
+            echo "⏱️ TIMEOUT: Arrêt du traitement (fichier: $entry)\n";
+            break;
         } catch (Throwable $e) {
-            $pdo->rollBack();
+            if (isset($pdo) && $pdo->inTransaction()) {
+                try {
+                    $pdo->rollBack();
+                } catch (Throwable $rollbackErr) {
+                    // Ignorer les erreurs de rollback
+                }
+            }
             echo "❌ [ERREUR PDO] " . $e->getMessage() . "\n";
-            sftp_safe_move($sftp, $remote, '/errors');
+            try {
+                sftp_safe_move($sftp, $remote, '/errors');
+            } catch (Throwable $moveErr) {
+                echo "⚠️ Impossible de déplacer $entry vers /errors: " . $moveErr->getMessage() . "\n";
+            }
             $files_error++;
         }
     }
@@ -263,5 +412,30 @@ try {
     echo "❌ [IMPORT_RUN] Erreur INSERT: " . $e->getMessage() . "\n";
 }
 
+// ---------- Gestion d'erreur finale ----------
+// S'assurer qu'une erreur est toujours loggée en cas d'échec
+if ($files_error > 0 && $compteurs_inserted === 0 && $files_processed > 0) {
+    try {
+        $errorSummary = json_encode([
+            'source' => 'SFTP',
+            'error' => "Tous les fichiers ont échoué ($files_error erreur(s) sur $files_processed fichier(s))",
+            'files_processed' => $files_processed,
+            'files_error' => $files_error,
+            'timestamp' => date('Y-m-d H:i:s')
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        
+        $pdo->prepare("
+            INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
+            VALUES (NOW(), 0, :skipped, 0, :msg)
+        ")->execute([
+            ':skipped' => $files_error,
+            ':msg' => $errorSummary
+        ]);
+    } catch (Throwable $e) {
+        // Ignorer les erreurs de log final
+    }
+}
+
 echo "-----------------------------\n";
-echo "✅ Traitement terminé.\n";
+$duration = time() - $scriptStartTime;
+echo "✅ Traitement terminé en {$duration} seconde(s).\n";

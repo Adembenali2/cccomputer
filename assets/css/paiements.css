@@ -411,13 +411,32 @@
   font-weight: 600;
   margin-bottom: 1.5rem;
   color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.paiements-chart-subtitle {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-left: 0.5rem;
 }
 
 .paiements-chart-wrapper {
   position: relative;
-  min-height: 300px;
+  min-height: 400px;
+  height: 400px;
   margin-top: 2rem;
   overflow: visible;
+}
+
+@media (max-width: 768px) {
+  .paiements-chart-wrapper {
+    min-height: 300px;
+    height: 300px;
+  }
 }
 
 .paiements-chart-legend {

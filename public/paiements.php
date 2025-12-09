@@ -7,6 +7,7 @@
     <title>Paiements & Facturation - CC Computer</title>
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <link rel="stylesheet" href="/assets/css/paiements.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="page-paiements">
     <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -100,19 +101,12 @@
                 </div>
 
                 <div class="paiements-chart-container">
-                    <div class="paiements-chart-title">Consommation par mois</div>
+                    <div class="paiements-chart-title">
+                        <span id="chartTitle">Consommation par mois</span>
+                        <span id="chartSubtitle" class="paiements-chart-subtitle"></span>
+                    </div>
                     <div class="paiements-chart-wrapper">
                         <canvas id="consumptionChart"></canvas>
-                    </div>
-                    <div class="paiements-chart-legend">
-                        <div class="paiements-legend-item">
-                            <div class="paiements-legend-color nb"></div>
-                            <span>Noir & Blanc</span>
-                        </div>
-                        <div class="paiements-legend-item">
-                            <div class="paiements-legend-color color"></div>
-                            <span>Couleur</span>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -655,9 +649,11 @@
                     item.addEventListener('click', function() {
                         searchInput.value = formatClientName(client);
                         selectedClientId = client.id;
+                        currentClientId = client.id;
                         suggestionsContainer.classList.remove('show');
                         console.log('Client sélectionné:', client);
-                        // Ici on pourra ajouter la logique pour filtrer la courbe
+                        // Mettre à jour la courbe avec le client sélectionné
+                        updateChart();
                     });
 
                     item.addEventListener('mouseenter', function() {
@@ -676,6 +672,9 @@
                 if (query.length === 0) {
                     suggestionsContainer.classList.remove('show');
                     selectedClientId = null;
+                    currentClientId = null;
+                    // Réinitialiser le graphique à la vue globale
+                    updateChart();
                     return;
                 }
                 const filtered = filterClients(query);
@@ -715,52 +714,83 @@
             });
         })();
 
-        // Sélecteurs de période (Mois et Année)
+        // Sélecteurs de période (Mois et Année) - Filtrage dynamique
         (function() {
             const monthSelect = document.getElementById('monthSelect');
             const yearSelect = document.getElementById('yearSelect');
 
             // Définir le mois actuel par défaut
             if (monthSelect) {
-                const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
-                monthSelect.value = currentMonth;
+                const monthValue = String(new Date().getMonth() + 1).padStart(2, '0');
+                monthSelect.value = monthValue;
+                currentMonth = monthValue;
             }
 
             if (monthSelect) {
                 monthSelect.addEventListener('change', function() {
+                    currentMonth = this.value;
                     console.log('Mois sélectionné:', this.value, this.options[this.selectedIndex].text);
-                    // Ici on pourra ajouter la logique pour recalculer la courbe
+                    // Mettre à jour la courbe
+                    updateChart();
                 });
             }
 
             if (yearSelect) {
                 yearSelect.addEventListener('change', function() {
+                    currentYear = this.value;
                     console.log('Année sélectionnée:', this.value);
-                    // Ici on pourra ajouter la logique pour recalculer la courbe
+                    // Mettre à jour la courbe
+                    updateChart();
                 });
             }
         })();
 
-        // Export CSV
+        // Export CSV dynamique avec nom incluant client + date
         (function() {
             const exportBtn = document.getElementById('exportCsvBtn');
             if (!exportBtn) return;
 
-            // Données fictives de consommation (basées sur le graphique)
-            const consommationData = [
-                { mois: 'Janvier', nb_noir: 1200, nb_couleur: 300 },
-                { mois: 'Février', nb_noir: 1350, nb_couleur: 350 },
-                { mois: 'Mars', nb_noir: 1100, nb_couleur: 280 },
-                { mois: 'Avril', nb_noir: 1450, nb_couleur: 400 },
-                { mois: 'Mai', nb_noir: 1600, nb_couleur: 450 },
-                { mois: 'Juin', nb_noir: 1500, nb_couleur: 420 },
-                { mois: 'Juillet', nb_noir: 1700, nb_couleur: 500 },
-                { mois: 'Août', nb_noir: 1650, nb_couleur: 480 },
-                { mois: 'Septembre', nb_noir: 1800, nb_couleur: 520 },
-                { mois: 'Octobre', nb_noir: 1750, nb_couleur: 510 },
-                { mois: 'Novembre', nb_noir: 1900, nb_couleur: 550 },
-                { mois: 'Décembre', nb_noir: 2000, nb_couleur: 600 }
-            ];
+            function getCurrentData() {
+                const clientId = currentClientId ? currentClientId.toString() : null;
+                const year = currentYear;
+                const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                                   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+                
+                let data = [];
+
+                if (clientId && dataClientMensuelle[clientId] && dataClientMensuelle[clientId][year]) {
+                    const clientData = dataClientMensuelle[clientId][year];
+                    for (let month = 1; month <= 12; month++) {
+                        const monthStr = String(month).padStart(2, '0');
+                        const monthData = clientData[monthStr] || { nb: 0, couleur: 0 };
+                        data.push({
+                            mois: monthNames[month - 1],
+                            nb_noir: monthData.nb,
+                            nb_couleur: monthData.couleur
+                        });
+                    }
+                } else {
+                    // Données moyennes (tous clients)
+                    for (let month = 1; month <= 12; month++) {
+                        const monthStr = String(month).padStart(2, '0');
+                        let totalNB = 0, totalColor = 0, count = 0;
+                        for (let cid in dataClientMensuelle) {
+                            if (dataClientMensuelle[cid][year] && dataClientMensuelle[cid][year][monthStr]) {
+                                totalNB += dataClientMensuelle[cid][year][monthStr].nb;
+                                totalColor += dataClientMensuelle[cid][year][monthStr].couleur;
+                                count++;
+                            }
+                        }
+                        data.push({
+                            mois: monthNames[month - 1],
+                            nb_noir: count > 0 ? Math.round(totalNB / count) : 0,
+                            nb_couleur: count > 0 ? Math.round(totalColor / count) : 0
+                        });
+                    }
+                }
+
+                return data;
+            }
 
             function convertToCSV(data) {
                 // En-tête
@@ -788,77 +818,356 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }
+
+            function generateFilename() {
+                const year = currentYear;
+                const clientId = currentClientId;
+                let filename = 'consommation';
+                
+                if (clientId) {
+                    const client = clientsData.find(c => c.id === clientId);
+                    if (client) {
+                        const clientName = client.raison_sociale
+                            .replace(/[^a-zA-Z0-9]/g, '_')
+                            .toLowerCase();
+                        filename += `_${clientName}`;
+                    }
+                } else {
+                    filename += '_tous_clients';
+                }
+                
+                filename += `_${year}`;
+                
+                // Ajouter la date d'export
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+                filename += `_${dateStr}`;
+                
+                return filename + '.csv';
             }
 
             exportBtn.addEventListener('click', function() {
-                const csvContent = convertToCSV(consommationData);
-                const monthSelect = document.getElementById('monthSelect');
-                const yearSelect = document.getElementById('yearSelect');
-                const month = monthSelect ? monthSelect.options[monthSelect.selectedIndex].text : '';
-                const year = yearSelect ? yearSelect.value : '';
-                const filename = `consommation_${month}_${year}.csv`.replace(/\s+/g, '_');
+                const data = getCurrentData();
+                const csvContent = convertToCSV(data);
+                const filename = generateFilename();
                 
                 downloadCSV(csvContent, filename);
             });
         })();
 
-        // Graphique de consommation (simplifié avec Canvas)
-        const canvas = document.getElementById('consumptionChart');
-        if (canvas) {
+        // ====== DONNÉES FICTIVES DE CONSOMMATION PAR CLIENT ======
+        const dataClientMensuelle = {
+            "1": { // DUPONT SARL
+                "2023": {
+                    "01": { nb: 1200, couleur: 300 }, "02": { nb: 1350, couleur: 350 },
+                    "03": { nb: 1100, couleur: 280 }, "04": { nb: 1450, couleur: 400 },
+                    "05": { nb: 1600, couleur: 450 }, "06": { nb: 1500, couleur: 420 },
+                    "07": { nb: 1700, couleur: 500 }, "08": { nb: 1650, couleur: 480 },
+                    "09": { nb: 1800, couleur: 520 }, "10": { nb: 1750, couleur: 510 },
+                    "11": { nb: 1900, couleur: 550 }, "12": { nb: 2000, couleur: 600 }
+                },
+                "2024": {
+                    "01": { nb: 2100, couleur: 650 }, "02": { nb: 2200, couleur: 680 },
+                    "03": { nb: 2050, couleur: 620 }, "04": { nb: 2300, couleur: 720 },
+                    "05": { nb: 2400, couleur: 750 }, "06": { nb: 2350, couleur: 730 },
+                    "07": { nb: 2500, couleur: 800 }, "08": { nb: 2450, couleur: 780 },
+                    "09": { nb: 2600, couleur: 820 }, "10": { nb: 2550, couleur: 810 },
+                    "11": { nb: 2700, couleur: 850 }, "12": { nb: 2800, couleur: 900 }
+                },
+                "2025": {
+                    "01": { nb: 2900, couleur: 950 }, "02": { nb: 3000, couleur: 980 },
+                    "03": { nb: 2850, couleur: 920 }, "04": { nb: 3100, couleur: 1020 },
+                    "05": { nb: 3200, couleur: 1050 }, "06": { nb: 3150, couleur: 1030 },
+                    "07": { nb: 3300, couleur: 1100 }, "08": { nb: 3250, couleur: 1080 },
+                    "09": { nb: 3400, couleur: 1120 }, "10": { nb: 3350, couleur: 1110 },
+                    "11": { nb: 3500, couleur: 1150 }, "12": { nb: 3600, couleur: 1200 }
+                }
+            },
+            "2": { // Durand Services
+                "2023": {
+                    "01": { nb: 800, couleur: 200 }, "02": { nb: 850, couleur: 220 },
+                    "03": { nb: 750, couleur: 180 }, "04": { nb: 900, couleur: 250 },
+                    "05": { nb: 950, couleur: 280 }, "06": { nb: 920, couleur: 260 },
+                    "07": { nb: 1000, couleur: 300 }, "08": { nb: 980, couleur: 290 },
+                    "09": { nb: 1050, couleur: 320 }, "10": { nb: 1020, couleur: 310 },
+                    "11": { nb: 1100, couleur: 350 }, "12": { nb: 1150, couleur: 380 }
+                },
+                "2024": {
+                    "01": { nb: 1200, couleur: 400 }, "02": { nb: 1250, couleur: 420 },
+                    "03": { nb: 1180, couleur: 390 }, "04": { nb: 1300, couleur: 450 },
+                    "05": { nb: 1350, couleur: 480 }, "06": { nb: 1320, couleur: 460 },
+                    "07": { nb: 1400, couleur: 500 }, "08": { nb: 1380, couleur: 490 },
+                    "09": { nb: 1450, couleur: 520 }, "10": { nb: 1420, couleur: 510 },
+                    "11": { nb: 1500, couleur: 550 }, "12": { nb: 1550, couleur: 580 }
+                },
+                "2025": {
+                    "01": { nb: 1600, couleur: 600 }, "02": { nb: 1650, couleur: 620 },
+                    "03": { nb: 1580, couleur: 590 }, "04": { nb: 1700, couleur: 650 },
+                    "05": { nb: 1750, couleur: 680 }, "06": { nb: 1720, couleur: 660 },
+                    "07": { nb: 1800, couleur: 700 }, "08": { nb: 1780, couleur: 690 },
+                    "09": { nb: 1850, couleur: 720 }, "10": { nb: 1820, couleur: 710 },
+                    "11": { nb: 1900, couleur: 750 }, "12": { nb: 1950, couleur: 780 }
+                }
+            },
+            "3": { // Martin & Fils
+                "2023": {
+                    "01": { nb: 1500, couleur: 400 }, "02": { nb: 1600, couleur: 420 },
+                    "03": { nb: 1450, couleur: 380 }, "04": { nb: 1700, couleur: 450 },
+                    "05": { nb: 1800, couleur: 480 }, "06": { nb: 1750, couleur: 460 },
+                    "07": { nb: 1900, couleur: 500 }, "08": { nb: 1850, couleur: 490 },
+                    "09": { nb: 2000, couleur: 520 }, "10": { nb: 1950, couleur: 510 },
+                    "11": { nb: 2100, couleur: 550 }, "12": { nb: 2200, couleur: 580 }
+                },
+                "2024": {
+                    "01": { nb: 2300, couleur: 600 }, "02": { nb: 2400, couleur: 620 },
+                    "03": { nb: 2250, couleur: 590 }, "04": { nb: 2500, couleur: 650 },
+                    "05": { nb: 2600, couleur: 680 }, "06": { nb: 2550, couleur: 660 },
+                    "07": { nb: 2700, couleur: 700 }, "08": { nb: 2650, couleur: 690 },
+                    "09": { nb: 2800, couleur: 720 }, "10": { nb: 2750, couleur: 710 },
+                    "11": { nb: 2900, couleur: 750 }, "12": { nb: 3000, couleur: 780 }
+                },
+                "2025": {
+                    "01": { nb: 3100, couleur: 800 }, "02": { nb: 3200, couleur: 820 },
+                    "03": { nb: 3050, couleur: 790 }, "04": { nb: 3300, couleur: 850 },
+                    "05": { nb: 3400, couleur: 880 }, "06": { nb: 3350, couleur: 860 },
+                    "07": { nb: 3500, couleur: 900 }, "08": { nb: 3450, couleur: 890 },
+                    "09": { nb: 3600, couleur: 920 }, "10": { nb: 3550, couleur: 910 },
+                    "11": { nb: 3700, couleur: 950 }, "12": { nb: 3800, couleur: 980 }
+                }
+            }
+        };
+
+        // Générer des données pour les autres clients (4-10) avec des variations
+        for (let clientId = 4; clientId <= 10; clientId++) {
+            dataClientMensuelle[clientId.toString()] = {};
+            for (let year of ['2023', '2024', '2025']) {
+                dataClientMensuelle[clientId.toString()][year] = {};
+                const baseNb = 500 + (clientId * 100);
+                const baseColor = 150 + (clientId * 20);
+                for (let month = 1; month <= 12; month++) {
+                    const monthStr = String(month).padStart(2, '0');
+                    const variation = Math.floor(Math.random() * 200) - 100;
+                    dataClientMensuelle[clientId.toString()][year][monthStr] = {
+                        nb: Math.max(100, baseNb + variation + (month * 50)),
+                        couleur: Math.max(50, baseColor + Math.floor(variation / 3) + (month * 10))
+                    };
+                }
+            }
+        }
+
+        // ====== GRAPHIQUE MODERNE AVEC CHART.JS ======
+        let consumptionChart = null;
+        let currentClientId = null;
+        let currentYear = '2025';
+        let currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+
+        function initChart() {
+            const canvas = document.getElementById('consumptionChart');
+            if (!canvas) return;
+
             const ctx = canvas.getContext('2d');
-            const resizeCanvas = () => {
-                canvas.width = canvas.parentElement.offsetWidth;
-                canvas.height = 300;
-                drawChart();
-            };
             
-            const drawChart = () => {
-                // Données fictives
-                const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-                const dataNB = [1200, 1350, 1100, 1450, 1600, 1500, 1700, 1650, 1800, 1750, 1900, 2000];
-                const dataColor = [300, 350, 280, 400, 450, 420, 500, 480, 520, 510, 550, 600];
+            // Détruire le graphique existant s'il existe
+            if (consumptionChart) {
+                consumptionChart.destroy();
+            }
 
-                const maxValue = Math.max(...dataNB, ...dataColor);
-                const chartHeight = canvas.height - 60;
-                const chartWidth = canvas.width - 80;
-                const barWidth = chartWidth / months.length - 10;
+            consumptionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    family: 'Inter, system-ui, sans-serif',
+                                    size: 13,
+                                    weight: '500'
+                                },
+                                color: '#475569'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            padding: 12,
+                            titleFont: {
+                                family: 'Inter, system-ui, sans-serif',
+                                size: 14,
+                                weight: '600'
+                            },
+                            bodyFont: {
+                                family: 'Inter, system-ui, sans-serif',
+                                size: 13
+                            },
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: true,
+                                color: 'rgba(226, 232, 240, 0.5)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: {
+                                    family: 'Inter, system-ui, sans-serif',
+                                    size: 12
+                                },
+                                color: '#64748b',
+                                padding: 10
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                display: true,
+                                color: 'rgba(226, 232, 240, 0.5)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: {
+                                    family: 'Inter, system-ui, sans-serif',
+                                    size: 12
+                                },
+                                color: '#64748b',
+                                padding: 10,
+                                callback: function(value) {
+                                    return value.toLocaleString('fr-FR');
+                                }
+                            }
+                        }
+                    },
+                    elements: {
+                        point: {
+                            radius: 4,
+                            hoverRadius: 6,
+                            borderWidth: 2
+                        },
+                        line: {
+                            tension: 0.4,
+                            borderWidth: 3
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
 
-                // Clear canvas
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            updateChart();
+        }
 
-                // Dessiner les axes
-                ctx.strokeStyle = '#e2e8f0';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(40, 20);
-                ctx.lineTo(40, chartHeight + 20);
-                ctx.lineTo(canvas.width - 40, chartHeight + 20);
-                ctx.stroke();
+        function updateChart() {
+            if (!consumptionChart) return;
 
-                // Dessiner les barres
-                months.forEach((month, index) => {
-                    const x = 50 + index * (barWidth + 10);
-                    const nbHeight = (dataNB[index] / maxValue) * chartHeight;
-                    const colorHeight = (dataColor[index] / maxValue) * chartHeight;
-
-                    // Barre N&B
-                    ctx.fillStyle = '#1e293b';
-                    ctx.fillRect(x, chartHeight + 20 - nbHeight, barWidth / 2, nbHeight);
-
-                    // Barre Couleur
-                    ctx.fillStyle = '#3b82f6';
-                    ctx.fillRect(x + barWidth / 2, chartHeight + 20 - colorHeight, barWidth / 2, colorHeight);
-
-                    // Labels
-                    ctx.fillStyle = '#64748b';
-                    ctx.font = '12px Inter';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(month, x + barWidth / 2, chartHeight + 40);
-                });
-            };
+            const clientId = currentClientId ? currentClientId.toString() : null;
+            const year = currentYear;
             
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
+            // Récupérer les données pour l'année sélectionnée
+            let dataNB = [];
+            let dataColor = [];
+            let labels = [];
+
+            if (clientId && dataClientMensuelle[clientId] && dataClientMensuelle[clientId][year]) {
+                const clientData = dataClientMensuelle[clientId][year];
+                for (let month = 1; month <= 12; month++) {
+                    const monthStr = String(month).padStart(2, '0');
+                    const monthData = clientData[monthStr] || { nb: 0, couleur: 0 };
+                    dataNB.push(monthData.nb);
+                    dataColor.push(monthData.couleur);
+                }
+                labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+            } else {
+                // Données par défaut (tous clients ou moyenne)
+                for (let month = 1; month <= 12; month++) {
+                    const monthStr = String(month).padStart(2, '0');
+                    let totalNB = 0, totalColor = 0, count = 0;
+                    for (let cid in dataClientMensuelle) {
+                        if (dataClientMensuelle[cid][year] && dataClientMensuelle[cid][year][monthStr]) {
+                            totalNB += dataClientMensuelle[cid][year][monthStr].nb;
+                            totalColor += dataClientMensuelle[cid][year][monthStr].couleur;
+                            count++;
+                        }
+                    }
+                    dataNB.push(count > 0 ? Math.round(totalNB / count) : 0);
+                    dataColor.push(count > 0 ? Math.round(totalColor / count) : 0);
+                }
+                labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+            }
+
+            consumptionChart.data.labels = labels;
+            consumptionChart.data.datasets = [
+                {
+                    label: 'Noir & Blanc',
+                    data: dataNB,
+                    borderColor: '#1e293b',
+                    backgroundColor: 'rgba(30, 41, 59, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#1e293b',
+                    pointBorderColor: '#ffffff',
+                    pointHoverBackgroundColor: '#0f172a',
+                    pointHoverBorderColor: '#ffffff'
+                },
+                {
+                    label: 'Couleur',
+                    data: dataColor,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#ffffff',
+                    pointHoverBackgroundColor: '#2563eb',
+                    pointHoverBorderColor: '#ffffff'
+                }
+            ];
+
+            // Mettre à jour le titre
+            const chartTitle = document.getElementById('chartTitle');
+            const chartSubtitle = document.getElementById('chartSubtitle');
+            if (clientId) {
+                const client = clientsData.find(c => String(c.id) === clientId);
+                if (client) {
+                    chartTitle.textContent = `Consommation - ${client.raison_sociale}`;
+                    chartSubtitle.textContent = `Année ${year}`;
+                    chartSubtitle.style.display = 'inline';
+                }
+            } else {
+                chartTitle.textContent = 'Consommation globale';
+                chartSubtitle.textContent = `Année ${year} - Tous les clients`;
+                chartSubtitle.style.display = 'inline';
+            }
+
+            consumptionChart.update('active');
+        }
+
+        // Initialiser le graphique au chargement
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initChart);
+        } else {
+            initChart();
         }
 
         // Fonctions modales
