@@ -4,6 +4,16 @@ declare(strict_types=1);
 // ✅ Affiche toutes les erreurs PHP et PDO dans Railway
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
+ini_set('log_errors', '1');
+
+// Fonction de debug avec timestamp
+function debugLog(string $message, array $context = []): void {
+    $timestamp = date('Y-m-d H:i:s');
+    $contextStr = !empty($context) ? ' | Context: ' . json_encode($context, JSON_UNESCAPED_UNICODE) : '';
+    $logMsg = "[$timestamp] [DEBUG] $message$contextStr\n";
+    echo $logMsg;
+    error_log($logMsg);
+}
 
 /**
  * upload_compteur.php (version avec logs détaillés et gestion d'erreurs)
@@ -19,49 +29,128 @@ set_time_limit(50);
 $scriptStartTime = time();
 $SCRIPT_TIMEOUT = 50;
 
+debugLog("=== DÉBUT DU SCRIPT D'IMPORT SFTP ===", [
+    'script_start' => date('Y-m-d H:i:s'),
+    'timeout' => $SCRIPT_TIMEOUT,
+    'php_version' => PHP_VERSION,
+    'memory_limit' => ini_get('memory_limit')
+]);
+
 // ---------- 0) Normaliser les variables d'env pour db.php ----------
+debugLog("Étape 0: Normalisation des variables d'environnement MySQL");
 (function (): void {
     $needs = !getenv('MYSQLHOST') || !getenv('MYSQLDATABASE') || !getenv('MYSQLUSER');
-    if (!$needs) return;
+    debugLog("Variables MySQL présentes", [
+        'MYSQLHOST' => getenv('MYSQLHOST') ? '✓' : '✗',
+        'MYSQLDATABASE' => getenv('MYSQLDATABASE') ? '✓' : '✗',
+        'MYSQLUSER' => getenv('MYSQLUSER') ? '✓' : '✗',
+        'needs_normalization' => $needs
+    ]);
+    
+    if (!$needs) {
+        debugLog("Variables MySQL déjà configurées, pas de normalisation nécessaire");
+        return;
+    }
 
     $url = getenv('MYSQL_PUBLIC_URL') ?: getenv('DATABASE_URL') ?: '';
-    if (!$url) return;
+    debugLog("Tentative de normalisation depuis URL", ['url_present' => !empty($url)]);
+    
+    if (!$url) {
+        debugLog("Aucune URL MySQL trouvée");
+        return;
+    }
 
     $p = parse_url($url);
-    if (!$p || empty($p['host']) || empty($p['user']) || empty($p['path'])) return;
+    if (!$p || empty($p['host']) || empty($p['user']) || empty($p['path'])) {
+        debugLog("Échec du parsing de l'URL MySQL", ['parsed' => $p]);
+        return;
+    }
 
     putenv("MYSQLHOST={$p['host']}");
     putenv("MYSQLPORT=" . ($p['port'] ?? '3306'));
     putenv("MYSQLUSER=" . urldecode($p['user']));
     putenv("MYSQLPASSWORD=" . (isset($p['pass']) ? urldecode($p['pass']) : ''));
     putenv("MYSQLDATABASE=" . ltrim($p['path'], '/'));
+    
+    debugLog("Variables MySQL normalisées", [
+        'host' => $p['host'],
+        'port' => $p['port'] ?? '3306',
+        'user' => urldecode($p['user']),
+        'database' => ltrim($p['path'], '/')
+    ]);
 })();
 
 // ---------- 1) Charger $pdo depuis includes/db.php ----------
+debugLog("Étape 1: Chargement de includes/db.php");
 $paths = [
     __DIR__ . '/../includes/db.php',
     __DIR__ . '/../../includes/db.php',
 ];
+debugLog("Chemins à tester", ['paths' => $paths, 'current_dir' => __DIR__]);
+
 $ok = false;
 $pdo = null;
 foreach ($paths as $p) {
+    debugLog("Test du chemin", ['path' => $p, 'exists' => is_file($p)]);
     if (is_file($p)) {
-        require_once $p;
-        $ok = true;
-        break;
+        debugLog("Fichier trouvé, chargement...", ['path' => $p]);
+        try {
+            require_once $p;
+            $ok = true;
+            debugLog("Fichier chargé avec succès", ['path' => $p]);
+            break;
+        } catch (Throwable $e) {
+            debugLog("Erreur lors du chargement", ['path' => $p, 'error' => $e->getMessage()]);
+        }
     }
 }
-if (!$ok || !isset($pdo) || !($pdo instanceof PDO)) {
-    $errorMsg = "Impossible de charger includes/db.php et obtenir \$pdo";
+
+if (!$ok) {
+    $errorMsg = "Aucun fichier includes/db.php trouvé dans les chemins testés";
+    debugLog("ERREUR FATALE", ['error' => $errorMsg]);
     echo "❌ Erreur: $errorMsg\n";
     exit(1);
 }
 
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    $errorMsg = "La variable \$pdo n'est pas définie ou n'est pas une instance de PDO";
+    debugLog("ERREUR FATALE", ['error' => $errorMsg, 'pdo_set' => isset($pdo), 'pdo_type' => gettype($pdo ?? null)]);
+    echo "❌ Erreur: $errorMsg\n";
+    exit(1);
+}
+
+debugLog("Connexion PDO établie", [
+    'pdo_class' => get_class($pdo),
+    'connection_status' => 'OK'
+]);
 echo "✅ Connexion à la base établie.\n";
 
 // ---------- 2) Connexion SFTP avec timeout et gestion d'erreurs ----------
-require __DIR__ . '/../vendor/autoload.php';
+debugLog("Étape 2: Chargement de la bibliothèque SFTP");
+$vendorPath = __DIR__ . '/../vendor/autoload.php';
+debugLog("Chemin vendor/autoload.php", ['path' => $vendorPath, 'exists' => is_file($vendorPath)]);
+
+if (!is_file($vendorPath)) {
+    $errorMsg = "Fichier vendor/autoload.php introuvable: $vendorPath";
+    debugLog("ERREUR FATALE", ['error' => $errorMsg]);
+    echo "❌ Erreur: $errorMsg\n";
+    logErrorToDB($pdo ?? null, $errorMsg);
+    exit(1);
+}
+
+try {
+    require $vendorPath;
+    debugLog("vendor/autoload.php chargé avec succès");
+} catch (Throwable $e) {
+    $errorMsg = "Erreur lors du chargement de vendor/autoload.php: " . $e->getMessage();
+    debugLog("ERREUR FATALE", ['error' => $errorMsg, 'exception' => get_class($e)]);
+    echo "❌ $errorMsg\n";
+    logErrorToDB($pdo ?? null, $errorMsg);
+    exit(1);
+}
+
 use phpseclib3\Net\SFTP;
+debugLog("Classe SFTP importée", ['class_exists' => class_exists('phpseclib3\Net\SFTP')]);
 
 // Fonction pour vérifier le timeout
 function checkTimeout(int $startTime, int $maxSeconds): void {
@@ -94,6 +183,7 @@ $sftp = null;
 try {
     checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
     
+    debugLog("Étape 2.1: Récupération des variables d'environnement SFTP");
     // Utiliser uniquement les variables d'environnement pour la sécurité
     $sftp_host = getenv('SFTP_HOST') ?: '';
     $sftp_user = getenv('SFTP_USER') ?: '';
@@ -101,24 +191,68 @@ try {
     $sftp_port = (int)(getenv('SFTP_PORT') ?: 22);
     $sftp_timeout = (int)(getenv('SFTP_TIMEOUT') ?: 15); // Timeout de connexion SFTP
 
+    debugLog("Variables SFTP récupérées", [
+        'SFTP_HOST' => $sftp_host ? '✓ (' . strlen($sftp_host) . ' chars)' : '✗',
+        'SFTP_USER' => $sftp_user ? '✓ (' . strlen($sftp_user) . ' chars)' : '✗',
+        'SFTP_PASS' => $sftp_pass ? '✓ (' . strlen($sftp_pass) . ' chars)' : '✗',
+        'SFTP_PORT' => $sftp_port,
+        'SFTP_TIMEOUT' => $sftp_timeout
+    ]);
+
     if (empty($sftp_host) || empty($sftp_user) || empty($sftp_pass)) {
         $errorMsg = "Variables d'environnement SFTP manquantes (SFTP_HOST, SFTP_USER, SFTP_PASS)";
+        debugLog("ERREUR FATALE", ['error' => $errorMsg]);
         echo "❌ Erreur: $errorMsg\n";
         logErrorToDB($pdo ?? null, $errorMsg);
         exit(1);
     }
 
+    debugLog("Étape 2.2: Création de l'instance SFTP", [
+        'host' => $sftp_host,
+        'port' => $sftp_port,
+        'timeout' => $sftp_timeout
+    ]);
     echo "🔌 Tentative de connexion SFTP à $sftp_host:$sftp_port (timeout: {$sftp_timeout}s)...\n";
     
     // Créer la connexion SFTP avec timeout explicite
-    $sftp = new SFTP($sftp_host, $sftp_port, $sftp_timeout);
+    $connectionStart = microtime(true);
+    try {
+        $sftp = new SFTP($sftp_host, $sftp_port, $sftp_timeout);
+        $connectionTime = round((microtime(true) - $connectionStart) * 1000, 2);
+        debugLog("Instance SFTP créée", ['duration_ms' => $connectionTime]);
+    } catch (Throwable $e) {
+        $errorMsg = "Erreur lors de la création de l'instance SFTP: " . $e->getMessage();
+        debugLog("ERREUR FATALE", [
+            'error' => $errorMsg,
+            'exception' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        echo "❌ $errorMsg\n";
+        logErrorToDB($pdo ?? null, $errorMsg);
+        exit(1);
+    }
     
     // Tentative de login avec gestion d'erreur
+    debugLog("Étape 2.3: Tentative de login SFTP", ['user' => $sftp_user]);
+    $loginStart = microtime(true);
     $loginSuccess = false;
     try {
         $loginSuccess = $sftp->login($sftp_user, $sftp_pass);
+        $loginTime = round((microtime(true) - $loginStart) * 1000, 2);
+        debugLog("Login SFTP terminé", ['success' => $loginSuccess, 'duration_ms' => $loginTime]);
     } catch (Throwable $e) {
-        $errorMsg = "Erreur lors de la connexion SFTP: " . $e->getMessage();
+        $loginTime = round((microtime(true) - $loginStart) * 1000, 2);
+        $errorMsg = "Exception lors de la connexion SFTP: " . $e->getMessage();
+        debugLog("ERREUR FATALE", [
+            'error' => $errorMsg,
+            'exception' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'duration_ms' => $loginTime,
+            'trace' => $e->getTraceAsString()
+        ]);
         echo "❌ $errorMsg\n";
         logErrorToDB($pdo ?? null, $errorMsg);
         exit(1);
@@ -126,11 +260,13 @@ try {
     
     if (!$loginSuccess) {
         $errorMsg = "Échec de l'authentification SFTP (vérifiez SFTP_USER et SFTP_PASS)";
+        debugLog("ERREUR FATALE", ['error' => $errorMsg, 'login_returned' => false]);
         echo "❌ Erreur: $errorMsg\n";
         logErrorToDB($pdo ?? null, $errorMsg);
         exit(1);
     }
 
+    debugLog("Connexion SFTP établie avec succès");
     echo "✅ Connexion SFTP établie.\n";
     
 } catch (Throwable $e) {
@@ -220,23 +356,49 @@ $files_error = 0;
 $files_list = []; // Liste des fichiers traités pour le log
 
 // ---------- 5) Parcours fichiers avec timeout et gestion d'erreurs ----------
+debugLog("Étape 5: Liste des fichiers sur le serveur SFTP");
 try {
     checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
     
     echo "📂 Liste des fichiers sur le serveur SFTP...\n";
+    $listStart = microtime(true);
     $files = $sftp->nlist('/');
+    $listTime = round((microtime(true) - $listStart) * 1000, 2);
+    
+    debugLog("Résultat de nlist('/')", [
+        'result' => $files === false ? 'false' : 'array',
+        'count' => is_array($files) ? count($files) : 'N/A',
+        'duration_ms' => $listTime
+    ]);
     
     if ($files === false) {
         $errorMsg = "Impossible de lister les fichiers du dossier racine SFTP";
+        debugLog("ERREUR FATALE", ['error' => $errorMsg]);
+        echo "❌ Erreur: $errorMsg\n";
+        logErrorToDB($pdo ?? null, $errorMsg);
+        exit(1);
+    }
+    
+    if (!is_array($files)) {
+        $errorMsg = "nlist('/') n'a pas retourné un tableau (type: " . gettype($files) . ")";
+        debugLog("ERREUR FATALE", ['error' => $errorMsg, 'type' => gettype($files)]);
         echo "❌ Erreur: $errorMsg\n";
         logErrorToDB($pdo ?? null, $errorMsg);
         exit(1);
     }
     
     echo "✅ " . count($files) . " entrées trouvées dans le dossier racine\n";
+    debugLog("Fichiers listés avec succès", ['total' => count($files)]);
     
 } catch (Throwable $e) {
     $errorMsg = "Erreur lors de la liste des fichiers SFTP: " . $e->getMessage();
+    debugLog("ERREUR FATALE", [
+        'error' => $errorMsg,
+        'exception' => get_class($e),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
+    ]);
     echo "❌ $errorMsg\n";
     logErrorToDB($pdo ?? null, $errorMsg);
     exit(1);
@@ -244,12 +406,19 @@ try {
 
 if (is_array($files) && count($files) > 0) {
     // Filtrer et trier les fichiers CSV valides
+    debugLog("Étape 5.1: Filtrage des fichiers CSV");
     $csvFiles = [];
     foreach ($files as $entry) {
         if ($entry === '.' || $entry === '..') continue;
         if (!preg_match('/^COPIEUR_MAC-([A-F0-9\-]+)_(\d{8}_\d{6})\.csv$/i', $entry)) continue;
         $csvFiles[] = $entry;
     }
+    
+    debugLog("Fichiers CSV filtrés", [
+        'total_files' => count($files),
+        'csv_files' => count($csvFiles),
+        'max_limit' => $MAX_FILES
+    ]);
     
     // Trier par nom (pour traiter dans l'ordre chronologique si possible)
     sort($csvFiles);
@@ -258,6 +427,7 @@ if (is_array($files) && count($files) > 0) {
     if (count($csvFiles) > $MAX_FILES) {
         $csvFiles = array_slice($csvFiles, 0, $MAX_FILES);
         echo "ℹ️ Limitation à $MAX_FILES fichiers CSV (limite maximale)\n";
+        debugLog("Fichiers limités", ['avant' => count($csvFiles) + (count($files) - count($csvFiles)), 'apres' => $MAX_FILES]);
     }
     
     $found = false;
@@ -273,10 +443,26 @@ if (is_array($files) && count($files) > 0) {
             $tmp = tempnam(sys_get_temp_dir(), 'csv_');
             
             // Tentative de téléchargement avec gestion d'erreur
+            debugLog("Téléchargement SFTP", ['remote' => $remote, 'local' => $tmp]);
+            $downloadStart = microtime(true);
             $downloadSuccess = false;
             try {
                 $downloadSuccess = $sftp->get($remote, $tmp);
+                $downloadTime = round((microtime(true) - $downloadStart) * 1000, 2);
+                debugLog("Résultat du téléchargement", [
+                    'success' => $downloadSuccess,
+                    'duration_ms' => $downloadTime,
+                    'file_size' => $downloadSuccess && file_exists($tmp) ? filesize($tmp) : 'N/A'
+                ]);
             } catch (Throwable $e) {
+                $downloadTime = round((microtime(true) - $downloadStart) * 1000, 2);
+                debugLog("Exception lors du téléchargement", [
+                    'error' => $e->getMessage(),
+                    'exception' => get_class($e),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'duration_ms' => $downloadTime
+                ]);
                 echo "❌ Exception lors du téléchargement de $entry: " . $e->getMessage() . "\n";
                 $downloadSuccess = false;
             }
@@ -438,4 +624,11 @@ if ($files_error > 0 && $compteurs_inserted === 0 && $files_processed > 0) {
 
 echo "-----------------------------\n";
 $duration = time() - $scriptStartTime;
+debugLog("=== FIN DU SCRIPT D'IMPORT SFTP ===", [
+    'script_end' => date('Y-m-d H:i:s'),
+    'duration_sec' => $duration,
+    'files_processed' => $files_processed,
+    'compteurs_inserted' => $compteurs_inserted,
+    'files_error' => $files_error
+]);
 echo "✅ Traitement terminé en {$duration} seconde(s).\n";
