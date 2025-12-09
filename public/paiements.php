@@ -719,11 +719,21 @@
             const monthSelect = document.getElementById('monthSelect');
             const yearSelect = document.getElementById('yearSelect');
 
-            // Définir le mois actuel par défaut
+            // Définir le mois actuel par défaut dans le select
             if (monthSelect) {
-                const monthValue = String(new Date().getMonth() + 1).padStart(2, '0');
-                monthSelect.value = monthValue;
-                selectedMonth = monthValue;
+                monthSelect.value = selectedMonth;
+            }
+
+            // Définir l'année actuelle par défaut dans le select
+            if (yearSelect) {
+                // Vérifier si l'année existe dans les options, sinon utiliser la valeur par défaut
+                const yearOption = Array.from(yearSelect.options).find(opt => opt.value === selectedYear);
+                if (yearOption) {
+                    yearSelect.value = selectedYear;
+                } else {
+                    // Si l'année actuelle n'est pas dans les options, utiliser la dernière option
+                    selectedYear = yearSelect.value || selectedYear;
+                }
             }
 
             if (monthSelect) {
@@ -742,11 +752,6 @@
                     // Mettre à jour la courbe
                     updateConsumptionChart();
                 });
-            }
-            
-            // Initialiser l'année par défaut
-            if (yearSelect && yearSelect.value) {
-                selectedYear = yearSelect.value;
             }
         })();
 
@@ -962,8 +967,11 @@
         // ====== GRAPHIQUE MODERNE AVEC CHART.JS ======
         let consumptionChart = null;
         let selectedClient = null;
-        let selectedMonth = null;
-        let selectedYear = null;
+        
+        // Initialiser les valeurs par défaut pour mois et année
+        const currentDate = new Date();
+        let selectedMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
+        let selectedYear = String(currentDate.getFullYear());
 
         // Restructurer les données au format demandé (client -> année-mois)
         const FAKE_CONSO = {};
