@@ -195,19 +195,19 @@ ensureCsrfToken();
             <div class="kpi-grid">
                 <div class="kpi-card">
                     <div class="kpi-label">Total à facturer</div>
-                    <div class="kpi-value" id="kpiTotalFacturer">1 245,30 €</div>
+                    <div class="kpi-value" id="kpiTotalFacturer">—</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-label">Montant non payé</div>
-                    <div class="kpi-value" id="kpiMontantNonPaye">820,00 €</div>
+                    <div class="kpi-value" id="kpiMontantNonPaye">—</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-label">Montant payé</div>
-                    <div class="kpi-value" id="kpiMontantPaye">425,30 €</div>
+                    <div class="kpi-value" id="kpiMontantPaye">—</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-label">Consommation pages</div>
-                    <div class="kpi-value" id="kpiConsoPages">N&B : 10 200 | Couleur : 2 100</div>
+                    <div class="kpi-value" id="kpiConsoPages">—</div>
                 </div>
             </div>
 
@@ -219,14 +219,14 @@ ensureCsrfToken();
                     <div class="card-body">
                         <div class="facture-current">
                             <div class="facture-info">
-                                <div class="facture-num" id="factureNum">Facture 2025-12 (brouillon)</div>
-                                <div class="facture-status">
-                                    <span class="badge badge-draft">BROUILLON</span>
+                                <div class="facture-num" id="factureNum">—</div>
+                                <div class="facture-status" id="factureStatus">
+                                    <span class="badge badge-draft" style="display:none;">BROUILLON</span>
                                 </div>
-                                <div class="facture-amount">Consommation N&B : <strong id="factureConsoNB">XXX pages</strong></div>
-                                <div class="facture-amount">Consommation couleur : <strong id="factureConsoCouleur">YYY pages</strong></div>
-                                <div class="facture-amount">Montant TTC : <strong id="factureMontantTTC">ZZZ,00 €</strong></div>
-                                <div class="facture-period" id="facturePeriod">Période : 20/11/2025 – 05/12/2025</div>
+                                <div class="facture-amount">Consommation N&B : <strong id="factureConsoNB">—</strong></div>
+                                <div class="facture-amount">Consommation couleur : <strong id="factureConsoCouleur">—</strong></div>
+                                <div class="facture-amount">Montant TTC : <strong id="factureMontantTTC">—</strong></div>
+                                <div class="facture-period" id="facturePeriod">—</div>
                             </div>
                             <div class="facture-actions">
                                 <button type="button" class="btn-secondary" id="btnOuvrirFacture" style="display:none;">Ouvrir la facture</button>
@@ -245,32 +245,8 @@ ensureCsrfToken();
                     </div>
                     <div class="card-body">
                         <div class="paiements-list" id="paiementsList">
-                            <div class="paiement-item">
-                                <div class="paiement-date">15/01/2025</div>
-                                <div class="paiement-amount">250,00 €</div>
-                                <div class="paiement-user">Admin CCComputer</div>
-                                <div class="paiement-mode">Virement</div>
-                                <div class="paiement-etat">
-                                    <span class="badge badge-success">Reçu</span>
-                                </div>
-                            </div>
-                            <div class="paiement-item">
-                                <div class="paiement-date">10/01/2025</div>
-                                <div class="paiement-amount">175,30 €</div>
-                                <div class="paiement-user">Utilisateur X</div>
-                                <div class="paiement-mode">Carte bancaire</div>
-                                <div class="paiement-etat">
-                                    <span class="badge badge-warning">EN COURS</span>
-                                </div>
-                            </div>
-                            <div class="paiement-item">
-                                <div class="paiement-date">05/01/2025</div>
-                                <div class="paiement-amount">100,00 €</div>
-                                <div class="paiement-user">Admin CCComputer</div>
-                                <div class="paiement-mode">Espèces</div>
-                                <div class="paiement-etat">
-                                    <span class="badge badge-danger">Pas reçu</span>
-                                </div>
+                            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                Sélectionnez un client pour voir les paiements
                             </div>
                         </div>
                     </div>
@@ -340,45 +316,10 @@ ensureCsrfToken();
                                         </tr>
                                     </thead>
                                     <tbody id="facturesListBody">
-                                        <tr class="facture-row" data-facture-id="1">
-                                            <td>2025-001</td>
-                                            <td>15/01/2025</td>
-                                            <td>01/01 - 31/01</td>
-                                            <td>Consommation</td>
-                                            <td>845,20 €</td>
-                                            <td><span class="badge badge-draft">Brouillon</span></td>
-                                        </tr>
-                                        <tr class="facture-row" data-facture-id="2">
-                                            <td>2024-125</td>
-                                            <td>10/12/2024</td>
-                                            <td>01/12 - 31/12</td>
-                                            <td>Consommation</td>
-                                            <td>1 120,50 €</td>
-                                            <td><span class="badge badge-sent">Envoyée</span></td>
-                                        </tr>
-                                        <tr class="facture-row" data-facture-id="3">
-                                            <td>2024-124</td>
-                                            <td>05/12/2024</td>
-                                            <td>—</td>
-                                            <td>Achat</td>
-                                            <td>450,00 €</td>
-                                            <td><span class="badge badge-paid">Payée</span></td>
-                                        </tr>
-                                        <tr class="facture-row" data-facture-id="4">
-                                            <td>2024-123</td>
-                                            <td>20/11/2024</td>
-                                            <td>01/11 - 30/11</td>
-                                            <td>Consommation</td>
-                                            <td>980,30 €</td>
-                                            <td><span class="badge badge-overdue">En retard</span></td>
-                                        </tr>
-                                        <tr class="facture-row" data-facture-id="5">
-                                            <td>2024-122</td>
-                                            <td>15/11/2024</td>
-                                            <td>—</td>
-                                            <td>Service</td>
-                                            <td>320,00 €</td>
-                                            <td><span class="badge badge-paid">Payée</span></td>
+                                        <tr>
+                                            <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                                Sélectionnez un client pour voir les factures
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -929,301 +870,22 @@ ensureCsrfToken();
 
 <script>
 // ==================
-// Mock Data
+// REMOVED: Mock Data - Now using real API calls
+// All data is loaded from the database via API endpoints
 // ==================
-const mockData = {
-    clients: [
-        { id: 1, name: 'Entreprise ABC', contrats: [1, 2] },
-        { id: 2, name: 'Société XYZ', contrats: [1, 3] },
-        { id: 3, name: 'Compagnie DEF', contrats: [2] },
-        { id: 4, name: 'Groupe GHI', contrats: [1, 2, 3] }
-    ],
-    contrats: [
-        { id: 1, name: 'Contrat Copie N&B – Mensuel' },
-        { id: 2, name: 'Contrat Couleur – Pro' },
-        { id: 3, name: 'Contrat Mixte – Annuel' }
-    ],
-    factures: [
-        {
-            id: 1,
-            numero: '2025-001',
-            date: '2025-01-15',
-            periode: { debut: '2025-01-01', fin: '2025-01-31' },
-            type: 'Consommation',
-            montantHT: 704.33,
-            tva: 140.87,
-            montantTTC: 845.20,
-            statut: 'brouillon',
-            pdfGenere: false,
-            client: { nom: 'Entreprise ABC', adresse: '123 Rue Example', email: 'contact@entreprise-abc.fr' },
-            lignes: [
-                { description: 'Pages N&B', type: 'N&B', quantite: 8450, prixUnitaire: 0.05, total: 422.50 },
-                { description: 'Pages Couleur', type: 'Couleur', quantite: 2100, prixUnitaire: 0.15, total: 315.00 },
-                { description: 'Maintenance', type: 'Service', quantite: 1, prixUnitaire: 107.70, total: 107.70 }
-            ]
-        },
-        {
-            id: 2,
-            numero: '2024-125',
-            date: '2024-12-10',
-            periode: { debut: '2024-12-01', fin: '2024-12-31' },
-            type: 'Consommation',
-            montantHT: 933.75,
-            tva: 186.75,
-            montantTTC: 1120.50,
-            statut: 'envoyee',
-            pdfGenere: true,
-            client: { nom: 'Société XYZ', adresse: '456 Avenue Test', email: 'comptabilite@societe-xyz.fr' },
-            lignes: [
-                { description: 'Pages N&B', type: 'N&B', quantite: 12000, prixUnitaire: 0.05, total: 600.00 },
-                { description: 'Pages Couleur', type: 'Couleur', quantite: 3000, prixUnitaire: 0.15, total: 450.00 },
-                { description: 'Maintenance', type: 'Service', quantite: 1, prixUnitaire: 70.50, total: 70.50 }
-            ]
-        },
-        {
-            id: 3,
-            numero: '2024-124',
-            date: '2024-12-05',
-            periode: null,
-            type: 'Achat',
-            montantHT: 375.00,
-            tva: 75.00,
-            montantTTC: 450.00,
-            statut: 'payee',
-            pdfGenere: true,
-            client: { nom: 'Compagnie DEF', adresse: '789 Boulevard Demo', email: 'direction@compagnie-def.fr' },
-            lignes: [
-                { description: 'Imprimante HP LaserJet', type: 'Produit', quantite: 1, prixUnitaire: 375.00, total: 375.00 }
-            ]
-        },
-        {
-            id: 4,
-            numero: '2024-123',
-            date: '2024-11-20',
-            periode: { debut: '2024-11-01', fin: '2024-11-30' },
-            type: 'Consommation',
-            montantHT: 816.92,
-            tva: 163.38,
-            montantTTC: 980.30,
-            statut: 'en_retard',
-            pdfGenere: true,
-            client: { nom: 'Groupe GHI', adresse: '321 Rue Sample', email: 'compta@groupe-ghi.fr' },
-            lignes: [
-                { description: 'Pages N&B', type: 'N&B', quantite: 10000, prixUnitaire: 0.05, total: 500.00 },
-                { description: 'Pages Couleur', type: 'Couleur', quantite: 2000, prixUnitaire: 0.15, total: 300.00 },
-                { description: 'Maintenance', type: 'Service', quantite: 1, prixUnitaire: 180.30, total: 180.30 }
-            ]
-        },
-        {
-            id: 5,
-            numero: '2024-122',
-            date: '2024-11-15',
-            periode: null,
-            type: 'Service',
-            montantHT: 266.67,
-            tva: 53.33,
-            montantTTC: 320.00,
-            statut: 'payee',
-            pdfGenere: true,
-            client: { nom: 'Entreprise ABC', adresse: '123 Rue Example', email: 'contact@entreprise-abc.fr' },
-            lignes: [
-                { description: 'Intervention technique', type: 'Service', quantite: 2, prixUnitaire: 133.33, total: 266.67 }
-            ]
-        }
-    ],
-    paiements: [
-        { id: 1, factureId: 1, date: '2025-01-15', montant: 250.00, mode: 'Virement', reference: 'VIR-2025-001', commentaire: 'Paiement partiel' },
-        { id: 2, factureId: 1, date: '2025-01-10', montant: 175.30, mode: 'Carte bancaire', reference: 'CB-2025-045' },
-        { id: 3, factureId: 2, date: '2024-12-20', montant: 1120.50, mode: 'Virement', reference: 'VIR-2024-089' },
-        { id: 4, factureId: 3, date: '2024-12-08', montant: 450.00, mode: 'Chèque', reference: 'CHQ-2024-123' },
-        { id: 5, factureId: 5, date: '2024-11-20', montant: 320.00, mode: 'Carte bancaire', reference: 'CB-2024-234' },
-        { id: 6, factureId: 1, date: '2025-01-05', montant: 100.00, mode: 'Espèces', reference: 'ESP-2025-001', commentaire: 'Acompte' },
-        { id: 7, factureId: 4, date: '2024-12-15', montant: 500.00, mode: 'Virement', reference: 'VIR-2024-090', commentaire: 'Paiement partiel' },
-        { id: 8, factureId: 4, date: '2024-12-10', montant: 300.00, mode: 'Chèque', reference: 'CHQ-2024-124' }
-    ],
-    // Mock data pour les imprimantes et leurs consommations mensuelles (20→20)
-    imprimantes: [
-        {
-            id: 1,
-            nom: 'HP LaserJet Pro',
-            modele: 'M404dn',
-            macAddress: 'AB:CD:EF:12:34:56',
-            consommations: [
-                { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 8450, pagesCouleur: 0, totalPages: 8450 },
-                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 9200, pagesCouleur: 150, totalPages: 9350 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 8750, pagesCouleur: 0, totalPages: 8750 }
-            ]
-        },
-        {
-            id: 2,
-            nom: 'Canon imageRUNNER',
-            modele: 'ADV C5235i',
-            macAddress: 'AB:CD:EF:12:34:57',
-            consommations: [
-                { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 1750, pagesCouleur: 2100, totalPages: 3850 },
-                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 2100, pagesCouleur: 2400, totalPages: 4500 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 1950, pagesCouleur: 2200, totalPages: 4150 }
-            ]
-        },
-        {
-            id: 3,
-            nom: 'Xerox VersaLink',
-            modele: 'C405',
-            macAddress: 'AB:CD:EF:12:34:58',
-            consommations: [
-                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 0, pagesCouleur: 1110, totalPages: 1110 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 500, pagesCouleur: 1250, totalPages: 1750 }
-            ]
-        },
-        {
-            id: 4,
-            nom: 'Brother MFC-L3770CDW',
-            modele: 'MFC-L3770CDW',
-            macAddress: 'AB:CD:EF:12:34:59',
-            consommations: [
-                { mois: '2024-11', periode: '20/11 → 20/12', pagesNB: 3200, pagesCouleur: 800, totalPages: 4000 },
-                { mois: '2024-12', periode: '20/12 → 20/01', pagesNB: 3500, pagesCouleur: 950, totalPages: 4450 },
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 3100, pagesCouleur: 750, totalPages: 3850 }
-            ]
-        },
-        {
-            id: 5,
-            nom: 'Ricoh MP C5503',
-            modele: 'MP C5503',
-            macAddress: 'AB:CD:EF:12:34:60',
-            consommations: [
-                { mois: '2025-01', periode: '20/01 → 20/02', pagesNB: 4500, pagesCouleur: 1800, totalPages: 6300 }
-            ]
-        }
-    ],
-    // Mock data pour la consommation (150+ clients avec N&B et Couleur)
-    consommation: {
-        // Génération de 150+ clients mock
-        clients: (() => {
-            const clients = [];
-            const prefixes = ['ACME', 'Beta', 'CC', 'Delta', 'Echo', 'Fusion', 'Gamma', 'Hyper', 'Innov', 'Jupiter', 'Kappa', 'Lambda', 'Matrix', 'Nova', 'Omega', 'Prime', 'Quantum', 'Rapid', 'Sigma', 'Titan', 'Ultra', 'Vector', 'Wave', 'Xeno', 'Ypsilon', 'Zenith'];
-            const suffixes = ['SARL', 'Industries', 'Services', 'Solutions', 'Technologies', 'Group', 'Corp', 'Ltd', 'SA', 'GmbH'];
-            const prenoms = ['Jean', 'Marie', 'Pierre', 'Sophie', 'Luc', 'Anne', 'Paul', 'Julie', 'Marc', 'Claire', 'Thomas', 'Laura', 'David', 'Emma', 'Nicolas', 'Sarah'];
-            const noms = ['Dupont', 'Martin', 'Bernard', 'Dubois', 'Lefebvre', 'Moreau', 'Laurent', 'Simon', 'Michel', 'Garcia', 'Petit', 'Roux', 'Vincent', 'Fournier', 'Leroy', 'Lambert'];
-            
-            for (let i = 1; i <= 150; i++) {
-                const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-                const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
-                const num = Math.floor(Math.random() * 999) + 1;
-                const prenom = prenoms[Math.floor(Math.random() * prenoms.length)];
-                const nom = noms[Math.floor(Math.random() * noms.length)];
-                const raisonSociale = `${prefix} ${suffix} ${num}`;
-                const reference = `CLI-${String(i).padStart(4, '0')}`;
-                
-                clients.push({
-                    id: String(i),
-                    name: raisonSociale,
-                    prenom: prenom,
-                    nom: nom,
-                    raisonSociale: raisonSociale,
-                    reference: reference,
-                    // Texte de recherche combiné pour faciliter la recherche
-                    searchText: `${prenom} ${nom} ${raisonSociale} ${reference}`.toLowerCase()
-                });
-            }
-            return clients;
-        })(),
-        // Fonction pour générer des données de consommation pour un client
-        generateClientData: function(clientId, granularityType, periodParams) {
-            const baseNb = 3000 + (parseInt(clientId) * 50);
-            const baseColor = 500 + (parseInt(clientId) * 20);
-            const variation = 0.15;
-            
-            let labels, nbData, colorData;
-            
-            if (granularityType === 'year') {
-                // Afficher les 12 mois de l'année sélectionnée
-                const year = periodParams.year || 2025;
-                const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-                labels = monthNames.map(m => `${m} ${year}`);
-                nbData = labels.map(() => Math.floor(baseNb * (1 + (Math.random() - 0.5) * variation)));
-                colorData = labels.map(() => Math.floor(baseColor * (1 + (Math.random() - 0.5) * variation)));
-            } else if (granularityType === 'month') {
-                // Afficher les jours du mois sélectionné
-                const year = periodParams.year || 2025;
-                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
-                labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
-                nbData = labels.map(() => Math.floor((baseNb / daysInMonth) * (1 + (Math.random() - 0.5) * variation)));
-                colorData = labels.map(() => Math.floor((baseColor / daysInMonth) * (1 + (Math.random() - 0.5) * variation)));
-            }
-            
-            return { labels, nbData, colorData };
-        },
-        
-        // Fonction pour obtenir les données agrégées (tous les clients)
-        getAggregatedData: function(granularityType, periodParams) {
-            const allClients = this.clients;
-            
-            // Générer les labels et initialiser les tableaux de données
-            let labels;
-            if (granularityType === 'year') {
-                const year = periodParams.year || 2025;
-                const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-                labels = monthNames.map(m => `${m} ${year}`);
-            } else if (granularityType === 'month') {
-                const year = periodParams.year || 2025;
-                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
-                labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
-            }
-            
-            const nbData = labels.map(() => 0);
-            const colorData = labels.map(() => 0);
-            
-            // Agréger les données de tous les clients
-            allClients.forEach(client => {
-                const clientData = this.generateClientData(client.id, granularityType, periodParams);
-                clientData.nbData.forEach((val, i) => nbData[i] += val);
-                clientData.colorData.forEach((val, i) => colorData[i] += val);
-            });
-            
-            // Calculer le total (N&B + Couleur)
-            const totalData = labels.map((_, i) => nbData[i] + colorData[i]);
-            
-            return { labels, nbData, colorData, totalData };
-        },
-        
-        // Fonction pour obtenir les données d'un ou plusieurs clients
-        getClientsData: function(clientIds, granularityType, periodParams) {
-            if (!clientIds || clientIds.length === 0) {
-                return this.getAggregatedData(granularityType, periodParams);
-            }
-            
-            // Générer les labels et initialiser les tableaux de données
-            let labels;
-            if (granularityType === 'year') {
-                const year = periodParams.year || 2025;
-                const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-                labels = monthNames.map(m => `${m} ${year}`);
-            } else if (granularityType === 'month') {
-                const year = periodParams.year || 2025;
-                const month = periodParams.month !== undefined ? parseInt(periodParams.month) : new Date().getMonth();
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
-                labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
-            }
-            
-            const nbData = labels.map(() => 0);
-            const colorData = labels.map(() => 0);
-            
-            clientIds.forEach(clientId => {
-                const clientData = this.generateClientData(clientId, granularityType, periodParams);
-                clientData.nbData.forEach((val, i) => nbData[i] += val);
-                clientData.colorData.forEach((val, i) => colorData[i] += val);
-            });
-            
-            // Calculer le total (N&B + Couleur)
-            const totalData = labels.map((_, i) => nbData[i] + colorData[i]);
-            
-            return { labels, nbData, colorData, totalData };
-        }
-    }
-};
+// REMOVED: mockData object (previously lines 934-1180)
+// The following functions now use real API calls:
+// - updateResumeKPIs() -> /API/facturation_summary.php
+// - updateFactureEnCours() -> /API/facturation_invoice.php
+// - updatePaiementsDisplay() -> /API/facturation_payments_list.php
+// - updateFacturesList() -> /API/facturation_factures_list.php
+// - displayFactureDetail() -> /API/facturation_facture_detail.php
+// - updateTableConsommation() -> /API/facturation_consumption_table.php
+// - initConsumptionChart() -> /API/facturation_consumption_chart.php
+// ==================
+
+// Variable pour suivre l'état de la facture (sera mis à jour via API)
+let factureGeneree = false;
 
 // ==================
 // Graphique de consommation
@@ -1387,6 +1049,7 @@ function selectClient(clientId, clientName) {
     updateResumeKPIs().catch(err => console.error('Erreur updateResumeKPIs:', err));
     updateFactureEnCours().catch(err => console.error('Erreur updateFactureEnCours:', err));
     updatePaiementsDisplay().catch(err => console.error('Erreur updatePaiementsDisplay:', err));
+    updateFacturesList().catch(err => console.error('Erreur updateFacturesList:', err));
 }
 
 // Réinitialiser la sélection (afficher tous les clients)
@@ -1978,11 +1641,35 @@ async function updateTableConsommation() {
 // ==================
 // Export Excel du tableau de consommation
 // ==================
-function exportTableConsommation() {
-    if (!mockData.imprimantes || mockData.imprimantes.length === 0) {
-        alert('Aucune donnée à exporter.');
+async function exportTableConsommation() {
+    // Récupérer les données depuis le tableau affiché (ou depuis l'API si nécessaire)
+    const tbody = document.getElementById('tableConsommationBody');
+    if (!tbody || tbody.children.length === 0) {
+        alert('Aucune donnée à exporter. Veuillez d\'abord charger les données de consommation.');
         return;
     }
+    
+    // Si pas de client sélectionné, on ne peut pas exporter
+    if (!selectedClientId) {
+        alert('Veuillez sélectionner un client pour exporter les données.');
+        return;
+    }
+    
+    try {
+        // Récupérer les données depuis l'API pour l'export
+        const response = await fetch(`/API/facturation_consumption_table.php?months=3&client_id=${selectedClientId}`);
+        const result = await response.json();
+        
+        if (!response.ok || !result.ok || !result.data) {
+            throw new Error(result.error || 'Erreur lors du chargement des données');
+        }
+        
+        const imprimantes = result.data;
+        
+        if (!imprimantes || imprimantes.length === 0) {
+            alert('Aucune donnée à exporter.');
+            return;
+        }
     
     // Calculer les 3 derniers mois (même logique que updateTableConsommation)
     const now = new Date();
@@ -2026,45 +1713,38 @@ function exportTableConsommation() {
     // En-têtes
     data.push(['Imprimante', 'MAC address', 'Pages N&B', 'Pages couleur', 'Total pages', 'Mois (20 → 20)']);
     
-    // Données
-    mockData.imprimantes.forEach(imprimante => {
-        const consommationsFiltrees = imprimante.consommations
-            .filter(cons => derniersMois.some(m => m.key === cons.mois))
-            .sort((a, b) => b.mois.localeCompare(a.mois));
+    // Données depuis l'API
+    imprimantes.forEach(imprimante => {
+        if (!imprimante.consommations || imprimante.consommations.length === 0) return;
         
-        if (consommationsFiltrees.length === 0) return;
-        
-        consommationsFiltrees.forEach((consommation, index) => {
-            const moisInfo = derniersMois.find(m => m.key === consommation.mois);
-            const periode = moisInfo ? moisInfo.periode : consommation.periode;
-            
+        imprimante.consommations.forEach((consommation, index) => {
             const row = [];
             
             // Imprimante (uniquement sur la première ligne)
             if (index === 0) {
-                row.push(`${imprimante.nom} (Modèle ${imprimante.modele})`);
+                row.push(`${imprimante.nom || 'Imprimante'} (Modèle ${imprimante.modele || 'N/A'})`);
             } else {
                 row.push(''); // Cellule vide pour le rowspan
             }
             
             // MAC address (uniquement sur la première ligne)
             if (index === 0) {
-                row.push(imprimante.macAddress);
+                row.push(imprimante.macAddress || 'N/A');
             } else {
                 row.push(''); // Cellule vide pour le rowspan
             }
             
             // Pages N&B
-            row.push(consommation.pagesNB);
+            row.push(consommation.pagesNB || 0);
             
             // Pages couleur
-            row.push(consommation.pagesCouleur);
+            row.push(consommation.pagesCouleur || 0);
             
             // Total pages
-            row.push(consommation.totalPages);
+            row.push(consommation.totalPages || 0);
             
             // Mois
-            row.push(periode);
+            row.push(consommation.periode || consommation.mois || 'N/A');
             
             data.push(row);
         });
@@ -2337,50 +2017,136 @@ function genererFacture() {
 // ==================
 // Gestion des factures
 // ==================
-const factureRows = document.querySelectorAll('.facture-row');
-factureRows.forEach(row => {
-    row.addEventListener('click', () => {
-        const factureId = parseInt(row.dataset.factureId);
-        const facture = mockData.factures.find(f => f.id === factureId);
-        if (facture) {
-            displayFactureDetail(facture);
+// Charger la liste des factures depuis l'API
+async function updateFacturesList() {
+    if (!selectedClientId) {
+        const tbody = document.getElementById('facturesListBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Sélectionnez un client pour voir les factures</td></tr>';
         }
-    });
-});
-
-function displayFactureDetail(facture) {
-    const detailPanel = document.getElementById('factureDetail');
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '—';
-        const d = new Date(dateStr);
-        return d.toLocaleDateString('fr-FR');
-    };
-    
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
-    };
-    
-    const statutBadge = {
-        'brouillon': '<span class="badge badge-draft">Brouillon</span>',
-        'envoyee': '<span class="badge badge-sent">Envoyée</span>',
-        'payee': '<span class="badge badge-paid">Payée</span>',
-        'en_retard': '<span class="badge badge-overdue">En retard</span>'
-    };
-    
-    let periodeHtml = '—';
-    if (facture.periode) {
-        periodeHtml = `${formatDate(facture.periode.debut)} - ${formatDate(facture.periode.fin)}`;
+        return;
     }
     
-    let lignesHtml = facture.lignes.map(ligne => `
-        <tr>
-            <td>${ligne.description}</td>
-            <td>${ligne.type}</td>
-            <td>${ligne.quantite}</td>
-            <td>${formatCurrency(ligne.prixUnitaire)}</td>
-            <td><strong>${formatCurrency(ligne.total)}</strong></td>
-        </tr>
-    `).join('');
+    const tbody = document.getElementById('facturesListBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Chargement des factures...</td></tr>';
+    
+    try {
+        const response = await fetch(`/API/facturation_factures_list.php?client_id=${selectedClientId}&limit=50`);
+        const result = await response.json();
+        
+        if (!response.ok || !result.ok || !result.data) {
+            throw new Error(result.error || `Erreur serveur (${response.status})`);
+        }
+        
+        const factures = result.data;
+        
+        if (factures.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Aucune facture trouvée</td></tr>';
+            return;
+        }
+        
+        const formatDate = (dateStr) => {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('fr-FR');
+        };
+        
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+        };
+        
+        const getStatutBadge = (statut) => {
+            const badges = {
+                'brouillon': '<span class="badge badge-draft">Brouillon</span>',
+                'envoyee': '<span class="badge badge-sent">Envoyée</span>',
+                'payee': '<span class="badge badge-paid">Payée</span>',
+                'en_retard': '<span class="badge badge-overdue">En retard</span>'
+            };
+            return badges[statut] || '';
+        };
+        
+        tbody.innerHTML = factures.map(facture => {
+            let periode = '—';
+            if (facture.periode && facture.periode.debut && facture.periode.fin) {
+                periode = `${formatDate(facture.periode.debut)} - ${formatDate(facture.periode.fin)}`;
+            }
+            
+            return `
+                <tr class="facture-row" data-facture-id="${facture.id}" style="cursor: pointer;">
+                    <td>${facture.numero}</td>
+                    <td>${formatDate(facture.date)}</td>
+                    <td>${periode}</td>
+                    <td>${facture.type}</td>
+                    <td>${formatCurrency(facture.montantTTC)}</td>
+                    <td>${getStatutBadge(facture.statut)}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Ajouter les event listeners aux nouvelles lignes
+        document.querySelectorAll('.facture-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const factureId = parseInt(row.dataset.factureId);
+                displayFactureDetail(factureId);
+            });
+        });
+        
+    } catch (error) {
+        console.error('Erreur chargement factures:', error);
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #ef4444;">Erreur lors du chargement des factures: ${error.message}</td></tr>`;
+    }
+}
+
+// Afficher le détail d'une facture depuis l'API
+async function displayFactureDetail(factureId) {
+    const detailPanel = document.getElementById('factureDetail');
+    if (!detailPanel) return;
+    
+    detailPanel.innerHTML = '<div class="content-card"><div class="card-body"><p>Chargement...</p></div></div>';
+    
+    try {
+        const response = await fetch(`/API/facturation_facture_detail.php?facture_id=${factureId}`);
+        const result = await response.json();
+        
+        if (!response.ok || !result.ok || !result.data) {
+            throw new Error(result.error || `Erreur serveur (${response.status})`);
+        }
+        
+        const facture = result.data;
+        
+        const formatDate = (dateStr) => {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('fr-FR');
+        };
+        
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+        };
+        
+        const statutBadge = {
+            'brouillon': '<span class="badge badge-draft">Brouillon</span>',
+            'envoyee': '<span class="badge badge-sent">Envoyée</span>',
+            'payee': '<span class="badge badge-paid">Payée</span>',
+            'en_retard': '<span class="badge badge-overdue">En retard</span>'
+        };
+        
+        let periodeHtml = '—';
+        if (facture.periode && facture.periode.debut && facture.periode.fin) {
+            periodeHtml = `${formatDate(facture.periode.debut)} - ${formatDate(facture.periode.fin)}`;
+        }
+        
+        let lignesHtml = facture.lignes.map(ligne => `
+            <tr>
+                <td>${ligne.description}</td>
+                <td>${ligne.type}</td>
+                <td>${ligne.quantite}</td>
+                <td>${formatCurrency(ligne.prixUnitaire)}</td>
+                <td><strong>${formatCurrency(ligne.total)}</strong></td>
+            </tr>
+        `).join('');
     
     detailPanel.innerHTML = `
         <div class="content-card">
@@ -2467,6 +2233,16 @@ function displayFactureDetail(facture) {
             </div>
         </div>
     `;
+    } catch (error) {
+        console.error('Erreur chargement détail facture:', error);
+        detailPanel.innerHTML = `
+            <div class="content-card">
+                <div class="card-body">
+                    <p style="color: #ef4444;">Erreur lors du chargement de la facture: ${error.message}</p>
+                </div>
+            </div>
+        `;
+    }
 }
 
 // ==================
