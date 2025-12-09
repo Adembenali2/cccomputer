@@ -144,7 +144,7 @@ try {
 debugLog("\nÉtape 4: Test avec données réelles depuis SFTP");
 try {
     require_once $projectRoot . '/vendor/autoload.php';
-    use phpseclib3\Net\SFTP;
+    // Note: on utilise le nom complet de la classe car use doit être au niveau du fichier
     
     $sftp_host = getenv('SFTP_HOST') ?: '';
     $sftp_user = getenv('SFTP_USER') ?: '';
