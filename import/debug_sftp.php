@@ -62,10 +62,12 @@ echo "\n";
 
 // 4. Tester le chargement de phpseclib
 echo "4. Test du chargement de phpseclib...\n";
+$sftpClassAvailable = false;
 try {
     require_once $projectRoot . '/vendor/autoload.php';
     if (class_exists('phpseclib3\Net\SFTP')) {
         echo "   ✓ Classe SFTP disponible\n";
+        $sftpClassAvailable = true;
     } else {
         echo "   ✗ Classe SFTP introuvable\n";
     }
@@ -85,13 +87,13 @@ $sftp_timeout = (int)(getenv('SFTP_TIMEOUT') ?: 15);
 
 if (empty($sftp_host) || empty($sftp_user) || empty($sftp_pass)) {
     echo "   ✗ Variables SFTP manquantes\n";
+} elseif (!$sftpClassAvailable) {
+    echo "   ✗ Classe SFTP non disponible (voir étape 4)\n";
 } else {
     try {
-        use phpseclib3\Net\SFTP;
-        
         echo "   Tentative de connexion à $sftp_host:$sftp_port (timeout: {$sftp_timeout}s)...\n";
         $start = microtime(true);
-        $sftp = new SFTP($sftp_host, $sftp_port, $sftp_timeout);
+        $sftp = new \phpseclib3\Net\SFTP($sftp_host, $sftp_port, $sftp_timeout);
         $connectTime = round((microtime(true) - $start) * 1000, 2);
         echo "   ✓ Instance SFTP créée ({$connectTime}ms)\n";
         

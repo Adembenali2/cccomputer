@@ -649,11 +649,11 @@
                     item.addEventListener('click', function() {
                         searchInput.value = formatClientName(client);
                         selectedClientId = client.id;
-                        currentClientId = client.id;
+                        selectedClient = client.raison_sociale;
                         suggestionsContainer.classList.remove('show');
                         console.log('Client sélectionné:', client);
                         // Mettre à jour la courbe avec le client sélectionné
-                        updateChart();
+                        updateConsumptionChart();
                     });
 
                     item.addEventListener('mouseenter', function() {
@@ -672,9 +672,9 @@
                 if (query.length === 0) {
                     suggestionsContainer.classList.remove('show');
                     selectedClientId = null;
-                    currentClientId = null;
-                    // Réinitialiser le graphique à la vue globale
-                    updateChart();
+                    selectedClient = null;
+                    // Réinitialiser le graphique
+                    updateConsumptionChart();
                     return;
                 }
                 const filtered = filterClients(query);
@@ -723,25 +723,30 @@
             if (monthSelect) {
                 const monthValue = String(new Date().getMonth() + 1).padStart(2, '0');
                 monthSelect.value = monthValue;
-                currentMonth = monthValue;
+                selectedMonth = monthValue;
             }
 
             if (monthSelect) {
                 monthSelect.addEventListener('change', function() {
-                    currentMonth = this.value;
+                    selectedMonth = this.value;
                     console.log('Mois sélectionné:', this.value, this.options[this.selectedIndex].text);
                     // Mettre à jour la courbe
-                    updateChart();
+                    updateConsumptionChart();
                 });
             }
 
             if (yearSelect) {
                 yearSelect.addEventListener('change', function() {
-                    currentYear = this.value;
+                    selectedYear = this.value;
                     console.log('Année sélectionnée:', this.value);
                     // Mettre à jour la courbe
-                    updateChart();
+                    updateConsumptionChart();
                 });
+            }
+            
+            // Initialiser l'année par défaut
+            if (yearSelect && yearSelect.value) {
+                selectedYear = yearSelect.value;
             }
         })();
 
@@ -751,26 +756,26 @@
             if (!exportBtn) return;
 
             function getCurrentData() {
-                const clientId = currentClientId ? currentClientId.toString() : null;
-                const year = currentYear;
                 const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
                                    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
                 
                 let data = [];
 
-                if (clientId && dataClientMensuelle[clientId] && dataClientMensuelle[clientId][year]) {
-                    const clientData = dataClientMensuelle[clientId][year];
-                    for (let month = 1; month <= 12; month++) {
-                        const monthStr = String(month).padStart(2, '0');
-                        const monthData = clientData[monthStr] || { nb: 0, couleur: 0 };
+                // Si un client, mois et année sont sélectionnés, exporter les données de ce mois
+                if (selectedClient && selectedMonth && selectedYear) {
+                    const periodKey = `${selectedYear}-${selectedMonth}`;
+                    const clientData = FAKE_CONSO[selectedClient];
+                    if (clientData && clientData[periodKey]) {
+                        const monthData = clientData[periodKey];
                         data.push({
-                            mois: monthNames[month - 1],
-                            nb_noir: monthData.nb,
+                            mois: monthNames[parseInt(selectedMonth) - 1],
+                            nb_noir: monthData.noir,
                             nb_couleur: monthData.couleur
                         });
                     }
                 } else {
-                    // Données moyennes (tous clients)
+                    // Sinon, exporter toutes les données disponibles (par défaut)
+                    const year = selectedYear || '2025';
                     for (let month = 1; month <= 12; month++) {
                         const monthStr = String(month).padStart(2, '0');
                         let totalNB = 0, totalColor = 0, count = 0;
@@ -822,23 +827,20 @@
             }
 
             function generateFilename() {
-                const year = currentYear;
-                const clientId = currentClientId;
                 let filename = 'consommation';
                 
-                if (clientId) {
-                    const client = clientsData.find(c => c.id === clientId);
-                    if (client) {
-                        const clientName = client.raison_sociale
-                            .replace(/[^a-zA-Z0-9]/g, '_')
-                            .toLowerCase();
-                        filename += `_${clientName}`;
-                    }
+                if (selectedClient && selectedMonth && selectedYear) {
+                    const clientName = selectedClient.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                    const monthNames = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 
+                                       'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+                    const monthName = monthNames[parseInt(selectedMonth) - 1];
+                    filename += `_${clientName}_${monthName}_${selectedYear}`;
+                } else if (selectedClient) {
+                    const clientName = selectedClient.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                    filename += `_${clientName}`;
                 } else {
                     filename += '_tous_clients';
                 }
-                
-                filename += `_${year}`;
                 
                 // Ajouter la date d'export
                 const now = new Date();
@@ -959,9 +961,29 @@
 
         // ====== GRAPHIQUE MODERNE AVEC CHART.JS ======
         let consumptionChart = null;
-        let currentClientId = null;
-        let currentYear = '2025';
-        let currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+        let selectedClient = null;
+        let selectedMonth = null;
+        let selectedYear = null;
+
+        // Restructurer les données au format demandé (client -> année-mois)
+        const FAKE_CONSO = {};
+        for (let clientId in dataClientMensuelle) {
+            const client = clientsData.find(c => String(c.id) === clientId);
+            if (!client) continue;
+            const clientName = client.raison_sociale;
+            FAKE_CONSO[clientName] = {};
+            
+            for (let year in dataClientMensuelle[clientId]) {
+                for (let month in dataClientMensuelle[clientId][year]) {
+                    const key = `${year}-${month}`;
+                    const data = dataClientMensuelle[clientId][year][month];
+                    FAKE_CONSO[clientName][key] = {
+                        noir: data.nb,
+                        couleur: data.couleur
+                    };
+                }
+            }
+        }
 
         function initChart() {
             const canvas = document.getElementById('consumptionChart');
@@ -975,9 +997,9 @@
             }
 
             consumptionChart = new Chart(ctx, {
-                type: 'line',
+                type: 'bar',
                 data: {
-                    labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                    labels: ['Noir & Blanc', 'Couleur'],
                     datasets: []
                 },
                 options: {
@@ -985,18 +1007,7 @@
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            display: true,
-                            position: 'top',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 15,
-                                font: {
-                                    family: 'Inter, system-ui, sans-serif',
-                                    size: 13,
-                                    weight: '500'
-                                },
-                                color: '#475569'
-                            }
+                            display: false
                         },
                         tooltip: {
                             backgroundColor: 'rgba(15, 23, 42, 0.95)',
@@ -1016,7 +1027,7 @@
                             displayColors: true,
                             callbacks: {
                                 label: function(context) {
-                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString('fr-FR') + ' pages';
+                                    return context.parsed.y.toLocaleString('fr-FR') + ' pages';
                                 }
                             }
                         }
@@ -1024,17 +1035,15 @@
                     scales: {
                         x: {
                             grid: {
-                                display: true,
-                                color: 'rgba(226, 232, 240, 0.5)',
-                                drawBorder: false
+                                display: false
                             },
                             ticks: {
                                 font: {
                                     family: 'Inter, system-ui, sans-serif',
-                                    size: 12
+                                    size: 13,
+                                    weight: '500'
                                 },
-                                color: '#64748b',
-                                padding: 10
+                                color: '#475569'
                             }
                         },
                         y: {
@@ -1058,116 +1067,120 @@
                         }
                     },
                     elements: {
-                        point: {
-                            radius: 4,
-                            hoverRadius: 6,
-                            borderWidth: 2
-                        },
-                        line: {
-                            tension: 0.4,
-                            borderWidth: 3
+                        bar: {
+                            borderRadius: 8,
+                            borderSkipped: false
                         }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
                     }
                 }
             });
 
-            updateChart();
+            updateConsumptionChart();
         }
 
-        function updateChart() {
-            if (!consumptionChart) return;
-
-            const clientId = currentClientId ? currentClientId.toString() : null;
-            const year = currentYear;
-            
-            // Récupérer les données pour l'année sélectionnée
-            let dataNB = [];
-            let dataColor = [];
-            let labels = [];
-
-            if (clientId && dataClientMensuelle[clientId] && dataClientMensuelle[clientId][year]) {
-                const clientData = dataClientMensuelle[clientId][year];
-                for (let month = 1; month <= 12; month++) {
-                    const monthStr = String(month).padStart(2, '0');
-                    const monthData = clientData[monthStr] || { nb: 0, couleur: 0 };
-                    dataNB.push(monthData.nb);
-                    dataColor.push(monthData.couleur);
-                }
-                labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-            } else {
-                // Données par défaut (tous clients ou moyenne)
-                for (let month = 1; month <= 12; month++) {
-                    const monthStr = String(month).padStart(2, '0');
-                    let totalNB = 0, totalColor = 0, count = 0;
-                    for (let cid in dataClientMensuelle) {
-                        if (dataClientMensuelle[cid][year] && dataClientMensuelle[cid][year][monthStr]) {
-                            totalNB += dataClientMensuelle[cid][year][monthStr].nb;
-                            totalColor += dataClientMensuelle[cid][year][monthStr].couleur;
-                            count++;
-                        }
-                    }
-                    dataNB.push(count > 0 ? Math.round(totalNB / count) : 0);
-                    dataColor.push(count > 0 ? Math.round(totalColor / count) : 0);
-                }
-                labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-            }
-
-            consumptionChart.data.labels = labels;
-            consumptionChart.data.datasets = [
-                {
-                    label: 'Noir & Blanc',
-                    data: dataNB,
-                    borderColor: '#1e293b',
-                    backgroundColor: 'rgba(30, 41, 59, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#1e293b',
-                    pointBorderColor: '#ffffff',
-                    pointHoverBackgroundColor: '#0f172a',
-                    pointHoverBorderColor: '#ffffff'
-                },
-                {
-                    label: 'Couleur',
-                    data: dataColor,
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#3b82f6',
-                    pointBorderColor: '#ffffff',
-                    pointHoverBackgroundColor: '#2563eb',
-                    pointHoverBorderColor: '#ffffff'
-                }
-            ];
-
-            // Mettre à jour le titre
+        function updateConsumptionChart() {
+            const chartWrapper = document.querySelector('.paiements-chart-wrapper');
+            const canvas = document.getElementById('consumptionChart');
             const chartTitle = document.getElementById('chartTitle');
             const chartSubtitle = document.getElementById('chartSubtitle');
-            if (clientId) {
-                const client = clientsData.find(c => String(c.id) === clientId);
-                if (client) {
-                    chartTitle.textContent = `Consommation - ${client.raison_sociale}`;
-                    chartSubtitle.textContent = `Année ${year}`;
-                    chartSubtitle.style.display = 'inline';
+            
+            // Vérifier si les 3 conditions sont réunies
+            if (!selectedClient || !selectedMonth || !selectedYear) {
+                // Afficher le message d'état
+                if (canvas) {
+                    canvas.style.display = 'none';
                 }
+                if (chartWrapper) {
+                    let messageDiv = chartWrapper.querySelector('.chart-message');
+                    if (!messageDiv) {
+                        messageDiv = document.createElement('div');
+                        messageDiv.className = 'chart-message';
+                        chartWrapper.appendChild(messageDiv);
+                    }
+                    messageDiv.innerHTML = `
+                        <div style="text-align: center; padding: 3rem 2rem; color: #64748b;">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 1rem; opacity: 0.5;">
+                                <path d="M9 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM19 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
+                                <path d="M13 16.5V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10.5a1 1 0 0 0 1 1h1m8-1a1 1 0 0 1-1 1H9m4-1v-8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v8m-6 1h6"/>
+                            </svg>
+                            <p style="font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem; color: #475569;">Veuillez sélectionner un client et une période</p>
+                            <p style="font-size: 0.9rem; color: #94a3b8;">Sélectionnez un client via la recherche, puis choisissez un mois et une année pour afficher la consommation.</p>
+                        </div>
+                    `;
+                }
+                if (chartTitle) {
+                    chartTitle.textContent = 'Consommation par mois';
+                }
+                if (chartSubtitle) {
+                    chartSubtitle.textContent = '';
+                    chartSubtitle.style.display = 'none';
+                }
+                return;
+            }
+
+            // Les 3 conditions sont réunies → afficher le graphique
+            if (chartWrapper) {
+                const messageDiv = chartWrapper.querySelector('.chart-message');
+                if (messageDiv) {
+                    messageDiv.remove();
+                }
+            }
+            if (canvas) {
+                canvas.style.display = 'block';
+            }
+
+            if (!consumptionChart) {
+                initChart();
+                return;
+            }
+
+            // Récupérer les données pour le client, mois et année sélectionnés
+            const periodKey = `${selectedYear}-${selectedMonth}`;
+            const clientData = FAKE_CONSO[selectedClient];
+            
+            if (!clientData || !clientData[periodKey]) {
+                // Pas de données pour cette période
+                consumptionChart.data.labels = ['Noir & Blanc', 'Couleur'];
+                consumptionChart.data.datasets = [{
+                    label: 'Consommation',
+                    data: [0, 0],
+                    backgroundColor: ['#1e293b', '#3b82f6']
+                }];
             } else {
-                chartTitle.textContent = 'Consommation globale';
-                chartSubtitle.textContent = `Année ${year} - Tous les clients`;
+                const data = clientData[periodKey];
+                consumptionChart.data.labels = ['Noir & Blanc', 'Couleur'];
+                consumptionChart.data.datasets = [{
+                    label: 'Consommation',
+                    data: [data.noir, data.couleur],
+                    backgroundColor: ['#1e293b', '#3b82f6']
+                }];
+            }
+
+            // Mettre à jour le titre
+            const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                               'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+            const monthName = monthNames[parseInt(selectedMonth) - 1];
+            
+            if (chartTitle) {
+                chartTitle.textContent = `Consommation - ${selectedClient}`;
+            }
+            if (chartSubtitle) {
+                chartSubtitle.textContent = `${monthName} ${selectedYear}`;
                 chartSubtitle.style.display = 'inline';
             }
 
             consumptionChart.update('active');
         }
 
-        // Initialiser le graphique au chargement
+        // Initialiser le graphique au chargement (mais ne pas l'afficher tant que les conditions ne sont pas réunies)
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initChart);
+            document.addEventListener('DOMContentLoaded', function() {
+                initChart();
+                updateConsumptionChart();
+            });
         } else {
             initChart();
+            updateConsumptionChart();
         }
 
         // Fonctions modales
