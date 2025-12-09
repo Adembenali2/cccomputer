@@ -481,43 +481,114 @@ if (is_array($files) && count($files) > 0) {
             
             echo "✅ Téléchargement réussi: $entry\n";
             
+            // Parser le CSV
+            debugLog("Parsing du fichier CSV", ['file' => $entry, 'tmp_path' => $tmp]);
+            try {
+                if (!file_exists($tmp)) {
+                    throw new RuntimeException("Fichier temporaire introuvable: $tmp");
+                }
+                $fileSize = filesize($tmp);
+                debugLog("Fichier temporaire vérifié", ['size' => $fileSize, 'readable' => is_readable($tmp)]);
+                
+                $parseStart = microtime(true);
+                $row = parse_csv_kv($tmp);
+                $parseTime = round((microtime(true) - $parseStart) * 1000, 2);
+                debugLog("CSV parsé", ['duration_ms' => $parseTime, 'keys_count' => count($row)]);
+                
+                @unlink($tmp);
+                
+                // Extraire les valeurs
+                $values = [];
+                foreach ($FIELDS as $f) $values[$f] = $row[$f] ?? null;
+                
+                debugLog("Valeurs extraites", [
+                    'MacAddress' => $values['MacAddress'] ?? 'NULL',
+                    'Timestamp' => $values['Timestamp'] ?? 'NULL',
+                    'total_fields' => count($values)
+                ]);
+
+                if (empty($values['MacAddress']) || empty($values['Timestamp'])) {
+                    $errorMsg = "Données manquantes (MacAddress/Timestamp) pour $entry";
+                    debugLog("ERREUR", ['error' => $errorMsg, 'MacAddress' => $values['MacAddress'] ?? 'NULL', 'Timestamp' => $values['Timestamp'] ?? 'NULL']);
+                    echo "⚠️ $errorMsg → /errors\n";
+                    try {
+                        sftp_safe_move($sftp, $remote, '/errors');
+                    } catch (Throwable $e) {
+                        debugLog("Erreur déplacement fichier", ['error' => $e->getMessage()]);
+                    }
+                    $files_error++;
+                    continue;
+                }
+            } catch (Throwable $e) {
+                @unlink($tmp);
+                $errorMsg = "Erreur lors du parsing CSV pour $entry: " . $e->getMessage();
+                debugLog("ERREUR parsing", [
+                    'error' => $errorMsg,
+                    'exception' => get_class($e),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]);
+                echo "❌ $errorMsg\n";
+                try {
+                    sftp_safe_move($sftp, $remote, '/errors');
+                } catch (Throwable $moveErr) {
+                    debugLog("Erreur déplacement fichier", ['error' => $moveErr->getMessage()]);
+                }
+                $files_error++;
+                continue;
+            }
+            
         } catch (RuntimeException $e) {
             // Timeout - arrêter le traitement
             echo "⏱️ TIMEOUT: Arrêt du traitement des fichiers\n";
+            debugLog("TIMEOUT détecté", ['error' => $e->getMessage()]);
             break;
         } catch (Throwable $e) {
             echo "❌ Erreur lors du traitement de $entry: " . $e->getMessage() . "\n";
+            debugLog("ERREUR traitement fichier", [
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
             $files_error++;
             continue;
         }
 
-        $row = parse_csv_kv($tmp);
-        @unlink($tmp);
-
-        $values = [];
-        foreach ($FIELDS as $f) $values[$f] = $row[$f] ?? null;
-
-        if (empty($values['MacAddress']) || empty($values['Timestamp'])) {
-            echo "⚠️ Données manquantes (MacAddress/Timestamp) pour $entry → /errors\n";
-            sftp_safe_move($sftp, $remote, '/errors');
-            $files_error++;
-            continue;
-        }
-
+        // Insertion en base de données
+        debugLog("Insertion en base de données", [
+            'MacAddress' => $values['MacAddress'],
+            'Timestamp' => $values['Timestamp']
+        ]);
         try {
+            $insertStart = microtime(true);
             $pdo->beginTransaction();
+            debugLog("Transaction démarrée");
+            
             $binds = [];
             foreach ($FIELDS as $f) $binds[":$f"] = $values[$f];
+            
+            debugLog("Exécution de la requête INSERT", ['binds_count' => count($binds)]);
             $st_compteur->execute($binds);
+            $insertTime = round((microtime(true) - $insertStart) * 1000, 2);
+            
+            $rowCount = $st_compteur->rowCount();
+            debugLog("Requête exécutée", [
+                'row_count' => $rowCount,
+                'duration_ms' => $insertTime
+            ]);
 
-            if ($st_compteur->rowCount() === 1) {
+            if ($rowCount === 1) {
                 $compteurs_inserted++;
                 echo "✅ Compteur INSÉRÉ pour {$values['MacAddress']} ({$values['Timestamp']})\n";
+                debugLog("Compteur inséré avec succès");
             } else {
                 echo "ℹ️ Déjà présent: compteur NON réinséré pour {$values['MacAddress']} ({$values['Timestamp']})\n";
+                debugLog("Compteur déjà présent (INSERT IGNORE)", ['row_count' => $rowCount]);
             }
 
             $pdo->commit();
+            debugLog("Transaction commitée");
 
             // Ajouter à la liste des fichiers traités (même si le déplacement échoue)
             $files_list[] = $entry;
