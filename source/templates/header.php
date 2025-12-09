@@ -96,6 +96,16 @@ if (!function_exists('h')) {
       </a>
     <?php endif; ?>
 
+    <?php if ($isAdmin || $canCommercial): ?>
+      <a href="/public/facturation.php" aria-label="Facturation & Paiements">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+          <line x1="1" y1="10" x2="23" y2="10"/>
+        </svg>
+        <span class="nav-label">Facturation</span>
+      </a>
+    <?php endif; ?>
+
     <a href="/public/maps.php" aria-label="Cartes">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2"/>

@@ -144,6 +144,17 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         </div>
 
         <div class="dashboard-grid">
+            <div class="dash-card" data-href="/public/facturation.php" tabindex="0" role="button" aria-label="Accéder aux paiements">
+                <div class="card-icon payments" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                        <line x1="1" y1="10" x2="23" y2="10"/>
+                    </svg>
+                </div>
+                <h3 class="card-title">Paiements</h3>
+                <p class="card-count">—</p>
+            </div>
+
             <div class="dash-card" data-href="/public/sav.php" tabindex="0" role="button" aria-label="Accéder au SAV">
                 <div class="card-icon sav" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
