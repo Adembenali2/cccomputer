@@ -9,27 +9,28 @@
     <link rel="stylesheet" href="/assets/css/paiements.css" />
 </head>
 <body class="page-paiements">
-    <div class="paiements-wrapper">
-        <!-- Header fixe -->
-        <div class="paiements-header">
-            <div class="paiements-header-top">
-                <h1 class="dashboard-title">Paiements & Facturation</h1>
-                <div class="paiements-header-controls">
-                    <select id="clientFilter">
-                        <option value="">Tous les clients</option>
-                        <option value="1">Client A</option>
-                        <option value="2">Client B</option>
-                        <option value="3">Client C</option>
-                    </select>
-                    <select id="periodFilter">
-                        <option value="month">Ce mois-ci</option>
-                        <option value="year">Cette année</option>
-                        <option value="custom">Personnalisée</option>
-                    </select>
-                </div>
-            </div>
+    <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
-            <!-- KPI Cards -->
+    <div class="paiements-wrapper">
+        <div class="dashboard-header">
+            <h2 class="dashboard-title">Paiements & Facturation</h2>
+            <div class="paiements-header-controls">
+                <select id="clientFilter">
+                    <option value="">Tous les clients</option>
+                    <option value="1">Client A</option>
+                    <option value="2">Client B</option>
+                    <option value="3">Client C</option>
+                </select>
+                <select id="periodFilter">
+                    <option value="month">Ce mois-ci</option>
+                    <option value="year">Cette année</option>
+                    <option value="custom">Personnalisée</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="paiements-header">
             <div class="paiements-kpi-row">
                 <div class="paiements-kpi-card">
                     <div class="paiements-kpi-title">Dettes</div>
