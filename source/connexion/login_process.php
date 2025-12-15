@@ -1,8 +1,11 @@
 <?php
 // source/connexion/login_process.php
 require_once __DIR__ . '/../../includes/session_config.php';
-require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/historique.php';
+
+// Récupérer PDO via la fonction centralisée
+$pdo = getPdo();
 
 // CSRF (optionnel mais conseillé)
 if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'])) {

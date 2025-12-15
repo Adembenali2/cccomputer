@@ -2,9 +2,11 @@
 // /public/client_fiche.php
 require_once __DIR__ . '/../includes/auth_role.php';        // démarre la session via auth.php
 authorize_page('client_fiche', ['Admin', 'Dirigeant']); // Utilise les valeurs exactes de la base de données (ENUM)   
-require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
+
+// Récupérer PDO via la fonction centralisée
+$pdo = getPdo();
 
 const ALLOWED_DEPOT_CF  = ['espece','cheque','virement','paiement_carte'];
 const ALLOWED_OFFRES_CF = ['packbronze','packargent'];

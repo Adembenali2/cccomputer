@@ -8,11 +8,13 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
-require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
 
 // Vérification des permissions
 authorize_page('stock', []);
+
+// Récupérer PDO via la fonction centralisée
+$pdo = getPdo();
 
 // Récupérer les paramètres
 $type = trim($_GET['type'] ?? '');

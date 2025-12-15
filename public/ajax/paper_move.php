@@ -2,7 +2,11 @@
 <?php
 // /ajax/paper_move.php
 require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/helpers.php';
+
+// Récupérer PDO via la fonction centralisée
+$pdo = getPdo();
+
 header('Content-Type: application/json');
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {

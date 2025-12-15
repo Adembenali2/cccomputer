@@ -697,6 +697,82 @@ Ces fichiers contiennent la logique de compatibilité temporaire qui peut mainte
 
 ---
 
+### Fix login_process PDO + fichiers publics utilisant $pdo sans définition
+**Date** : Généré automatiquement  
+**Résultat** : ✅ **CORRECTION EFFECTUÉE** - Tous les fichiers utilisant `$pdo` sans le définir ont été corrigés
+
+**Problème identifié** :
+- Après la finalisation PDO, `db.php` ne crée plus la variable `$pdo` globale
+- Plusieurs fichiers incluaient encore `db.php` et utilisaient `$pdo` sans le définir via `getPdo()`
+- Cela causait l'erreur "Undefined variable $pdo"
+
+**Fichiers modifiés** :
+1. `source/connexion/login_process.php` ⚠️ **CRITIQUE** :
+   - Remplacé `require_once db.php` par `require_once helpers.php`
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+2. `public/sav.php` :
+   - Remplacé `require_once db.php` par suppression (helpers.php déjà inclus via auth.php)
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+3. `public/livraison.php` :
+   - Remplacé `require_once db.php` par suppression (helpers.php déjà inclus via auth.php)
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+4. `public/maps.php` :
+   - Remplacé `require_once db.php` par `require_once helpers.php`
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+5. `public/agenda.php` :
+   - Remplacé `require_once db.php` par suppression (helpers.php déjà inclus via auth.php)
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+6. `public/scan_barcode.php` :
+   - Remplacé `require_once db.php` par `require_once helpers.php`
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+7. `public/client_fiche.php` :
+   - Remplacé `require_once db.php` par suppression (helpers.php déjà inclus)
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+8. `public/photocopieurs_details.php` :
+   - Remplacé `require_once db.php` par `require_once helpers.php`
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+9. `public/print_labels.php` :
+   - Remplacé `require_once db.php` par suppression (helpers.php déjà inclus)
+   - Ajouté `$pdo = getPdo();` avant le premier usage
+
+10. `public/ajax/paper_move.php` :
+    - Remplacé `require_once db.php` par `require_once helpers.php`
+    - Ajouté `$pdo = getPdo();` avant le premier usage
+
+**Modification** : 
+- Tous les fichiers qui incluaient `db.php` et utilisaient `$pdo` ont été migrés vers `getPdo()`
+- Remplacement de `require_once db.php` par `require_once helpers.php` (ou suppression si déjà inclus via auth.php)
+- Ajout de `$pdo = getPdo();` systématique avant le premier usage de `$pdo`
+
+**Raison** : 
+- Corriger l'erreur "Undefined variable $pdo" causée par la finalisation PDO
+- Assurer la compatibilité avec la nouvelle architecture PDO unifiée
+- Tous les fichiers doivent maintenant utiliser `getPdo()` pour obtenir PDO
+
+**Risque** : Très faible - Migration simple, comportement identique  
+**Test** : 
+- ✅ `/public/login.php` (POST vers login_process.php) - doit permettre de se connecter sans erreur
+- ✅ Accès à `/public/dashboard.php` après login - doit fonctionner normalement
+- ✅ `/public/sav.php` - doit s'afficher et fonctionner normalement
+- ✅ `/public/livraison.php` - doit s'afficher et fonctionner normalement
+- ✅ `/public/maps.php` - doit s'afficher et fonctionner normalement
+- ✅ `/public/agenda.php` - doit s'afficher et fonctionner normalement
+- ✅ `/public/scan_barcode.php` - doit s'afficher et fonctionner normalement
+- ✅ `/public/client_fiche.php` - doit s'afficher et fonctionner normalement
+- ✅ `/public/photocopieurs_details.php` - doit s'afficher et fonctionner normalement
+- ✅ `/public/print_labels.php` - doit s'afficher et fonctionner normalement
+- ✅ `/public/ajax/paper_move.php` (POST) - doit fonctionner normalement
+
+---
+
 ## RÉSUMÉ DES MODIFICATIONS
 
 ### Fichiers modifiés

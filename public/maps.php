@@ -4,7 +4,10 @@
 
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('maps', ['Admin', 'Dirigeant']);
-require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/helpers.php';
+
+// Récupérer PDO via la fonction centralisée
+$pdo = getPdo();
 
 // La fonction h() est définie dans includes/helpers.php
 
