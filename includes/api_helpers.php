@@ -7,6 +7,9 @@ if (file_exists(__DIR__ . '/Logger.php')) {
     require_once __DIR__ . '/Logger.php';
 }
 
+// Charger DatabaseConnection depuis son fichier isolé
+require_once __DIR__ . '/db_connection.php';
+
 // Charger helpers.php pour avoir accès à getPdo() (si pas déjà chargé)
 if (!function_exists('getPdo')) {
     require_once __DIR__ . '/helpers.php';
@@ -29,6 +32,43 @@ if (!function_exists('jsonResponse')) {
         }
         echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
         exit;
+    }
+}
+
+/**
+ * Helper pour renvoyer une réponse d'erreur JSON standardisée
+ * 
+ * @param string $message Message d'erreur
+ * @param int $code Code HTTP (défaut: 500)
+ * @param array $extra Données supplémentaires à inclure dans la réponse
+ * @return void (termine l'exécution avec jsonResponse)
+ */
+function apiFail(string $message, int $code = 500, array $extra = []): void {
+    $response = [
+        'ok' => false,
+        'error' => $message
+    ];
+    
+    if (!empty($extra)) {
+        $response = array_merge($response, $extra);
+    }
+    
+    jsonResponse($response, $code);
+}
+
+/**
+ * Récupère PDO via getPdo() et renvoie une erreur JSON en cas d'échec
+ * Helper pour les endpoints API qui utilisent getPdo()
+ * 
+ * @return PDO Instance PDO (jamais null, car exit en cas d'erreur)
+ */
+function getPdoOrFail(): PDO {
+    try {
+        return getPdo();
+    } catch (RuntimeException $e) {
+        error_log('getPdoOrFail: Erreur de connexion PDO - ' . $e->getMessage());
+        apiFail('Erreur de connexion à la base de données', 500);
+        exit; // Redondant mais explicite
     }
 }
 
@@ -63,40 +103,6 @@ function requireCsrfToken(?string $token = null): void {
  */
 function requireCsrfForApi(?string $token = null): void {
     requireCsrfToken($token);
-}
-
-/**
- * Classe simple pour gérer la connexion PDO de manière centralisée
- * Améliore la gestion des GLOBALS sans casser le comportement existant
- */
-class DatabaseConnection {
-    private static ?PDO $instance = null;
-    
-    /**
-     * Récupère l'instance PDO unique (Singleton)
-     * Source de vérité pour toute la gestion PDO
-     */
-    public static function getInstance(): PDO {
-        // Si déjà initialisé, retourner l'instance
-        if (self::$instance !== null && self::$instance instanceof PDO) {
-            // Compatibilité temporaire : maintenir GLOBALS tant que la migration n'est pas terminée
-            $GLOBALS['pdo'] = self::$instance;
-            return self::$instance;
-        }
-        
-        // Si pas encore initialisé, charger depuis db.php qui crée la connexion
-        if (!defined('DB_LOADED')) {
-            require_once __DIR__ . '/db.php';
-        }
-        
-        // Récupérer depuis GLOBALS (créé par db.php)
-        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
-            self::$instance = $GLOBALS['pdo'];
-            return self::$instance;
-        }
-        
-        throw new RuntimeException('Impossible de récupérer la connexion PDO');
-    }
 }
 
 /**

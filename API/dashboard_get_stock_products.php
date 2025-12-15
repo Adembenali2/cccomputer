@@ -24,7 +24,7 @@ function jsonResponse(array $data, int $statusCode = 200) {
 
 try {
     require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/helpers.php';
 } catch (Throwable $e) {
     error_log('dashboard_get_stock_products.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
@@ -40,9 +40,8 @@ if (!in_array($type, ['papier', 'toner', 'lcd', 'pc'], true)) {
     jsonResponse(['ok' => false, 'error' => 'Type de produit invalide'], 400);
 }
 
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
-}
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
 
 try {
     $products = [];

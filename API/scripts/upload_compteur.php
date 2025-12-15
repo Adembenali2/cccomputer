@@ -441,10 +441,73 @@ $compteurs_skipped = 0;
 $files_error = 0;
 $files_list = []; // Liste des fichiers traités pour le log
 
+// ---------- Fonction de normalisation des chemins SFTP ----------
+/**
+ * Normalise un chemin SFTP :
+ * - Toujours commence par /
+ * - Pas de // (doubles slashes)
+ * - rtrim('/', '/') doit donner / (pas vide)
+ */
+function normalize_sftp_path(string $path): string {
+    // Si vide, retourner /
+    if (empty($path) || trim($path) === '') {
+        return '/';
+    }
+    
+    // Normaliser les séparateurs (au cas où)
+    $path = str_replace('\\', '/', $path);
+    
+    // Supprimer les slashes multiples
+    $path = preg_replace('#/+#', '/', $path);
+    
+    // S'assurer qu'il commence par /
+    if ($path[0] !== '/') {
+        $path = '/' . $path;
+    }
+    
+    // Si c'est juste /, le retourner tel quel
+    if ($path === '/') {
+        return '/';
+    }
+    
+    // Supprimer le slash final sauf si c'est la racine
+    $path = rtrim($path, '/');
+    
+    // Si après rtrim on a une chaîne vide, retourner /
+    if ($path === '') {
+        return '/';
+    }
+    
+    // S'assurer qu'il commence toujours par /
+    if ($path[0] !== '/') {
+        $path = '/' . $path;
+    }
+    
+    return $path;
+}
+
 // ---------- 5) Parcours fichiers avec timeout et gestion d'erreurs ----------
 // ====== STAGE: scan_files ======
-$REMOTE_DIR = getenv('SFTP_REMOTE_DIR') ?: '/';
-$REMOTE_DIR = rtrim($REMOTE_DIR, '/') ?: '/';
+// Déterminer remote_dir_used selon la priorité : $_GET['dir'] > SFTP_REMOTE_DIR > '/' par défaut
+$remote_dir_requested = null;
+if (isset($_GET['dir']) && !empty($_GET['dir'])) {
+    $remote_dir_requested = $_GET['dir'];
+    // Accepter "processed" ou "/processed" et normaliser
+    if ($remote_dir_requested === 'processed' || $remote_dir_requested === '/processed') {
+        $remote_dir_requested = '/processed';
+    }
+} elseif (getenv('SFTP_REMOTE_DIR')) {
+    $remote_dir_requested = getenv('SFTP_REMOTE_DIR');
+} else {
+    $remote_dir_requested = '/';
+}
+
+// Normaliser le chemin
+$REMOTE_DIR = normalize_sftp_path($remote_dir_requested);
+
+// Déterminer processed_dir : SFTP_PROCESSED_DIR si défini, sinon /processed
+$processed_dir_raw = getenv('SFTP_PROCESSED_DIR') ?: '/processed';
+$PROCESSED_DIR = normalize_sftp_path($processed_dir_raw);
 
 debugLog("Étape 5: Liste des fichiers sur le serveur SFTP", ['remote_dir' => $REMOTE_DIR]);
 try {

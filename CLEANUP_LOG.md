@@ -263,10 +263,12 @@ Après chaque modification, tester rapidement :
 
 **État actuel de la migration PDO** :
 - ✅ Fonction `getPdo()` créée et simplifiée (retourne directement DatabaseConnection::getInstance())
+- ✅ Isolation DatabaseConnection : classe déplacée dans `includes/db_connection.php` (suppression dépendance helpers.php → api_helpers.php)
 - ✅ Lot #1 migré (4 fichiers : auth_role.php, last_import_ancien.php, run_import_ancien_if_due.php, debug_import.php)
+- ✅ Lot #2 migré (10 fichiers API : maps_get_all_clients, dashboard_get_sav, messagerie_get_unread_count, dashboard_get_deliveries, dashboard_get_techniciens, dashboard_get_livreurs, dashboard_get_stock_products, maps_search_clients, dashboard_create_sav, stock_add)
 - ✅ Stabilisation effectuée : fallbacks supprimés, `getPdo()` simplifié
 - ✅ Tous les includes utilisent `require_once` (vérification effectuée)
-- ⚠️ Les fichiers publics et API utilisent encore `$pdo` directement (via variable globale définie par db.php)
+- ⚠️ Les fichiers publics et certains fichiers API utilisent encore `$pdo` directement ou `requirePdoConnection()`
 - ⚠️ Compatibilité temporaire maintenue : `$GLOBALS['pdo']` et `global $pdo` dans db.php (sera retiré après migration complète)
 
 **Prochaines étapes** :
@@ -313,6 +315,130 @@ Après chaque modification, tester rapidement :
 - Tester une API (ex: `/API/maps_get_all_clients.php`) - doit retourner des données JSON
 - Tester `import/debug_import.php` si utilisé - doit fonctionner sans erreur
 - Vérifier qu'aucune erreur "Cannot redeclare function" n'apparaît dans les logs
+
+---
+
+### ÉTAPE Y - Isolation DatabaseConnection
+**Date** : Généré automatiquement  
+**Fichiers modifiés** : 
+- `includes/db_connection.php` - **NOUVEAU** : Classe DatabaseConnection isolée
+- `includes/helpers.php` - Remplacement de l'inclusion d'api_helpers.php par db_connection.php
+- `includes/api_helpers.php` - Remplacement de la définition de DatabaseConnection par l'inclusion de db_connection.php
+
+**Modification** : 
+1. **Création de `includes/db_connection.php`** :
+   - Nouveau fichier contenant uniquement la classe `DatabaseConnection`
+   - Isolé pour éviter les dépendances circulaires entre helpers.php et api_helpers.php
+   - Déplacé depuis `includes/api_helpers.php`
+
+2. **Modification de `includes/helpers.php`** :
+   - `getPdo()` charge maintenant `db_connection.php` au lieu d'`api_helpers.php`
+   - Suppression de la dépendance `helpers.php` → `api_helpers.php`
+   - `getPdo()` simplifié : vérifie si DatabaseConnection existe, sinon charge db_connection.php, puis retourne `DatabaseConnection::getInstance()`
+
+3. **Modification de `includes/api_helpers.php`** :
+   - Suppression de la définition de la classe `DatabaseConnection`
+   - Ajout de `require_once __DIR__ . '/db_connection.php';` au début
+   - Le reste du fichier reste inchangé
+
+**Raison** : 
+- Éliminer la dépendance circulaire potentielle entre `helpers.php` et `api_helpers.php`
+- Isoler DatabaseConnection dans un fichier dédié pour une meilleure organisation
+- Faciliter la maintenance et éviter les problèmes de dépendances
+
+**Risque** : Très faible - Réorganisation du code sans changement fonctionnel  
+**Test** : 
+- Tester `/public/dashboard.php` - doit fonctionner normalement
+- Tester 2 endpoints API :
+  - `/API/maps_get_all_clients.php` - doit retourner des données JSON
+  - `/API/dashboard_get_sav.php` - doit retourner des données JSON
+- Vérifier qu'aucune erreur "Class DatabaseConnection already declared" n'apparaît
+- Vérifier que `getPdo()` fonctionne correctement depuis les pages publiques et les API
+
+---
+
+### ÉTAPE Z - Migration PDO Lot #2 (API)
+**Date** : Généré automatiquement  
+**Fichiers modifiés** : 
+- `API/maps_get_all_clients.php` - Remplacement de `$pdo` global par `getPdo()`
+- `API/dashboard_get_sav.php` - Remplacement de `requirePdoConnection()` par `getPdo()`
+- `API/messagerie_get_unread_count.php` - Remplacement de `$pdo` global par `getPdo()`
+- `API/dashboard_get_deliveries.php` - Remplacement de `requirePdoConnection()` par `getPdo()`
+- `API/dashboard_get_techniciens.php` - Remplacement de `$pdo` global par `getPdo()`
+- `API/dashboard_get_livreurs.php` - Remplacement de `$pdo` global par `getPdo()`
+- `API/dashboard_get_stock_products.php` - Remplacement de `$pdo` global par `getPdo()`
+- `API/maps_search_clients.php` - Remplacement de `$pdo` global par `getPdo()`
+- `API/dashboard_create_sav.php` - Remplacement de `requirePdoConnection()` par `getPdo()`
+- `API/stock_add.php` - Remplacement de `requirePdoConnection()` par `getPdo()`
+
+**Modification** : 
+- Pour chaque fichier migré :
+  - Remplacement de `requirePdoConnection()` par `getPdo()` avec gestion d'erreur via try/catch
+  - Remplacement de l'inclusion `db.php` par `helpers.php` pour les fichiers qui utilisaient `$pdo` global
+  - Ajout de `$pdo = getPdo();` après les includes nécessaires
+  - Suppression des vérifications `if (!isset($pdo) || !($pdo instanceof PDO))` remplacées par try/catch
+- Aucun usage de `$GLOBALS['pdo']`, `global $pdo` ou `requirePdoConnection()` dans les fichiers migrés
+
+**Raison** : 
+- Migration progressive des fichiers API vers l'utilisation unifiée de `getPdo()`
+- Élimination progressive des dépendances vers `requirePdoConnection()` et les variables globales
+
+**Risque** : Faible - Migration ciblée sur les endpoints API, compatibilité maintenue pour les fichiers non migrés  
+**Test** : 
+- Tester au moins 3 endpoints API migrés :
+  - `/API/maps_get_all_clients.php` - doit retourner la liste des clients avec leurs coordonnées
+  - `/API/dashboard_get_sav.php?client_id=1` - doit retourner les SAV d'un client
+  - `/API/messagerie_get_unread_count.php` - doit retourner le nombre de messages non lus
+- Tester également les autres endpoints migrés :
+  - `/API/dashboard_get_deliveries.php?client_id=1`
+  - `/API/dashboard_get_techniciens.php`
+  - `/API/dashboard_get_livreurs.php`
+  - `/API/dashboard_get_stock_products.php?type=papier`
+  - `/API/maps_search_clients.php?q=test`
+- Vérifier qu'aucun fichier migré n'utilise encore `$GLOBALS['pdo']`, `global $pdo` ou `requirePdoConnection()`
+
+---
+
+### ÉTAPE Z2 - Centralisation erreurs DB API (Lot #2B)
+**Date** : Généré automatiquement  
+**Fichiers modifiés** : 
+- `includes/api_helpers.php` - Ajout de `apiFail()` et `getPdoOrFail()` helper functions
+- `API/maps_get_all_clients.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/dashboard_get_sav.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/dashboard_get_deliveries.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/dashboard_get_techniciens.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/dashboard_get_livreurs.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/dashboard_get_stock_products.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/maps_search_clients.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/dashboard_create_sav.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/stock_add.php` - Remplacement try/catch par `getPdoOrFail()`
+- `API/messagerie_get_unread_count.php` - Conservé try/catch spécifique (retourne count=0 au lieu d'erreur pour ne pas bloquer le header)
+
+**Modification** : 
+1. **Ajout de fonctions helpers dans `includes/api_helpers.php`** :
+   - `apiFail(string $message, int $code = 500, array $extra = [])` : Helper pour renvoyer une réponse d'erreur JSON standardisée
+   - `getPdoOrFail()` : Wrapper autour de `getPdo()` qui appelle `apiFail()` en cas d'erreur (terminant l'exécution)
+
+2. **Simplification des endpoints migrés** :
+   - Suppression des try/catch répétitifs autour de `getPdo()`
+   - Remplacement par `$pdo = getPdoOrFail();` (sauf messagerie_get_unread_count qui a un comportement spécial)
+   - Code plus propre et gestion d'erreurs standardisée
+   - Les erreurs PDO sont maintenant gérées de manière cohérente avec une réponse JSON standardisée
+
+**Raison** : 
+- Centraliser la gestion des erreurs PDO côté API
+- Éliminer la duplication de code (try/catch répétitifs)
+- Standardiser les réponses d'erreur JSON
+- Simplifier le code des endpoints
+
+**Risque** : Très faible - Simplification du code, comportement identique (même gestion d'erreur, juste centralisée)  
+**Test** : 
+- Tester 3 endpoints et vérifier le format de réponse d'erreur (en cas de panne DB simulée) :
+  - `/API/maps_get_all_clients.php` - doit retourner `{"ok":false,"error":"Erreur de connexion à la base de données"}` avec code 500
+  - `/API/dashboard_get_sav.php?client_id=1` - doit retourner `{"ok":false,"error":"Erreur de connexion à la base de données"}` avec code 500
+  - `/API/dashboard_get_techniciens.php` - doit retourner `{"ok":false,"error":"Erreur de connexion à la base de données"}` avec code 500
+- Vérifier que le comportement fonctionnel normal reste identique (quand la DB fonctionne)
+- Optionnel : Simuler une panne DB (désactiver MySQL) et vérifier que tous les endpoints retournent la même réponse d'erreur standardisée
 
 ---
 

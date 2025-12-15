@@ -4,7 +4,10 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 
 initApi();
 requireApiAuth();
-$pdo = requirePdoConnection();
+
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
+
 require_once __DIR__ . '/../includes/historique.php';
 
 // Fonction helper pour enregistrer dans l'historique

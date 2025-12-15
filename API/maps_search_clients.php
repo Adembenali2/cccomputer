@@ -24,7 +24,7 @@ function jsonResponse(array $data, int $statusCode = 200) {
 
 try {
     require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/helpers.php';
 } catch (Throwable $e) {
     error_log('maps_search_clients.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation: ' . $e->getMessage()], 500);
@@ -34,11 +34,8 @@ if (empty($_SESSION['user_id'])) {
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
 }
 
-// Vérifier que $pdo est bien défini
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    error_log('maps_search_clients.php: $pdo not defined or invalid');
-    jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
-}
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
 
 $query = trim($_GET['q'] ?? '');
 $limit = min((int)($_GET['limit'] ?? 20), 50); // Max 50 résultats

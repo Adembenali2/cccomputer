@@ -388,15 +388,9 @@ if (!function_exists('configureErrorReporting')) {
  */
 if (!function_exists('getPdo')) {
     function getPdo(): PDO {
-        // Charger DatabaseConnection si pas encore chargé (pour les pages publiques)
+        // Charger DatabaseConnection depuis son fichier isolé (évite la dépendance vers api_helpers.php)
         if (!class_exists('DatabaseConnection')) {
-            // Charger depuis api_helpers.php qui contient la classe DatabaseConnection
-            $apiHelpersPath = __DIR__ . '/api_helpers.php';
-            if (file_exists($apiHelpersPath)) {
-                require_once $apiHelpersPath;
-            } else {
-                throw new RuntimeException('DatabaseConnection non disponible : api_helpers.php introuvable');
-            }
+            require_once __DIR__ . '/db_connection.php';
         }
         
         // Utiliser DatabaseConnection comme source de vérité unique

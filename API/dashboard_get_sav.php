@@ -4,17 +4,15 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 
 initApi();
 requireApiAuth();
-$pdo = requirePdoConnection();
+
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
 
 $clientId = isset($_GET['client_id']) ? (int)$_GET['client_id'] : 0;
 
 if ($clientId <= 0) {
     error_log('dashboard_get_sav.php: ID client invalide ou manquant - client_id=' . ($_GET['client_id'] ?? 'non défini'));
     jsonResponse(['ok' => false, 'error' => 'ID client invalide ou manquant'], 400);
-}
-
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
 }
 
 try {

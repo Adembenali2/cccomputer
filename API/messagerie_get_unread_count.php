@@ -15,7 +15,7 @@ if (!headers_sent()) {
 try {
     // Inclure session_config.php EN PREMIER (il démarre la session si nécessaire)
     require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/helpers.php';
     require_once __DIR__ . '/../includes/api_helpers.php';
 } catch (Throwable $e) {
     error_log('messagerie_get_unread_count.php require error: ' . $e->getMessage());
@@ -28,6 +28,15 @@ if (empty($_SESSION['user_id'])) {
 }
 
 $userId = (int)$_SESSION['user_id'];
+
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+// Note: pour ce endpoint spécifique, on retourne 0 au lieu d'une erreur pour ne pas bloquer le header
+try {
+    $pdo = getPdo();
+} catch (RuntimeException $e) {
+    error_log('messagerie_get_unread_count.php: getPdo() failed - ' . $e->getMessage());
+    jsonResponse(['ok' => true, 'count' => 0]); // Retourner 0 pour ne pas bloquer le header
+}
 
 try {
     // Vérifier si la table messagerie existe

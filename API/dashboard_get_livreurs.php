@@ -24,7 +24,7 @@ function jsonResponse(array $data, int $statusCode = 200) {
 
 try {
     require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/helpers.php';
 } catch (Throwable $e) {
     error_log('dashboard_get_livreurs.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
@@ -34,9 +34,8 @@ if (empty($_SESSION['user_id'])) {
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
 }
 
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
-}
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
 
 try {
     // Récupérer uniquement les utilisateurs avec Emploi = 'Livreur' et statut = 'actif'

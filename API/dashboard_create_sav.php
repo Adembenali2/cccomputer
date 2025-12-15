@@ -4,15 +4,14 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 
 initApi();
 requireApiAuth();
-$pdo = requirePdoConnection();
+
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
+
 require_once __DIR__ . '/../includes/historique.php';
 
 if (empty($_SESSION['user_id'])) {
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
-}
-
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-    jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
