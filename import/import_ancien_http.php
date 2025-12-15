@@ -128,10 +128,13 @@ $html = @file_get_contents($URL, false, stream_context_create([
 if($html === false){
     $errorMsg = json_encode([
         'source'=>'WEB_COMPTEUR',
+        'ok'=>0,
         'processed'=>0,
         'inserted'=>0,
+        'updated'=>0,
         'skipped'=>0,
         'batch'=>$BATCH,
+        'reason'=>'download_html_failed',
         'error'=>'Failed to fetch URL: ' . $URL
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),0,0,0,:m)")
@@ -152,10 +155,13 @@ $table = $xpath->query('//table')->item(0);
 if(!$table){
     $errorMsg = json_encode([
         'source'=>'WEB_COMPTEUR',
+        'ok'=>0,
         'processed'=>0,
         'inserted'=>0,
+        'updated'=>0,
         'skipped'=>0,
         'batch'=>$BATCH,
+        'reason'=>'mapping_failed',
         'error'=>'No table found in HTML'
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),0,0,0,:m)")
@@ -231,10 +237,13 @@ if(empty($columnMap['mac']) || empty($columnMap['date'])){
 if (empty($columnMap['mac']) || empty($columnMap['date'])) {
     $errorMsg = json_encode([
         'source'=>'WEB_COMPTEUR',
+        'ok'=>0,
         'processed'=>0,
         'inserted'=>0,
+        'updated'=>0,
         'skipped'=>0,
         'batch'=>$BATCH,
+        'reason'=>'mapping_failed',
         'error'=>'Impossible de détecter les colonnes MAC et Date dans le tableau HTML'
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),0,0,0,:m)")
@@ -303,7 +312,16 @@ foreach($rows as $row){
 $totalCandidates = count($rowsData);
 
 if($totalCandidates === 0){
-    $msg = json_encode(['source'=>'WEB_COMPTEUR','processed'=>0,'inserted'=>0,'skipped'=>0,'batch'=>$BATCH], JSON_UNESCAPED_UNICODE);
+    $msg = json_encode([
+        'source'=>'WEB_COMPTEUR',
+        'ok'=>1,
+        'processed'=>0,
+        'inserted'=>0,
+        'updated'=>0,
+        'skipped'=>0,
+        'batch'=>$BATCH,
+        'reason'=>'no_new_data'
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),0,0,1,:m)")->execute([':m'=>$msg]);
     echo "OK ANCIEN no new data\n";
     exit(0);
@@ -360,6 +378,9 @@ $stmtInsert = $pdo->prepare($sqlInsert);
 // INSERT ... ON DUPLICATE KEY UPDATE met à jour les données si le couple (mac_norm, Timestamp) existe déjà
 $pdo->beginTransaction();
 $imported=0; $skipped=0; $updated=0; $added=[]; $errors=[];
+// Initialiser ok=1 par défaut (succès) - sera modifié en cas d'erreur
+$isOk = 1;
+$reason = null;
 try{
     foreach($rowsData as $data){
         $mac = $data['mac'];
@@ -407,26 +428,42 @@ try{
 }catch(Throwable $e){
     $pdo->rollBack();
     $imported=0; 
+    $updated=0;
     $skipped=count($rowsData);
     $errors[] = "Transaction failed: " . $e->getMessage();
     error_log('import_ancien_http: Transaction error: ' . $e->getMessage());
+    // En cas d'exception transaction, ok=0
+    $isOk = 0;
+    $reason = 'transaction_failed';
 }
 
 // ---------- Journal ----------
 // Déterminer si l'import est réussi (ok=1) ou en erreur (ok=0)
-// Succès si: on a importé au moins un élément, ou s'il n'y avait rien à importer
-$isOk = 1;
-if (count($rowsData) > 0 && $imported === 0) {
-    // On avait des candidats mais rien n'a été importé = erreur
-    $isOk = 0;
-}
-if (count($errors) > 0 && $imported === 0) {
-    // Des erreurs se sont produites et rien n'a été importé = erreur
-    $isOk = 0;
+// ok=1 si le script a réussi (même si 0 ligne insérée)
+// ok=0 uniquement si exception / download HTML fail / mapping fail / insert fail
+// Note: $isOk et $reason peuvent déjà être définis dans le catch de transaction (transaction_failed)
+
+// Si pas déjà défini par une exception transaction, déterminer le statut
+if ($isOk === 1 && $reason === null) {
+    if (count($rowsData) === 0) {
+        // Aucune nouvelle donnée = succès (rien à importer)
+        $reason = 'no_new_data';
+    } elseif (count($rowsData) > 0 && $imported === 0 && count($errors) > 0) {
+        // Cas d'erreur : on avait des candidats mais rien n'a été importé ET il y a des erreurs
+        // Erreur lors de l'insertion = échec
+        $isOk = 0;
+        $reason = 'insert_failed';
+    } elseif (count($rowsData) > 0 && $imported === 0 && $updated === 0 && count($errors) === 0) {
+        // Cas étrange : candidats mais rien inséré ni mis à jour ni erreur = probablement un problème
+        // Mais on considère ça comme OK si pas d'erreur explicite
+        $reason = 'no_new_data';
+    }
+    // Si $imported > 0 ou $updated > 0, c'est un succès, on garde ok=1 et reason=null
 }
 
 $msg = json_encode([
     'source'=>'WEB_COMPTEUR',
+    'ok'=>$isOk,
     'processed'=>count($rowsData),
     'inserted'=>$imported,
     'updated'=>$updated ?? 0, // Nombre d'enregistrements mis à jour (doublons)
@@ -434,6 +471,7 @@ $msg = json_encode([
     'batch'=>$BATCH,
     'remaining_estimate'=>$remaining,
     'last_timestamp'=>$lastTimestamp,
+    'reason'=>$reason,
     'files'=>array_slice($added,0,20), // Limiter à 20 pour éviter un JSON trop gros
     'errors'=>count($errors) > 0 ? array_slice($errors,0,10) : null // Limiter les erreurs affichées
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

@@ -111,19 +111,41 @@ try {
     debugLog("Note: Impossible de vérifier les imports récents", ['error' => $e->getMessage()]);
 }
 
+// Vérifier le mode force (debug) - support GET et POST
+$force = (isset($_GET['force']) && $_GET['force'] === '1') || (isset($_POST['force']) && $_POST['force'] === '1');
+$forced = false;
+
 $stmt = $pdo->prepare("SELECT v FROM app_kv WHERE k = ? LIMIT 1");
 $stmt->execute([$key]);
 $last = $stmt->fetchColumn();
 $due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
 
-if (!$due) {
+// Si force=1, ignorer le check not_due mais conserver le lock
+if (!$due && !$force) {
   $releaseLock();
-  echo json_encode(['ok' => false, 'reason' => 'not_due', 'last_run' => $last], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  echo json_encode([
+    'ok' => false, 
+    'reason' => 'not_due', 
+    'last_run' => $last,
+    'forced' => false
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   exit;
 }
 
+// Si force=1 et not_due, on force l'exécution
+if (!$due && $force) {
+  $forced = true;
+  debugLog("Mode FORCE activé - import exécuté même si not_due", [
+    'last_run' => $last,
+    'interval' => $INTERVAL,
+    'elapsed' => $last ? (time() - strtotime((string)$last)) : 0
+  ]);
+}
+
+// Mettre à jour app_kv même en mode force pour éviter les imports trop fréquents
 $pdo->prepare("REPLACE INTO app_kv(k,v) VALUES(?,NOW())")->execute([$key]);
 
+// Récupérer limit depuis POST ou GET (support POST pour compatibilité)
 $limit = (int)($_POST['limit'] ?? $_GET['limit'] ?? 10);
 if ($limit <= 0) $limit = 10;
 
@@ -301,6 +323,7 @@ if (!empty($err)) {
 $response = [
   'ok'           => $success,
   'ran'          => true,
+  'forced'       => $forced,
   'inserted'     => $inserted,
   'updated'      => $updated,
   'skipped'      => $skipped,

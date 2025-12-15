@@ -44,6 +44,28 @@ if (!empty($row['msg'])) {
 }
 $recent = (time() - strtotime((string)$row['ran_at'])) < 180; // < 3 min
 
+// Extraire processed depuis summary si disponible
+$processed = 0;
+if ($summary && isset($summary['processed'])) {
+    $processed = (int)$summary['processed'];
+}
+
+// Déterminer le statut d'affichage
+$status = 'ok';
+$statusText = '';
+if ((int)$row['ok'] === 1) {
+    if ($processed === 0) {
+        $status = 'ok';
+        $statusText = '0 (rien à importer)';
+    } else {
+        $status = 'ok';
+        $statusText = (string)$row['imported'];
+    }
+} else {
+    $status = 'ko';
+    $statusText = 'KO';
+}
+
 echo json_encode([
     'has_run'  => true,
     'id'       => (int)$row['id'],
@@ -52,6 +74,9 @@ echo json_encode([
     'skipped'  => (int)$row['skipped'],
     'ok'       => (int)$row['ok'],
     'recent'   => $recent ? 1 : 0,
-    'summary'  => $summary
+    'summary'  => $summary,
+    'processed' => $processed,
+    'status'   => $status,
+    'status_text' => $statusText
 ]);
 

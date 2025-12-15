@@ -1710,9 +1710,18 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const files = (d.summary && d.summary.files) ? d.summary.files : null;
 
                 if (d.ok === 1) {
-                    const label = `import IONOS OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    // OK : afficher le nombre d'éléments importés, ou "0 (rien à importer)" si processed=0
+                    const processed = d.processed || 0;
+                    const imported = d.imported || 0;
+                    let label;
+                    if (processed === 0) {
+                        label = `import IONOS OK — 0 (rien à importer) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    } else {
+                        label = `import IONOS OK — ${imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    }
                     setState('ok', label, files);
                 } else {
+                    // KO uniquement si ok=0
                     const label = `import IONOS KO — ${d.ran_at}`;
                     setState('fail', label, files);
                 }
