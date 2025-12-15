@@ -110,6 +110,13 @@ function section_env(array &$result): void {
     $result['env'] = $env;
 }
 
+// ====== HELPER: Safe JSON decode ======
+function safe_json_decode($s) {
+    if (!is_string($s) || $s === '') return null;
+    $j = json_decode($s, true);
+    return (json_last_error() === JSON_ERROR_NONE && is_array($j)) ? $j : null;
+}
+
 // ====== SECTION DB ======
 function section_db(array &$result): void {
     $db = [];
@@ -168,36 +175,79 @@ function section_db(array &$result): void {
             
             $sftpImports = [];
             $webImports = [];
+            $lastRowDebug = null;
             
             foreach ($allImports as $row) {
                 $msg = $row['msg'] ?? '';
-                $decoded = null;
-                if (!empty($msg)) {
-                    $decoded = json_decode($msg, true);
+                $msgType = gettype($msg);
+                $msgLength = is_string($msg) ? strlen($msg) : 0;
+                
+                // Safe JSON decode
+                $decoded = safe_json_decode($msg);
+                $jsonError = null;
+                $msgRaw = null;
+                
+                if ($decoded === null && !empty($msg)) {
+                    // JSON decode failed
+                    $jsonError = json_last_error_msg();
+                    $msgRaw = is_string($msg) ? substr($msg, 0, 400) : (string)$msg;
                 }
                 
-                $source = $decoded['source'] ?? null;
+                // Extract source safely
+                $source = null;
+                if (is_array($decoded) && isset($decoded['source'])) {
+                    $source = $decoded['source'];
+                }
+                
+                // Debug info for last row processed
+                $lastRowDebug = [
+                    'id' => (int)($row['id'] ?? 0),
+                    'msg_type' => $msgType,
+                    'msg_length' => $msgLength,
+                    'decoded_is_array' => is_array($decoded),
+                    'source' => $source,
+                    'json_error' => $jsonError,
+                    'msg_raw_preview' => $msgRaw
+                ];
                 
                 if ($source === 'SFTP' && count($sftpImports) < 10) {
-                    $sftpImports[] = [
+                    $importData = [
                         'id' => (int)$row['id'],
                         'ran_at' => $row['ran_at'],
                         'ok' => (int)$row['ok'],
                         'imported' => (int)$row['imported'],
-                        'skipped' => (int)$row['skipped'],
-                        'msg' => $decoded ?: $msg
+                        'skipped' => (int)$row['skipped']
                     ];
+                    
+                    if (is_array($decoded)) {
+                        $importData['msg'] = $decoded;
+                    } else {
+                        $importData['msg_decoded'] = null;
+                        $importData['msg_raw'] = $msgRaw;
+                        $importData['json_error'] = $jsonError;
+                    }
+                    
+                    $sftpImports[] = $importData;
                 }
                 
                 if ($source === 'WEB_COMPTEUR' && count($webImports) < 10) {
-                    $webImports[] = [
+                    $importData = [
                         'id' => (int)$row['id'],
                         'ran_at' => $row['ran_at'],
                         'ok' => (int)$row['ok'],
                         'imported' => (int)$row['imported'],
-                        'skipped' => (int)$row['skipped'],
-                        'msg' => $decoded ?: $msg
+                        'skipped' => (int)$row['skipped']
                     ];
+                    
+                    if (is_array($decoded)) {
+                        $importData['msg'] = $decoded;
+                    } else {
+                        $importData['msg_decoded'] = null;
+                        $importData['msg_raw'] = $msgRaw;
+                        $importData['json_error'] = $jsonError;
+                    }
+                    
+                    $webImports[] = $importData;
                 }
             }
             
@@ -205,6 +255,11 @@ function section_db(array &$result): void {
                 'sftp' => $sftpImports,
                 'web_compteur' => $webImports
             ];
+            
+            // Add debug info for last row processed
+            if ($lastRowDebug !== null) {
+                $db['last_row_debug'] = $lastRowDebug;
+            }
             
         } catch (Throwable $e) {
             addError($result, 'db', 'Failed to fetch last imports: ' . $e->getMessage());
