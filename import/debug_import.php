@@ -42,9 +42,7 @@ $writeDb  = (isset($_GET['write_db']) && $_GET['write_db'] === '1');
 $moveFile = (isset($_GET['move']) && $_GET['move'] === '1');
 
 $limit = (int)($_GET['limit'] ?? 3);
-if ($limit <= 0) {
-    $limit = 3;
-}
+if ($limit <= 0) $limit = 3;
 
 // ====== INITIALISATION ======
 $result = [
@@ -67,15 +65,9 @@ function mask_secret(?string $secret): string {
 }
 
 function safe_scalar($v): string {
-    if (is_array($v)) {
-        return (string)json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
-    if (is_object($v)) {
-        return '[object ' . get_class($v) . ']';
-    }
-    if (is_resource($v)) {
-        return '[resource]';
-    }
+    if (is_array($v)) return (string)json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (is_object($v)) return '[object ' . get_class($v) . ']';
+    if (is_resource($v)) return '[resource]';
     return (string)$v;
 }
 
@@ -87,7 +79,6 @@ function ensure_array($v): array {
     return is_array($v) ? $v : [];
 }
 
-/** Force une valeur en array (sinon array vide) */
 function as_array($v): array {
     return is_array($v) ? $v : [];
 }
@@ -134,7 +125,6 @@ function section_env(array &$result): void {
         $env['project_root'] = $projectRoot;
         $env['project_root_exists'] = is_dir($projectRoot);
 
-        // PHP
         $env['php'] = [
             'version' => PHP_VERSION,
             'os' => PHP_OS,
@@ -142,20 +132,14 @@ function section_env(array &$result): void {
             'time_limit' => ini_get('max_execution_time')
         ];
 
-        // Chemins
         $autoloadPaths = [
             $projectRoot . '/vendor/autoload.php',
             dirname($projectRoot) . '/vendor/autoload.php',
         ];
-
         $autoloadFound = null;
         foreach ($autoloadPaths as $path) {
-            if (file_exists($path)) {
-                $autoloadFound = $path;
-                break;
-            }
+            if (file_exists($path)) { $autoloadFound = $path; break; }
         }
-
         $env['autoload_path'] = $autoloadFound ?: 'not_found';
         $env['autoload_exists'] = ($autoloadFound !== null);
 
@@ -167,15 +151,12 @@ function section_env(array &$result): void {
         $env['upload_script_path'] = $uploadScriptPath;
         $env['upload_script_exists'] = file_exists($uploadScriptPath);
 
-        // Variables SFTP
         $sftpHost      = getenv('SFTP_HOST') ?: '';
         $sftpUser      = getenv('SFTP_USER') ?: '';
         $sftpPass      = getenv('SFTP_PASS') ?: '';
         $sftpPort      = getenv('SFTP_PORT') ?: '22';
         $sftpTimeout   = getenv('SFTP_TIMEOUT') ?: '15';
         $sftpRemoteDir = getenv('SFTP_REMOTE_DIR') ?: '/';
-
-        // Param dir (pour scanner /processed)
         $scanDir = trim((string)($_GET['dir'] ?? ''));
 
         $env['sftp'] = [
@@ -188,7 +169,6 @@ function section_env(array &$result): void {
             'scan_dir_param' => ($scanDir !== '' ? $scanDir : '(none)'),
         ];
 
-        // Variables MySQL
         $mysqlHost = getenv('MYSQLHOST');
         $mysqlDb   = getenv('MYSQLDATABASE');
         $mysqlUser = getenv('MYSQLUSER');
@@ -204,11 +184,9 @@ function section_env(array &$result): void {
             'dsn' => ($mysqlHost && $mysqlDb) ? "mysql:host=$mysqlHost;port=$mysqlPort;dbname=$mysqlDb;charset=utf8mb4" : 'not_set'
         ];
 
-        // WEB_URL (IONOS)
         $webUrl = getenv('WEB_URL') ?: 'https://cccomputer.fr/test_compteur.php';
         $env['web_url'] = $webUrl;
 
-        // Résumé env_ok
         $missing = [];
         if (empty($sftpHost)) $missing[] = 'SFTP_HOST';
         if (empty($sftpUser)) $missing[] = 'SFTP_USER';
@@ -220,24 +198,53 @@ function section_env(array &$result): void {
 
         $env['env_ok'] = empty($missing);
         $env['missing'] = $missing;
+
     } catch (Throwable $e) {
-        addError($result, 'Exception in section_env: ' . $e->getMessage());
+        addError($result, 'Exception in section_env: ' . $e->getMessage(), [
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]);
     }
 
     $result['env'] = $env;
 }
 
 // ====== SECTION DB ======
-function get_pdo_from_anywhere(): ?PDO {
-    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) return $GLOBALS['pdo'];
-    if (isset($GLOBALS['PDO']) && $GLOBALS['PDO'] instanceof PDO) return $GLOBALS['PDO'];
-    if (isset($GLOBALS['db']) && $GLOBALS['db'] instanceof PDO) return $GLOBALS['db'];
-    if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO) return $GLOBALS['conn'];
-    return null;
+/**
+ * Charge includes/db.php sans polluer les variables locales (évite collision $db, etc.)
+ * Retourne un PDO si possible.
+ */
+function load_pdo_isolated(string $dbPath): ?PDO {
+    if (!file_exists($dbPath)) return null;
+
+    $pdo = (static function (string $__path): ?PDO {
+        // variables possibles attendues dans db.php
+        $pdo = null;
+        $PDO = null;
+        $db  = null;
+        $conn = null;
+
+        require $__path;
+
+        if (isset($pdo) && $pdo instanceof PDO) return $pdo;
+        if (isset($PDO) && $PDO instanceof PDO) return $PDO;
+        if (isset($db)  && $db  instanceof PDO) return $db;
+        if (isset($conn) && $conn instanceof PDO) return $conn;
+
+        // si db.php set un global
+        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) return $GLOBALS['pdo'];
+        if (isset($GLOBALS['PDO']) && $GLOBALS['PDO'] instanceof PDO) return $GLOBALS['PDO'];
+        if (isset($GLOBALS['db'])  && $GLOBALS['db']  instanceof PDO) return $GLOBALS['db'];
+        if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO) return $GLOBALS['conn'];
+
+        return null;
+    })($dbPath);
+
+    return ($pdo instanceof PDO) ? $pdo : null;
 }
 
 function section_db(array &$result): void {
-    $db = [];
+    $dbInfo = [];
 
     try {
         $projectRoot = dirname(__DIR__);
@@ -249,14 +256,7 @@ function section_db(array &$result): void {
             return;
         }
 
-        require_once $dbPath;
-
-        // Récupérer PDO de manière robuste
-        $pdoLocal = null;
-        if (isset($pdo) && $pdo instanceof PDO) {
-            $pdoLocal = $pdo;
-        }
-        $pdo2 = $pdoLocal ?: get_pdo_from_anywhere();
+        $pdo2 = load_pdo_isolated($dbPath);
 
         if (!($pdo2 instanceof PDO)) {
             addError($result, 'PDO not available after db.php load');
@@ -264,35 +264,33 @@ function section_db(array &$result): void {
             return;
         }
 
-        $db['connection'] = 'ok';
-        $db['pdo_class'] = get_class($pdo2);
-        $db['pdo_source'] = ($pdoLocal ? 'local' : 'globals');
+        $dbInfo['connection'] = 'ok';
+        $dbInfo['pdo_class'] = get_class($pdo2);
 
         // Test query
         try {
             $pdo2->query("SELECT 1");
-            $db['test_query'] = 'ok';
+            $dbInfo['test_query'] = 'ok';
         } catch (Throwable $e) {
             addError($result, 'Test query failed: ' . $e->getMessage());
-            $db['test_query'] = 'failed';
+            $dbInfo['test_query'] = 'failed';
         }
 
-        // Vérifier existence tables
+        // Tables
         $tables = ['import_run', 'compteur_relevee', 'compteur_relevee_ancien'];
-        $db['tables'] = [];
+        $dbInfo['tables'] = [];
         foreach ($tables as $table) {
             try {
                 $stmt = $pdo2->query("SHOW TABLES LIKE '$table'");
-                $exists = ($stmt && $stmt->rowCount() > 0);
-                $db['tables'][$table] = $exists;
+                $dbInfo['tables'][$table] = ($stmt && $stmt->rowCount() > 0);
             } catch (Throwable $e) {
-                $db['tables'][$table] = false;
+                $dbInfo['tables'][$table] = false;
                 addWarning($result, "Failed to check table $table: " . $e->getMessage());
             }
         }
 
-        // Lire les 10 dernières lignes import_run
-        $db['last_10_imports'] = [];
+        // last 10 imports
+        $dbInfo['last_10_imports'] = [];
         try {
             $stmt = $pdo2->query("
                 SELECT id, ran_at, imported, skipped, ok, msg
@@ -304,13 +302,7 @@ function section_db(array &$result): void {
             $rows = ensure_array($rows);
 
             foreach ($rows as $r) {
-                if (!is_array($r)) {
-                    addWarning($result, 'Non-array row encountered in import_run', [
-                        'row_type' => gettype($r),
-                        'row_preview' => substr(safe_scalar($r), 0, 200)
-                    ]);
-                    continue;
-                }
+                if (!is_array($r)) continue;
 
                 $msg = arr_get($r, 'msg', '');
                 $jsonError = null;
@@ -318,17 +310,15 @@ function section_db(array &$result): void {
                 $decodedArr = as_array($decoded);
 
                 $type = 'other';
-                $hasProcessedFiles = arr_get($decodedArr, 'processed_files') !== null;
-                $hasInserted = arr_get($decodedArr, 'inserted') !== null;
-                $hasMatchedFiles = arr_get($decodedArr, 'matched_files') !== null;
-
-                if ($hasProcessedFiles || $hasInserted || $hasMatchedFiles) {
+                if (arr_get($decodedArr, 'processed_files') !== null
+                    || arr_get($decodedArr, 'inserted') !== null
+                    || arr_get($decodedArr, 'matched_files') !== null) {
                     $type = 'summary';
                 } elseif (arr_get($decodedArr, 'stage', '') === 'process_file') {
                     $type = 'process_file';
                 }
 
-                $importData = [
+                $item = [
                     'id' => (int)arr_get($r, 'id', 0),
                     'ran_at' => (string)arr_get($r, 'ran_at', ''),
                     'ok' => (int)arr_get($r, 'ok', 0),
@@ -338,21 +328,21 @@ function section_db(array &$result): void {
                 ];
 
                 if (!empty($decodedArr)) {
-                    $importData['msg'] = $decodedArr;
+                    $item['msg'] = $decodedArr;
                 } else {
-                    $importData['msg_decoded'] = null;
-                    $importData['msg_raw_preview'] = substr(safe_scalar($msg), 0, 400);
-                    $importData['json_error'] = $jsonError;
+                    $item['msg_decoded'] = null;
+                    $item['msg_raw_preview'] = substr(safe_scalar($msg), 0, 400);
+                    $item['json_error'] = $jsonError;
                 }
 
-                $db['last_10_imports'][] = $importData;
+                $dbInfo['last_10_imports'][] = $item;
             }
         } catch (Throwable $e) {
             addWarning($result, 'Failed to fetch last imports: ' . $e->getMessage());
         }
 
-        // Dernier résumé SFTP
-        $db['last_summary_sftp'] = null;
+        // last summary sftp
+        $dbInfo['last_summary_sftp'] = null;
         try {
             $stmt = $pdo2->query("
                 SELECT id, ran_at, imported, skipped, ok, msg
@@ -369,7 +359,7 @@ function section_db(array &$result): void {
             $decodedArr = as_array($decoded);
 
             if (!empty($row)) {
-                $db['last_summary_sftp'] = [
+                $dbInfo['last_summary_sftp'] = [
                     'id' => (int)arr_get($row, 'id', 0),
                     'ran_at' => (string)arr_get($row, 'ran_at', ''),
                     'ok' => (int)arr_get($row, 'ok', 0),
@@ -380,15 +370,15 @@ function section_db(array &$result): void {
                     'updated' => arr_get($decodedArr, 'updated'),
                     'matched_files' => arr_get($decodedArr, 'matched_files'),
                     'processed_files' => arr_get($decodedArr, 'processed_files'),
-                    'json_error' => ($decodedArr ? null : $jsonError),
+                    'json_error' => (!empty($decodedArr) ? null : $jsonError),
                 ];
             }
         } catch (Throwable $e) {
             addWarning($result, 'Failed to fetch last summary SFTP: ' . $e->getMessage());
         }
 
-        // Lignes insérées récemment
-        $db['recent_rows_inserted'] = null;
+        // recent inserted
+        $dbInfo['recent_rows_inserted'] = null;
         try {
             $stmt = $pdo2->query("
                 SELECT COUNT(*) as cnt
@@ -396,7 +386,7 @@ function section_db(array &$result): void {
                 WHERE DateInsertion > NOW() - INTERVAL 10 MINUTE
             ");
             $row = fetch_assoc_safe($stmt);
-            $db['recent_rows_inserted'] = (int)arr_get($row, 'cnt', 0);
+            $dbInfo['recent_rows_inserted'] = (int)arr_get($row, 'cnt', 0);
         } catch (Throwable $e) {
             addWarning($result, 'Failed to count recent rows: ' . $e->getMessage());
         }
@@ -407,16 +397,16 @@ function section_db(array &$result): void {
             'line' => $e->getLine(),
             'trace' => $e->getTraceAsString()
         ]);
-        $db = is_array($db) ? $db : [];
-        $db['error'] = safe_scalar($e->getMessage());
+        $dbInfo = is_array($dbInfo) ? $dbInfo : [];
+        $dbInfo['error'] = safe_scalar($e->getMessage());
     }
 
-    $result['db'] = is_array($db) ? $db : [];
+    $result['db'] = is_array($dbInfo) ? $dbInfo : [];
 }
 
 // ====== SECTION SFTP SCAN ======
 function section_sftp_scan(array &$result): void {
-    $sftp = [];
+    $sftpInfo = [];
 
     try {
         $autoloadPath = $result['env']['autoload_path'] ?? null;
@@ -437,7 +427,6 @@ function section_sftp_scan(array &$result): void {
         $sftpRemoteDir = getenv('SFTP_REMOTE_DIR') ?: '/';
         $sftpRemoteDir = rtrim($sftpRemoteDir, '/') ?: '/';
 
-        // override via ?dir=processed ou ?dir=/processed
         $dirParam = trim((string)($_GET['dir'] ?? ''));
         if ($dirParam !== '') {
             if ($dirParam === 'processed') $dirParam = '/processed';
@@ -445,7 +434,7 @@ function section_sftp_scan(array &$result): void {
             $sftpRemoteDir = rtrim($dirParam, '/') ?: '/';
         }
 
-        $sftp['remote_dir_used'] = $sftpRemoteDir;
+        $sftpInfo['remote_dir_used'] = $sftpRemoteDir;
 
         if (empty($sftpHost) || empty($sftpUser) || empty($sftpPass)) {
             addError($result, 'SFTP credentials missing');
@@ -454,18 +443,17 @@ function section_sftp_scan(array &$result): void {
         }
 
         $sftpConn = new \phpseclib3\Net\SFTP($sftpHost, $sftpPort, $sftpTimeout);
-        $sftp['connection'] = 'ok';
+        $sftpInfo['connection'] = 'ok';
 
         if (!$sftpConn->login($sftpUser, $sftpPass)) {
             addError($result, 'SFTP login failed');
-            $sftp['login'] = 'failed';
-            $result['sftp'] = $sftp;
+            $sftpInfo['login'] = 'failed';
+            $result['sftp'] = $sftpInfo;
             return;
         }
 
-        $sftp['login'] = 'ok';
+        $sftpInfo['login'] = 'ok';
 
-        // List files
         $files = $sftpConn->nlist($sftpRemoteDir);
         if ($files === false) {
             $rawFiles = $sftpConn->rawlist($sftpRemoteDir);
@@ -476,8 +464,8 @@ function section_sftp_scan(array &$result): void {
 
         if ($files === false || !is_array($files)) {
             addError($result, 'Failed to list files');
-            $sftp['scan'] = 'failed';
-            $result['sftp'] = $sftp;
+            $sftpInfo['scan'] = 'failed';
+            $result['sftp'] = $sftpInfo;
             return;
         }
 
@@ -487,22 +475,15 @@ function section_sftp_scan(array &$result): void {
         });
         $totalCsv = count($csvFiles);
 
-        // Pattern
         $pattern = '/^COPIEUR_MAC-([A-F0-9]{12})_(\d{8})_(\d{6})\.csv$/i';
-        $sftp['pattern'] = $pattern;
+        $sftpInfo['pattern'] = $pattern;
 
-        // Match debug for first 30 files
         $matchDebug = [];
-
         foreach (array_slice($files, 0, 30) as $entry) {
             if (!is_string($entry)) continue;
             if ($entry === '.' || $entry === '..') continue;
 
-            $matchInfo = [
-                'filename' => $entry,
-                'match' => false,
-                'reason' => null
-            ];
+            $matchInfo = ['filename' => $entry, 'match' => false, 'reason' => null];
 
             if (!preg_match('/\.csv$/i', $entry)) {
                 $matchInfo['reason'] = 'wrong_extension';
@@ -519,17 +500,14 @@ function section_sftp_scan(array &$result): void {
             $matchDebug[] = $matchInfo;
         }
 
-        // Count all matched
         $allMatched = [];
         foreach ($files as $entry) {
             if (!is_string($entry)) continue;
             if ($entry === '.' || $entry === '..') continue;
-            if (preg_match($pattern, $entry)) {
-                $allMatched[] = $entry;
-            }
+            if (preg_match($pattern, $entry)) $allMatched[] = $entry;
         }
 
-        $sftp['scan'] = [
+        $sftpInfo['scan'] = [
             'total_entries' => $totalEntries,
             'total_csv' => $totalCsv,
             'matched_count' => count($allMatched),
@@ -537,7 +515,7 @@ function section_sftp_scan(array &$result): void {
             'match_debug' => $matchDebug
         ];
 
-        $result['sftp'] = $sftp;
+        $result['sftp'] = $sftpInfo;
 
     } catch (Throwable $e) {
         addError($result, 'Exception in section_sftp_scan: ' . $e->getMessage(), [
@@ -582,7 +560,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
         $sftpPort = (int)(getenv('SFTP_PORT') ?: 22);
         $sftpTimeout = (int)(getenv('SFTP_TIMEOUT') ?: 15);
 
-        // Utiliser le même dir que le scan
         $sftpRemoteDir = $result['sftp']['remote_dir_used'] ?? (getenv('SFTP_REMOTE_DIR') ?: '/');
         $sftpRemoteDir = rtrim((string)$sftpRemoteDir, '/') ?: '/';
 
@@ -593,19 +570,14 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
             return;
         }
 
-        // Load DB if needed
         $pdoDb = null;
         if ($writeDb) {
             $dbPath = dirname(__DIR__) . '/includes/db.php';
-            if (file_exists($dbPath)) {
-                require_once $dbPath;
-                $pdoDb = (isset($pdo) && $pdo instanceof PDO) ? $pdo : get_pdo_from_anywhere();
-            }
+            $pdoDb = load_pdo_isolated($dbPath);
         }
 
         $pattern = '/^COPIEUR_MAC-([A-F0-9]{12})_(\d{8})_(\d{6})\.csv$/i';
 
-        // Construire la liste des fichiers matched depuis scan.match_debug (30 max)
         $matchedFiles = [];
         if (isset($result['sftp']['scan']['match_debug']) && is_array($result['sftp']['scan']['match_debug'])) {
             foreach ($result['sftp']['scan']['match_debug'] as $matchInfo) {
@@ -614,14 +586,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
                 }
             }
         }
-
-        // Si la liste est vide (ex: les CSV ne sont pas dans les 30 premiers), on retombe sur scan complet si dispo
-        if (empty($matchedFiles) && isset($result['sftp']['scan']['first_30']) && is_array($result['sftp']['scan']['first_30'])) {
-            foreach ($result['sftp']['scan']['first_30'] as $entry) {
-                if (is_string($entry) && preg_match($pattern, $entry)) $matchedFiles[] = $entry;
-            }
-        }
-
         $matchedFiles = array_values(array_filter($matchedFiles, static fn($x) => $x !== ''));
         $matchedFiles = array_slice($matchedFiles, 0, $limit);
 
@@ -640,7 +604,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
             try {
                 $process['processed']++;
 
-                // Remote path (éviter double slash)
                 $remote = ($sftpRemoteDir === '/' ? '' : $sftpRemoteDir) . '/' . $filename;
 
                 $tmp = tempnam(sys_get_temp_dir(), 'csv_');
@@ -664,7 +627,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
 
                 $fileData['tmp_size'] = @filesize($tmp);
 
-                // Parse CSV key/value
                 $csvData = [];
                 try {
                     $h = fopen($tmp, 'r');
@@ -685,11 +647,9 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
                     continue;
                 }
 
-                // Extract from CSV
                 $macFromCsv = (string)arr_get($csvData, 'MacAddress', '');
                 $timestampFromCsv = (string)arr_get($csvData, 'Timestamp', '');
 
-                // Extract from filename
                 $macFromFilename = null;
                 $timestampFromFilename = null;
 
@@ -717,7 +677,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
                     'timestamp_from_filename' => $timestampFromFilename
                 ];
 
-                // Decision
                 $useMac = $macFromFilename ?: $macFromCsv;
                 $useTimestamp = $timestampFromFilename ?: $timestampFromCsv;
 
@@ -734,7 +693,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
                     continue;
                 }
 
-                // DB Insert if writeDb
                 if ($writeDb && ($pdoDb instanceof PDO)) {
                     try {
                         $sql = "
@@ -752,7 +710,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
                                 TotalColor = VALUES(TotalColor),
                                 Status = VALUES(Status)
                         ";
-
                         $stmt = $pdoDb->prepare($sql);
 
                         $binds = [
@@ -767,7 +724,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
                         $stmt->execute($binds);
                         $rowCount = (int)$stmt->rowCount();
 
-                        // MySQL: rowCount 1 insert, 2 update (souvent), 0 si aucune modif
                         $isInsert = ($rowCount === 1);
                         $isUpdate = ($rowCount === 2);
 
@@ -786,7 +742,6 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
                     }
                 }
 
-                // Move file if moveFile
                 if ($moveFile) {
                     try {
                         $processedDir = '/processed';
@@ -799,9 +754,7 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
                             'error' => $moved ? null : 'rename failed'
                         ];
 
-                        if ($moved) {
-                            $process['moved']++;
-                        }
+                        if ($moved) $process['moved']++;
                     } catch (Throwable $e) {
                         $fileData['move']['error'] = $e->getMessage();
                         $process['errors_count']++;
@@ -840,7 +793,6 @@ function section_web_ionos(array &$result, bool $runWeb): void {
         $url = getenv('WEB_URL') ?: 'https://cccomputer.fr/test_compteur.php';
         $web['url'] = $url;
 
-        // GET léger
         $context = stream_context_create([
             'http' => [
                 'timeout' => 20,
@@ -867,7 +819,6 @@ function section_web_ionos(array &$result, bool $runWeb): void {
             return;
         }
 
-        // Parse DOM
         libxml_use_internal_errors(true);
         $dom = new DOMDocument();
         @$dom->loadHTML('<?xml encoding="UTF-8">' . $html);
@@ -892,7 +843,6 @@ function section_web_ionos(array &$result, bool $runWeb): void {
             }
         }
 
-        // Mapping detection
         $columnMap = [];
         if ($rows && $rows->length > 0) {
             $firstRow = $rows->item(0);
@@ -905,14 +855,9 @@ function section_web_ionos(array &$result, bool $runWeb): void {
                 }
             }
         }
-
-        if (!isset($columnMap['mac'], $columnMap['date'])) {
-            $columnMap = ['mac' => 5, 'date' => 1];
-        }
-
+        if (!isset($columnMap['mac'], $columnMap['date'])) $columnMap = ['mac' => 5, 'date' => 1];
         $web['mapping'] = $columnMap;
 
-        // Extract rows
         $rowsParsed = [];
         $getCellText = static function($cell): string {
             return $cell ? trim((string)$cell->textContent) : '';
@@ -927,43 +872,35 @@ function section_web_ionos(array &$result, bool $runWeb): void {
                 $mac  = isset($columnMap['mac'])  ? $getCellText($cells->item((int)$columnMap['mac']))  : '';
                 $date = isset($columnMap['date']) ? $getCellText($cells->item((int)$columnMap['date'])) : '';
 
-                if ($mac && $date) {
-                    $rowsParsed[] = ['mac' => $mac, 'date' => $date];
-                }
+                if ($mac && $date) $rowsParsed[] = ['mac' => $mac, 'date' => $date];
             }
         }
 
         $web['rows_parsed'] = array_slice($rowsParsed, -20);
         $web['rows_total'] = count($rowsParsed);
 
-        // Compare with DB
         try {
             $dbPath = dirname(__DIR__) . '/includes/db.php';
-            if (file_exists($dbPath)) {
-                require_once $dbPath;
-                $pdoDb = (isset($pdo) && $pdo instanceof PDO) ? $pdo : get_pdo_from_anywhere();
+            $pdoDb = load_pdo_isolated($dbPath);
 
-                if ($pdoDb instanceof PDO) {
-                    $stmt = $pdoDb->query("SELECT MAX(Timestamp) as max_ts FROM compteur_relevee_ancien");
-                    $row = fetch_assoc_safe($stmt);
-                    $lastDbTs = arr_get($row, 'max_ts', null);
+            if ($pdoDb instanceof PDO) {
+                $stmt = $pdoDb->query("SELECT MAX(Timestamp) as max_ts FROM compteur_relevee_ancien");
+                $row = fetch_assoc_safe($stmt);
+                $lastDbTs = arr_get($row, 'max_ts', null);
 
-                    $web['db'] = [
-                        'last_db_ts' => $lastDbTs,
-                        'rows_new_estimated' => null
-                    ];
+                $web['db'] = [
+                    'last_db_ts' => $lastDbTs,
+                    'rows_new_estimated' => null
+                ];
 
-                    if ($lastDbTs) {
-                        $newCount = 0;
-                        foreach ($rowsParsed as $r) {
-                            if (!is_array($r)) continue;
-                            $rDate = (string)arr_get($r, 'date', '');
-                            if ($rDate !== '' && $rDate > $lastDbTs) {
-                                $newCount++;
-                            }
-                        }
-                        $web['db']['rows_new_estimated'] = $newCount;
+                if ($lastDbTs) {
+                    $newCount = 0;
+                    foreach ($rowsParsed as $r) {
+                        if (!is_array($r)) continue;
+                        $rDate = (string)arr_get($r, 'date', '');
+                        if ($rDate !== '' && $rDate > $lastDbTs) $newCount++;
                     }
+                    $web['db']['rows_new_estimated'] = $newCount;
                 }
             }
         } catch (Throwable $e) {
