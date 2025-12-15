@@ -268,10 +268,13 @@ Après chaque modification, tester rapidement :
 - ✅ Lot #2 migré (10 fichiers API : maps_get_all_clients, dashboard_get_sav, messagerie_get_unread_count, dashboard_get_deliveries, dashboard_get_techniciens, dashboard_get_livreurs, dashboard_get_stock_products, maps_search_clients, dashboard_create_sav, stock_add)
 - ✅ Lot #2B : Centralisation erreurs DB API (getPdoOrFail, apiFail)
 - ✅ Lot #3 migré (5 fichiers publics : clients.php, stock.php, messagerie.php, profil.php, historique.php)
+- ✅ Lot #4 migré (1 fichier public : dashboard.php)
 - ✅ Stabilisation effectuée : fallbacks supprimés, `getPdo()` simplifié
 - ✅ Tous les includes utilisent `require_once` (vérification effectuée)
-- ⚠️ D'autres fichiers publics et certains fichiers API utilisent encore `$pdo` directement ou `requirePdoConnection()`
-- ⚠️ Compatibilité temporaire maintenue : `$GLOBALS['pdo']` et `global $pdo` dans db.php (sera retiré après migration complète)
+- ✅ **Lot #5 migré** : Tous les fichiers utilisant `requirePdoConnection()` ont été migrés vers `getPdo()` ou `getPdoOrFail()`
+- ⚠️ **Compatibilité temporaire maintenue** : `$GLOBALS['pdo']` et `global $pdo` dans db.php (db_connection.php est maintenant autonome)
+- ✅ **DatabaseConnection rendu autonome** : `DatabaseConnection::getInstance()` crée maintenant directement le PDO sans dépendre de $GLOBALS['pdo'] (voir ÉTAPE FINAL-A)
+- ✅ **Tous les fichiers migrés** : Plus aucun fichier n'utilise `requirePdoConnection()` (hors définition dans api_helpers.php)
 
 **Prochaines étapes** :
 - Migrer les fichiers publics et API par lots (rechercher les utilisations directes de `$pdo`)
@@ -477,6 +480,147 @@ Après chaque modification, tester rapidement :
   - `/public/historique.php` - doit afficher l'historique normalement
 - Vérifier qu'aucun fichier migré n'utilise encore `$GLOBALS['pdo']`, `global $pdo` ou `require_once db.php`
 - Vérifier que toutes les fonctionnalités (affichage, recherche, filtres) fonctionnent normalement
+
+---
+
+### ÉTAPE Z4 - Migration PDO Lot #4 (dashboard.php)
+**Date** : Généré automatiquement  
+**Fichiers modifiés** : 
+- `public/dashboard.php` - Remplacement de `require_once db.php` par `helpers.php` + `getPdo()`
+
+**Modification** : 
+- Remplacement de l'inclusion `db.php` par `helpers.php` (déjà inclus)
+- Ajout de `$pdo = getPdo();` après les includes nécessaires
+- Suppression de la dépendance vers `$pdo` global créé par `db.php`
+- Le fichier utilise maintenant une variable locale `$pdo` obtenue via `getPdo()`
+- Pas d'utilisation de `getPdoOrFail()` (réservé aux API)
+- Aucune modification du SQL ni du HTML
+
+**Raison** : 
+- Migration du fichier dashboard.php vers l'utilisation unifiée de `getPdo()`
+- Dashboard.php était considéré comme trop gros pour être inclus dans le lot #3
+- Élimination de la dépendance vers les variables globales PDO
+
+**Risque** : Faible - Migration ciblée sur un seul fichier public important, compatibilité maintenue  
+**Test** : 
+- Tester `/public/dashboard.php` - doit afficher le tableau de bord normalement avec :
+  - Compteurs SAV et livraisons
+  - Liste des clients
+  - Toutes les fonctionnalités du dashboard
+- Tester `/public/clients.php` - doit toujours fonctionner normalement
+- Tester 2 endpoints API pour vérifier qu'ils fonctionnent toujours :
+  - `/API/maps_get_all_clients.php` - doit retourner la liste des clients
+  - `/API/dashboard_get_sav.php?client_id=1` - doit retourner les SAV d'un client
+- Vérifier qu'aucun fichier migré n'utilise encore `$GLOBALS['pdo']`, `global $pdo` ou `require_once db.php`
+
+---
+
+## FICHIERS RESTANTS À MIGRER (avant suppression compatibilité temporaire)
+
+**Statut** : ✅ **Tous les fichiers ont été migrés** - Plus aucun fichier n'utilise `requirePdoConnection()` (hors définition dans api_helpers.php).
+
+### Fichiers utilisant requirePdoConnection() (à migrer vers getPdoOrFail())
+✅ **TOUS MIGRÉS** dans le Lot #5 :
+- ✅ `API/chatroom_get.php` - migré vers `getPdoOrFail()`
+- ✅ `API/chatroom_send.php` - migré vers `getPdoOrFail()`
+- ✅ `API/get_product_by_barcode.php` - migré vers `getPdoOrFail()`
+- ✅ `API/chatroom_search_users.php` - migré vers `getPdoOrFail()`
+- ✅ `API/dashboard_create_delivery.php` - migré vers `getPdoOrFail()`
+- ✅ `scripts/cleanup.php` - migré vers `getPdo()`
+
+**Total** : 0 fichier restant à migrer
+
+### Fichiers contenant encore $GLOBALS['pdo'] ou global $pdo (logique interne de compatibilité)
+Ces fichiers contiennent la logique de compatibilité temporaire qui peut maintenant être retirée :
+- `includes/api_helpers.php` :
+  - Fonction `requirePdoConnection()` (dépréciée, plus utilisée - peut être supprimée ou marquée @deprecated)
+  - Fonction `initApi()` (utilise $GLOBALS['pdo'] pour compatibilité - à vérifier si encore nécessaire)
+- `includes/db_connection.php` :
+  - ✅ **RENDU AUTONOME** : `DatabaseConnection::getInstance()` crée maintenant directement le PDO (plus de dépendance à $GLOBALS['pdo'])
+- `includes/db.php` :
+  - Initialisation de $GLOBALS['pdo'] et global $pdo (compatibilité temporaire, lignes 56, 59 - peut être retirée)
+
+**Action requise** : 
+1. ✅ **TERMINÉ** : Tous les fichiers utilisant `requirePdoConnection()` ont été migrés
+2. **Prochaine étape** : Retirer la compatibilité temporaire dans :
+   - `includes/db.php` : supprimer `$GLOBALS['pdo'] = $pdo;` et `global $pdo;`
+   - `includes/api_helpers.php` : supprimer ou marquer @deprecated `requirePdoConnection()`
+   - Vérifier si `initApi()` a encore besoin de `$GLOBALS['pdo']`
+
+---
+
+### ÉTAPE FINAL-A — DatabaseConnection autonome
+**Date** : Généré automatiquement  
+**Fichiers modifiés** : 
+- `includes/db_connection.php` - DatabaseConnection rendu autonome (suppression dépendance à $GLOBALS['pdo'])
+
+**Modification** : 
+1. **DatabaseConnection::getInstance() rendu autonome** :
+   - Suppression de toute dépendance à `$GLOBALS['pdo']`
+   - `getInstance()` crée maintenant directement l'instance PDO si elle n'existe pas
+   - Utilisation de la même configuration que `db.php` (variables d'environnement, fallback XAMPP/local)
+   - Pattern Singleton conservé : si `self::$instance` existe, elle est retournée directement
+
+2. **Logique de création PDO intégrée** :
+   - Priorité 1: Variables d'environnement (MYSQLHOST, MYSQLPORT, etc.)
+   - Priorité 2: Fichier de config local (`db_config.local.php`) si présent
+   - Fallback par défaut: XAMPP (localhost, root, cccomputer)
+   - Options PDO identiques à `db.php` (ERRMODE_EXCEPTION, FETCH_ASSOC, etc.)
+
+3. **Gestion d'erreurs améliorée** :
+   - Exceptions PDO capturées et transformées en RuntimeException
+   - Logs sécurisés (pas de credentials en clair)
+
+**Raison** : 
+- Rendre DatabaseConnection complètement autonome, sans dépendance à `db.php` ou `$GLOBALS`
+- Étape importante vers la suppression complète de la compatibilité temporaire
+- Simplification de l'architecture : DatabaseConnection est maintenant la seule source de vérité pour la création PDO
+
+**Risque** : Très faible - DatabaseConnection crée maintenant directement le PDO avec la même logique que `db.php`  
+**Test** : 
+- Tester `/public/dashboard.php` - doit fonctionner normalement (utilise getPdo() → DatabaseConnection::getInstance())
+- Tester 2 endpoints API :
+  - `/API/maps_get_all_clients.php` - doit retourner la liste des clients
+  - `/API/dashboard_get_sav.php?client_id=1` - doit retourner les SAV d'un client
+- Vérifier que la connexion PDO fonctionne correctement dans tous les cas (environnement Railway/Docker et XAMPP local)
+
+---
+
+### ÉTAPE Z5 - Migration PDO Lot #5 (derniers fichiers)
+**Date** : Généré automatiquement  
+**Fichiers modifiés** : 
+- `API/chatroom_get.php` - Remplacement de `requirePdoConnection()` par `getPdoOrFail()`
+- `API/chatroom_send.php` - Remplacement de `requirePdoConnection()` par `getPdoOrFail()`
+- `API/get_product_by_barcode.php` - Remplacement de `requirePdoConnection()` par `getPdoOrFail()`
+- `API/chatroom_search_users.php` - Remplacement de `requirePdoConnection()` par `getPdoOrFail()`
+- `API/dashboard_create_delivery.php` - Remplacement de `requirePdoConnection()` par `getPdoOrFail()`
+- `scripts/cleanup.php` - Remplacement de `requirePdoConnection()` par `getPdo()` avec gestion d'erreur adaptée
+
+**Modification** : 
+- Pour les fichiers API (5 fichiers) :
+  - Remplacement de `requirePdoConnection()` par `getPdoOrFail()`
+  - Suppression des try/catch redondants autour de `requirePdoConnection()`
+  - Code simplifié : `$pdo = getPdoOrFail();` au lieu de try/catch complexe
+- Pour `scripts/cleanup.php` (script CLI) :
+  - Remplacement de `require_once db.php` par `helpers.php`
+  - Remplacement de `requirePdoConnection()` par `getPdo()`
+  - Gestion d'erreur conservée dans le try/catch existant (echo + exit)
+
+**Raison** : 
+- Éliminer les derniers usages de `requirePdoConnection()` dans le projet
+- Standardiser l'accès PDO : tous les fichiers utilisent maintenant `getPdo()` ou `getPdoOrFail()`
+- Préparer la suppression complète de la compatibilité temporaire
+
+**Risque** : Très faible - Migration des derniers fichiers, comportement identique  
+**Test** : 
+- Tester les endpoints API migrés :
+  - `/API/chatroom_get.php` - doit retourner les messages de la chatroom
+  - `/API/chatroom_send.php` - doit permettre d'envoyer un message
+  - `/API/get_product_by_barcode.php?barcode=XXX` - doit retourner un produit par code-barres
+  - `/API/chatroom_search_users.php?q=test` - doit retourner la liste des utilisateurs
+  - `/API/dashboard_create_delivery.php` (POST) - doit créer une livraison
+- Tester le script CLI : `php scripts/cleanup.php` - doit exécuter le nettoyage sans erreur
+- Vérifier qu'il ne reste plus d'usage de `requirePdoConnection()` dans le repo (hors définition dans api_helpers.php)
 
 ---
 

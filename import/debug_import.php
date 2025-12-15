@@ -57,6 +57,51 @@ $result = [
 ];
 
 // ====== HELPERS ======
+/**
+ * Normalise un chemin SFTP :
+ * - Toujours commence par /
+ * - Supprime les doubles slashes //
+ * - Gère le cas "/" (ne doit jamais devenir vide)
+ * - Si on reçoit "processed", doit devenir /processed
+ */
+function normalize_sftp_path(string $path): string {
+    // Si vide, retourner /
+    if (empty($path) || trim($path) === '') {
+        return '/';
+    }
+    
+    // Normaliser les séparateurs (au cas où)
+    $path = str_replace('\\', '/', $path);
+    
+    // Supprimer les slashes multiples
+    $path = preg_replace('#/+#', '/', $path);
+    
+    // S'assurer qu'il commence par /
+    if ($path[0] !== '/') {
+        $path = '/' . $path;
+    }
+    
+    // Si c'est juste /, le retourner tel quel
+    if ($path === '/') {
+        return '/';
+    }
+    
+    // Supprimer le slash final sauf si c'est la racine
+    $path = rtrim($path, '/');
+    
+    // Si après rtrim on a une chaîne vide, retourner /
+    if ($path === '') {
+        return '/';
+    }
+    
+    // S'assurer qu'il commence toujours par /
+    if ($path[0] !== '/') {
+        $path = '/' . $path;
+    }
+    
+    return $path;
+}
+
 function mask_secret(?string $secret): string {
     if (empty($secret)) return '(empty)';
     $len = strlen($secret);
@@ -424,17 +469,30 @@ function section_sftp_scan(array &$result): void {
         $sftpPort = (int)(getenv('SFTP_PORT') ?: 22);
         $sftpTimeout = (int)(getenv('SFTP_TIMEOUT') ?: 15);
 
-        $sftpRemoteDir = getenv('SFTP_REMOTE_DIR') ?: '/';
-        $sftpRemoteDir = rtrim($sftpRemoteDir, '/') ?: '/';
-
-        $dirParam = trim((string)($_GET['dir'] ?? ''));
-        if ($dirParam !== '') {
-            if ($dirParam === 'processed') $dirParam = '/processed';
-            if ($dirParam[0] !== '/') $dirParam = '/' . $dirParam;
-            $sftpRemoteDir = rtrim($dirParam, '/') ?: '/';
+        // Déterminer remote_dir_requested selon la priorité : $_GET['dir'] > SFTP_REMOTE_DIR > '/' par défaut
+        $remote_dir_requested = null;
+        if (isset($_GET['dir']) && !empty($_GET['dir'])) {
+            $remote_dir_requested = $_GET['dir'];
+            // Accepter "processed" ou "/processed" et normaliser
+            if ($remote_dir_requested === 'processed' || $remote_dir_requested === '/processed') {
+                $remote_dir_requested = '/processed';
+            }
+        } elseif (getenv('SFTP_REMOTE_DIR')) {
+            $remote_dir_requested = getenv('SFTP_REMOTE_DIR');
+        } else {
+            $remote_dir_requested = '/';
         }
 
-        $sftpInfo['remote_dir_used'] = $sftpRemoteDir;
+        // Normaliser le chemin
+        $remote_dir_used = normalize_sftp_path($remote_dir_requested);
+
+        // Déterminer processed_dir : SFTP_PROCESSED_DIR si défini, sinon /processed
+        $processed_dir_raw = getenv('SFTP_PROCESSED_DIR') ?: '/processed';
+        $processed_dir = normalize_sftp_path($processed_dir_raw);
+
+        $sftpInfo['remote_dir_requested'] = $remote_dir_requested;
+        $sftpInfo['remote_dir_used'] = $remote_dir_used;
+        $sftpInfo['processed_dir'] = $processed_dir;
 
         if (empty($sftpHost) || empty($sftpUser) || empty($sftpPass)) {
             addError($result, 'SFTP credentials missing');
@@ -454,11 +512,24 @@ function section_sftp_scan(array &$result): void {
 
         $sftpInfo['login'] = 'ok';
 
-        $files = $sftpConn->nlist($sftpRemoteDir);
+        // Scan SFTP robuste : utiliser nlist() puis fallback rawlist()
+        $files = $sftpConn->nlist($remote_dir_used);
+        $rawFiles = false;
         if ($files === false) {
-            $rawFiles = $sftpConn->rawlist($sftpRemoteDir);
-            if ($rawFiles !== false && is_array($rawFiles)) {
-                $files = array_keys($rawFiles);
+            try {
+                $rawFiles = $sftpConn->rawlist($remote_dir_used);
+                if ($rawFiles !== false && is_array($rawFiles)) {
+                    $files = array_keys($rawFiles);
+                }
+            } catch (Throwable $e) {
+                // rawlist() non disponible, continuer avec nlist()
+            }
+        } else {
+            // Essayer aussi rawlist() pour plus de détails (même si nlist() a réussi)
+            try {
+                $rawFiles = $sftpConn->rawlist($remote_dir_used);
+            } catch (Throwable $e) {
+                // rawlist() non disponible, continuer avec nlist()
             }
         }
 
@@ -470,42 +541,143 @@ function section_sftp_scan(array &$result): void {
         }
 
         $totalEntries = count($files);
-        $csvFiles = array_filter($files, static function($f) {
-            return is_string($f) && preg_match('/\.csv$/i', $f);
-        });
-        $totalCsv = count($csvFiles);
+        
+        // Dossiers à ignorer
+        $ignoredDirs = ['processed', 'errors'];
 
+        // Pattern strict
         $pattern = '/^COPIEUR_MAC-([A-F0-9]{12})_(\d{8})_(\d{6})\.csv$/i';
         $sftpInfo['pattern'] = $pattern;
 
+        // match_debug amélioré : filename, reason, mac_norm, timestamp si match
         $matchDebug = [];
-        foreach (array_slice($files, 0, 30) as $entry) {
+        $first20ForDebug = array_slice($files, 0, 20);
+        
+        foreach ($first20ForDebug as $entry) {
             if (!is_string($entry)) continue;
-            if ($entry === '.' || $entry === '..') continue;
-
-            $matchInfo = ['filename' => $entry, 'match' => false, 'reason' => null];
-
+            
+            $matchInfo = [
+                'filename' => $entry,
+                'match' => false,
+                'reason' => null,
+            ];
+            
+            // Ignorer . et ..
+            if ($entry === '.' || $entry === '..') {
+                $matchInfo['reason'] = 'directory_entry';
+                $matchDebug[] = $matchInfo;
+                continue;
+            }
+            
+            // Vérifier si c'est un dossier avec rawlist() si disponible
+            $isDirectory = false;
+            if ($rawFiles !== false && is_array($rawFiles) && isset($rawFiles[$entry])) {
+                $fileInfo = $rawFiles[$entry];
+                // rawlist() retourne un tableau avec des clés comme 'type', 'size', etc.
+                // Type 2 = directory dans SFTP
+                if (isset($fileInfo['type']) && $fileInfo['type'] === 2) {
+                    $isDirectory = true;
+                }
+            } else {
+                // Fallback : si pas d'extension .csv, considérer comme dossier potentiel
+                // Mais on vérifie aussi si c'est dans la liste des dossiers ignorés
+                if (!preg_match('/\.csv$/i', $entry)) {
+                    // Vérifier si c'est un dossier connu à ignorer
+                    $entryBasename = basename($entry);
+                    if (in_array($entryBasename, $ignoredDirs, true)) {
+                        $isDirectory = true;
+                    }
+                }
+            }
+            
+            if ($isDirectory) {
+                $matchInfo['reason'] = 'directory_entry';
+                $matchDebug[] = $matchInfo;
+                continue;
+            }
+            
+            // Vérifier l'extension
             if (!preg_match('/\.csv$/i', $entry)) {
                 $matchInfo['reason'] = 'wrong_extension';
                 $matchDebug[] = $matchInfo;
                 continue;
             }
-
-            if (preg_match($pattern, $entry)) {
-                $matchInfo['match'] = true;
-            } else {
+            
+            // Vérifier le pattern complet
+            if (!preg_match($pattern, $entry, $matches)) {
                 $matchInfo['reason'] = 'pattern_mismatch';
+                $matchDebug[] = $matchInfo;
+                continue;
             }
-
+            
+            // Extraire mac_norm et timestamp si match
+            $macRaw = $matches[1] ?? null;
+            $dateStr = $matches[2] ?? null; // YYYYMMDD
+            $timeStr = $matches[3] ?? null; // HHMMSS
+            
+            if (empty($macRaw) || empty($dateStr) || empty($timeStr)) {
+                $matchInfo['reason'] = 'invalid_format';
+                $matchDebug[] = $matchInfo;
+                continue;
+            }
+            
+            // Normaliser la MAC (uppercase, sans tirets)
+            $macNorm = strtoupper($macRaw);
+            
+            // Construire Timestamp au format YYYY-MM-DD HH:MM:SS
+            $year = substr($dateStr, 0, 4);
+            $month = substr($dateStr, 4, 2);
+            $day = substr($dateStr, 6, 2);
+            $hour = substr($timeStr, 0, 2);
+            $minute = substr($timeStr, 2, 2);
+            $second = substr($timeStr, 4, 2);
+            $timestamp = "$year-$month-$day $hour:$minute:$second";
+            
+            $matchInfo['match'] = true;
+            $matchInfo['reason'] = 'match';
+            $matchInfo['mac_norm'] = $macNorm;
+            $matchInfo['timestamp'] = $timestamp;
             $matchDebug[] = $matchInfo;
         }
 
+        // Filtrer tous les fichiers (pas seulement les 20 premiers)
         $allMatched = [];
         foreach ($files as $entry) {
             if (!is_string($entry)) continue;
+            
+            // Ignorer . et ..
             if ($entry === '.' || $entry === '..') continue;
-            if (preg_match($pattern, $entry)) $allMatched[] = $entry;
+            
+            // Vérifier si c'est un dossier avec rawlist() si disponible
+            $isDirectory = false;
+            if ($rawFiles !== false && is_array($rawFiles) && isset($rawFiles[$entry])) {
+                $fileInfo = $rawFiles[$entry];
+                if (isset($fileInfo['type']) && $fileInfo['type'] === 2) {
+                    $isDirectory = true;
+                }
+            } else {
+                // Fallback : vérifier extension et dossiers connus
+                if (!preg_match('/\.csv$/i', $entry)) {
+                    $entryBasename = basename($entry);
+                    if (in_array($entryBasename, $ignoredDirs, true)) {
+                        $isDirectory = true;
+                    }
+                }
+            }
+            
+            if ($isDirectory) {
+                continue;
+            }
+            
+            if (preg_match($pattern, $entry)) {
+                $allMatched[] = $entry;
+            }
         }
+        
+        $csvFiles = array_filter($files, static function($f) {
+            return is_string($f) && preg_match('/\.csv$/i', $f);
+        });
+        $totalCsv = count($csvFiles);
 
         $sftpInfo['scan'] = [
             'total_entries' => $totalEntries,
@@ -560,8 +732,13 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
         $sftpPort = (int)(getenv('SFTP_PORT') ?: 22);
         $sftpTimeout = (int)(getenv('SFTP_TIMEOUT') ?: 15);
 
-        $sftpRemoteDir = $result['sftp']['remote_dir_used'] ?? (getenv('SFTP_REMOTE_DIR') ?: '/');
-        $sftpRemoteDir = rtrim((string)$sftpRemoteDir, '/') ?: '/';
+        // Récupérer les valeurs depuis section_sftp_scan
+        $remote_dir_used = $result['sftp']['remote_dir_used'] ?? '/';
+        $processed_dir = $result['sftp']['processed_dir'] ?? '/processed';
+        
+        // Normaliser les chemins
+        $remote_dir_used = normalize_sftp_path($remote_dir_used);
+        $processed_dir = normalize_sftp_path($processed_dir);
 
         $sftpConn = new \phpseclib3\Net\SFTP($sftpHost, $sftpPort, $sftpTimeout);
         if (!$sftpConn->login($sftpUser, $sftpPass)) {
@@ -604,7 +781,12 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
             try {
                 $process['processed']++;
 
-                $remote = ($sftpRemoteDir === '/' ? '' : $sftpRemoteDir) . '/' . $filename;
+                // Construire le chemin remote : si remote_dir_used est /, alors remote = /filename, sinon /remote_dir_used/filename
+                if ($remote_dir_used === '/') {
+                    $remote = '/' . $filename;
+                } else {
+                    $remote = $remote_dir_used . '/' . $filename;
+                }
 
                 $tmp = tempnam(sys_get_temp_dir(), 'csv_');
                 if ($tmp === false) {
@@ -744,19 +926,38 @@ function section_sftp_process(array &$result, int $limit, bool $writeDb, bool $m
 
                 if ($moveFile) {
                     try {
-                        $processedDir = '/processed';
-                        $target = $processedDir . '/' . $filename;
-                        $moved = $sftpConn->rename($remote, $target);
+                        // Ne pas déplacer si remote_dir_used === processed_dir (évite déplacer sur lui-même)
+                        if ($remote_dir_used === $processed_dir) {
+                            $fileData['move'] = [
+                                'moved_ok' => false,
+                                'moved_to' => null,
+                                'error' => 'skipped_same_dir',
+                                'reason' => 'remote_dir_used === processed_dir, no move needed'
+                            ];
+                        } else {
+                            // Construire le chemin cible : si processed_dir est /, alors target = /filename, sinon /processed_dir/filename
+                            if ($processed_dir === '/') {
+                                $target = '/' . $filename;
+                            } else {
+                                $target = $processed_dir . '/' . $filename;
+                            }
+                            
+                            $moved = $sftpConn->rename($remote, $target);
 
-                        $fileData['move'] = [
-                            'moved_ok' => (bool)$moved,
-                            'moved_to' => $moved ? $target : null,
-                            'error' => $moved ? null : 'rename failed'
-                        ];
+                            $fileData['move'] = [
+                                'moved_ok' => (bool)$moved,
+                                'moved_to' => $moved ? $target : null,
+                                'error' => $moved ? null : 'rename failed'
+                            ];
 
-                        if ($moved) $process['moved']++;
+                            if ($moved) $process['moved']++;
+                        }
                     } catch (Throwable $e) {
-                        $fileData['move']['error'] = $e->getMessage();
+                        $fileData['move'] = [
+                            'moved_ok' => false,
+                            'moved_to' => null,
+                            'error' => $e->getMessage()
+                        ];
                         $process['errors_count']++;
                     }
                 }

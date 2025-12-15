@@ -5,8 +5,10 @@
 require_once __DIR__ . '/../includes/api_helpers.php';
 
 initApi();
-$pdo = requirePdoConnection();
 requireApiAuth();
+
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);

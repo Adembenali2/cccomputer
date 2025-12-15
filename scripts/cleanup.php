@@ -8,13 +8,13 @@ declare(strict_types=1);
  * Usage: php scripts/cleanup.php
  */
 
-require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
 
 echo "=== Début du nettoyage automatique ===\n";
 
 try {
-    $pdo = requirePdoConnection();
+    // Récupérer PDO via la fonction centralisée
+    $pdo = getPdo();
     
     // 1. Nettoyer les sessions expirées (plus de 30 jours)
     echo "Nettoyage des sessions expirées...\n";

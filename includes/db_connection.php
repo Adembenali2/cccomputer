@@ -12,6 +12,7 @@ declare(strict_types=1);
 /**
  * Classe simple pour gérer la connexion PDO de manière centralisée
  * Pattern Singleton pour garantir une seule instance PDO
+ * Autonome : crée directement l'instance PDO sans dépendre de $GLOBALS
  */
 class DatabaseConnection {
     private static ?PDO $instance = null;
@@ -26,23 +27,60 @@ class DatabaseConnection {
     public static function getInstance(): PDO {
         // Si déjà initialisé, retourner l'instance
         if (self::$instance !== null && self::$instance instanceof PDO) {
-            // Compatibilité temporaire : maintenir GLOBALS tant que la migration n'est pas terminée
-            $GLOBALS['pdo'] = self::$instance;
             return self::$instance;
         }
         
-        // Si pas encore initialisé, charger depuis db.php qui crée la connexion
-        if (!defined('DB_LOADED')) {
-            require_once __DIR__ . '/db.php';
-        }
-        
-        // Récupérer depuis GLOBALS (créé par db.php)
-        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
-            self::$instance = $GLOBALS['pdo'];
+        // Créer une nouvelle instance PDO avec la même configuration que db.php
+        try {
+            // Priorité 1: Variables d'environnement (Railway, Docker, etc.)
+            $host = getenv('MYSQLHOST');
+            $port = getenv('MYSQLPORT');
+            $db   = getenv('MYSQLDATABASE');
+            $user = getenv('MYSQLUSER');
+            $pass = getenv('MYSQLPASSWORD');
+            
+            // Priorité 2: Fallback pour XAMPP/local (fichier de config optionnel)
+            if (empty($host) || empty($db) || empty($user)) {
+                $configFile = __DIR__ . '/db_config.local.php';
+                if (file_exists($configFile)) {
+                    require_once $configFile;
+                    $host = $host ?? $DB_HOST ?? 'localhost';
+                    $port = $port ?? $DB_PORT ?? '3306';
+                    $db   = $db ?? $DB_NAME ?? '';
+                    $user = $user ?? $DB_USER ?? 'root';
+                    $pass = $pass ?? $DB_PASS ?? '';
+                } else {
+                    // Fallback par défaut XAMPP
+                    $host = 'localhost';
+                    $port = '3306';
+                    $db   = 'cccomputer';
+                    $user = 'root';
+                    $pass = '';
+                }
+            }
+            
+            $charset = 'utf8mb4';
+            $dsn = "mysql:host=$host;port=$port;dbname=$db;charset=$charset";
+            $options = [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES   => false,
+            ];
+            
+            self::$instance = new PDO($dsn, $user, $pass, $options);
+            
+            // Log de succès pour le débogage (sans informations sensibles)
+            $safeDsn = preg_replace('/:[^@]+@/', ':****@', $dsn);
+            error_log("DatabaseConnection::getInstance() - PDO créé: DSN=$safeDsn");
+            
             return self::$instance;
+            
+        } catch (PDOException $e) {
+            // Ne jamais logger les credentials en clair
+            $safeDsn = isset($dsn) ? preg_replace('/:[^@]+@/', ':****@', $dsn) : 'N/A';
+            error_log("DatabaseConnection::getInstance() - Erreur: " . $e->getMessage() . " | DSN: $safeDsn");
+            throw new RuntimeException('Impossible de créer la connexion PDO: ' . $e->getMessage(), 0, $e);
         }
-        
-        throw new RuntimeException('Impossible de récupérer la connexion PDO');
     }
 }
 

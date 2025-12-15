@@ -10,7 +10,9 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 
 initApi();
 requireApiAuth();
-$pdo = requirePdoConnection();
+
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
 
 // Vérifier l'authentification
 if (empty($_SESSION['user_id'])) {
