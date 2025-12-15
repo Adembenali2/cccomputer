@@ -73,14 +73,19 @@ function maskEnv(array $env): array {
     $sensitive = ['PASS', 'PASSWORD', 'SECRET', 'KEY', 'TOKEN'];
     
     foreach ($env as $k => $v) {
+        // S'assurer que la clé est un string
+        $key = safe_scalar($k);
+        
         $isSensitive = false;
         foreach ($sensitive as $s) {
-            if (stripos($k, $s) !== false) {
+            if (stripos($key, $s) !== false) {
                 $isSensitive = true;
                 break;
             }
         }
-        $masked[$k] = $isSensitive ? maskPassword($v) : $v;
+        // S'assurer que la valeur est un string avant maskPassword
+        $value = safe_scalar($v);
+        $masked[$key] = $isSensitive ? maskPassword($value) : $value;
     }
     
     return $masked;
@@ -94,6 +99,19 @@ function truncate(string $s, int $max = 10000): string {
 function getTail(string $s, int $lines = 20): array {
     $allLines = explode("\n", $s);
     return array_slice($allLines, -$lines);
+}
+
+function safe_scalar($v): string {
+    if (is_array($v)) {
+        return json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    if (is_object($v)) {
+        return '[object ' . get_class($v) . ']';
+    }
+    if (is_resource($v)) {
+        return '[resource]';
+    }
+    return (string)$v;
 }
 
 function addError(array &$result, string $error, array $context = []): void {
@@ -134,7 +152,8 @@ try {
     
     // Vérifier que le script existe
     if (!is_file($scriptPath)) {
-        addError($result, "Script upload_compteur.php introuvable: $scriptPath");
+        $errorMsg = safe_scalar("Script upload_compteur.php introuvable: {$scriptPath}");
+        addError($result, $errorMsg);
         $result['command'] = 'N/A';
     } else {
         // Construire la commande
@@ -142,18 +161,28 @@ try {
         $cmd = escapeshellcmd($php) . ' ' . escapeshellarg($scriptPath);
         $result['command'] = $cmd;
         
-        // Informations système
+            // Informations système
         $result['system'] = [
-            'php_binary' => $php,
+            'php_binary' => safe_scalar($php),
             'php_binary_exists' => file_exists($php),
             'php_version' => PHP_VERSION,
-            'user' => function_exists('get_current_user') ? get_current_user() : 'unknown',
-            'cwd' => getcwd() ?: 'unknown',
-            'path' => getenv('PATH') ?: 'not_set'
+            'user' => function_exists('get_current_user') ? safe_scalar(get_current_user()) : 'unknown',
+            'cwd' => safe_scalar(getcwd() ?: 'unknown'),
+            'path' => safe_scalar(getenv('PATH') ?: 'not_set')
         ];
         
-        // Environnement
-        $env = array_merge($_ENV, $_SERVER, ['SFTP_BATCH_LIMIT' => (string)$limit]);
+        // Environnement - s'assurer que toutes les valeurs sont des strings
+        $env = [];
+        foreach ($_ENV as $k => $v) {
+            $env[$k] = safe_scalar($v);
+        }
+        foreach ($_SERVER as $k => $v) {
+            if (!isset($env[$k])) {
+                $env[$k] = safe_scalar($v);
+            }
+        }
+        $env['SFTP_BATCH_LIMIT'] = (string)$limit;
+        
         $result['env_masked'] = maskEnv($env);
         $result['env_keys'] = array_keys($env);
         $result['env_count'] = count($env);
@@ -216,17 +245,18 @@ try {
                     @proc_terminate($proc, SIGTERM);
                     sleep(2);
                     $status = @proc_get_status($proc);
-                    if ($status && $status['running']) {
+                    if ($status && isset($status['running']) && $status['running']) {
                         @proc_terminate($proc, SIGKILL);
                     }
-                    $err .= "\nTIMEOUT: Le processus a dépassé la limite de {$TIMEOUT_SEC} secondes";
+                    $timeoutMsg = safe_scalar("TIMEOUT: Le processus a dépassé la limite de {$TIMEOUT_SEC} secondes");
+                    $err .= "\n" . $timeoutMsg;
                     $code = -1;
                     break;
                 }
                 
                 // Si le processus est terminé
-                if (!$status['running']) {
-                    $code = $status['exitcode'];
+                if (!isset($status['running']) || !$status['running']) {
+                    $code = isset($status['exitcode']) ? $status['exitcode'] : -1;
                     break;
                 }
                 
@@ -246,11 +276,20 @@ try {
                 }
                 
                 // Lire les données disponibles
-                $changed = @stream_select($read, $w = null, $e = null, 1);
+                // PHP 8.x : doit passer des variables par référence, pas null directement
+                $write = null;
+                $except = null;
+                
+                $changed = @stream_select($read, $write, $except, 1);
                 
                 if ($changed === false) {
-                    usleep(100000);
-                    continue;
+                    // stream_select a échoué, arrêter la boucle
+                    addError($result, 'stream_select failed', [
+                        'read_count' => count($read),
+                        'pipes_1_resource' => isset($pipes[1]) && is_resource($pipes[1]),
+                        'pipes_2_resource' => isset($pipes[2]) && is_resource($pipes[2])
+                    ]);
+                    break;
                 }
                 
                 if ($changed > 0) {
@@ -402,7 +441,8 @@ try {
                     $recentInserted = (int)($row['cnt'] ?? 0);
                 } catch (Throwable $e) {
                     $recentInserted = null;
-                    addError($result, 'DB query failed (recent_inserted): ' . $e->getMessage());
+                    $errorMsg = safe_scalar('DB query failed (recent_inserted): ' . $e->getMessage());
+                    addError($result, $errorMsg);
                 }
                 
                 // Derniers imports
@@ -428,7 +468,8 @@ try {
                     }
                 } catch (Throwable $e) {
                     $lastImports = [];
-                    addError($result, 'DB query failed (last_imports): ' . $e->getMessage());
+                    $errorMsg = safe_scalar('DB query failed (last_imports): ' . $e->getMessage());
+                    addError($result, $errorMsg);
                 }
                 
                 $result['db_check'] = [
@@ -440,19 +481,22 @@ try {
                 $result['db_check'] = ['error' => 'PDO not available'];
             }
         } else {
-            addError($result, 'db.php not found: ' . $dbPath);
+            $errorMsg = safe_scalar("db.php not found: {$dbPath}");
+            addError($result, $errorMsg);
             $result['db_check'] = ['error' => 'db.php not found'];
         }
     } catch (Throwable $e) {
-        addError($result, 'DB check failed: ' . $e->getMessage());
-        $result['db_check'] = ['error' => $e->getMessage()];
+        $errorMsg = safe_scalar('DB check failed: ' . $e->getMessage());
+        addError($result, $errorMsg);
+        $result['db_check'] = ['error' => safe_scalar($e->getMessage())];
     }
     
 } catch (Throwable $e) {
-    addError($result, 'Fatal exception: ' . $e->getMessage(), [
-        'file' => $e->getFile(),
+    $errorMsg = safe_scalar('Fatal exception: ' . $e->getMessage());
+    addError($result, $errorMsg, [
+        'file' => safe_scalar($e->getFile()),
         'line' => $e->getLine(),
-        'trace' => $e->getTraceAsString()
+        'trace' => safe_scalar($e->getTraceAsString())
     ]);
     $result['ok'] = false;
 }
