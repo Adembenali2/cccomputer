@@ -78,6 +78,11 @@ function ensure_array($v): array {
     return is_array($v) ? $v : [];
 }
 
+function fetch_assoc_safe($stmt): array {
+    $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+    return is_array($row) ? $row : [];
+}
+
 function safe_json_decode($s, &$err = null): ?array {
     $err = null;
     if (!is_string($s) || $s === '') return null;
@@ -323,6 +328,10 @@ function section_db(array &$result): void {
                 $msg = arr_get($r, 'msg', '');
                 $jsonError = null;
                 $decoded = safe_json_decode($msg, $jsonError);
+                // Garde-fou : forcer null si pas array (ne jamais supposer array)
+                if (!is_array($decoded)) {
+                    $decoded = null;
+                }
                 
                 $type = 'other';
                 if (is_array($decoded)) {
@@ -372,14 +381,16 @@ function section_db(array &$result): void {
                 ORDER BY id DESC 
                 LIMIT 1
             ");
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            // Normaliser : toujours un array
-            $row = is_array($row) ? $row : [];
+            $row = fetch_assoc_safe($stmt);
             
             // Crash shield - debug anti-crash ligne ~428
             $msg = arr_get($row, 'msg', '');
             $jsonError = null;
             $decoded = safe_json_decode($msg, $jsonError);
+            // Garde-fou : forcer null si pas array (ne jamais supposer array)
+            if (!is_array($decoded)) {
+                $decoded = null;
+            }
             
             $db['debug_line_428'] = [
                 'row_type' => gettype($row),
@@ -426,9 +437,7 @@ function section_db(array &$result): void {
                 FROM compteur_relevee 
                 WHERE DateInsertion > NOW() - INTERVAL 10 MINUTE
             ");
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            // Normaliser : toujours un array
-            $row = is_array($row) ? $row : [];
+            $row = fetch_assoc_safe($stmt);
             
             // Protection : utiliser arr_get() au lieu d'accès direct
             if (!empty($row) && is_array($row)) {
@@ -444,7 +453,11 @@ function section_db(array &$result): void {
         }
         
     } catch (Throwable $e) {
-        addError($result, 'Exception in section_db: ' . $e->getMessage());
+        addError($result, 'Exception in section_db: ' . $e->getMessage(), [
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
         // S'assurer que $db est un array avant d'y ajouter une clé
         if (!is_array($db)) {
             $db = [];
@@ -945,8 +958,8 @@ function section_web_ionos(array &$result, bool $runWeb): void {
                 
                 if ($pdo instanceof PDO) {
                     $stmt = $pdo->query("SELECT MAX(Timestamp) as max_ts FROM compteur_relevee_ancien");
-                    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-                    $lastDbTs = $row['max_ts'] ?? null;
+                    $row = fetch_assoc_safe($stmt);
+                    $lastDbTs = arr_get($row, 'max_ts', null);
                     
                     $web['db'] = [
                         'last_db_ts' => $lastDbTs,
@@ -956,7 +969,12 @@ function section_web_ionos(array &$result, bool $runWeb): void {
                     if ($lastDbTs) {
                         $newCount = 0;
                         foreach ($rowsParsed as $r) {
-                            if ($r['date'] > $lastDbTs) {
+                            // Protection : utiliser arr_get()
+                            if (!is_array($r)) {
+                                continue;
+                            }
+                            $rDate = arr_get($r, 'date', '');
+                            if ($rDate && $rDate > $lastDbTs) {
                                 $newCount++;
                             }
                         }
