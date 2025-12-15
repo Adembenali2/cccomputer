@@ -1,32 +1,17 @@
 <?php
 declare(strict_types=1);
 error_reporting(E_ALL);
-ini_set('display_errors', '1');
+ini_set('display_errors', '0');
+ob_start();
 
 /**
  * import/debug_run_wrapper.php
  * 
  * Debug end-to-end : exécute exactement la même commande que run_import_if_due.php
  * et capture tout pour comprendre pourquoi le dashboard affiche 0
+ * 
+ * IMPORTANT: Ce script ne doit JAMAIS crasher et doit toujours renvoyer un JSON propre
  */
-
-// ====== SÉCURITÉ ======
-$isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1', 'localhost']) || 
-           (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'localhost') !== false);
-$debugKey = getenv('DEBUG_KEY') ?: '';
-$requestKey = $_GET['key'] ?? '';
-
-if (!$isLocal && $debugKey && $requestKey !== $debugKey) {
-    http_response_code(403);
-    header('Content-Type: application/json');
-    echo json_encode(['ok' => false, 'error' => 'Access denied. DEBUG_KEY required.']);
-    exit;
-}
-
-// ====== CONFIGURATION ======
-$htmlMode = isset($_GET['html']) && $_GET['html'] === '1';
-$limit = (int)($_GET['limit'] ?? $_POST['limit'] ?? 10);
-if ($limit <= 0) $limit = 10;
 
 // ====== INITIALISATION ======
 $result = [
@@ -34,12 +19,46 @@ $result = [
     'ts' => date('Y-m-d H:i:s'),
     'command' => '',
     'cwd' => '',
+    'system' => [],
     'env_masked' => [],
+    'env_keys' => [],
+    'env_count' => 0,
     'proc' => [],
     'parsed' => [],
     'db_check' => [],
+    'warnings' => [],
     'errors' => []
 ];
+
+// ====== ERROR HANDLER ======
+set_error_handler(function($errno, $errstr, $errfile, $errline) use (&$result) {
+    $result['warnings'][] = [
+        'type' => $errno,
+        'message' => $errstr,
+        'file' => $errfile,
+        'line' => $errline,
+        'ts' => date('Y-m-d H:i:s')
+    ];
+    return true; // Ne pas interrompre l'exécution
+});
+
+// ====== SHUTDOWN FUNCTION ======
+register_shutdown_function(function() use (&$result) {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE])) {
+        ob_clean();
+        $result['ok'] = false;
+        $result['errors'][] = [
+            'fatal_error' => true,
+            'message' => $error['message'],
+            'file' => $error['file'],
+            'line' => $error['line'],
+            'ts' => date('Y-m-d H:i:s')
+        ];
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+});
 
 // ====== HELPERS ======
 function maskPassword(?string $pass): string {
@@ -72,6 +91,11 @@ function truncate(string $s, int $max = 10000): string {
     return substr($s, 0, $max) . "\n... (tronqué à $max caractères)";
 }
 
+function getTail(string $s, int $lines = 20): array {
+    $allLines = explode("\n", $s);
+    return array_slice($allLines, -$lines);
+}
+
 function addError(array &$result, string $error, array $context = []): void {
     $result['ok'] = false;
     $result['errors'][] = [
@@ -81,116 +105,42 @@ function addError(array &$result, string $error, array $context = []): void {
     ];
 }
 
-// ====== PARSE COMPTEURS ======
-function parseCounters(string $stdout, string $stderr): array {
-    $parsed = [
-        'inserted' => null,
-        'updated' => null,
-        'skipped' => null,
-        'method' => null,
-        'parse_error' => null
-    ];
-    
-    $combined = $stdout . "\n" . $stderr;
-    
-    // Méthode 1 : Chercher JSON {"source":"SFTP", ...}
-    if (preg_match('/\{[^}]*"source"\s*:\s*"SFTP"[^}]*\}/i', $combined, $jsonMatch)) {
-        $jsonStr = $jsonMatch[0];
-        $decoded = json_decode($jsonStr, true);
-        if (is_array($decoded)) {
-            if (isset($decoded['inserted'])) {
-                $parsed['inserted'] = (int)$decoded['inserted'];
-                $parsed['method'] = 'json_inserted';
-            }
-            if (isset($decoded['updated'])) {
-                $parsed['updated'] = (int)$decoded['updated'];
-                if (!$parsed['method']) $parsed['method'] = 'json_updated';
-            }
-            if (isset($decoded['skipped'])) {
-                $parsed['skipped'] = (int)$decoded['skipped'];
-            }
-            if ($parsed['method']) {
-                return $parsed;
-            }
-        }
-    }
-    
-    // Méthode 2 : Chercher patterns texte
-    $patterns = [
-        'inserted' => [
-            '/(\d+)\s+insérés?/i',
-            '/inserted[:\s=]+(\d+)/i',
-            '/insert[:\s=]+(\d+)/i'
-        ],
-        'updated' => [
-            '/(\d+)\s+mis\s+à\s+jour/i',
-            '/updated[:\s=]+(\d+)/i',
-            '/update[:\s=]+(\d+)/i'
-        ],
-        'skipped' => [
-            '/(\d+)\s+ignorés?/i',
-            '/skipped[:\s=]+(\d+)/i',
-            '/skip[:\s=]+(\d+)/i'
-        ]
-    ];
-    
-    foreach ($patterns as $key => $patternList) {
-        foreach ($patternList as $pattern) {
-            if (preg_match($pattern, $combined, $m)) {
-                $parsed[$key] = (int)$m[1];
-                if (!$parsed['method']) {
-                    $parsed['method'] = 'text_pattern_' . $key;
-                }
-                break;
-            }
-        }
-    }
-    
-    // Si on a trouvé au moins un compteur, c'est bon
-    if ($parsed['inserted'] !== null || $parsed['updated'] !== null || $parsed['skipped'] !== null) {
-        return $parsed;
-    }
-    
-    // Méthode 3 : Fallback - parse_error
-    $parsed['parse_error'] = 'Aucun compteur trouvé dans stdout/stderr';
-    $parsed['method'] = 'fallback';
-    
-    // Dump des 20 dernières lignes
-    $stdoutLines = explode("\n", $stdout);
-    $stderrLines = explode("\n", $stderr);
-    $lastStdout = array_slice($stdoutLines, -20);
-    $lastStderr = array_slice($stderrLines, -20);
-    
-    $parsed['last_20_stdout'] = $lastStdout;
-    $parsed['last_20_stderr'] = $lastStderr;
-    
-    return $parsed;
+// ====== SÉCURITÉ ======
+$isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1', 'localhost']) || 
+           (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'localhost') !== false);
+$debugKey = getenv('DEBUG_KEY') ?: '';
+$requestKey = $_GET['key'] ?? '';
+
+if (!$isLocal && $debugKey && $requestKey !== $debugKey) {
+    ob_clean();
+    http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => false, 'error' => 'Access denied. DEBUG_KEY required.'], JSON_UNESCAPED_UNICODE);
+    exit;
 }
+
+// ====== CONFIGURATION ======
+$limit = (int)($_GET['limit'] ?? $_POST['limit'] ?? 10);
+if ($limit <= 0) $limit = 10;
 
 // ====== EXECUTION ======
 try {
-    $projectRoot = dirname(__DIR__);
+    // Chemins absolus
+    $projectRoot = '/var/www/html';
+    $scriptPath = $projectRoot . '/API/scripts/upload_compteur.php';
+    $dbPath = $projectRoot . '/includes/db.php';
+    
     $result['cwd'] = $projectRoot;
     
     // Vérifier que le script existe
-    $scriptPath = $projectRoot . '/API/scripts/upload_compteur.php';
     if (!is_file($scriptPath)) {
         addError($result, "Script upload_compteur.php introuvable: $scriptPath");
         $result['command'] = 'N/A';
-        $result['proc'] = ['error' => 'script_not_found'];
     } else {
-        // Construire la commande exactement comme run_import_if_due.php
+        // Construire la commande
         $php = PHP_BINARY ?: 'php';
         $cmd = escapeshellcmd($php) . ' ' . escapeshellarg($scriptPath);
         $result['command'] = $cmd;
-        
-        // Environnement exactement comme run_import_if_due.php
-        $env = $_ENV + $_SERVER + ['SFTP_BATCH_LIMIT' => (string)$limit];
-        
-        // Masquer les mots de passe pour l'affichage
-        $result['env_masked'] = maskEnv($env);
-        $result['env_keys'] = array_keys($env);
-        $result['env_count'] = count($env);
         
         // Informations système
         $result['system'] = [
@@ -202,56 +152,101 @@ try {
             'path' => getenv('PATH') ?: 'not_set'
         ];
         
-        // Descripteurs pour proc_open
-        $desc = [
+        // Environnement
+        $env = array_merge($_ENV, $_SERVER, ['SFTP_BATCH_LIMIT' => (string)$limit]);
+        $result['env_masked'] = maskEnv($env);
+        $result['env_keys'] = array_keys($env);
+        $result['env_count'] = count($env);
+        
+        // Descripteurs
+        $descriptors = [
+            0 => ['pipe', 'r'], // stdin
             1 => ['pipe', 'w'], // stdout
-            2 => ['pipe', 'w'], // stderr
+            2 => ['pipe', 'w']  // stderr
         ];
         
         $TIMEOUT_SEC = 60;
         $startTime = microtime(true);
         
-        // Exécuter proc_open exactement comme run_import_if_due.php
-        $proc = proc_open($cmd, $desc, $pipes, $projectRoot, $env);
-        $out = $err = '';
-        $code = null;
-        $timeoutReached = false;
+        // Exécuter proc_open
+        $proc = @proc_open($cmd, $descriptors, $pipes, $projectRoot, $env);
         
-        if (is_resource($proc)) {
-            // Configurer les pipes en mode non-bloquant
-            stream_set_blocking($pipes[1], false);
-            stream_set_blocking($pipes[2], false);
+        if (!is_resource($proc)) {
+            addError($result, 'proc_open() a échoué - impossible de créer le processus');
+            $result['proc'] = [
+                'exit_code' => -1,
+                'duration_ms' => 0,
+                'timed_out' => false,
+                'stdout' => '',
+                'stderr' => 'proc_open() failed',
+                'stdout_len' => 0,
+                'stderr_len' => 0
+            ];
+        } else {
+            // Fermer stdin immédiatement
+            if (isset($pipes[0]) && is_resource($pipes[0])) {
+                fclose($pipes[0]);
+            }
             
-            $read = [$pipes[1], $pipes[2]];
-            $write = null;
-            $except = null;
+            // Configurer stdout et stderr en non-bloquant
+            if (isset($pipes[1]) && is_resource($pipes[1])) {
+                stream_set_blocking($pipes[1], false);
+            }
+            if (isset($pipes[2]) && is_resource($pipes[2])) {
+                stream_set_blocking($pipes[2], false);
+            }
             
-            // Lire les pipes avec timeout
+            $out = '';
+            $err = '';
+            $code = null;
+            $timeoutReached = false;
+            
+            // Boucle de lecture
             while (is_resource($proc)) {
-                $status = proc_get_status($proc);
+                $status = @proc_get_status($proc);
+                
+                if ($status === false) {
+                    break;
+                }
                 
                 // Vérifier le timeout
                 $elapsed = time() - (int)$startTime;
                 if ($elapsed > $TIMEOUT_SEC) {
                     $timeoutReached = true;
-                    proc_terminate($proc, SIGTERM);
+                    @proc_terminate($proc, SIGTERM);
                     sleep(2);
-                    if (proc_get_status($proc)['running']) {
-                        proc_terminate($proc, SIGKILL);
+                    $status = @proc_get_status($proc);
+                    if ($status && $status['running']) {
+                        @proc_terminate($proc, SIGKILL);
                     }
                     $err .= "\nTIMEOUT: Le processus a dépassé la limite de {$TIMEOUT_SEC} secondes";
                     $code = -1;
                     break;
                 }
                 
-                // Si le processus est terminé, lire les dernières données
+                // Si le processus est terminé
                 if (!$status['running']) {
                     $code = $status['exitcode'];
                     break;
                 }
                 
-                // Lire les données disponibles (non-bloquant)
-                $changed = @stream_select($read, $write, $except, 1);
+                // Construire $read avec seulement les pipes valides
+                $read = [];
+                if (isset($pipes[1]) && is_resource($pipes[1])) {
+                    $read[] = $pipes[1];
+                }
+                if (isset($pipes[2]) && is_resource($pipes[2])) {
+                    $read[] = $pipes[2];
+                }
+                
+                // Ne jamais appeler stream_select avec un array vide
+                if (empty($read)) {
+                    usleep(100000); // 100ms
+                    continue;
+                }
+                
+                // Lire les données disponibles
+                $changed = @stream_select($read, $w = null, $e = null, 1);
                 
                 if ($changed === false) {
                     usleep(100000);
@@ -259,13 +254,17 @@ try {
                 }
                 
                 if ($changed > 0) {
-                    foreach ($read as $pipe) {
-                        if ($pipe === $pipes[1]) {
-                            $data = stream_get_contents($pipes[1]);
-                            if ($data !== false && $data !== '') $out .= $data;
-                        } elseif ($pipe === $pipes[2]) {
-                            $data = stream_get_contents($pipes[2]);
-                            if ($data !== false && $data !== '') $err .= $data;
+                    foreach ($read as $stream) {
+                        if ($stream === $pipes[1] && is_resource($pipes[1])) {
+                            $data = @fread($pipes[1], 8192);
+                            if ($data !== false && $data !== '') {
+                                $out .= $data;
+                            }
+                        } elseif ($stream === $pipes[2] && is_resource($pipes[2])) {
+                            $data = @fread($pipes[2], 8192);
+                            if ($data !== false && $data !== '') {
+                                $err .= $data;
+                            }
                         }
                     }
                 } else {
@@ -274,44 +273,120 @@ try {
             }
             
             // Lire les dernières données restantes
-            $remainingOut = stream_get_contents($pipes[1]);
-            $remainingErr = stream_get_contents($pipes[2]);
-            if ($remainingOut !== false) $out .= $remainingOut;
-            if ($remainingErr !== false) $err .= $remainingErr;
-            
-            // Fermer les pipes
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            
-            // Fermer le processus si pas déjà fait
-            if (is_resource($proc)) {
-                $code = proc_close($proc);
+            if (isset($pipes[1]) && is_resource($pipes[1])) {
+                $remaining = @stream_get_contents($pipes[1]);
+                if ($remaining !== false) {
+                    $out .= $remaining;
+                }
+                @fclose($pipes[1]);
             }
-        } else {
-            $err = 'Impossible de créer le processus';
-            $code = -1;
-            addError($result, $err);
+            
+            if (isset($pipes[2]) && is_resource($pipes[2])) {
+                $remaining = @stream_get_contents($pipes[2]);
+                if ($remaining !== false) {
+                    $err .= $remaining;
+                }
+                @fclose($pipes[2]);
+            }
+            
+            // Fermer le processus
+            if (is_resource($proc)) {
+                $code = @proc_close($proc);
+            }
+            
+            $durationMs = (microtime(true) - $startTime) * 1000;
+            
+            $result['proc'] = [
+                'exit_code' => $code ?? -1,
+                'duration_ms' => round($durationMs, 2),
+                'timed_out' => $timeoutReached,
+                'stdout' => truncate($out, 10000),
+                'stderr' => truncate($err, 10000),
+                'stdout_len' => strlen($out),
+                'stderr_len' => strlen($err)
+            ];
+            
+            // Parser les compteurs
+            $parsed = [
+                'inserted' => null,
+                'updated' => null,
+                'skipped' => null,
+                'method' => null,
+                'parse_error' => null
+            ];
+            
+            $combined = $out . "\n" . $err;
+            
+            // Méthode 1 : Chercher JSON
+            $jsonFound = false;
+            if (preg_match_all('/\{[^{}]*"source"\s*:\s*"SFTP"[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/i', $combined, $jsonMatches)) {
+                // Prendre le dernier JSON trouvé
+                $lastJson = end($jsonMatches[0]);
+                $decoded = @json_decode($lastJson, true);
+                if (is_array($decoded)) {
+                    if (isset($decoded['inserted'])) {
+                        $parsed['inserted'] = (int)$decoded['inserted'];
+                        $parsed['method'] = 'json_inserted';
+                        $jsonFound = true;
+                    }
+                    if (isset($decoded['updated'])) {
+                        $parsed['updated'] = (int)$decoded['updated'];
+                        if (!$jsonFound) $parsed['method'] = 'json_updated';
+                        $jsonFound = true;
+                    }
+                    if (isset($decoded['skipped'])) {
+                        $parsed['skipped'] = (int)$decoded['skipped'];
+                    }
+                }
+            }
+            
+            // Méthode 2 : Patterns texte (si JSON n'a pas fonctionné)
+            if (!$jsonFound) {
+                $patterns = [
+                    'inserted' => [
+                        '/(\d+)\s+insérés?/i',
+                        '/inserted[:\s=]+(\d+)/i',
+                        '/insert[:\s=]+(\d+)/i'
+                    ],
+                    'updated' => [
+                        '/(\d+)\s+mis\s+à\s+jour/i',
+                        '/updated[:\s=]+(\d+)/i',
+                        '/update[:\s=]+(\d+)/i'
+                    ],
+                    'skipped' => [
+                        '/(\d+)\s+ignorés?/i',
+                        '/skipped[:\s=]+(\d+)/i',
+                        '/skip[:\s=]+(\d+)/i'
+                    ]
+                ];
+                
+                foreach ($patterns as $key => $patternList) {
+                    foreach ($patternList as $pattern) {
+                        if (preg_match($pattern, $combined, $m)) {
+                            $parsed[$key] = (int)$m[1];
+                            if (!$parsed['method']) {
+                                $parsed['method'] = 'text_pattern_' . $key;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Si toujours rien trouvé
+            if ($parsed['inserted'] === null && $parsed['updated'] === null && $parsed['skipped'] === null) {
+                $parsed['parse_error'] = 'Aucun compteur trouvé dans stdout/stderr';
+                $parsed['method'] = 'fallback';
+                $parsed['tail_stdout'] = getTail($out, 20);
+                $parsed['tail_stderr'] = getTail($err, 20);
+            }
+            
+            $result['parsed'] = $parsed;
         }
-        
-        $durationMs = (microtime(true) - $startTime) * 1000;
-        
-        $result['proc'] = [
-            'exit_code' => $code,
-            'duration_ms' => round($durationMs, 2),
-            'timed_out' => $timeoutReached,
-            'stdout' => truncate($out, 10000),
-            'stderr' => truncate($err, 10000),
-            'stdout_length' => strlen($out),
-            'stderr_length' => strlen($err)
-        ];
-        
-        // Parser les compteurs
-        $result['parsed'] = parseCounters($out, $err);
     }
     
-    // Vérifier la DB après exécution
+    // Vérification DB après exécution
     try {
-        $dbPath = $projectRoot . '/includes/db.php';
         if (file_exists($dbPath)) {
             require_once $dbPath;
             
@@ -343,9 +418,11 @@ try {
                     // Décoder les msg JSON si possible
                     foreach ($lastImports as &$import) {
                         if (!empty($import['msg'])) {
-                            $decoded = json_decode($import['msg'], true);
+                            $decoded = @json_decode($import['msg'], true);
                             if (is_array($decoded)) {
                                 $import['msg_decoded'] = $decoded;
+                            } else {
+                                $import['msg_raw'] = substr($import['msg'], 0, 500);
                             }
                         }
                     }
@@ -363,7 +440,7 @@ try {
                 $result['db_check'] = ['error' => 'PDO not available'];
             }
         } else {
-            addError($result, 'db.php not found');
+            addError($result, 'db.php not found: ' . $dbPath);
             $result['db_check'] = ['error' => 'db.php not found'];
         }
     } catch (Throwable $e) {
@@ -381,84 +458,6 @@ try {
 }
 
 // ====== OUTPUT ======
-if ($htmlMode) {
-    header('Content-Type: text/html; charset=utf-8');
-    ?>
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <title>Debug Run Wrapper</title>
-        <style>
-            body { font-family: monospace; margin: 20px; background: #f5f5f5; }
-            .section { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
-            .error { color: red; }
-            .ok { color: green; }
-            pre { background: #f0f0f0; padding: 10px; overflow-x: auto; font-size: 12px; }
-            h2 { margin-top: 0; }
-            .stdout { background: #e8f5e9; }
-            .stderr { background: #ffebee; }
-        </style>
-    </head>
-    <body>
-        <h1>Debug Run Wrapper - <?= htmlspecialchars($result['ts']) ?></h1>
-        
-        <div class="section">
-            <h2>Status: <span class="<?= $result['ok'] ? 'ok' : 'error' ?>"><?= $result['ok'] ? 'OK' : 'ERROR' ?></span></h2>
-        </div>
-        
-        <div class="section">
-            <h2>Command & Environment</h2>
-            <pre><?= htmlspecialchars(json_encode([
-                'command' => $result['command'],
-                'cwd' => $result['cwd'],
-                'system' => $result['system'] ?? [],
-                'env_masked' => $result['env_masked'] ?? [],
-                'env_keys' => $result['env_keys'] ?? [],
-                'env_count' => $result['env_count'] ?? 0
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></pre>
-        </div>
-        
-        <div class="section">
-            <h2>Process Execution</h2>
-            <pre><?= htmlspecialchars(json_encode($result['proc'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></pre>
-        </div>
-        
-        <?php if (!empty($result['proc']['stdout'])): ?>
-        <div class="section stdout">
-            <h2>STDOUT</h2>
-            <pre><?= htmlspecialchars($result['proc']['stdout']) ?></pre>
-        </div>
-        <?php endif; ?>
-        
-        <?php if (!empty($result['proc']['stderr'])): ?>
-        <div class="section stderr">
-            <h2>STDERR</h2>
-            <pre><?= htmlspecialchars($result['proc']['stderr']) ?></pre>
-        </div>
-        <?php endif; ?>
-        
-        <div class="section">
-            <h2>Parsed Counters</h2>
-            <pre><?= htmlspecialchars(json_encode($result['parsed'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></pre>
-        </div>
-        
-        <div class="section">
-            <h2>DB Check</h2>
-            <pre><?= htmlspecialchars(json_encode($result['db_check'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></pre>
-        </div>
-        
-        <?php if (!empty($result['errors'])): ?>
-        <div class="section">
-            <h2>Errors</h2>
-            <pre><?= htmlspecialchars(json_encode($result['errors'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></pre>
-        </div>
-        <?php endif; ?>
-    </body>
-    </html>
-    <?php
-} else {
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-}
-
+ob_clean();
+header('Content-Type: application/json; charset=utf-8');
+echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
