@@ -10,6 +10,46 @@ ini_set('log_errors', '1');
 $PID = getmypid();
 define('IMPORT_PID', $PID);
 
+// ====== DEBUG MODE: Helpers pour diagnostic précis ======
+function log_import_run(?PDO $pdo, array $data, bool $ok): void {
+    $data['ts'] = date('Y-m-d H:i:s');
+    $msg = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    error_log('[IMPORT SFTP] ' . $msg);
+
+    if ($pdo) {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO import_run(ran_at, imported, skipped, ok, msg) VALUES (NOW(), 0, 0, :ok, :msg)");
+            $stmt->execute([
+                ':ok'  => $ok ? 1 : 0,
+                ':msg' => $msg,
+            ]);
+        } catch (Throwable $e) {
+            // Si la DB n'est pas dispo, on ne bloque pas le debug
+            error_log('[IMPORT SFTP] log_import_run failed: ' . $e->getMessage());
+        }
+    }
+}
+
+function debug_die(?PDO $pdo, string $stage, string $error, array $extra = [], int $code = 1): void {
+    $payload = array_merge([
+        'source' => 'SFTP',
+        'stage'  => $stage,
+        'error'  => $error,
+        'file'   => __FILE__,
+        'dir'    => __DIR__,
+        'cwd'    => getcwd(),
+        'php'    => PHP_VERSION,
+        'include_path' => ini_get('include_path'),
+        'user'   => function_exists('get_current_user') ? get_current_user() : null,
+    ], $extra);
+
+    log_import_run($pdo, $payload, false);
+    http_response_code(500);
+    echo "ERROR[$stage] $error\n";
+    exit($code);
+}
+
 // Fonction de debug avec timestamp et PID
 function debugLog(string $message, array $context = []): void {
     $timestamp = date('Y-m-d H:i:s');
@@ -18,6 +58,82 @@ function debugLog(string $message, array $context = []): void {
     echo $logMsg;
     error_log($logMsg);
 }
+
+// ====== STAGE: bootstrap ======
+log_import_run(null, ['source' => 'SFTP', 'stage' => 'bootstrap', 'msg' => 'Script démarré'], true);
+
+// DEBUG BOOTSTRAP — on essaye de détecter autoload/db.php sans supposer le cwd
+$pathsAutoload = [
+    __DIR__ . '/vendor/autoload.php',            // si vendor est au même niveau (rare)
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../vendor/autoload.php',      // fréquent si script dans API/scripts
+    dirname(__DIR__, 2) . '/vendor/autoload.php',
+    dirname(__DIR__, 3) . '/vendor/autoload.php',
+];
+$autoloadFound = null;
+$autoloadChecks = [];
+foreach ($pathsAutoload as $p) {
+    $autoloadChecks[] = ['path' => $p, 'exists' => file_exists($p), 'realpath' => realpath($p) ?: null];
+    if (file_exists($p)) { 
+        $autoloadFound = $p; 
+        break; 
+    }
+}
+
+// ====== STAGE: autoload ======
+if (!$autoloadFound) {
+    debug_die(null, 'autoload', 'vendor/autoload.php introuvable', [
+        'paths_tested' => $autoloadChecks,
+    ], 2);
+}
+try {
+    require_once $autoloadFound;
+    log_import_run(null, ['source' => 'SFTP', 'stage' => 'autoload', 'msg' => 'autoload.php chargé', 'path' => $autoloadFound], true);
+} catch (Throwable $e) {
+    debug_die(null, 'autoload', 'Erreur lors du chargement de vendor/autoload.php: ' . $e->getMessage(), [
+        'exception' => get_class($e),
+        'path' => $autoloadFound,
+        'paths_tested' => $autoloadChecks,
+    ], 2);
+}
+
+// Même logique pour db.php (adapte si ton fichier s'appelle autrement)
+$pathsDb = [
+    __DIR__ . '/../../includes/db.php',
+    dirname(__DIR__, 2) . '/includes/db.php',
+    dirname(__DIR__, 3) . '/includes/db.php',
+    __DIR__ . '/../includes/db.php',
+    __DIR__ . '/../..' . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php',
+];
+$dbFound = null;
+$dbChecks = [];
+foreach ($pathsDb as $p) {
+    $dbChecks[] = ['path' => $p, 'exists' => file_exists($p), 'realpath' => realpath($p) ?: null];
+    if (file_exists($p)) { 
+        $dbFound = $p; 
+        break; 
+    }
+}
+
+// ====== STAGE: db_include ======
+if (!$dbFound) {
+    debug_die(null, 'db_include', 'includes/db.php introuvable', [
+        'paths_tested' => $dbChecks,
+    ], 3);
+}
+try {
+    require_once $dbFound;
+    log_import_run(null, ['source' => 'SFTP', 'stage' => 'db_include', 'msg' => 'db.php chargé', 'path' => $dbFound], true);
+} catch (Throwable $e) {
+    debug_die(null, 'db_include', 'Erreur lors du chargement de includes/db.php: ' . $e->getMessage(), [
+        'exception' => get_class($e),
+        'path' => $dbFound,
+        'paths_tested' => $dbChecks,
+    ], 3);
+}
+
+// À partir d'ici tu peux récupérer $pdo depuis ton include db.php
+// Et tu peux faire : log_import_run($pdo, ['source'=>'SFTP','stage'=>'bootstrap','msg'=>'autoload+db include OK'], true);
 
 /**
  * upload_compteur.php (version avec logs détaillés et gestion d'erreurs)
@@ -85,93 +201,15 @@ debugLog("Étape 0: Normalisation des variables d'environnement MySQL");
     ]);
 })();
 
-// ---------- Fonction helper pour trouver le root du projet ----------
-function findProjectRoot(string $startDir): ?string {
-    $dir = realpath($startDir);
-    if (!$dir) return null;
-    
-    $candidates = [
-        $dir,
-        dirname($dir),
-        dirname($dir, 2),
-        dirname($dir, 3),
-    ];
-    
-    foreach ($candidates as $candidate) {
-        if (!$candidate) continue;
-        $vendorPath = $candidate . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
-        if (is_file($vendorPath)) {
-            return $candidate;
-        }
-    }
-    
-    return null;
-}
-
-// ---------- 1) Charger $pdo depuis includes/db.php ----------
-debugLog("Étape 1: Chargement de includes/db.php");
-$projectRoot = findProjectRoot(__DIR__);
-$dbPaths = [];
-
-if ($projectRoot) {
-    $dbPaths[] = $projectRoot . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php';
-}
-
-// Chemins de fallback basés sur __DIR__
-$dbPaths[] = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php';
-$dbPaths[] = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php';
-$dbPaths[] = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php';
-
-// Normaliser les chemins (résoudre les ..)
-$dbPaths = array_map('realpath', array_filter($dbPaths, 'is_file'));
-$dbPaths = array_unique($dbPaths);
-
-debugLog("Chemins à tester pour db.php", [
-    'paths' => $dbPaths,
-    'current_dir' => __DIR__,
-    'project_root' => $projectRoot
-]);
-
-$ok = false;
-$pdo = null;
-$dbPathUsed = null;
-
-foreach ($dbPaths as $p) {
-    if (!$p || !is_file($p)) continue;
-    debugLog("Test du chemin", ['path' => $p, 'exists' => is_file($p)]);
-    try {
-        require_once $p;
-        $ok = true;
-        $dbPathUsed = $p;
-        debugLog("Fichier chargé avec succès", ['path' => $p]);
-        break;
-    } catch (Throwable $e) {
-        debugLog("Erreur lors du chargement", ['path' => $p, 'error' => $e->getMessage()]);
-    }
-}
-
-if (!$ok) {
-    $errorMsg = "Aucun fichier includes/db.php trouvé dans les chemins testés";
-    $errorDetails = [
-        'error' => $errorMsg,
-        'paths_tested' => $dbPaths,
-        'current_dir' => __DIR__,
-        'project_root' => $projectRoot
-    ];
-    debugLog("ERREUR FATALE", $errorDetails);
-    echo "❌ Erreur: $errorMsg\n";
-    echo "   Chemins testés: " . implode(', ', $dbPaths) . "\n";
-    // Logger dans import_run si possible (mais pdo n'existe pas encore)
-    exit(1);
-}
-
+// ====== STAGE: db_connect ======
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-    $errorMsg = "La variable \$pdo n'est pas définie ou n'est pas une instance de PDO";
-    debugLog("ERREUR FATALE", ['error' => $errorMsg, 'pdo_set' => isset($pdo), 'pdo_type' => gettype($pdo ?? null)]);
-    echo "❌ Erreur: $errorMsg\n";
-    exit(1);
+    debug_die(null, 'db_connect', 'La variable $pdo n\'est pas définie ou n\'est pas une instance de PDO', [
+        'pdo_set' => isset($pdo),
+        'pdo_type' => gettype($pdo ?? null),
+    ], 4);
 }
 
+log_import_run($pdo, ['source' => 'SFTP', 'stage' => 'db_connect', 'msg' => 'Connexion PDO établie', 'pdo_class' => get_class($pdo)], true);
 debugLog("Connexion PDO établie", [
     'pdo_class' => get_class($pdo),
     'connection_status' => 'OK'
@@ -181,118 +219,8 @@ echo "✅ Connexion à la base établie.\n";
 // Note: La contrainte UNIQUE (mac_norm, Timestamp) doit exister en base.
 // Aucun DDL n'est exécuté dans ce script pour garantir la stabilité.
 
-// ---------- 2) Connexion SFTP avec timeout et gestion d'erreurs ----------
-debugLog("Étape 2: Chargement de la bibliothèque SFTP");
-// Trouver le root du projet si pas déjà fait
-if (!$projectRoot) {
-    $projectRoot = findProjectRoot(__DIR__);
-}
-
-$vendorPaths = [];
-
-if ($projectRoot) {
-    $vendorPaths[] = $projectRoot . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
-}
-
-// Chemins de fallback basés sur __DIR__
-$vendorPaths[] = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
-$vendorPaths[] = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
-$vendorPaths[] = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
-
-// Normaliser les chemins (résoudre les ..)
-$vendorPaths = array_map('realpath', array_filter($vendorPaths, 'is_file'));
-$vendorPaths = array_unique($vendorPaths);
-
-debugLog("Chemins à tester pour vendor/autoload.php", [
-    'paths' => $vendorPaths,
-    'current_dir' => __DIR__,
-    'project_root' => $projectRoot
-]);
-
-$vendorPath = null;
-foreach ($vendorPaths as $p) {
-    if ($p && is_file($p)) {
-        $vendorPath = $p;
-        break;
-    }
-}
-
-if (!$vendorPath) {
-    $errorMsg = "Fichier vendor/autoload.php introuvable";
-    $errorDetails = [
-        'error' => $errorMsg,
-        'paths_tested' => $vendorPaths,
-        'current_dir' => __DIR__,
-        'project_root' => $projectRoot,
-        'cwd' => getcwd()
-    ];
-    debugLog("ERREUR FATALE", $errorDetails);
-    echo "❌ Erreur: $errorMsg\n";
-    echo "   Chemins testés: " . implode(', ', $vendorPaths) . "\n";
-    echo "   Current dir: " . __DIR__ . "\n";
-    echo "   CWD: " . getcwd() . "\n";
-    
-    // Logger dans import_run avec ok=0
-    if (isset($pdo) && $pdo instanceof PDO) {
-        try {
-            $errorJson = json_encode([
-                'source' => 'SFTP',
-                'error' => $errorMsg,
-                'paths_tested' => $vendorPaths,
-                'current_dir' => __DIR__,
-                'project_root' => $projectRoot,
-                'cwd' => getcwd(),
-                'timestamp' => date('Y-m-d H:i:s')
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            
-            $pdo->prepare("
-                INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
-                VALUES (NOW(), 0, 0, 0, :msg)
-            ")->execute([':msg' => $errorJson]);
-            debugLog("Erreur loggée dans import_run");
-        } catch (Throwable $e) {
-            debugLog("Impossible de logger dans import_run", ['error' => $e->getMessage()]);
-        }
-    }
-    exit(1);
-}
-
-try {
-    require $vendorPath;
-    echo "✅ Autoload OK: $vendorPath\n";
-    debugLog("vendor/autoload.php chargé avec succès", ['path' => $vendorPath]);
-} catch (Throwable $e) {
-    $errorMsg = "Erreur lors du chargement de vendor/autoload.php: " . $e->getMessage();
-    debugLog("ERREUR FATALE", [
-        'error' => $errorMsg,
-        'exception' => get_class($e),
-        'path' => $vendorPath
-    ]);
-    echo "❌ $errorMsg\n";
-    
-    // Logger dans import_run
-    if (isset($pdo) && $pdo instanceof PDO) {
-        try {
-            $errorJson = json_encode([
-                'source' => 'SFTP',
-                'error' => $errorMsg,
-                'exception' => get_class($e),
-                'path' => $vendorPath,
-                'timestamp' => date('Y-m-d H:i:s')
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            
-            $pdo->prepare("
-                INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
-                VALUES (NOW(), 0, 0, 0, :msg)
-            ")->execute([':msg' => $errorJson]);
-        } catch (Throwable $logErr) {
-            debugLog("Impossible de logger dans import_run", ['error' => $logErr->getMessage()]);
-        }
-    }
-    exit(1);
-}
-
 use phpseclib3\Net\SFTP;
+log_import_run($pdo, ['source' => 'SFTP', 'stage' => 'autoload', 'msg' => 'Classe SFTP importée', 'class_exists' => class_exists('phpseclib3\Net\SFTP')], true);
 debugLog("Classe SFTP importée", ['class_exists' => class_exists('phpseclib3\Net\SFTP')]);
 
 // Fonction pour vérifier le timeout
@@ -350,6 +278,7 @@ try {
         exit(1);
     }
 
+    // ====== STAGE: sftp_connect ======
     debugLog("Étape 2.2: Création de l'instance SFTP", [
         'host' => $sftp_host,
         'port' => $sftp_port,
@@ -364,17 +293,14 @@ try {
         $connectionTime = round((microtime(true) - $connectionStart) * 1000, 2);
         debugLog("Instance SFTP créée", ['duration_ms' => $connectionTime]);
     } catch (Throwable $e) {
-        $errorMsg = "Erreur lors de la création de l'instance SFTP: " . $e->getMessage();
-        debugLog("ERREUR FATALE", [
-            'error' => $errorMsg,
+        debug_die($pdo, 'sftp_connect', "Erreur lors de la création de l'instance SFTP: " . $e->getMessage(), [
             'exception' => get_class($e),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        echo "❌ $errorMsg\n";
-        logErrorToDB($pdo ?? null, $errorMsg);
-        exit(1);
+            'host' => $sftp_host,
+            'port' => $sftp_port,
+            'timeout' => $sftp_timeout,
+        ], 5);
     }
     
     // Tentative de login avec gestion d'erreur
@@ -387,27 +313,25 @@ try {
         debugLog("Login SFTP terminé", ['success' => $loginSuccess, 'duration_ms' => $loginTime]);
     } catch (Throwable $e) {
         $loginTime = round((microtime(true) - $loginStart) * 1000, 2);
-        $errorMsg = "Exception lors de la connexion SFTP: " . $e->getMessage();
-        debugLog("ERREUR FATALE", [
-            'error' => $errorMsg,
+        debug_die($pdo, 'sftp_connect', "Exception lors de la connexion SFTP: " . $e->getMessage(), [
             'exception' => get_class($e),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
             'duration_ms' => $loginTime,
-            'trace' => $e->getTraceAsString()
-        ]);
-        echo "❌ $errorMsg\n";
-        logErrorToDB($pdo ?? null, $errorMsg);
-        exit(1);
+            'host' => $sftp_host,
+            'port' => $sftp_port,
+        ], 5);
     }
     
     if (!$loginSuccess) {
-        $errorMsg = "Échec de l'authentification SFTP (vérifiez SFTP_USER et SFTP_PASS)";
-        debugLog("ERREUR FATALE", ['error' => $errorMsg, 'login_returned' => false]);
-        echo "❌ Erreur: $errorMsg\n";
-        logErrorToDB($pdo ?? null, $errorMsg);
-        exit(1);
+        debug_die($pdo, 'sftp_connect', "Échec de l'authentification SFTP", [
+            'host' => $sftp_host,
+            'port' => $sftp_port,
+            'user' => $sftp_user,
+        ], 5);
     }
+    
+    log_import_run($pdo, ['source' => 'SFTP', 'stage' => 'sftp_connect', 'msg' => 'Connexion SFTP établie', 'host' => $sftp_host, 'port' => $sftp_port], true);
 
     debugLog("Connexion SFTP établie avec succès");
     echo "✅ Connexion SFTP établie.\n";
