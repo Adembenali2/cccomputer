@@ -740,6 +740,10 @@ if (is_array($files) && count($files) > 0) {
                 'moved_to' => null,
             ];
             
+            // Initialiser les variables de fichier tmp pour éviter les erreurs
+            $tmpFileMtime = time();
+            $tmpFileSize = 'N/A';
+            
             echo "📥 Téléchargement de $entry...\n";
             $tmp = tempnam(sys_get_temp_dir(), 'csv_');
             
@@ -780,6 +784,11 @@ if (is_array($files) && count($files) > 0) {
                     echo "⚠️ Impossible de déplacer $entry vers /errors: " . $e->getMessage() . "\n";
                     $fileDebug['move_error'] = $e->getMessage();
                 }
+                
+                // Initialiser tmpFileMtime pour éviter les erreurs plus tard
+                $tmpFileMtime = time();
+                $tmpFileSize = 'N/A';
+                
                 @unlink($tmp);
                 $files_error++;
                 log_import_run($pdo, array_merge(['source' => 'SFTP', 'stage' => 'process_file'], $fileDebug), false);
@@ -802,6 +811,30 @@ if (is_array($files) && count($files) > 0) {
                 $row = parse_csv_kv($tmp);
                 $parseTime = round((microtime(true) - $parseStart) * 1000, 2);
                 debugLog("CSV parsé", ['duration_ms' => $parseTime, 'keys_count' => count($row)]);
+                
+                // Sauvegarder filemtime() AVANT de supprimer le fichier
+                $tmpFileMtime = false;
+                $tmpFileSize = 'N/A';
+                if (file_exists($tmp)) {
+                    $tmpFileMtime = @filemtime($tmp);
+                    $tmpFileSize = @filesize($tmp);
+                    if ($tmpFileMtime === false) {
+                        debugLog("⚠️ filemtime() a retourné false", [
+                            'tmp_path' => $tmp,
+                            'file_exists' => file_exists($tmp),
+                            'is_readable' => is_readable($tmp),
+                            'filesize' => $tmpFileSize !== false ? $tmpFileSize : 'N/A',
+                            'stage' => 'before_unlink_parse'
+                        ]);
+                        $tmpFileMtime = time(); // Fallback vers l'heure actuelle
+                    }
+                } else {
+                    debugLog("⚠️ Fichier tmp n'existe plus avant unlink", [
+                        'tmp_path' => $tmp,
+                        'stage' => 'before_unlink_parse'
+                    ]);
+                    $tmpFileMtime = time(); // Fallback vers l'heure actuelle
+                }
                 
                 @unlink($tmp);
                 
@@ -859,13 +892,35 @@ if (is_array($files) && count($files) > 0) {
                     'source' => 'filename'
                 ]);
             } catch (Throwable $e) {
+                // Sauvegarder filemtime() avant suppression si le fichier existe encore
+                $tmpFileMtime = false;
+                $tmpFileSize = 'N/A';
+                if (isset($tmp) && file_exists($tmp)) {
+                    $tmpFileMtime = @filemtime($tmp);
+                    $tmpFileSize = @filesize($tmp);
+                    if ($tmpFileMtime === false) {
+                        debugLog("⚠️ filemtime() a retourné false dans catch", [
+                            'tmp_path' => $tmp,
+                            'file_exists' => file_exists($tmp),
+                            'is_readable' => is_readable($tmp),
+                            'filesize' => $tmpFileSize !== false ? $tmpFileSize : 'N/A',
+                            'stage' => 'catch_parse_error'
+                        ]);
+                        $tmpFileMtime = time();
+                    }
+                } else {
+                    $tmpFileMtime = time();
+                }
+                
                 @unlink($tmp);
                 $errorMsg = "Erreur lors du parsing CSV pour $entry: " . $e->getMessage();
                 debugLog("ERREUR parsing", [
                     'error' => $errorMsg,
                     'exception' => get_class($e),
                     'file' => $e->getFile(),
-                    'line' => $e->getLine()
+                    'line' => $e->getLine(),
+                    'tmp_path' => $tmp ?? 'N/A',
+                    'tmp_file_exists' => isset($tmp) && file_exists($tmp)
                 ]);
                 echo "❌ $errorMsg\n";
                 try {
@@ -895,14 +950,31 @@ if (is_array($files) && count($files) > 0) {
         }
 
         // Insertion en base de données
-        $fileSize = file_exists($tmp ?? '') ? filesize($tmp) : 'N/A';
-        $fileDate = date('Y-m-d H:i:s', filemtime($tmp ?? __FILE__));
+        // Utiliser la date sauvegardée avant la suppression du fichier tmp
+        $fileSize = $tmpFileSize ?? 'N/A';
+        $fileMtime = $tmpFileMtime ?? time();
+        
+        // Vérification de sécurité : s'assurer que fileMtime est un int valide
+        if (!is_int($fileMtime) || $fileMtime <= 0) {
+            debugLog("⚠️ fileMtime invalide, utilisation de time() comme fallback", [
+                'tmp_path' => $tmp ?? 'N/A',
+                'fileMtime_value' => $fileMtime,
+                'fileMtime_type' => gettype($fileMtime),
+                'file_exists' => isset($tmp) && file_exists($tmp),
+                'stage' => 'before_db_insert'
+            ]);
+            $fileMtime = time();
+        }
+        
+        $fileDate = date('Y-m-d H:i:s', $fileMtime);
         debugLog("Insertion en base de données", [
             'MacAddress' => $values['MacAddress'],
             'Timestamp' => $values['Timestamp'],
             'filename' => $entry,
             'file_size' => $fileSize,
-            'file_date' => $fileDate
+            'file_date' => $fileDate,
+            'file_mtime' => $fileMtime,
+            'tmp_path' => $tmp ?? 'N/A'
         ]);
         try {
             // Vérifier le timeout avant l'insertion
