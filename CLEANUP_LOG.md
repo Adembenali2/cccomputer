@@ -773,6 +773,46 @@ Ces fichiers contiennent la logique de compatibilité temporaire qui peut mainte
 
 ---
 
+### Fix auth.php PDO
+**Date** : Généré automatiquement  
+**Résultat** : ✅ **CORRECTION EFFECTUÉE** - `includes/auth.php` utilise maintenant `getPdo()` correctement
+
+**Problème identifié** :
+- `includes/auth.php` utilisait `$pdo` aux lignes 42, 53, 88 sans le définir
+- Le fichier incluait `db.php` qui ne crée plus la variable `$pdo` globale depuis la finalisation PDO
+- Cela causait l'erreur "Undefined variable $pdo" ligne ~53 (et autres)
+
+**Fichiers modifiés** :
+1. `includes/auth.php` ⚠️ **CRITIQUE** (inclus partout) :
+   - Supprimé `require_once db.php` (plus nécessaire, db.php est deprecated)
+   - Ajouté `$pdo = getPdo();` juste après les includes, avant le premier usage
+   - Aucune dépendance à `$GLOBALS['pdo']` ou `global $pdo`
+
+**Vérification des autres fichiers dans includes/** :
+- `includes/auth_role.php` : ✅ Déjà corrigé (utilise `$pdo = getPdo();` ligne 56)
+- `includes/historique.php` : ✅ OK (fonctions reçoivent `$pdo` en paramètre)
+- `includes/helpers.php` : ✅ OK (fonctions reçoivent `$pdo` en paramètre)
+- `includes/api_helpers.php` : ✅ OK (`initApi()` définit `$pdo`, fonctions reçoivent `$pdo` en paramètre)
+- `includes/logout.php` : ✅ Vérifié (n'utilise pas `$pdo`, inclut `db.php` uniquement pour DB_LOADED si nécessaire)
+
+**Modification** : 
+- `auth.php` est maintenant autonome et utilise `getPdo()` directement
+- Plus de dépendance à `db.php` pour la création PDO
+
+**Raison** : 
+- Corriger l'erreur "Undefined variable $pdo" dans auth.php (fichier critique inclus partout)
+- Assurer la compatibilité complète avec la nouvelle architecture PDO unifiée
+- Rendre auth.php autonome vis-à-vis de db.php
+
+**Risque** : Très faible - Modification simple, comportement identique  
+**Test** : 
+- ✅ Login complet (POST vers login_process.php puis redirection) - doit fonctionner sans erreur
+- ✅ Accès à `/public/dashboard.php` après login - doit fonctionner normalement
+- ✅ `/API/maps_get_all_clients.php` (ou autre API) - doit fonctionner normalement
+- ✅ Toutes les pages publiques qui incluent auth.php doivent fonctionner normalement
+
+---
+
 ## RÉSUMÉ DES MODIFICATIONS
 
 ### Fichiers modifiés
