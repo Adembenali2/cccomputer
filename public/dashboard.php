@@ -1627,7 +1627,20 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const files = (d.summary && d.summary.files) ? d.summary.files : null;
 
                 if (d.ok === 1) {
-                    const label = `Import SFTP OK — ${d.imported} élément(s) — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    // Utiliser inserted/updated depuis JSON si disponible
+                    const inserted = d.imported || 0;
+                    const updated = d.updated || 0;
+                    let countText = '';
+                    if (inserted > 0 && updated > 0) {
+                        countText = `${inserted} inséré(s) + ${updated} mis à jour`;
+                    } else if (inserted > 0) {
+                        countText = `${inserted} inséré(s)`;
+                    } else if (updated > 0) {
+                        countText = `${updated} mis à jour`;
+                    } else {
+                        countText = '0 élément(s)';
+                    }
+                    const label = `Import SFTP OK — ${countText} — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
                     setState('ok', label, files);
                 } else {
                     const label = `Import SFTP KO — ${d.ran_at}`;
