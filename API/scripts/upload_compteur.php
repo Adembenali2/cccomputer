@@ -497,30 +497,27 @@ function normalize_sftp_path(string $path): string {
 
 // ---------- 5) Parcours fichiers avec timeout et gestion d'erreurs ----------
 // ====== STAGE: scan_files ======
-// Déterminer remote_dir_used selon la priorité : $_GET['dir'] > SFTP_REMOTE_DIR > '/' par défaut
-$remote_dir_requested = null;
-if (isset($_GET['dir']) && !empty($_GET['dir'])) {
-    $remote_dir_requested = $_GET['dir'];
-    // Accepter "processed" ou "/processed" et normaliser
-    if ($remote_dir_requested === 'processed' || $remote_dir_requested === '/processed') {
-        $remote_dir_requested = '/processed';
-    }
-} elseif (getenv('SFTP_REMOTE_DIR')) {
-    $remote_dir_requested = getenv('SFTP_REMOTE_DIR');
-} else {
-    $remote_dir_requested = '/';
-}
+// IMPORTANT: Le script d'import SFTP (cron) scanne TOUJOURS la racine "/" pour trouver les nouveaux CSV
+// Ne jamais scanner /processed dans le flux normal (sinon ça retraitera l'historique)
+// REMOTE_SCAN_DIR est forcé à "/" même si une env existe
+$REMOTE_SCAN_DIR = '/';
+$REMOTE_DIR = normalize_sftp_path($REMOTE_SCAN_DIR);
 
-// Normaliser le chemin
-$REMOTE_DIR = normalize_sftp_path($remote_dir_requested);
+// Garder /processed uniquement comme destination d'archive
+$PROCESSED_DIR_RAW = getenv('SFTP_PROCESSED_DIR') ?: '/processed';
+$PROCESSED_DIR = normalize_sftp_path($PROCESSED_DIR_RAW);
 
-// Déterminer processed_dir : SFTP_PROCESSED_DIR si défini, sinon /processed
-$processed_dir_raw = getenv('SFTP_PROCESSED_DIR') ?: '/processed';
-$PROCESSED_DIR = normalize_sftp_path($processed_dir_raw);
+// Garder /errors comme destination pour les fichiers invalides
+$ERRORS_DIR_RAW = getenv('SFTP_ERRORS_DIR') ?: '/errors';
+$ERRORS_DIR = normalize_sftp_path($ERRORS_DIR_RAW);
 
-// Déterminer errors_dir : SFTP_ERRORS_DIR si défini, sinon /errors
-$errors_dir_raw = getenv('SFTP_ERRORS_DIR') ?: '/errors';
-$ERRORS_DIR = normalize_sftp_path($errors_dir_raw);
+// Log des répertoires configurés
+debugLog("Configuration des répertoires SFTP", [
+    'remote_scan_dir' => $REMOTE_DIR,
+    'processed_dir' => $PROCESSED_DIR,
+    'errors_dir' => $ERRORS_DIR,
+    'note' => 'REMOTE_SCAN_DIR est toujours "/" pour éviter de scanner /processed'
+]);
 
 debugLog("Étape 5: Liste des fichiers sur le serveur SFTP", ['remote_dir' => $REMOTE_DIR]);
 try {
@@ -545,9 +542,9 @@ try {
     log_import_run($pdo, [
         'source' => 'SFTP',
         'stage' => 'scan_files',
-        'remote_dir_requested' => $remote_dir_requested,
-        'remote_dir_used' => $REMOTE_DIR,
+        'remote_dir' => $REMOTE_DIR,
         'processed_dir' => $PROCESSED_DIR,
+        'errors_dir' => $ERRORS_DIR,
         'total_files' => $totalFiles,
         'first_files' => $firstFiles,
         'nlist_result_type' => gettype($files),
@@ -1182,7 +1179,8 @@ if (is_array($files) && count($files) > 0) {
             // Ajouter à la liste des fichiers traités (même si le déplacement échoue)
             $files_list[] = $entry;
             
-            // Ne pas déplacer si remote_dir_used === processed_dir (évite déplacer sur lui-même)
+            // Ne pas déplacer si REMOTE_DIR === PROCESSED_DIR (évite déplacer sur lui-même)
+            // Note: En production, REMOTE_DIR est toujours "/" et PROCESSED_DIR est "/processed", donc cette condition ne devrait jamais être vraie
             if ($REMOTE_DIR === $PROCESSED_DIR) {
                 $fileDebug['moved_to'] = 'skipped_same_dir';
                 echo "ℹ️ Fichier déjà dans $PROCESSED_DIR, pas de déplacement nécessaire\n";
@@ -1285,9 +1283,9 @@ if (is_array($files) && count($files) > 0) {
         log_import_run($pdo, [
             'source' => 'SFTP',
             'stage' => 'scan_files',
-            'remote_dir_requested' => $remote_dir_requested,
-            'remote_dir_used' => $REMOTE_DIR,
+            'remote_dir' => $REMOTE_DIR,
             'processed_dir' => $PROCESSED_DIR,
+            'errors_dir' => $ERRORS_DIR,
             'total_files' => $totalFiles ?? 0,
             'matched_files' => 0,
             'pattern' => $CSV_PATTERN,
@@ -1302,13 +1300,15 @@ try {
     // Créer un message JSON structuré pour différencier les sources
     $summaryData = [
         'source' => 'SFTP',
-        'remote_dir_requested' => $remote_dir_requested,
-        'remote_dir_used' => $REMOTE_DIR,
-        'processed_dir' => $PROCESSED_DIR,
+        'remote_dir' => $REMOTE_DIR,  // Toujours "/" pour le scan
+        'processed_dir' => $PROCESSED_DIR,  // Toujours "/processed" pour l'archive
+        'errors_dir' => $ERRORS_DIR,  // Toujours "/errors" pour les erreurs
         'pid' => IMPORT_PID,
         'total_files' => $totalFiles ?? 0,
         'matched_files' => count($csvFiles ?? []),
+        'matched_files_list' => array_slice($csvFiles ?? [], 0, 50), // Liste des fichiers trouvés (matchés)
         'processed_files' => $files_processed,
+        'processed_files_list' => array_slice($files_list, 0, 50), // Liste des fichiers réellement traités
         'files_error' => $files_error,
         'files_success' => max(0, $files_processed - $files_error),
         'skipped_nonmatching' => $skippedNonMatching ?? 0,
@@ -1320,8 +1320,7 @@ try {
         'max_files_limit' => $MAX_FILES,
         'pattern' => $CSV_PATTERN,
         'duration_sec' => $duration,
-        'first_files' => $firstFiles ?? [],
-        'files' => array_slice($files_list, 0, 20), // Limiter à 20 pour éviter un JSON trop gros
+        'first_files' => $firstFiles ?? [], // Premiers fichiers listés (pour debug)
         'processed_details' => array_slice($processedFiles ?? [], 0, 10) // Limiter à 10 détails
     ];
     
