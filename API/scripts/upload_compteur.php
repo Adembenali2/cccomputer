@@ -356,10 +356,19 @@ try {
 
 function sftp_safe_move(SFTP $sftp, string $from, string $toDir): array {
     $basename = basename($from);
-    $target   = rtrim($toDir, '/') . '/' . $basename;
+    // Normaliser le répertoire de destination
+    $toDirNormalized = normalize_sftp_path($toDir);
+    // Construire le chemin cible : si toDir est /, alors target = /filename, sinon /toDir/filename
+    if ($toDirNormalized === '/') {
+        $target = '/' . $basename;
+    } else {
+        $target = $toDirNormalized . '/' . $basename;
+    }
     if ($sftp->rename($from, $target)) return [true, $target];
 
-    $alt = rtrim($toDir, '/') . '/' . pathinfo($basename, PATHINFO_FILENAME)
+    // Fallback avec timestamp si le fichier existe déjà
+    $alt = ($toDirNormalized === '/' ? '/' : $toDirNormalized . '/') 
+         . pathinfo($basename, PATHINFO_FILENAME)
          . '_' . date('Ymd_His') . '.' . pathinfo($basename, PATHINFO_EXTENSION);
     if ($sftp->rename($from, $alt)) return [true, $alt];
 
@@ -509,6 +518,10 @@ $REMOTE_DIR = normalize_sftp_path($remote_dir_requested);
 $processed_dir_raw = getenv('SFTP_PROCESSED_DIR') ?: '/processed';
 $PROCESSED_DIR = normalize_sftp_path($processed_dir_raw);
 
+// Déterminer errors_dir : SFTP_ERRORS_DIR si défini, sinon /errors
+$errors_dir_raw = getenv('SFTP_ERRORS_DIR') ?: '/errors';
+$ERRORS_DIR = normalize_sftp_path($errors_dir_raw);
+
 debugLog("Étape 5: Liste des fichiers sur le serveur SFTP", ['remote_dir' => $REMOTE_DIR]);
 try {
     checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
@@ -532,7 +545,9 @@ try {
     log_import_run($pdo, [
         'source' => 'SFTP',
         'stage' => 'scan_files',
-        'remote_dir' => $REMOTE_DIR,
+        'remote_dir_requested' => $remote_dir_requested,
+        'remote_dir_used' => $REMOTE_DIR,
+        'processed_dir' => $PROCESSED_DIR,
         'total_files' => $totalFiles,
         'first_files' => $firstFiles,
         'nlist_result_type' => gettype($files),
@@ -601,6 +616,9 @@ if (is_array($files) && count($files) > 0) {
     $skippedDirs = 0;
     $first20ForDebug = array_slice($files, 0, 20);
     
+    // Dossiers à ignorer
+    $ignoredDirs = ['processed', 'errors'];
+    
     foreach ($first20ForDebug as $entry) {
         $matchInfo = [
             'filename' => $entry,
@@ -608,7 +626,36 @@ if (is_array($files) && count($files) > 0) {
             'reason' => null,
         ];
         
+        // Ignorer . et ..
         if ($entry === '.' || $entry === '..') {
+            $matchInfo['reason'] = 'directory_entry';
+            $skippedDirs++;
+            $matchDebug[] = $matchInfo;
+            continue;
+        }
+        
+        // Vérifier si c'est un dossier avec rawlist() si disponible
+        $isDirectory = false;
+        if ($rawFiles !== false && is_array($rawFiles) && isset($rawFiles[$entry])) {
+            $fileInfo = $rawFiles[$entry];
+            // rawlist() retourne un tableau avec des clés comme 'type', 'size', etc.
+            // Type 2 = directory dans SFTP
+            if (isset($fileInfo['type']) && $fileInfo['type'] === 2) {
+                $isDirectory = true;
+            }
+        } else {
+            // Fallback : si pas d'extension .csv, considérer comme dossier potentiel
+            // Mais on vérifie aussi si c'est dans la liste des dossiers ignorés
+            if (!preg_match('/\.csv$/i', $entry)) {
+                // Vérifier si c'est un dossier connu à ignorer
+                $entryBasename = basename($entry);
+                if (in_array($entryBasename, $ignoredDirs, true)) {
+                    $isDirectory = true;
+                }
+            }
+        }
+        
+        if ($isDirectory) {
             $matchInfo['reason'] = 'directory_entry';
             $skippedDirs++;
             $matchDebug[] = $matchInfo;
@@ -670,9 +717,8 @@ if (is_array($files) && count($files) > 0) {
         $timestamp = "$year-$month-$day $hour:$minute:$second";
         
         $matchInfo['match'] = true;
+        $matchInfo['reason'] = 'match';
         $matchInfo['mac_norm'] = $macNorm;
-        $matchInfo['date'] = $dateStr;
-        $matchInfo['time'] = $timeStr;
         $matchInfo['timestamp'] = $timestamp;
         $matchDebug[] = $matchInfo;
     }
@@ -689,7 +735,31 @@ if (is_array($files) && count($files) > 0) {
     // Filtrer tous les fichiers (pas seulement les 20 premiers)
     $matchedFiles = [];
     foreach ($files as $entry) {
+        // Ignorer . et ..
         if ($entry === '.' || $entry === '..') continue;
+        
+        // Vérifier si c'est un dossier avec rawlist() si disponible
+        $isDirectory = false;
+        if ($rawFiles !== false && is_array($rawFiles) && isset($rawFiles[$entry])) {
+            $fileInfo = $rawFiles[$entry];
+            if (isset($fileInfo['type']) && $fileInfo['type'] === 2) {
+                $isDirectory = true;
+            }
+        } else {
+            // Fallback : vérifier extension et dossiers connus
+            if (!preg_match('/\.csv$/i', $entry)) {
+                $entryBasename = basename($entry);
+                if (in_array($entryBasename, $ignoredDirs, true)) {
+                    $isDirectory = true;
+                }
+            }
+        }
+        
+        if ($isDirectory) {
+            $skippedDirs++;
+            continue;
+        }
+        
         if (!preg_match($CSV_PATTERN, $entry, $fileMatches)) {
             $skippedNonMatching++;
             continue;
@@ -784,7 +854,12 @@ if (is_array($files) && count($files) > 0) {
             
             $found = true;
             $files_processed++;
-            $remote = ($REMOTE_DIR === '/' ? '' : $REMOTE_DIR) . '/' . $entry;
+            // Construire le chemin remote : si REMOTE_DIR est /, alors remote = /filename, sinon /REMOTE_DIR/filename
+            if ($REMOTE_DIR === '/') {
+                $remote = '/' . $entry;
+            } else {
+                $remote = $REMOTE_DIR . '/' . $entry;
+            }
             
             // Récupérer les infos extraites du nom de fichier
             $fileInfo = $fileInfoIndex[$entry] ?? null;
@@ -842,10 +917,10 @@ if (is_array($files) && count($files) > 0) {
                 $downloadErrors++;
                 echo "❌ Erreur téléchargement $entry\n";
                 try {
-                    [$moved, $target] = sftp_safe_move($sftp, $remote, '/errors');
+                    [$moved, $target] = sftp_safe_move($sftp, $remote, $ERRORS_DIR);
                     $fileDebug['moved_to'] = $moved ? $target : 'errors_failed';
                 } catch (Throwable $e) {
-                    echo "⚠️ Impossible de déplacer $entry vers /errors: " . $e->getMessage() . "\n";
+                    echo "⚠️ Impossible de déplacer $entry vers $ERRORS_DIR: " . $e->getMessage() . "\n";
                     $fileDebug['move_error'] = $e->getMessage();
                 }
                 
@@ -927,7 +1002,7 @@ if (is_array($files) && count($files) > 0) {
                     ]);
                     echo "⚠️ $errorMsg → /errors\n";
                     try {
-                        [$moved, $target] = sftp_safe_move($sftp, $remote, '/errors');
+                        [$moved, $target] = sftp_safe_move($sftp, $remote, $ERRORS_DIR);
                         $fileDebug['moved_to'] = $moved ? $target : 'errors_failed';
                     } catch (Throwable $e) {
                         debugLog("Erreur déplacement fichier", ['error' => $e->getMessage()]);
@@ -988,7 +1063,7 @@ if (is_array($files) && count($files) > 0) {
                 ]);
                 echo "❌ $errorMsg\n";
                 try {
-                    sftp_safe_move($sftp, $remote, '/errors');
+                    sftp_safe_move($sftp, $remote, $ERRORS_DIR);
                 } catch (Throwable $moveErr) {
                     debugLog("Erreur déplacement fichier", ['error' => $moveErr->getMessage()]);
                 }
@@ -1107,20 +1182,26 @@ if (is_array($files) && count($files) > 0) {
             // Ajouter à la liste des fichiers traités (même si le déplacement échoue)
             $files_list[] = $entry;
             
-            try {
-                [$okMove, $target] = sftp_safe_move($sftp, $remote, '/processed');
-                if (!$okMove) {
-                    $fileDebug['moved_to'] = 'processed_failed';
-                    echo "⚠️ Impossible de déplacer $entry vers /processed\n";
-                } else {
-                    $fileDebug['moved_to'] = $target;
-                    echo "📦 Archivé: $entry → /processed\n";
+            // Ne pas déplacer si remote_dir_used === processed_dir (évite déplacer sur lui-même)
+            if ($REMOTE_DIR === $PROCESSED_DIR) {
+                $fileDebug['moved_to'] = 'skipped_same_dir';
+                echo "ℹ️ Fichier déjà dans $PROCESSED_DIR, pas de déplacement nécessaire\n";
+            } else {
+                try {
+                    [$okMove, $target] = sftp_safe_move($sftp, $remote, $PROCESSED_DIR);
+                    if (!$okMove) {
+                        $fileDebug['moved_to'] = 'processed_failed';
+                        echo "⚠️ Impossible de déplacer $entry vers $PROCESSED_DIR\n";
+                    } else {
+                        $fileDebug['moved_to'] = $target;
+                        echo "📦 Archivé: $entry → $PROCESSED_DIR\n";
+                    }
+                } catch (Throwable $e) {
+                    $fileDebug['moved_to'] = 'processed_error';
+                    $fileDebug['move_error'] = $e->getMessage();
+                    echo "⚠️ Erreur lors du déplacement de $entry: " . $e->getMessage() . "\n";
+                    // On continue quand même, le fichier est déjà traité
                 }
-            } catch (Throwable $e) {
-                $fileDebug['moved_to'] = 'processed_error';
-                $fileDebug['move_error'] = $e->getMessage();
-                echo "⚠️ Erreur lors du déplacement de $entry: " . $e->getMessage() . "\n";
-                // On continue quand même, le fichier est déjà traité
             }
             
             $processedFiles[] = $fileDebug;
@@ -1204,7 +1285,9 @@ if (is_array($files) && count($files) > 0) {
         log_import_run($pdo, [
             'source' => 'SFTP',
             'stage' => 'scan_files',
-            'remote_dir' => $REMOTE_DIR,
+            'remote_dir_requested' => $remote_dir_requested,
+            'remote_dir_used' => $REMOTE_DIR,
+            'processed_dir' => $PROCESSED_DIR,
             'total_files' => $totalFiles ?? 0,
             'matched_files' => 0,
             'pattern' => $CSV_PATTERN,
@@ -1219,7 +1302,9 @@ try {
     // Créer un message JSON structuré pour différencier les sources
     $summaryData = [
         'source' => 'SFTP',
-        'remote_dir' => $REMOTE_DIR,
+        'remote_dir_requested' => $remote_dir_requested,
+        'remote_dir_used' => $REMOTE_DIR,
+        'processed_dir' => $PROCESSED_DIR,
         'pid' => IMPORT_PID,
         'total_files' => $totalFiles ?? 0,
         'matched_files' => count($csvFiles ?? []),

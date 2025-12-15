@@ -5,8 +5,10 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('messagerie', []); // Accessible à tous les utilisateurs connectés
-require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
+
+// Récupérer PDO via la fonction centralisée
+$pdo = getPdo();
 
 $CSRF = ensureCsrfToken();
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);

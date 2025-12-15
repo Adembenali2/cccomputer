@@ -9,9 +9,11 @@
 // ========================================================================
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('profil', ['Admin', 'Dirigeant', 'Technicien', 'Livreur']);
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/historique.php';
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/historique.php';
+
+// Récupérer PDO via la fonction centralisée
+$pdo = getPdo();
 
 // ========================================================================
 // CONSTANTES

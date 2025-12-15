@@ -266,9 +266,11 @@ Après chaque modification, tester rapidement :
 - ✅ Isolation DatabaseConnection : classe déplacée dans `includes/db_connection.php` (suppression dépendance helpers.php → api_helpers.php)
 - ✅ Lot #1 migré (4 fichiers : auth_role.php, last_import_ancien.php, run_import_ancien_if_due.php, debug_import.php)
 - ✅ Lot #2 migré (10 fichiers API : maps_get_all_clients, dashboard_get_sav, messagerie_get_unread_count, dashboard_get_deliveries, dashboard_get_techniciens, dashboard_get_livreurs, dashboard_get_stock_products, maps_search_clients, dashboard_create_sav, stock_add)
+- ✅ Lot #2B : Centralisation erreurs DB API (getPdoOrFail, apiFail)
+- ✅ Lot #3 migré (5 fichiers publics : clients.php, stock.php, messagerie.php, profil.php, historique.php)
 - ✅ Stabilisation effectuée : fallbacks supprimés, `getPdo()` simplifié
 - ✅ Tous les includes utilisent `require_once` (vérification effectuée)
-- ⚠️ Les fichiers publics et certains fichiers API utilisent encore `$pdo` directement ou `requirePdoConnection()`
+- ⚠️ D'autres fichiers publics et certains fichiers API utilisent encore `$pdo` directement ou `requirePdoConnection()`
 - ⚠️ Compatibilité temporaire maintenue : `$GLOBALS['pdo']` et `global $pdo` dans db.php (sera retiré après migration complète)
 
 **Prochaines étapes** :
@@ -439,6 +441,42 @@ Après chaque modification, tester rapidement :
   - `/API/dashboard_get_techniciens.php` - doit retourner `{"ok":false,"error":"Erreur de connexion à la base de données"}` avec code 500
 - Vérifier que le comportement fonctionnel normal reste identique (quand la DB fonctionne)
 - Optionnel : Simuler une panne DB (désactiver MySQL) et vérifier que tous les endpoints retournent la même réponse d'erreur standardisée
+
+---
+
+### ÉTAPE Z3 - Migration PDO Lot #3 (PUBLIC)
+**Date** : Généré automatiquement  
+**Fichiers modifiés** : 
+- `public/clients.php` - Remplacement de `require_once db.php` par `helpers.php` + `getPdo()`
+- `public/stock.php` - Remplacement de `require_once db.php` par `helpers.php` + `getPdo()`
+- `public/messagerie.php` - Remplacement de `require_once db.php` par `helpers.php` + `getPdo()`
+- `public/profil.php` - Remplacement de `require_once db.php` par `helpers.php` + `getPdo()`
+- `public/historique.php` - Remplacement de `require_once db.php` par `helpers.php` + `getPdo()`
+
+**Modification** : 
+- Pour chaque fichier migré :
+  - Remplacement de l'inclusion `db.php` par `helpers.php` (ou s'assurer que `helpers.php` est inclus)
+  - Ajout de `$pdo = getPdo();` après les includes nécessaires
+  - Suppression de la dépendance vers `$pdo` global créé par `db.php`
+  - Les fichiers utilisent maintenant une variable locale `$pdo` obtenue via `getPdo()`
+- Pas d'utilisation de `getPdoOrFail()` (réservé aux API)
+- Aucune modification du SQL ni du HTML
+
+**Raison** : 
+- Migration progressive des pages publiques vers l'utilisation unifiée de `getPdo()`
+- Élimination progressive des dépendances vers les variables globales PDO
+- Normalisation de l'accès à la base de données dans tout le projet
+
+**Risque** : Faible - Migration ciblée sur 5 fichiers publics, compatibilité maintenue pour les fichiers non migrés  
+**Test** : 
+- Tester les pages migrées :
+  - `/public/clients.php` - doit afficher la liste des clients normalement
+  - `/public/stock.php` - doit afficher la gestion du stock normalement
+  - `/public/messagerie.php` - doit afficher la messagerie normalement
+  - `/public/profil.php` - doit afficher la gestion des profils normalement
+  - `/public/historique.php` - doit afficher l'historique normalement
+- Vérifier qu'aucun fichier migré n'utilise encore `$GLOBALS['pdo']`, `global $pdo` ou `require_once db.php`
+- Vérifier que toutes les fonctionnalités (affichage, recherche, filtres) fonctionnent normalement
 
 ---
 
