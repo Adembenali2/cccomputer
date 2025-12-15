@@ -48,14 +48,24 @@ function requireCommercial() {
  * @return bool True si l'utilisateur a accès, false sinon
  */
 function checkPagePermission(string $page, array $allowed_roles = []): bool {
-    global $pdo;
+    // Récupérer PDO via la fonction centralisée
+    if (!function_exists('getPdo')) {
+        require_once __DIR__ . '/helpers.php';
+    }
+    try {
+        $pdo = getPdo();
+    } catch (RuntimeException $e) {
+        // Si PDO n'est pas disponible, refuser l'accès
+        error_log('checkPagePermission: Impossible de récupérer PDO: ' . $e->getMessage());
+        return false;
+    }
     
     // Récupérer les informations de l'utilisateur depuis la session
     $user_id = (int)($_SESSION['user_id'] ?? 0);
     $emploi = $_SESSION['emploi'] ?? '';
     
-    // Si pas de connexion DB ou pas d'utilisateur, refuser
-    if (!isset($pdo) || empty($user_id)) {
+    // Si pas d'utilisateur, refuser
+    if (empty($user_id)) {
         return false;
     }
     

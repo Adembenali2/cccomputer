@@ -18,11 +18,15 @@ try {
     $projectRoot = dirname(__DIR__);
     require_once $projectRoot . '/includes/db.php';
     
-    if (!isset($GLOBALS['pdo']) || !$GLOBALS['pdo'] instanceof PDO) {
-        throw new Exception('PDO non initialisé');
+    // Récupérer PDO via la fonction centralisée
+    if (!function_exists('getPdo')) {
+        require_once $projectRoot . '/includes/helpers.php';
     }
-    
-    $pdo = $GLOBALS['pdo'];
+    try {
+        $pdo = getPdo();
+    } catch (RuntimeException $e) {
+        throw new Exception('PDO non initialisé: ' . $e->getMessage());
+    }
     
     /**
      * Table KV pour anti-bouclage

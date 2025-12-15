@@ -231,11 +231,11 @@ function load_pdo_isolated(string $dbPath): ?PDO {
         if (isset($db)  && $db  instanceof PDO) return $db;
         if (isset($conn) && $conn instanceof PDO) return $conn;
 
-        // si db.php set un global
-        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) return $GLOBALS['pdo'];
-        if (isset($GLOBALS['PDO']) && $GLOBALS['PDO'] instanceof PDO) return $GLOBALS['PDO'];
-        if (isset($GLOBALS['db'])  && $GLOBALS['db']  instanceof PDO) return $GLOBALS['db'];
-        if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO) return $GLOBALS['conn'];
+        // Récupérer PDO via la fonction centralisée
+        if (!function_exists('getPdo')) {
+            require_once __DIR__ . '/../includes/helpers.php';
+        }
+        return getPdo();
 
         return null;
     })($dbPath);
@@ -821,7 +821,9 @@ function section_web_ionos(array &$result, bool $runWeb): void {
 
         libxml_use_internal_errors(true);
         $dom = new DOMDocument();
-        @$dom->loadHTML('<?xml encoding="UTF-8">' . $html);
+        $dom->loadHTML('<?xml encoding="UTF-8">' . $html); // Erreurs capturées par libxml_use_internal_errors
+        $errors = libxml_get_errors();
+        libxml_clear_errors();
 
         $xpath = new DOMXPath($dom);
         $rows = $xpath->query('//table//tr');

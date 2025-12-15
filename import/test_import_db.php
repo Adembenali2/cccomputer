@@ -6,9 +6,9 @@
 
 declare(strict_types=1);
 
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
-ini_set('log_errors', '1');
+// Configuration d'erreurs sécurisée (script de test, affiche les erreurs)
+require_once __DIR__ . '/../includes/helpers.php';
+configureErrorReporting(true); // forceDev=true pour afficher les erreurs de test
 
 echo "=== TEST IMPORT BASE DE DONNÉES ===\n\n";
 

@@ -17,11 +17,15 @@ try {
     
     require_once dirname(__DIR__) . '/includes/db.php';
     
-    if (!isset($GLOBALS['pdo']) || !$GLOBALS['pdo'] instanceof PDO) {
-        throw new Exception('PDO non initialisé');
+    // Récupérer PDO via la fonction centralisée
+    if (!function_exists('getPdo')) {
+        require_once dirname(__DIR__) . '/includes/helpers.php';
     }
-    
-    $pdo = $GLOBALS['pdo'];
+    try {
+        $pdo = getPdo();
+    } catch (RuntimeException $e) {
+        throw new Exception('PDO non initialisé: ' . $e->getMessage());
+    }
     
     // Récupérer le dernier import avec source = 'ancien_import'
     $stmt = $pdo->prepare("

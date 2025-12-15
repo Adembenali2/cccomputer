@@ -7,6 +7,11 @@ if (file_exists(__DIR__ . '/Logger.php')) {
     require_once __DIR__ . '/Logger.php';
 }
 
+// Charger helpers.php pour avoir accès à getPdo() (si pas déjà chargé)
+if (!function_exists('getPdo')) {
+    require_once __DIR__ . '/helpers.php';
+}
+
 /**
  * Réponse JSON standardisée pour toutes les API
  */
@@ -69,27 +74,22 @@ class DatabaseConnection {
     
     /**
      * Récupère l'instance PDO unique (Singleton)
-     * Compatible avec le système GLOBALS existant
+     * Source de vérité pour toute la gestion PDO
      */
     public static function getInstance(): PDO {
         // Si déjà initialisé, retourner l'instance
         if (self::$instance !== null && self::$instance instanceof PDO) {
-            // Maintenir la compatibilité avec GLOBALS
+            // Compatibilité temporaire : maintenir GLOBALS tant que la migration n'est pas terminée
             $GLOBALS['pdo'] = self::$instance;
             return self::$instance;
         }
         
-        // Sinon, récupérer depuis GLOBALS ou charger db.php
-        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
-            self::$instance = $GLOBALS['pdo'];
-            return self::$instance;
-        }
-        
-        // Dernier recours : charger db.php
+        // Si pas encore initialisé, charger depuis db.php qui crée la connexion
         if (!defined('DB_LOADED')) {
             require_once __DIR__ . '/db.php';
         }
         
+        // Récupérer depuis GLOBALS (créé par db.php)
         if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
             self::$instance = $GLOBALS['pdo'];
             return self::$instance;
@@ -101,79 +101,45 @@ class DatabaseConnection {
 
 /**
  * Vérifie que la connexion PDO existe
- * Utilise DatabaseConnection pour une meilleure gestion interne
+ * @deprecated Utiliser getPdo() à la place (depuis includes/helpers.php)
+ * Conservé temporairement pour compatibilité pendant la migration
  */
 function requirePdoConnection(?PDO $pdo = null): PDO {
     // Priorité 1: Vérifier le paramètre passé
     if ($pdo instanceof PDO) {
-        // S'assurer qu'il est aussi dans GLOBALS pour compatibilité
+        // Compatibilité temporaire
         $GLOBALS['pdo'] = $pdo;
-        DatabaseConnection::$instance = $pdo;
         return $pdo;
     }
     
-    // Priorité 2: Utiliser DatabaseConnection (améliore la gestion interne)
+    // Priorité 2: Utiliser DatabaseConnection (source de vérité)
     try {
         $pdo = DatabaseConnection::getInstance();
-        // Maintenir la compatibilité avec GLOBALS
+        // Compatibilité temporaire
         $GLOBALS['pdo'] = $pdo;
         return $pdo;
     } catch (RuntimeException $e) {
-        // Fallback sur l'ancienne méthode pour compatibilité
+        // Fallback pour compatibilité temporaire
     }
     
-    // Priorité 3: Vérifier GLOBALS directement (ancienne méthode)
+    // Fallback temporaire : vérifier GLOBALS directement (sera retiré après migration)
     if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
         return $GLOBALS['pdo'];
     }
     
-    // Priorité 4: Vérifier la variable globale classique
-    global $pdo;
-    if (isset($pdo) && $pdo instanceof PDO) {
-        // S'assurer qu'il est aussi dans GLOBALS
-        $GLOBALS['pdo'] = $pdo;
-        return $pdo;
+    // Si toujours pas de PDO, essayer de le charger depuis db.php
+    if (!defined('DB_LOADED')) {
+        require_once __DIR__ . '/db.php';
+        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+            return $GLOBALS['pdo'];
+        }
     }
     
-    // Si toujours pas de PDO, essayer de le charger depuis db.php
-    try {
-        // Vérifier si db.php a été chargé
-        if (!isset($GLOBALS['pdo'])) {
-            // Essayer de charger db.php si pas déjà fait
-            if (!defined('DB_LOADED')) {
-                require_once __DIR__ . '/db.php';
-                // Après le require, vérifier à nouveau GLOBALS
-                if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
-                    return $GLOBALS['pdo'];
-                }
-            }
-        }
-        
-        // Dernière vérification
-        if (!isset($GLOBALS['pdo']) || !($GLOBALS['pdo'] instanceof PDO)) {
-            throw new RuntimeException(
-                'La connexion PDO n\'est pas disponible. ' .
-                'db.php a été chargé mais $pdo n\'est pas dans $GLOBALS. ' .
-                'Vérifiez la configuration de la base de données.'
-            );
-        }
-        
-        return $GLOBALS['pdo'];
-        
-    } catch (Throwable $e) {
-        error_log('requirePdoConnection error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        jsonResponse([
-            'ok' => false, 
-            'error' => 'Erreur de connexion à la base de données',
-            'debug' => [
-                'message' => $e->getMessage(),
-                'type' => get_class($e),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => explode("\n", $e->getTraceAsString())
-            ]
-        ], 500);
-    }
+    error_log('requirePdoConnection error: Impossible de récupérer PDO');
+    jsonResponse([
+        'ok' => false, 
+        'error' => 'Erreur de connexion à la base de données'
+    ], 500);
 }
 
 /**
@@ -187,10 +153,12 @@ function initApi(): void {
     requireRateLimit(60, 60); // 60 requêtes par minute
     
     ob_start();
-    error_reporting(E_ALL);
-    ini_set('display_errors', 0);
-    ini_set('html_errors', 0);
-    ini_set('log_errors', 1);
+    
+    // Configuration d'erreurs sécurisée (production par défaut pour les API)
+    if (!function_exists('configureErrorReporting')) {
+        require_once __DIR__ . '/helpers.php';
+    }
+    configureErrorReporting(false); // API en production (pas d'affichage d'erreurs)
     
     // Définir les headers JSON en premier
     if (!headers_sent()) {
@@ -221,6 +189,7 @@ function initApi(): void {
             throw new RuntimeException("Le fichier db.php n'existe pas à: $dbFile");
         }
         
+        // Toujours utiliser require_once pour éviter les redéclarations
         require_once $dbFile;
         
         // Vérifier que db.php a bien été chargé

@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
-error_reporting(E_ALL);
-ini_set('display_errors','1');
+
+// Configuration d'erreurs sécurisée (affiche les erreurs pour debug d'import)
+require_once __DIR__ . '/../includes/helpers.php';
+configureErrorReporting(true); // forceDev=true pour afficher les erreurs d'import en temps réel
 
 /**
  * /import/import_ancien_http.php
@@ -147,7 +149,8 @@ if($html === false){
 // ---------- Parser HTML (même logique que import_ancien_données.php) ----------
 libxml_use_internal_errors(true);
 $dom = new DOMDocument();
-@$dom->loadHTML($html);
+$dom->loadHTML($html); // Erreurs capturées par libxml_use_internal_errors
+$errors = libxml_get_errors();
 libxml_clear_errors();
 $xpath = new DOMXPath($dom);
 

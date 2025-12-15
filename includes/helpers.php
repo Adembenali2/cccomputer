@@ -357,3 +357,50 @@ if (!function_exists('normalizeMacForUrl')) {
     }
 }
 
+/**
+ * Configure les paramètres d'erreurs PHP de manière sécurisée
+ * Respecte l'environnement (production vs développement)
+ * 
+ * @param bool $forceDev Si true, force le mode développement (pour scripts de debug)
+ * @return void
+ */
+if (!function_exists('configureErrorReporting')) {
+    function configureErrorReporting(bool $forceDev = false): void {
+        $isDevelopment = $forceDev || (getenv('APP_ENV') ?: 'production') === 'development';
+        
+        // Toujours activer le reporting complet pour les logs
+        error_reporting(E_ALL);
+        
+        // En production : masquer les erreurs à l'utilisateur, les logger uniquement
+        // En développement : afficher les erreurs pour faciliter le debug
+        ini_set('display_errors', $isDevelopment ? '1' : '0');
+        ini_set('html_errors', '0'); // Pas d'HTML dans les erreurs (sécurité)
+        ini_set('log_errors', '1');  // Toujours logger les erreurs
+    }
+}
+
+/**
+ * Récupère l'instance PDO unique (source de vérité)
+ * Utilise DatabaseConnection::getInstance() pour une gestion unifiée
+ * 
+ * @return PDO Instance PDO unique
+ * @throws RuntimeException Si la connexion PDO n'est pas disponible
+ */
+if (!function_exists('getPdo')) {
+    function getPdo(): PDO {
+        // Charger DatabaseConnection si pas encore chargé (pour les pages publiques)
+        if (!class_exists('DatabaseConnection')) {
+            // Charger depuis api_helpers.php qui contient la classe DatabaseConnection
+            $apiHelpersPath = __DIR__ . '/api_helpers.php';
+            if (file_exists($apiHelpersPath)) {
+                require_once $apiHelpersPath;
+            } else {
+                throw new RuntimeException('DatabaseConnection non disponible : api_helpers.php introuvable');
+            }
+        }
+        
+        // Utiliser DatabaseConnection comme source de vérité unique
+        return DatabaseConnection::getInstance();
+    }
+}
+

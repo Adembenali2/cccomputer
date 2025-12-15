@@ -50,15 +50,17 @@ if (!defined('DB_LOADED')) {
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
     
-    // IMPORTANT: Stocker dans GLOBALS pour garantir l'accessibilité globale
+    // COMPATIBILITÉ TEMPORAIRE : Stocker dans GLOBALS pour garantir la compatibilité
+    // pendant la migration progressive. Cette ligne sera retirée à la fin de la migration.
+    // DatabaseConnection::getInstance() pourra récupérer cette instance depuis GLOBALS
     $GLOBALS['pdo'] = $pdo;
     
-    // S'assurer aussi que la variable globale classique est définie
+    // COMPATIBILITÉ TEMPORAIRE : Variable globale classique (sera retirée après migration)
     global $pdo;
     
     // Log de succès pour le débogage (sans informations sensibles)
     $safeDsn = preg_replace('/:[^@]+@/', ':****@', $dsn);
-    error_log("DB connection successful: DSN=$safeDsn, PDO stored in GLOBALS");
+    error_log("DB connection successful: DSN=$safeDsn, PDO stored in GLOBALS (compatibilité temporaire)");
     
 } catch (PDOException $e) {
     // Ne jamais logger les credentials en clair

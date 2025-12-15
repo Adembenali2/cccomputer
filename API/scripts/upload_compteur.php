@@ -50,13 +50,14 @@ function debug_die(?PDO $pdo, string $stage, string $error, array $extra = [], i
     exit($code);
 }
 
-// Fonction de debug avec timestamp et PID
-function debugLog(string $message, array $context = []): void {
-    $timestamp = date('Y-m-d H:i:s');
-    $contextStr = !empty($context) ? ' | Context: ' . json_encode($context, JSON_UNESCAPED_UNICODE) : '';
-    $logMsg = "[$timestamp] [PID:" . IMPORT_PID . "] [DEBUG] $message$contextStr\n";
-    echo $logMsg;
-    error_log($logMsg);
+// Fonction de debug - centralisée dans includes/debug_helpers.php
+require_once __DIR__ . '/../../../includes/debug_helpers.php';
+// Wrapper pour préserver la compatibilité avec les appels existants (signature: message, context)
+if (!function_exists('debugLog')) {
+    function debugLog(string $message, array $context = []): void {
+        // Utiliser la fonction centralisée avec tag PID et echo=true
+        \debugLog($message, $context, 'PID:' . (defined('IMPORT_PID') ? IMPORT_PID : getmypid()), true);
+    }
 }
 
 // ====== STAGE: bootstrap ======

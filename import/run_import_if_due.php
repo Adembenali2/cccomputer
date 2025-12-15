@@ -9,12 +9,13 @@ ini_set('log_errors', '1');
 
 $projectRoot = dirname(__DIR__); // ← racine du projet (pas besoin de remonter plus)
 
-// Fonction de debug
-function debugLog(string $message, array $context = []): void {
-    $timestamp = date('Y-m-d H:i:s');
-    $contextStr = !empty($context) ? ' | Context: ' . json_encode($context, JSON_UNESCAPED_UNICODE) : '';
-    $logMsg = "[$timestamp] [run_import_if_due] $message$contextStr\n";
-    error_log($logMsg);
+// Fonction de debug - centralisée dans includes/debug_helpers.php
+require_once __DIR__ . '/../includes/debug_helpers.php';
+// Wrapper pour préserver la compatibilité avec les appels existants
+if (!function_exists('debugLog')) {
+    function debugLog(string $message, array $context = []): void {
+        \debugLog($message, $context, 'run_import_if_due', false);
+    }
 }
 
 debugLog("=== DÉBUT run_import_if_due.php ===", ['project_root' => $projectRoot]);
