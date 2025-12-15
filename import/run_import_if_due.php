@@ -158,14 +158,22 @@ $env = $_ENV + $_SERVER + ['SFTP_BATCH_LIMIT' => (string)$limit];
 $TIMEOUT_SEC = 60;
 $startTime = time();
 
+// Forcer le working directory au root du projet pour éviter les problèmes de chemins relatifs
+$cwd = $projectRoot;
+if (!is_dir($cwd)) {
+    debugLog("ERREUR: projectRoot n'est pas un répertoire valide", ['path' => $cwd]);
+    $cwd = dirname(__DIR__); // Fallback vers le répertoire parent de import/
+}
+
 debugLog("Lancement du processus", [
     'cmd' => $cmd,
-    'cwd' => $projectRoot,
+    'cwd' => $cwd,
     'limit' => $limit,
-    'timeout' => $TIMEOUT_SEC
+    'timeout' => $TIMEOUT_SEC,
+    'project_root' => $projectRoot
 ]);
 
-$proc = proc_open($cmd, $desc, $pipes, $projectRoot, $env);
+$proc = proc_open($cmd, $desc, $pipes, $cwd, $env);
 $out = $err = '';
 $code = null;
 $timeoutReached = false;
