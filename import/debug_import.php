@@ -291,12 +291,15 @@ function section_db(array &$result): void {
                 'first_row_decoded_is_array' => null
             ];
             
-            if (!empty($rows) && is_array($rows)) {
+            if (!empty($rows) && is_array($rows) && isset($rows[0])) {
                 $firstRow = $rows[0];
+                // Normaliser : toujours un array
+                $firstRow = is_array($firstRow) ? $firstRow : [];
+                
                 $db['debug_line_362']['first_row_type'] = gettype($firstRow);
                 $db['debug_line_362']['first_row_is_array'] = is_array($firstRow);
                 
-                if (is_array($firstRow)) {
+                if (is_array($firstRow) && !empty($firstRow)) {
                     $firstMsg = arr_get($firstRow, 'msg', '');
                     $db['debug_line_362']['first_row_msg_type'] = gettype($firstMsg);
                     
@@ -370,13 +373,28 @@ function section_db(array &$result): void {
                 LIMIT 1
             ");
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Normaliser : toujours un array
+            $row = is_array($row) ? $row : [];
             
-            // Protection : vérifier que $row est un array
-            if ($row && is_array($row)) {
-                $msg = arr_get($row, 'msg', '');
-                $jsonError = null;
-                $decoded = safe_json_decode($msg, $jsonError);
-                
+            // Crash shield - debug anti-crash ligne ~428
+            $msg = arr_get($row, 'msg', '');
+            $jsonError = null;
+            $decoded = safe_json_decode($msg, $jsonError);
+            
+            $db['debug_line_428'] = [
+                'row_type' => gettype($row),
+                'row_is_array' => is_array($row),
+                'row_keys' => is_array($row) ? array_keys($row) : null,
+                'msg_type' => gettype($msg),
+                'msg_length' => is_string($msg) ? strlen($msg) : 0,
+                'decoded_type' => gettype($decoded),
+                'decoded_is_array' => is_array($decoded),
+                'decoded_keys' => is_array($decoded) ? array_keys($decoded) : null,
+                'json_error' => $jsonError
+            ];
+            
+            // Protection : vérifier que $row est un array (devrait toujours être le cas après normalisation)
+            if (!empty($row) && is_array($row)) {
                 $db['last_summary_sftp'] = [
                     'id' => (int)arr_get($row, 'id', 0),
                     'ran_at' => arr_get($row, 'ran_at', ''),
@@ -389,9 +407,9 @@ function section_db(array &$result): void {
                     'matched_files' => is_array($decoded) ? arr_get($decoded, 'matched_files') : null,
                     'processed_files' => is_array($decoded) ? arr_get($decoded, 'processed_files') : null
                 ];
-            } elseif ($row) {
-                // $row existe mais n'est pas un array
-                addWarning($result, 'last_summary_sftp row is not an array', [
+            } elseif (!empty($row)) {
+                // $row existe mais n'est pas un array (ne devrait jamais arriver après normalisation)
+                addWarning($result, 'last_summary_sftp row is not an array after normalization', [
                     'row_type' => gettype($row),
                     'row_preview' => substr(safe_scalar($row), 0, 200)
                 ]);
@@ -409,12 +427,14 @@ function section_db(array &$result): void {
                 WHERE DateInsertion > NOW() - INTERVAL 10 MINUTE
             ");
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Normaliser : toujours un array
+            $row = is_array($row) ? $row : [];
             
             // Protection : utiliser arr_get() au lieu d'accès direct
-            if (is_array($row)) {
+            if (!empty($row) && is_array($row)) {
                 $db['recent_rows_inserted'] = (int)arr_get($row, 'cnt', 0);
-            } else {
-                addWarning($result, 'recent_rows_inserted row is not an array', [
+            } elseif (!empty($row)) {
+                addWarning($result, 'recent_rows_inserted row is not an array after normalization', [
                     'row_type' => gettype($row),
                     'row_preview' => substr(safe_scalar($row), 0, 200)
                 ]);
@@ -425,9 +445,17 @@ function section_db(array &$result): void {
         
     } catch (Throwable $e) {
         addError($result, 'Exception in section_db: ' . $e->getMessage());
-        $db['error'] = $e->getMessage();
+        // S'assurer que $db est un array avant d'y ajouter une clé
+        if (!is_array($db)) {
+            $db = [];
+        }
+        $db['error'] = safe_scalar($e->getMessage());
     }
     
+    // S'assurer que $db est toujours un array avant de l'assigner
+    if (!is_array($db)) {
+        $db = [];
+    }
     $result['db'] = $db;
 }
 
