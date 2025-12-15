@@ -74,6 +74,10 @@ function arr_get($v, $k, $default = null) {
     return (is_array($v) && array_key_exists($k, $v)) ? $v[$k] : $default;
 }
 
+function ensure_array($v): array {
+    return is_array($v) ? $v : [];
+}
+
 function safe_json_decode($s, &$err = null): ?array {
     $err = null;
     if (!is_string($s) || $s === '') return null;
@@ -273,15 +277,59 @@ function section_db(array &$result): void {
                 LIMIT 10
             ");
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $rows = ensure_array($rows);
+            
+            // Debug anti-crash
+            $db['debug_line_362'] = [
+                'rows_type' => gettype($rows),
+                'rows_is_array' => is_array($rows),
+                'rows_count' => is_array($rows) ? count($rows) : 0,
+                'first_row_type' => null,
+                'first_row_is_array' => null,
+                'first_row_msg_type' => null,
+                'first_row_decoded_type' => null,
+                'first_row_decoded_is_array' => null
+            ];
+            
+            if (!empty($rows) && is_array($rows)) {
+                $firstRow = $rows[0];
+                $db['debug_line_362']['first_row_type'] = gettype($firstRow);
+                $db['debug_line_362']['first_row_is_array'] = is_array($firstRow);
+                
+                if (is_array($firstRow)) {
+                    $firstMsg = arr_get($firstRow, 'msg', '');
+                    $db['debug_line_362']['first_row_msg_type'] = gettype($firstMsg);
+                    
+                    $jsonErr = null;
+                    $firstDecoded = safe_json_decode($firstMsg, $jsonErr);
+                    $db['debug_line_362']['first_row_decoded_type'] = gettype($firstDecoded);
+                    $db['debug_line_362']['first_row_decoded_is_array'] = is_array($firstDecoded);
+                }
+            }
             
             foreach ($rows as $r) {
+                // Protection : vérifier que $r est un array
+                if (!is_array($r)) {
+                    addWarning($result, 'Non-array row encountered in import_run', [
+                        'row_type' => gettype($r),
+                        'row_preview' => substr(safe_scalar($r), 0, 200)
+                    ]);
+                    continue;
+                }
+                
                 $msg = arr_get($r, 'msg', '');
                 $jsonError = null;
                 $decoded = safe_json_decode($msg, $jsonError);
                 
                 $type = 'other';
                 if (is_array($decoded)) {
-                    if (isset($decoded['processed_files']) || isset($decoded['inserted']) || isset($decoded['matched_files'])) {
+                    $source = arr_get($decoded, 'source', null);
+                    // Utiliser arr_get() pour être sûr (isset() est OK mais arr_get() est plus sûr)
+                    $hasProcessedFiles = arr_get($decoded, 'processed_files') !== null;
+                    $hasInserted = arr_get($decoded, 'inserted') !== null;
+                    $hasMatchedFiles = arr_get($decoded, 'matched_files') !== null;
+                    
+                    if ($hasProcessedFiles || $hasInserted || $hasMatchedFiles) {
                         $type = 'summary';
                     } elseif (arr_get($decoded, 'stage') === 'process_file') {
                         $type = 'process_file';
@@ -301,7 +349,7 @@ function section_db(array &$result): void {
                     $importData['msg'] = $decoded;
                 } else {
                     $importData['msg_decoded'] = null;
-                    $importData['msg_raw_preview'] = substr($msg, 0, 400);
+                    $importData['msg_raw_preview'] = substr(safe_scalar($msg), 0, 400);
                     $importData['json_error'] = $jsonError;
                 }
                 
@@ -322,9 +370,12 @@ function section_db(array &$result): void {
                 LIMIT 1
             ");
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($row) {
+            
+            // Protection : vérifier que $row est un array
+            if ($row && is_array($row)) {
                 $msg = arr_get($row, 'msg', '');
-                $decoded = safe_json_decode($msg);
+                $jsonError = null;
+                $decoded = safe_json_decode($msg, $jsonError);
                 
                 $db['last_summary_sftp'] = [
                     'id' => (int)arr_get($row, 'id', 0),
@@ -333,11 +384,17 @@ function section_db(array &$result): void {
                     'imported' => (int)arr_get($row, 'imported', 0),
                     'skipped' => (int)arr_get($row, 'skipped', 0),
                     'msg' => $decoded,
-                    'inserted' => arr_get($decoded, 'inserted'),
-                    'updated' => arr_get($decoded, 'updated'),
-                    'matched_files' => arr_get($decoded, 'matched_files'),
-                    'processed_files' => arr_get($decoded, 'processed_files')
+                    'inserted' => is_array($decoded) ? arr_get($decoded, 'inserted') : null,
+                    'updated' => is_array($decoded) ? arr_get($decoded, 'updated') : null,
+                    'matched_files' => is_array($decoded) ? arr_get($decoded, 'matched_files') : null,
+                    'processed_files' => is_array($decoded) ? arr_get($decoded, 'processed_files') : null
                 ];
+            } elseif ($row) {
+                // $row existe mais n'est pas un array
+                addWarning($result, 'last_summary_sftp row is not an array', [
+                    'row_type' => gettype($row),
+                    'row_preview' => substr(safe_scalar($row), 0, 200)
+                ]);
             }
         } catch (Throwable $e) {
             addWarning($result, 'Failed to fetch last summary SFTP: ' . $e->getMessage());
@@ -352,7 +409,16 @@ function section_db(array &$result): void {
                 WHERE DateInsertion > NOW() - INTERVAL 10 MINUTE
             ");
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            $db['recent_rows_inserted'] = (int)($row['cnt'] ?? 0);
+            
+            // Protection : utiliser arr_get() au lieu d'accès direct
+            if (is_array($row)) {
+                $db['recent_rows_inserted'] = (int)arr_get($row, 'cnt', 0);
+            } else {
+                addWarning($result, 'recent_rows_inserted row is not an array', [
+                    'row_type' => gettype($row),
+                    'row_preview' => substr(safe_scalar($row), 0, 200)
+                ]);
+            }
         } catch (Throwable $e) {
             addWarning($result, 'Failed to count recent rows: ' . $e->getMessage());
         }
