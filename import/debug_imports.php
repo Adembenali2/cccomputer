@@ -41,14 +41,43 @@ $result = [
     'db' => [],
     'sftp' => [],
     'web' => [],
-    'errors' => []
+    'errors' => [],
+    'warnings' => []
 ];
+
+// ====== HELPERS: Array utilities ======
+function arr_get($v, $k, $default = null) {
+    return (is_array($v) && array_key_exists($k, $v)) ? $v[$k] : $default;
+}
+
+function ensure_array($v): array {
+    return is_array($v) ? $v : [];
+}
+
+function get_pdo_from_anywhere(): ?PDO {
+    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) return $GLOBALS['pdo'];
+    if (isset($GLOBALS['PDO']) && $GLOBALS['PDO'] instanceof PDO) return $GLOBALS['PDO'];
+    if (isset($GLOBALS['db']) && $GLOBALS['db'] instanceof PDO) return $GLOBALS['db'];
+    if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO) return $GLOBALS['conn'];
+    // tente aussi une variable locale si existante
+    if (isset($GLOBALS['GLOBALS']['pdo']) && $GLOBALS['GLOBALS']['pdo'] instanceof PDO) return $GLOBALS['GLOBALS']['pdo'];
+    return null;
+}
 
 function addError(array &$result, string $section, string $error, array $context = []): void {
     $result['ok'] = false;
     $result['errors'][] = [
         'section' => $section,
         'error' => $error,
+        'context' => $context,
+        'ts' => date('Y-m-d H:i:s')
+    ];
+}
+
+function addWarning(array &$result, string $section, string $warning, array $context = []): void {
+    $result['warnings'][] = [
+        'section' => $section,
+        'warning' => $warning,
         'context' => $context,
         'ts' => date('Y-m-d H:i:s')
     ];
@@ -111,10 +140,15 @@ function section_env(array &$result): void {
 }
 
 // ====== HELPER: Safe JSON decode ======
-function safe_json_decode($s) {
+function safe_json_decode($s, &$err = null) {
+    $err = null;
     if (!is_string($s) || $s === '') return null;
     $j = json_decode($s, true);
-    return (json_last_error() === JSON_ERROR_NONE && is_array($j)) ? $j : null;
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        $err = json_last_error_msg();
+        return null;
+    }
+    return is_array($j) ? $j : null;
 }
 
 // ====== SECTION DB ======
@@ -132,40 +166,60 @@ function section_db(array &$result): void {
         
         require_once $dbPath;
         
-        if (!isset($pdo) || !($pdo instanceof PDO)) {
-            addError($result, 'db', 'PDO not available after db.php load');
-            $result['db'] = ['error' => 'PDO not available'];
+        // Récupérer PDO depuis variable locale ou GLOBALS
+        $pdoLocal = null;
+        if (isset($pdo) && $pdo instanceof PDO) {
+            $pdoLocal = $pdo;
+        }
+        $pdo2 = $pdoLocal ?: get_pdo_from_anywhere();
+        
+        if ($pdo2 === null) {
+            // Dump des clés GLOBALS disponibles (sans secrets)
+            $globalsKeys = array_keys($GLOBALS);
+            $pdoKeys = [];
+            foreach (['pdo', 'PDO', 'db', 'conn'] as $key) {
+                if (isset($GLOBALS[$key])) {
+                    $pdoKeys[$key] = gettype($GLOBALS[$key]);
+                }
+            }
+            
+            addError($result, 'db', 'PDO not available after db.php load', [
+                'globals_keys_sample' => array_slice($globalsKeys, 0, 20),
+                'pdo_keys_types' => $pdoKeys
+            ]);
+            $result['db'] = ['error' => 'PDO not available', 'globals_dump' => $pdoKeys];
             return;
         }
         
         $db['connection'] = 'ok';
-        $db['pdo_class'] = get_class($pdo);
+        $db['pdo_class'] = get_class($pdo2);
+        $db['pdo_source'] = $pdoLocal ? 'local' : 'globals';
         
         // Test query
         try {
-            $pdo->query("SELECT 1");
+            $pdo2->query("SELECT 1");
             $db['test_query'] = 'ok';
         } catch (Throwable $e) {
             addError($result, 'db', 'Test query failed: ' . $e->getMessage());
             $db['test_query'] = 'failed';
             $db['test_error'] = $e->getMessage();
-            $db['error_info'] = $pdo->errorInfo();
+            $db['error_info'] = $pdo2->errorInfo();
         }
         
         // Check import_run table
         try {
-            $stmt = $pdo->query("SHOW TABLES LIKE 'import_run'");
+            $stmt = $pdo2->query("SHOW TABLES LIKE 'import_run'");
             $tableExists = $stmt->rowCount() > 0;
             $db['import_run_exists'] = $tableExists;
         } catch (Throwable $e) {
-            addError($result, 'db', 'Failed to check import_run table: ' . $e->getMessage());
+            addWarning($result, 'db', 'Failed to check import_run table: ' . $e->getMessage());
             $db['import_run_exists'] = false;
         }
         
         // Last 10 imports SFTP + WEB_COMPTEUR
         $db['last_imports'] = [];
         try {
-            $stmt = $pdo->query("
+            $stmt = $pdo2->query("
                 SELECT id, ran_at, imported, skipped, ok, msg 
                 FROM import_run 
                 ORDER BY id DESC 
@@ -178,30 +232,35 @@ function section_db(array &$result): void {
             $lastRowDebug = null;
             
             foreach ($allImports as $row) {
-                $msg = $row['msg'] ?? '';
+                // Protection contre les rows non-array
+                if (!is_array($row)) {
+                    addWarning($result, 'db', 'Non-array row encountered in import_run');
+                    continue;
+                }
+                
+                $msg = arr_get($row, 'msg', '');
                 $msgType = gettype($msg);
                 $msgLength = is_string($msg) ? strlen($msg) : 0;
                 
-                // Safe JSON decode
-                $decoded = safe_json_decode($msg);
+                // Safe JSON decode avec gestion d'erreur
                 $jsonError = null;
+                $decoded = safe_json_decode($msg, $jsonError);
                 $msgRaw = null;
                 
                 if ($decoded === null && !empty($msg)) {
                     // JSON decode failed
-                    $jsonError = json_last_error_msg();
                     $msgRaw = is_string($msg) ? substr($msg, 0, 400) : (string)$msg;
                 }
                 
                 // Extract source safely
                 $source = null;
-                if (is_array($decoded) && isset($decoded['source'])) {
-                    $source = $decoded['source'];
+                if (is_array($decoded)) {
+                    $source = arr_get($decoded, 'source', null);
                 }
                 
                 // Debug info for last row processed
                 $lastRowDebug = [
-                    'id' => (int)($row['id'] ?? 0),
+                    'id' => (int)arr_get($row, 'id', 0),
                     'msg_type' => $msgType,
                     'msg_length' => $msgLength,
                     'decoded_is_array' => is_array($decoded),
@@ -212,11 +271,11 @@ function section_db(array &$result): void {
                 
                 if ($source === 'SFTP' && count($sftpImports) < 10) {
                     $importData = [
-                        'id' => (int)$row['id'],
-                        'ran_at' => $row['ran_at'],
-                        'ok' => (int)$row['ok'],
-                        'imported' => (int)$row['imported'],
-                        'skipped' => (int)$row['skipped']
+                        'id' => (int)arr_get($row, 'id', 0),
+                        'ran_at' => arr_get($row, 'ran_at', ''),
+                        'ok' => (int)arr_get($row, 'ok', 0),
+                        'imported' => (int)arr_get($row, 'imported', 0),
+                        'skipped' => (int)arr_get($row, 'skipped', 0)
                     ];
                     
                     if (is_array($decoded)) {
@@ -232,11 +291,11 @@ function section_db(array &$result): void {
                 
                 if ($source === 'WEB_COMPTEUR' && count($webImports) < 10) {
                     $importData = [
-                        'id' => (int)$row['id'],
-                        'ran_at' => $row['ran_at'],
-                        'ok' => (int)$row['ok'],
-                        'imported' => (int)$row['imported'],
-                        'skipped' => (int)$row['skipped']
+                        'id' => (int)arr_get($row, 'id', 0),
+                        'ran_at' => arr_get($row, 'ran_at', ''),
+                        'ok' => (int)arr_get($row, 'ok', 0),
+                        'imported' => (int)arr_get($row, 'imported', 0),
+                        'skipped' => (int)arr_get($row, 'skipped', 0)
                     ];
                     
                     if (is_array($decoded)) {
@@ -262,7 +321,7 @@ function section_db(array &$result): void {
             }
             
         } catch (Throwable $e) {
-            addError($result, 'db', 'Failed to fetch last imports: ' . $e->getMessage());
+            addWarning($result, 'db', 'Failed to fetch last imports: ' . $e->getMessage());
         }
         
     } catch (Throwable $e) {
@@ -706,7 +765,7 @@ function section_web_ionos(array &$result, bool $writeDb): void {
             }
         }
         
-        if (empty($columnMap['mac']) || empty($columnMap['date'])) {
+        if (!isset($columnMap['mac'], $columnMap['date'])) {
             $columnMap = [
                 'mac' => 5,
                 'date' => 1
@@ -825,6 +884,13 @@ if ($htmlMode) {
         <div class="section">
             <h2>Errors</h2>
             <pre><?= htmlspecialchars(json_encode($result['errors'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></pre>
+        </div>
+        <?php endif; ?>
+        
+        <?php if (!empty($result['warnings'])): ?>
+        <div class="section">
+            <h2>Warnings</h2>
+            <pre><?= htmlspecialchars(json_encode($result['warnings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></pre>
         </div>
         <?php endif; ?>
     </body>
