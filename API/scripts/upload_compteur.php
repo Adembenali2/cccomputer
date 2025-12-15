@@ -441,39 +441,67 @@ $files_error = 0;
 $files_list = []; // Liste des fichiers traités pour le log
 
 // ---------- 5) Parcours fichiers avec timeout et gestion d'erreurs ----------
-debugLog("Étape 5: Liste des fichiers sur le serveur SFTP");
+// ====== STAGE: scan_files ======
+$REMOTE_DIR = getenv('SFTP_REMOTE_DIR') ?: '/';
+$REMOTE_DIR = rtrim($REMOTE_DIR, '/') ?: '/';
+
+debugLog("Étape 5: Liste des fichiers sur le serveur SFTP", ['remote_dir' => $REMOTE_DIR]);
 try {
     checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
     
-    echo "📂 Liste des fichiers sur le serveur SFTP...\n";
+    echo "📂 Liste des fichiers sur le serveur SFTP (répertoire: $REMOTE_DIR)...\n";
     $listStart = microtime(true);
-    $files = $sftp->nlist('/');
+    $files = $sftp->nlist($REMOTE_DIR);
     $listTime = round((microtime(true) - $listStart) * 1000, 2);
     
-    debugLog("Résultat de nlist('/')", [
+    // Essayer aussi rawlist() pour plus de détails
+    $rawFiles = false;
+    try {
+        $rawFiles = $sftp->rawlist($REMOTE_DIR);
+    } catch (Throwable $e) {
+        debugLog("rawlist() non disponible", ['error' => $e->getMessage()]);
+    }
+    
+    $totalFiles = is_array($files) ? count($files) : 0;
+    $firstFiles = is_array($files) ? array_slice($files, 0, 20) : [];
+    
+    log_import_run($pdo, [
+        'source' => 'SFTP',
+        'stage' => 'scan_files',
+        'remote_dir' => $REMOTE_DIR,
+        'total_files' => $totalFiles,
+        'first_files' => $firstFiles,
+        'nlist_result_type' => gettype($files),
+        'rawlist_available' => $rawFiles !== false,
+        'duration_ms' => $listTime,
+    ], true);
+    
+    debugLog("Résultat de nlist('$REMOTE_DIR')", [
         'result' => $files === false ? 'false' : 'array',
-        'count' => is_array($files) ? count($files) : 'N/A',
-        'duration_ms' => $listTime
+        'count' => $totalFiles,
+        'duration_ms' => $listTime,
+        'first_20' => $firstFiles
     ]);
     
     if ($files === false) {
-        $errorMsg = "Impossible de lister les fichiers du dossier racine SFTP";
+        $errorMsg = "Impossible de lister les fichiers du dossier SFTP: $REMOTE_DIR";
         debugLog("ERREUR FATALE", ['error' => $errorMsg]);
-        echo "❌ Erreur: $errorMsg\n";
-        logErrorToDB($pdo ?? null, $errorMsg);
-        exit(1);
+        debug_die($pdo, 'scan_files', $errorMsg, [
+            'remote_dir' => $REMOTE_DIR,
+        ], 6);
     }
     
     if (!is_array($files)) {
-        $errorMsg = "nlist('/') n'a pas retourné un tableau (type: " . gettype($files) . ")";
+        $errorMsg = "nlist('$REMOTE_DIR') n'a pas retourné un tableau (type: " . gettype($files) . ")";
         debugLog("ERREUR FATALE", ['error' => $errorMsg, 'type' => gettype($files)]);
-        echo "❌ Erreur: $errorMsg\n";
-        logErrorToDB($pdo ?? null, $errorMsg);
-        exit(1);
+        debug_die($pdo, 'scan_files', $errorMsg, [
+            'remote_dir' => $REMOTE_DIR,
+            'result_type' => gettype($files),
+        ], 6);
     }
     
-    echo "✅ " . count($files) . " entrées trouvées dans le dossier racine\n";
-    debugLog("Fichiers listés avec succès", ['total' => count($files)]);
+    echo "✅ $totalFiles entrées trouvées dans $REMOTE_DIR\n";
+    debugLog("Fichiers listés avec succès", ['total' => $totalFiles]);
     
 } catch (Throwable $e) {
     $errorMsg = "Erreur lors de la liste des fichiers SFTP: " . $e->getMessage();
@@ -484,26 +512,186 @@ try {
         'line' => $e->getLine(),
         'trace' => $e->getTraceAsString()
     ]);
-    echo "❌ $errorMsg\n";
-    logErrorToDB($pdo ?? null, $errorMsg);
-    exit(1);
+    debug_die($pdo, 'scan_files', $errorMsg, [
+        'remote_dir' => $REMOTE_DIR,
+        'exception' => get_class($e),
+    ], 6);
 }
 
+// Pattern de matching : COPIEUR_MAC-<MAC12>_YYYYMMDD_HHMMSS.csv
+$CSV_PATTERN = '/^COPIEUR_MAC-([A-F0-9]{12})_(\d{8})_(\d{6})\.csv$/i';
+
+// Initialiser les variables de comptage
+$skippedNonMatching = 0;
+$alreadyProcessed = 0;
+$downloadErrors = 0;
+$processedFiles = [];
+$csvFiles = [];
+
 if (is_array($files) && count($files) > 0) {
-    // Filtrer et trier les fichiers CSV valides
+    // ====== STAGE: match_debug ======
     debugLog("Étape 5.1: Filtrage des fichiers CSV");
     $csvFiles = [];
+    $matchDebug = [];
+    $skippedNonMatching = 0;
+    $skippedDirs = 0;
+    $first20ForDebug = array_slice($files, 0, 20);
+    
+    foreach ($first20ForDebug as $entry) {
+        $matchInfo = [
+            'filename' => $entry,
+            'match' => false,
+            'reason' => null,
+        ];
+        
+        if ($entry === '.' || $entry === '..') {
+            $matchInfo['reason'] = 'directory_entry';
+            $skippedDirs++;
+            $matchDebug[] = $matchInfo;
+            continue;
+        }
+        
+        // Vérifier l'extension
+        if (!preg_match('/\.csv$/i', $entry)) {
+            $matchInfo['reason'] = 'wrong_extension';
+            $skippedNonMatching++;
+            $matchDebug[] = $matchInfo;
+            continue;
+        }
+        
+        // Vérifier le pattern complet
+        if (!preg_match($CSV_PATTERN, $entry, $matches)) {
+            $matchInfo['reason'] = 'pattern_mismatch';
+            $skippedNonMatching++;
+            $matchDebug[] = $matchInfo;
+            continue;
+        }
+        
+        // Extraire mac_norm (12 caractères hexadécimaux), date (YYYYMMDD), heure (HHMMSS)
+        $macRaw = $matches[1] ?? null;
+        $dateStr = $matches[2] ?? null; // YYYYMMDD
+        $timeStr = $matches[3] ?? null; // HHMMSS
+        
+        if (empty($macRaw) || strlen($macRaw) !== 12 || !preg_match('/^[A-F0-9]{12}$/i', $macRaw)) {
+            $matchInfo['reason'] = 'invalid_mac';
+            $skippedNonMatching++;
+            $matchDebug[] = $matchInfo;
+            continue;
+        }
+        
+        if (empty($dateStr) || strlen($dateStr) !== 8 || !preg_match('/^\d{8}$/', $dateStr)) {
+            $matchInfo['reason'] = 'invalid_date_format';
+            $skippedNonMatching++;
+            $matchDebug[] = $matchInfo;
+            continue;
+        }
+        
+        if (empty($timeStr) || strlen($timeStr) !== 6 || !preg_match('/^\d{6}$/', $timeStr)) {
+            $matchInfo['reason'] = 'invalid_time_format';
+            $skippedNonMatching++;
+            $matchDebug[] = $matchInfo;
+            continue;
+        }
+        
+        // Normaliser la MAC (uppercase, sans tirets)
+        $macNorm = strtoupper($macRaw);
+        
+        // Construire Timestamp au format YYYY-MM-DD HH:MM:SS
+        $year = substr($dateStr, 0, 4);
+        $month = substr($dateStr, 4, 2);
+        $day = substr($dateStr, 6, 2);
+        $hour = substr($timeStr, 0, 2);
+        $minute = substr($timeStr, 2, 2);
+        $second = substr($timeStr, 4, 2);
+        $timestamp = "$year-$month-$day $hour:$minute:$second";
+        
+        $matchInfo['match'] = true;
+        $matchInfo['mac_norm'] = $macNorm;
+        $matchInfo['date'] = $dateStr;
+        $matchInfo['time'] = $timeStr;
+        $matchInfo['timestamp'] = $timestamp;
+        $matchDebug[] = $matchInfo;
+    }
+    
+    log_import_run($pdo, [
+        'source' => 'SFTP',
+        'stage' => 'match_debug',
+        'pattern' => $CSV_PATTERN,
+        'first_20_debug' => $matchDebug,
+        'skipped_dirs' => $skippedDirs,
+        'skipped_nonmatching' => $skippedNonMatching,
+    ], true);
+    
+    // Filtrer tous les fichiers (pas seulement les 20 premiers)
+    $matchedFiles = [];
     foreach ($files as $entry) {
         if ($entry === '.' || $entry === '..') continue;
-        if (!preg_match('/^COPIEUR_MAC-([A-F0-9\-]+)_(\d{8}_\d{6})\.csv$/i', $entry)) continue;
+        if (!preg_match($CSV_PATTERN, $entry, $fileMatches)) {
+            $skippedNonMatching++;
+            continue;
+        }
+        
+        // Extraire les informations du nom de fichier
+        $macRaw = $fileMatches[1] ?? null;
+        $dateStr = $fileMatches[2] ?? null;
+        $timeStr = $fileMatches[3] ?? null;
+        
+        if (empty($macRaw) || empty($dateStr) || empty($timeStr)) {
+            $skippedNonMatching++;
+            continue;
+        }
+        
+        // Normaliser la MAC
+        $macNorm = strtoupper($macRaw);
+        
+        // Construire Timestamp
+        $year = substr($dateStr, 0, 4);
+        $month = substr($dateStr, 4, 2);
+        $day = substr($dateStr, 6, 2);
+        $hour = substr($timeStr, 0, 2);
+        $minute = substr($timeStr, 2, 2);
+        $second = substr($timeStr, 4, 2);
+        $timestamp = "$year-$month-$day $hour:$minute:$second";
+        
+        $matchedFiles[] = [
+            'filename' => $entry,
+            'mac_norm' => $macNorm,
+            'timestamp' => $timestamp,
+        ];
+        
         $csvFiles[] = $entry;
     }
+    
+    // ====== STAGE: match_files ======
+    log_import_run($pdo, [
+        'source' => 'SFTP',
+        'stage' => 'match_files',
+        'matched_files' => count($matchedFiles),
+        'matched_details' => array_slice($matchedFiles, 0, 20), // Limiter à 20 pour le log
+    ], true);
     
     debugLog("Fichiers CSV filtrés", [
         'total_files' => count($files),
         'csv_files' => count($csvFiles),
-        'max_limit' => $MAX_FILES
+        'matched_files' => count($matchedFiles),
+        'skipped_nonmatching' => $skippedNonMatching,
+        'max_limit' => $MAX_FILES,
+        'pattern' => $CSV_PATTERN
     ]);
+    
+    // Vérifier que matched_files > 0
+    if (count($matchedFiles) === 0) {
+        echo "⚠️ Aucun fichier ne correspond au pattern $CSV_PATTERN\n";
+        log_import_run($pdo, [
+            'source' => 'SFTP',
+            'stage' => 'match_files',
+            'error' => 'Aucun fichier ne correspond au pattern',
+            'pattern' => $CSV_PATTERN,
+            'total_files' => count($files),
+        ], false);
+    } else {
+        echo "✅ " . count($matchedFiles) . " fichier(s) correspond(ent) au pattern\n";
+    }
     
     // Trier par nom (pour traiter dans l'ordre chronologique si possible)
     sort($csvFiles);
@@ -516,13 +704,41 @@ if (is_array($files) && count($files) > 0) {
     }
     
     $found = false;
+    $processedFiles = [];
+    $alreadyProcessed = 0;
+    $downloadErrors = 0;
+    
+    // Créer un index des fichiers matchés pour récupérer mac_norm et timestamp
+    $fileInfoIndex = [];
+    foreach ($matchedFiles as $info) {
+        $fileInfoIndex[$info['filename']] = $info;
+    }
+    
     foreach ($csvFiles as $entry) {
         try {
             checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
             
             $found = true;
             $files_processed++;
-            $remote = '/' . $entry;
+            $remote = ($REMOTE_DIR === '/' ? '' : $REMOTE_DIR) . '/' . $entry;
+            
+            // Récupérer les infos extraites du nom de fichier
+            $fileInfo = $fileInfoIndex[$entry] ?? null;
+            $macNormFromFilename = $fileInfo['mac_norm'] ?? null;
+            $timestampFromFilename = $fileInfo['timestamp'] ?? null;
+            
+            // ====== STAGE: process_file ======
+            $fileDebug = [
+                'filename' => $entry,
+                'remote' => $remote,
+                'download_ok' => false,
+                'parse_ok' => false,
+                'mac_norm' => $macNormFromFilename,
+                'timestamp' => $timestampFromFilename,
+                'db_inserted' => false,
+                'db_updated' => false,
+                'moved_to' => null,
+            ];
             
             echo "📥 Téléchargement de $entry...\n";
             $tmp = tempnam(sys_get_temp_dir(), 'csv_');
@@ -553,17 +769,24 @@ if (is_array($files) && count($files) > 0) {
             }
             
             if (!$downloadSuccess) {
+                $fileDebug['download_ok'] = false;
+                $fileDebug['moved_to'] = 'errors';
+                $downloadErrors++;
                 echo "❌ Erreur téléchargement $entry\n";
                 try {
-                    sftp_safe_move($sftp, $remote, '/errors');
+                    [$moved, $target] = sftp_safe_move($sftp, $remote, '/errors');
+                    $fileDebug['moved_to'] = $moved ? $target : 'errors_failed';
                 } catch (Throwable $e) {
                     echo "⚠️ Impossible de déplacer $entry vers /errors: " . $e->getMessage() . "\n";
+                    $fileDebug['move_error'] = $e->getMessage();
                 }
                 @unlink($tmp);
                 $files_error++;
+                log_import_run($pdo, array_merge(['source' => 'SFTP', 'stage' => 'process_file'], $fileDebug), false);
                 continue;
             }
             
+            $fileDebug['download_ok'] = true;
             echo "✅ Téléchargement réussi: $entry\n";
             
             // Parser le CSV
@@ -582,42 +805,59 @@ if (is_array($files) && count($files) > 0) {
                 
                 @unlink($tmp);
                 
-                // Extraire les valeurs
+                // Extraire les valeurs du CSV
                 $values = [];
                 foreach ($FIELDS as $f) $values[$f] = $row[$f] ?? null;
                 
-                debugLog("Valeurs extraites", [
+                $fileDebug['parse_ok'] = true;
+                debugLog("Valeurs extraites du CSV", [
                     'MacAddress' => $values['MacAddress'] ?? 'NULL',
                     'Timestamp' => $values['Timestamp'] ?? 'NULL',
                     'total_fields' => count($values)
                 ]);
 
-                // VALIDATION STRICTE : MacAddress et Timestamp doivent être non vides et non NULL
-                $macAddress = trim($values['MacAddress'] ?? '');
-                $timestamp = trim($values['Timestamp'] ?? '');
-                
-                if (empty($macAddress) || empty($timestamp) || $macAddress === '' || $timestamp === '') {
-                    $errorMsg = "Données manquantes (MacAddress/Timestamp) pour $entry";
-                    debugLog("SKIP fichier - données manquantes", [
+                // Utiliser mac_norm et timestamp extraits du nom de fichier (priorité sur CSV)
+                if (empty($macNormFromFilename) || empty($timestampFromFilename)) {
+                    $fileDebug['parse_ok'] = false;
+                    $fileDebug['parse_error'] = 'missing_filename_info';
+                    $fileDebug['moved_to'] = 'errors';
+                    $errorMsg = "Impossible d'extraire mac_norm/timestamp du nom de fichier pour $entry";
+                    debugLog("SKIP fichier - info nom fichier manquante", [
                         'error' => $errorMsg,
-                        'MacAddress' => $macAddress ?: 'NULL/EMPTY',
-                        'Timestamp' => $timestamp ?: 'NULL/EMPTY',
+                        'mac_norm' => $macNormFromFilename ?: 'NULL/EMPTY',
+                        'timestamp' => $timestampFromFilename ?: 'NULL/EMPTY',
                         'filename' => $entry
                     ]);
                     echo "⚠️ $errorMsg → /errors\n";
                     try {
-                        sftp_safe_move($sftp, $remote, '/errors');
+                        [$moved, $target] = sftp_safe_move($sftp, $remote, '/errors');
+                        $fileDebug['moved_to'] = $moved ? $target : 'errors_failed';
                     } catch (Throwable $e) {
                         debugLog("Erreur déplacement fichier", ['error' => $e->getMessage()]);
+                        $fileDebug['move_error'] = $e->getMessage();
                     }
                     $compteurs_skipped++;
                     $files_error++;
+                    log_import_run($pdo, array_merge(['source' => 'SFTP', 'stage' => 'process_file'], $fileDebug), false);
                     continue;
                 }
+                
+                // Utiliser mac_norm et timestamp du nom de fichier (priorité)
+                // Le MacAddress du CSV peut être utilisé comme fallback, mais on préfère celui du nom de fichier
+                $macAddress = $macNormFromFilename;
+                $timestamp = $timestampFromFilename;
                 
                 // S'assurer que les valeurs sont bien définies
                 $values['MacAddress'] = $macAddress;
                 $values['Timestamp'] = $timestamp;
+                $fileDebug['mac_norm'] = $macAddress;
+                $fileDebug['timestamp'] = $timestamp;
+                
+                debugLog("Valeurs finales utilisées", [
+                    'MacAddress' => $macAddress,
+                    'Timestamp' => $timestamp,
+                    'source' => 'filename'
+                ]);
             } catch (Throwable $e) {
                 @unlink($tmp);
                 $errorMsg = "Erreur lors du parsing CSV pour $entry: " . $e->getMessage();
@@ -699,6 +939,7 @@ if (is_array($files) && count($files) > 0) {
             // - rowCount = 2 : Enregistrement mis à jour (doublon détecté via UNIQUE constraint)
             if ($rowCount === 1) {
                 $compteurs_inserted++;
+                $fileDebug['db_inserted'] = true;
                 echo "✅ Compteur INSÉRÉ pour {$values['MacAddress']} ({$values['Timestamp']})\n";
                 debugLog("Compteur inséré avec succès", [
                     'inserted' => 1,
@@ -706,6 +947,7 @@ if (is_array($files) && count($files) > 0) {
                 ]);
             } elseif ($rowCount === 2) {
                 $compteurs_updated++;
+                $fileDebug['db_updated'] = true;
                 echo "ℹ️ Déjà présent: compteur MIS À JOUR pour {$values['MacAddress']} ({$values['Timestamp']})\n";
                 debugLog("Compteur mis à jour (ON DUPLICATE KEY UPDATE)", [
                     'updated' => 1,
@@ -714,6 +956,7 @@ if (is_array($files) && count($files) > 0) {
                 ]);
             } else {
                 $compteurs_skipped++;
+                $alreadyProcessed++;
                 echo "⚠️ Aucune modification: compteur pour {$values['MacAddress']} ({$values['Timestamp']}) - rowCount=$rowCount\n";
                 debugLog("Aucune modification effectuée", [
                     'skipped' => 1,
@@ -729,16 +972,23 @@ if (is_array($files) && count($files) > 0) {
             $files_list[] = $entry;
             
             try {
-                [$okMove, ] = sftp_safe_move($sftp, $remote, '/processed');
+                [$okMove, $target] = sftp_safe_move($sftp, $remote, '/processed');
                 if (!$okMove) {
+                    $fileDebug['moved_to'] = 'processed_failed';
                     echo "⚠️ Impossible de déplacer $entry vers /processed\n";
                 } else {
+                    $fileDebug['moved_to'] = $target;
                     echo "📦 Archivé: $entry → /processed\n";
                 }
             } catch (Throwable $e) {
+                $fileDebug['moved_to'] = 'processed_error';
+                $fileDebug['move_error'] = $e->getMessage();
                 echo "⚠️ Erreur lors du déplacement de $entry: " . $e->getMessage() . "\n";
                 // On continue quand même, le fichier est déjà traité
             }
+            
+            $processedFiles[] = $fileDebug;
+            log_import_run($pdo, array_merge(['source' => 'SFTP', 'stage' => 'process_file'], $fileDebug), true);
 
         } catch (RuntimeException $e) {
             // Timeout - arrêter le traitement
@@ -815,6 +1065,15 @@ if (is_array($files) && count($files) > 0) {
 
     if (!$found) {
         echo "⚠️ Aucun fichier CSV trouvé sur le SFTP.\n";
+        log_import_run($pdo, [
+            'source' => 'SFTP',
+            'stage' => 'scan_files',
+            'remote_dir' => $REMOTE_DIR,
+            'total_files' => $totalFiles ?? 0,
+            'matched_files' => 0,
+            'pattern' => $CSV_PATTERN,
+            'msg' => 'Aucun fichier CSV correspondant au pattern trouvé',
+        ], true);
     }
 }
 
@@ -824,19 +1083,32 @@ try {
     // Créer un message JSON structuré pour différencier les sources
     $summaryData = [
         'source' => 'SFTP',
+        'remote_dir' => $REMOTE_DIR,
         'pid' => IMPORT_PID,
-        'files_processed' => $files_processed,
+        'total_files' => $totalFiles ?? 0,
+        'matched_files' => count($csvFiles ?? []),
+        'processed_files' => $files_processed,
         'files_error' => $files_error,
         'files_success' => max(0, $files_processed - $files_error),
-        'compteurs_inserted' => $compteurs_inserted,
-        'compteurs_updated' => $compteurs_updated,
-        'compteurs_skipped' => $compteurs_skipped,
+        'skipped_nonmatching' => $skippedNonMatching ?? 0,
+        'already_processed' => $alreadyProcessed ?? 0,
+        'download_errors' => $downloadErrors ?? 0,
+        'inserted' => $compteurs_inserted,
+        'updated' => $compteurs_updated,
+        'skipped' => $compteurs_skipped,
         'max_files_limit' => $MAX_FILES,
+        'pattern' => $CSV_PATTERN,
         'duration_sec' => $duration,
-        'files' => array_slice($files_list, 0, 20) // Limiter à 20 pour éviter un JSON trop gros
+        'first_files' => $firstFiles ?? [],
+        'files' => array_slice($files_list, 0, 20), // Limiter à 20 pour éviter un JSON trop gros
+        'processed_details' => array_slice($processedFiles ?? [], 0, 10) // Limiter à 10 détails
     ];
     
     $summary = json_encode($summaryData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    
+    // Aussi retourner en stdout pour le dashboard
+    echo "\n=== RÉSULTAT FINAL ===\n";
+    echo json_encode($summaryData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . "\n";
 
     $stmt = $pdo->prepare("
         INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
