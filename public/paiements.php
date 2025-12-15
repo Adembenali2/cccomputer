@@ -714,6 +714,13 @@
             });
         })();
 
+        // ====== INITIALISATION DES VARIABLES DE FILTRAGE ======
+        // Initialiser les valeurs par défaut pour mois et année AVANT toute utilisation
+        const currentDate = new Date();
+        let selectedClient = null;
+        let selectedMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
+        let selectedYear = String(currentDate.getFullYear());
+
         // Sélecteurs de période (Mois et Année) - Filtrage dynamique
         (function() {
             const monthSelect = document.getElementById('monthSelect');
@@ -966,12 +973,6 @@
 
         // ====== GRAPHIQUE MODERNE AVEC CHART.JS ======
         let consumptionChart = null;
-        let selectedClient = null;
-        
-        // Initialiser les valeurs par défaut pour mois et année
-        const currentDate = new Date();
-        let selectedMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
-        let selectedYear = String(currentDate.getFullYear());
 
         // Restructurer les données au format demandé (client -> année-mois)
         const FAKE_CONSO = {};

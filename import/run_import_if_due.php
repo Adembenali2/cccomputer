@@ -50,13 +50,75 @@ $pdo->exec("
 $INTERVAL = (int)(getenv('SFTP_IMPORT_INTERVAL_SEC') ?: 20);
 $key      = 'sftp_last_run';
 
+// ---------- VERROU ANTI-PARALLÉLISME avec GET_LOCK ----------
+$lockName = 'import_compteur_sftp';
+$lockAcquired = false;
+try {
+    // Tentative d'acquisition du verrou (timeout 0 = échec immédiat si verrouillé)
+    $stmtLock = $pdo->query("SELECT GET_LOCK('$lockName', 0) as lock_result");
+    $lockResult = $stmtLock->fetch(PDO::FETCH_ASSOC);
+    $lockAcquired = (int)($lockResult['lock_result'] ?? 0) === 1;
+    
+    if (!$lockAcquired) {
+        debugLog("Verrou non acquis - import déjà en cours");
+        echo json_encode([
+            'ok' => false,
+            'reason' => 'locked',
+            'message' => 'Un import est déjà en cours (verrou MySQL actif)'
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+    debugLog("Verrou MySQL acquis", ['lock_name' => $lockName]);
+} catch (Throwable $e) {
+    debugLog("ERREUR acquisition verrou", ['error' => $e->getMessage()]);
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Erreur lors de l\'acquisition du verrou: ' . $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+// Fonction pour libérer le verrou (utilisée dans finally)
+$releaseLock = function() use ($pdo, $lockName, &$lockAcquired) {
+    if ($lockAcquired) {
+        try {
+            $pdo->query("SELECT RELEASE_LOCK('$lockName')");
+            debugLog("Verrou MySQL libéré");
+            $lockAcquired = false;
+        } catch (Throwable $e) {
+            debugLog("ERREUR libération verrou", ['error' => $e->getMessage()]);
+        }
+    }
+};
+
+// Log informatif (non bloquant) sur les imports récents
+try {
+    $stmtRunning = $pdo->prepare("
+        SELECT ran_at, imported 
+        FROM import_run 
+        WHERE ran_at > DATE_SUB(NOW(), INTERVAL 60 SECOND)
+        AND msg LIKE '%\"source\":\"SFTP\"%'
+        ORDER BY ran_at DESC 
+        LIMIT 1
+    ");
+    $stmtRunning->execute();
+    $recent = $stmtRunning->fetch(PDO::FETCH_ASSOC);
+    if ($recent) {
+        debugLog("Import récent détecté (informatif)", ['ran_at' => $recent['ran_at'], 'imported' => $recent['imported']]);
+    }
+} catch (Throwable $e) {
+    // Log informatif uniquement, pas d'impact sur l'exécution
+    debugLog("Note: Impossible de vérifier les imports récents", ['error' => $e->getMessage()]);
+}
+
 $stmt = $pdo->prepare("SELECT v FROM app_kv WHERE k = ? LIMIT 1");
 $stmt->execute([$key]);
 $last = $stmt->fetchColumn();
 $due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
 
 if (!$due) {
-  echo json_encode(['ran' => false, 'reason' => 'not_due', 'last_run' => $last], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  $releaseLock();
+  echo json_encode(['ok' => false, 'reason' => 'not_due', 'last_run' => $last], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   exit;
 }
 
@@ -206,25 +268,71 @@ if ($timeoutReached) {
   $errorMsg = "Le processus s'est terminé avec le code d'erreur: $code";
 }
 
+// Parser la sortie pour extraire les statistiques
+$inserted = 0;
+$updated = 0;
+$skipped = 0;
+$errors = [];
+
+if (preg_match('/(\d+) insérés/', $out, $m)) {
+    $inserted = (int)$m[1];
+}
+if (preg_match('/(\d+) mis à jour/', $out, $m)) {
+    $updated = (int)$m[1];
+}
+if (preg_match('/(\d+) ignorés/', $out, $m)) {
+    $skipped = (int)$m[1];
+}
+
+// Extraire les erreurs depuis stderr
+if (!empty($err)) {
+    $errors[] = trim($err);
+}
+
+// Réponse JSON structurée
 $response = [
-  'ran'         => true,
-  'stdout'      => trim($out),
-  'stderr'      => trim($err),
-  'last_run'    => date('Y-m-d H:i:s'),
-  'code'        => $code,
-  'success'     => $success,
-  'timeout'     => $timeoutReached,
-  'error'       => $errorMsg,
-  'duration_sec' => time() - $startTime
+  'ok'           => $success,
+  'ran'          => true,
+  'inserted'     => $inserted,
+  'updated'      => $updated,
+  'skipped'      => $skipped,
+  'errors'       => $errors,
+  'stdout'       => trim($out),
+  'stderr'       => trim($err),
+  'last_run'     => date('Y-m-d H:i:s'),
+  'code'         => $code,
+  'timeout'      => $timeoutReached,
+  'error'        => $errorMsg,
+  'duration_ms'  => (time() - $startTime) * 1000
 ];
+
+if ($errorMsg) {
+    $response['where'] = 'script_execution';
+    $response['details'] = [
+        'code' => $code,
+        'stdout_length' => strlen($out),
+        'stderr_length' => strlen($err)
+    ];
+}
+
+// Libérer le verrou dans TOUS les cas (finally équivalent)
+try {
+    if (isset($releaseLock) && is_callable($releaseLock)) {
+        $releaseLock();
+    }
+} catch (Throwable $e) {
+    debugLog("ERREUR lors de la libération finale du verrou", ['error' => $e->getMessage()]);
+}
 
 debugLog("=== FIN run_import_if_due.php ===", [
   'success' => $success,
   'code' => $code,
   'timeout' => $timeoutReached,
   'error' => $errorMsg,
-  'stdout_length' => strlen($out),
-  'stderr_length' => strlen($err)
+  'inserted' => $inserted,
+  'updated' => $updated,
+  'skipped' => $skipped,
+  'duration_sec' => time() - $startTime
 ]);
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

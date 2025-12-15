@@ -6,11 +6,15 @@ error_reporting(E_ALL);
 ini_set('display_errors', '1');
 ini_set('log_errors', '1');
 
-// Fonction de debug avec timestamp
+// PID du processus pour tracer les exécutions concurrentes
+$PID = getmypid();
+define('IMPORT_PID', $PID);
+
+// Fonction de debug avec timestamp et PID
 function debugLog(string $message, array $context = []): void {
     $timestamp = date('Y-m-d H:i:s');
     $contextStr = !empty($context) ? ' | Context: ' . json_encode($context, JSON_UNESCAPED_UNICODE) : '';
-    $logMsg = "[$timestamp] [DEBUG] $message$contextStr\n";
+    $logMsg = "[$timestamp] [PID:" . IMPORT_PID . "] [DEBUG] $message$contextStr\n";
     echo $logMsg;
     error_log($logMsg);
 }
@@ -30,6 +34,7 @@ $scriptStartTime = time();
 $SCRIPT_TIMEOUT = 50;
 
 debugLog("=== DÉBUT DU SCRIPT D'IMPORT SFTP ===", [
+    'pid' => IMPORT_PID,
     'script_start' => date('Y-m-d H:i:s'),
     'timeout' => $SCRIPT_TIMEOUT,
     'php_version' => PHP_VERSION,
@@ -124,6 +129,9 @@ debugLog("Connexion PDO établie", [
     'connection_status' => 'OK'
 ]);
 echo "✅ Connexion à la base établie.\n";
+
+// Note: La contrainte UNIQUE (mac_norm, Timestamp) doit exister en base.
+// Aucun DDL n'est exécuté dans ce script pour garantir la stabilité.
 
 // ---------- 2) Connexion SFTP avec timeout et gestion d'erreurs ----------
 debugLog("Étape 2: Chargement de la bibliothèque SFTP");
@@ -334,24 +342,40 @@ echo "🚀 Traitement des fichiers CSV...\n";
 // ---------- 4) Requêtes PDO ----------
 $cols_compteur = implode(',', $FIELDS) . ',DateInsertion';
 $ph_compteur   = ':' . implode(',:', $FIELDS) . ',NOW()';
-$sql_compteur  = "INSERT IGNORE INTO compteur_relevee ($cols_compteur) VALUES ($ph_compteur)";
+// Utilisation de ON DUPLICATE KEY UPDATE : ne mettre à jour que les champs de compteurs/toners
+// NE PAS écraser les champs d'identification (MacAddress, Timestamp, IpAddress) qui doivent rester stables
+$sql_compteur  = "
+    INSERT INTO compteur_relevee ($cols_compteur) VALUES ($ph_compteur)
+    ON DUPLICATE KEY UPDATE
+        DateInsertion = NOW(),
+        Status = VALUES(Status),
+        TonerBlack = VALUES(TonerBlack),
+        TonerCyan = VALUES(TonerCyan),
+        TonerMagenta = VALUES(TonerMagenta),
+        TonerYellow = VALUES(TonerYellow),
+        TotalPages = VALUES(TotalPages),
+        FaxPages = VALUES(FaxPages),
+        CopiedPages = VALUES(CopiedPages),
+        PrintedPages = VALUES(PrintedPages),
+        BWCopies = VALUES(BWCopies),
+        ColorCopies = VALUES(ColorCopies),
+        MonoCopies = VALUES(MonoCopies),
+        BichromeCopies = VALUES(BichromeCopies),
+        BWPrinted = VALUES(BWPrinted),
+        BichromePrinted = VALUES(BichromePrinted),
+        MonoPrinted = VALUES(MonoPrinted),
+        ColorPrinted = VALUES(ColorPrinted),
+        TotalColor = VALUES(TotalColor),
+        TotalBW = VALUES(TotalBW),
+        -- Ne mettre à jour Nom/Model/SerialNumber que si les valeurs actuelles sont NULL
+        Nom = COALESCE(Nom, VALUES(Nom)),
+        Model = COALESCE(Model, VALUES(Model)),
+        SerialNumber = COALESCE(SerialNumber, VALUES(SerialNumber))
+";
 $st_compteur   = $pdo->prepare($sql_compteur);
 
-try {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS import_run (
-            id INT NOT NULL AUTO_INCREMENT,
-            ran_at DATETIME NOT NULL,
-            imported INT NOT NULL,
-            skipped INT NOT NULL,
-            ok TINYINT(1) NOT NULL,
-            msg TEXT,
-            PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-} catch (Throwable $e) {
-    echo "⚠️ [IMPORT_RUN] Erreur CREATE TABLE: " . $e->getMessage() . "\n";
-}
+// Note: La table import_run doit exister en base.
+// Aucun DDL n'est exécuté dans ce script pour garantir la stabilité.
 
 // ---------- 4.5) Limite de fichiers ----------
 // Maximum 20 fichiers CSV par exécution (configurable via SFTP_BATCH_LIMIT)
@@ -361,6 +385,8 @@ if ($MAX_FILES > 20) $MAX_FILES = 20; // Limite absolue de 20 fichiers
 
 $files_processed = 0;
 $compteurs_inserted = 0;
+$compteurs_updated = 0;
+$compteurs_skipped = 0;
 $files_error = 0;
 $files_list = []; // Liste des fichiers traités pour le log
 
@@ -516,18 +542,32 @@ if (is_array($files) && count($files) > 0) {
                     'total_fields' => count($values)
                 ]);
 
-                if (empty($values['MacAddress']) || empty($values['Timestamp'])) {
+                // VALIDATION STRICTE : MacAddress et Timestamp doivent être non vides et non NULL
+                $macAddress = trim($values['MacAddress'] ?? '');
+                $timestamp = trim($values['Timestamp'] ?? '');
+                
+                if (empty($macAddress) || empty($timestamp) || $macAddress === '' || $timestamp === '') {
                     $errorMsg = "Données manquantes (MacAddress/Timestamp) pour $entry";
-                    debugLog("ERREUR", ['error' => $errorMsg, 'MacAddress' => $values['MacAddress'] ?? 'NULL', 'Timestamp' => $values['Timestamp'] ?? 'NULL']);
+                    debugLog("SKIP fichier - données manquantes", [
+                        'error' => $errorMsg,
+                        'MacAddress' => $macAddress ?: 'NULL/EMPTY',
+                        'Timestamp' => $timestamp ?: 'NULL/EMPTY',
+                        'filename' => $entry
+                    ]);
                     echo "⚠️ $errorMsg → /errors\n";
                     try {
                         sftp_safe_move($sftp, $remote, '/errors');
                     } catch (Throwable $e) {
                         debugLog("Erreur déplacement fichier", ['error' => $e->getMessage()]);
                     }
+                    $compteurs_skipped++;
                     $files_error++;
                     continue;
                 }
+                
+                // S'assurer que les valeurs sont bien définies
+                $values['MacAddress'] = $macAddress;
+                $values['Timestamp'] = $timestamp;
             } catch (Throwable $e) {
                 @unlink($tmp);
                 $errorMsg = "Erreur lors du parsing CSV pour $entry: " . $e->getMessage();
@@ -565,39 +605,75 @@ if (is_array($files) && count($files) > 0) {
         }
 
         // Insertion en base de données
+        $fileSize = file_exists($tmp ?? '') ? filesize($tmp) : 'N/A';
+        $fileDate = date('Y-m-d H:i:s', filemtime($tmp ?? __FILE__));
         debugLog("Insertion en base de données", [
             'MacAddress' => $values['MacAddress'],
-            'Timestamp' => $values['Timestamp']
+            'Timestamp' => $values['Timestamp'],
+            'filename' => $entry,
+            'file_size' => $fileSize,
+            'file_date' => $fileDate
         ]);
         try {
+            // Vérifier le timeout avant l'insertion
+            checkTimeout($scriptStartTime, $SCRIPT_TIMEOUT);
+            
             $insertStart = microtime(true);
             $pdo->beginTransaction();
-            debugLog("Transaction démarrée");
+            debugLog("Transaction démarrée", ['mac' => $values['MacAddress'], 'timestamp' => $values['Timestamp']]);
             
             $binds = [];
-            foreach ($FIELDS as $f) $binds[":$f"] = $values[$f];
+            foreach ($FIELDS as $f) {
+                $binds[":$f"] = $values[$f] ?? null;
+            }
             
-            debugLog("Exécution de la requête INSERT", ['binds_count' => count($binds)]);
+            debugLog("Exécution de la requête INSERT", [
+                'binds_count' => count($binds),
+                'mac' => $values['MacAddress'],
+                'timestamp' => $values['Timestamp']
+            ]);
+            
             $st_compteur->execute($binds);
             $insertTime = round((microtime(true) - $insertStart) * 1000, 2);
             
             $rowCount = $st_compteur->rowCount();
             debugLog("Requête exécutée", [
                 'row_count' => $rowCount,
-                'duration_ms' => $insertTime
+                'duration_ms' => $insertTime,
+                'mac' => $values['MacAddress'],
+                'timestamp' => $values['Timestamp']
             ]);
 
+            // Avec ON DUPLICATE KEY UPDATE :
+            // - rowCount = 1 : Nouvel enregistrement inséré
+            // - rowCount = 2 : Enregistrement mis à jour (doublon détecté via UNIQUE constraint)
             if ($rowCount === 1) {
                 $compteurs_inserted++;
                 echo "✅ Compteur INSÉRÉ pour {$values['MacAddress']} ({$values['Timestamp']})\n";
-                debugLog("Compteur inséré avec succès");
+                debugLog("Compteur inséré avec succès", [
+                    'inserted' => 1,
+                    'total_inserted' => $compteurs_inserted
+                ]);
+            } elseif ($rowCount === 2) {
+                $compteurs_updated++;
+                echo "ℹ️ Déjà présent: compteur MIS À JOUR pour {$values['MacAddress']} ({$values['Timestamp']})\n";
+                debugLog("Compteur mis à jour (ON DUPLICATE KEY UPDATE)", [
+                    'updated' => 1,
+                    'total_updated' => $compteurs_updated,
+                    'row_count' => $rowCount
+                ]);
             } else {
-                echo "ℹ️ Déjà présent: compteur NON réinséré pour {$values['MacAddress']} ({$values['Timestamp']})\n";
-                debugLog("Compteur déjà présent (INSERT IGNORE)", ['row_count' => $rowCount]);
+                $compteurs_skipped++;
+                echo "⚠️ Aucune modification: compteur pour {$values['MacAddress']} ({$values['Timestamp']}) - rowCount=$rowCount\n";
+                debugLog("Aucune modification effectuée", [
+                    'skipped' => 1,
+                    'total_skipped' => $compteurs_skipped,
+                    'row_count' => $rowCount
+                ]);
             }
 
             $pdo->commit();
-            debugLog("Transaction commitée");
+            debugLog("Transaction commitée", ['mac' => $values['MacAddress']]);
 
             // Ajouter à la liste des fichiers traités (même si le déplacement échoue)
             $files_list[] = $entry;
@@ -635,40 +711,49 @@ if (is_array($files) && count($files) > 0) {
                 }
             }
             
-            // Log détaillé de l'erreur SQL
+            // Log détaillé de l'erreur SQL avec contexte complet
             $errorDetails = [
                 'error' => $e->getMessage(),
                 'exception' => get_class($e),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
+                'mac' => $values['MacAddress'] ?? 'N/A',
+                'timestamp' => $values['Timestamp'] ?? 'N/A',
+                'filename' => $entry ?? 'N/A'
             ];
             
             if ($e instanceof PDOException) {
-                $errorInfo = $e->errorInfo;
-                $errorDetails['sql_state'] = $errorInfo[0] ?? 'N/A';
-                $errorDetails['driver_code'] = $errorInfo[1] ?? 'N/A';
-                $errorDetails['driver_message'] = $errorInfo[2] ?? 'N/A';
+                $errorInfo = $e->errorInfo ?? $e->getCode();
+                if (is_array($errorInfo)) {
+                    $errorDetails['sql_state'] = $errorInfo[0] ?? 'N/A';
+                    $errorDetails['driver_code'] = $errorInfo[1] ?? 'N/A';
+                    $errorDetails['driver_message'] = $errorInfo[2] ?? 'N/A';
+                } else {
+                    $errorDetails['pdo_code'] = $errorInfo;
+                }
                 
                 // Afficher la requête SQL avec les valeurs pour debug
                 $sqlDebug = $sql_compteur;
-                foreach ($binds as $key => $value) {
-                    $displayValue = is_null($value) ? 'NULL' : (is_string($value) ? "'$value'" : $value);
+                foreach ($binds ?? [] as $key => $value) {
+                    $displayValue = is_null($value) ? 'NULL' : (is_string($value) ? "'" . substr($value, 0, 50) . "'" : $value);
                     $sqlDebug = str_replace($key, $displayValue, $sqlDebug);
                 }
-                $errorDetails['sql_debug'] = $sqlDebug;
+                $errorDetails['sql_debug'] = substr($sqlDebug, 0, 500); // Limiter la taille
                 
-                debugLog("ERREUR PDO DÉTAILLÉE", $errorDetails);
+                debugLog("ERREUR PDO DÉTAILLÉE - PREMIÈRE ERREUR SQL", $errorDetails);
             } else {
                 debugLog("ERREUR NON-PDO", $errorDetails);
             }
             
             echo "❌ [ERREUR PDO] " . $e->getMessage() . "\n";
-            if ($e instanceof PDOException && isset($errorInfo[2])) {
+            if ($e instanceof PDOException && isset($errorInfo) && is_array($errorInfo) && isset($errorInfo[2])) {
                 echo "   SQL Error: " . $errorInfo[2] . "\n";
                 echo "   SQL State: " . ($errorInfo[0] ?? 'N/A') . "\n";
                 echo "   Driver Code: " . ($errorInfo[1] ?? 'N/A') . "\n";
             }
             
+            $compteurs_skipped++;
+            $compteurs_skipped++;
             try {
                 sftp_safe_move($sftp, $remote, '/errors');
             } catch (Throwable $moveErr) {
@@ -685,14 +770,19 @@ if (is_array($files) && count($files) > 0) {
 
 // ---------- 6) Journal du run ----------
 try {
+    $duration = time() - $scriptStartTime;
     // Créer un message JSON structuré pour différencier les sources
     $summaryData = [
         'source' => 'SFTP',
+        'pid' => IMPORT_PID,
         'files_processed' => $files_processed,
         'files_error' => $files_error,
         'files_success' => max(0, $files_processed - $files_error),
         'compteurs_inserted' => $compteurs_inserted,
+        'compteurs_updated' => $compteurs_updated,
+        'compteurs_skipped' => $compteurs_skipped,
         'max_files_limit' => $MAX_FILES,
+        'duration_sec' => $duration,
         'files' => array_slice($files_list, 0, 20) // Limiter à 20 pour éviter un JSON trop gros
     ];
     
@@ -702,15 +792,29 @@ try {
         INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
         VALUES (NOW(), :imported, :skipped, :ok, :msg)
     ");
+    // skipped = fichiers en erreur + compteurs ignorés
+    $totalSkipped = $files_error + $compteurs_skipped;
+    $isOk = ($files_error === 0 && $files_processed > 0 && ($compteurs_inserted > 0 || $compteurs_updated > 0)) 
+            || ($files_processed === 0); // OK si aucun fichier à traiter
     $stmt->execute([
         ':imported' => $compteurs_inserted, // Nombre de compteurs réellement insérés
-        ':skipped'  => $files_error,
-        ':ok'       => ($files_error === 0 && $files_processed > 0 ? 1 : ($files_processed === 0 ? 1 : 0)),
+        ':skipped'  => $totalSkipped,
+        ':ok'       => $isOk ? 1 : 0,
         ':msg'      => $summary,
     ]);
-    echo "📝 [IMPORT_RUN] Ligne insérée: $files_processed fichiers traités, $compteurs_inserted compteurs insérés\n";
+    echo "📝 [IMPORT_RUN] Ligne insérée: $files_processed fichiers traités, $compteurs_inserted insérés, $compteurs_updated mis à jour, $totalSkipped ignorés\n";
+    debugLog("Import terminé avec succès", [
+        'inserted' => $compteurs_inserted,
+        'updated' => $compteurs_updated,
+        'skipped' => $totalSkipped,
+        'duration_sec' => $duration
+    ]);
 } catch (Throwable $e) {
     echo "❌ [IMPORT_RUN] Erreur INSERT: " . $e->getMessage() . "\n";
+    debugLog("ERREUR lors de la journalisation", [
+        'error' => $e->getMessage(),
+        'exception' => get_class($e)
+    ]);
 }
 
 // ---------- Gestion d'erreur finale ----------
@@ -740,10 +844,14 @@ if ($files_error > 0 && $compteurs_inserted === 0 && $files_processed > 0) {
 echo "-----------------------------\n";
 $duration = time() - $scriptStartTime;
 debugLog("=== FIN DU SCRIPT D'IMPORT SFTP ===", [
+    'pid' => IMPORT_PID,
     'script_end' => date('Y-m-d H:i:s'),
     'duration_sec' => $duration,
     'files_processed' => $files_processed,
     'compteurs_inserted' => $compteurs_inserted,
+    'compteurs_updated' => $compteurs_updated,
+    'compteurs_skipped' => $compteurs_skipped,
     'files_error' => $files_error
 ]);
 echo "✅ Traitement terminé en {$duration} seconde(s).\n";
+echo "   → $compteurs_inserted insérés, $compteurs_updated mis à jour, $compteurs_skipped ignorés\n";

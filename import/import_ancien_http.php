@@ -86,10 +86,24 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS import_run( id INT AUTO_INCREMENT PRIMARY
 // ---------- S'assurer que la contrainte UNIQUE existe sur (mac_norm, Timestamp) ----------
 // Cette contrainte garantit l'unicité du couple MAC + Timestamp
 try {
-    $pdo->exec("ALTER TABLE `compteur_relevee_ancien` ADD UNIQUE KEY `uniq_mac_ts_ancien` (`mac_norm`,`Timestamp`)");
+    // Vérifier si la contrainte existe déjà avant de la créer
+    $stmt = $pdo->query("
+        SELECT COUNT(*) as cnt
+        FROM information_schema.TABLE_CONSTRAINTS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'compteur_relevee_ancien'
+        AND CONSTRAINT_NAME = 'uniq_mac_ts_ancien'
+        AND CONSTRAINT_TYPE = 'UNIQUE'
+    ");
+    $exists = (int)$stmt->fetchColumn() > 0;
+    
+    if (!$exists) {
+        $pdo->exec("ALTER TABLE `compteur_relevee_ancien` ADD UNIQUE KEY `uniq_mac_ts_ancien` (`mac_norm`,`Timestamp`)");
+        error_log('import_ancien_http: Contrainte UNIQUE créée sur compteur_relevee_ancien');
+    }
 } catch (Throwable $e) {
-    // La contrainte existe déjà ou la table n'existe pas encore - c'est OK
-    // On continue normalement
+    // La contrainte existe déjà ou erreur - continuer
+    error_log('import_ancien_http: Contrainte UNIQUE déjà présente ou erreur: ' . $e->getMessage());
 }
 
 // ---------- Récupérer le dernier Timestamp importé (pour reprendre depuis le dernier enregistrement) ----------
@@ -211,6 +225,23 @@ if(empty($columnMap['mac']) || empty($columnMap['date'])){
         'toner_y' => 13,   // Colonne Toner Y (index 13)
         'status' => 9,     // Colonne Compteur du mois (index 9) - utilisé comme status
     ];
+}
+
+// Validation du mapping des colonnes essentielles après fallback
+if (empty($columnMap['mac']) || empty($columnMap['date'])) {
+    $errorMsg = json_encode([
+        'source'=>'WEB_COMPTEUR',
+        'processed'=>0,
+        'inserted'=>0,
+        'skipped'=>0,
+        'batch'=>$BATCH,
+        'error'=>'Impossible de détecter les colonnes MAC et Date dans le tableau HTML'
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $pdo->prepare("INSERT INTO import_run(ran_at,imported,skipped,ok,msg) VALUES (NOW(),0,0,0,:m)")
+        ->execute([':m'=>$errorMsg]);
+    http_response_code(500);
+    echo "ERROR ANCIEN Colonnes MAC/Date non détectées\n";
+    exit(1);
 }
 
 $rowsData = [];

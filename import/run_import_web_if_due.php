@@ -75,22 +75,90 @@ $desc = [
 // Passer les variables d'environnement
 $env = $_ENV + $_SERVER;
 
+// Timeout maximum : 120 secondes (2x l'intervalle normal)
+$TIMEOUT_SEC = 120;
+$startTime = time();
+
 $proc = proc_open($cmd, $desc, $pipes, $projectRoot, $env);
 $out = $err = '';
 $code = null;
+$timeoutReached = false;
 
 if (is_resource($proc)) {
-  $out  = stream_get_contents($pipes[1]); fclose($pipes[1]);
-  $err  = stream_get_contents($pipes[2]); fclose($pipes[2]);
-  $code = proc_close($proc);
+  // Configurer les pipes en mode non-bloquant
+  stream_set_blocking($pipes[1], false);
+  stream_set_blocking($pipes[2], false);
+  
+  $read = [$pipes[1], $pipes[2]];
+  $write = null;
+  $except = null;
+  
+  // Lire les pipes avec timeout
+  while (is_resource($proc)) {
+    $status = proc_get_status($proc);
+    
+    // Vérifier le timeout
+    $elapsed = time() - $startTime;
+    if ($elapsed > $TIMEOUT_SEC) {
+      $timeoutReached = true;
+      proc_terminate($proc, SIGTERM);
+      sleep(2);
+      if (proc_get_status($proc)['running']) {
+        proc_terminate($proc, SIGKILL);
+      }
+      $err = "TIMEOUT: Le processus a dépassé la limite de {$TIMEOUT_SEC} secondes";
+      $code = -1;
+      break;
+    }
+    
+    // Si le processus est terminé, lire les dernières données
+    if (!$status['running']) {
+      $code = $status['exitcode'];
+      break;
+    }
+    
+    // Lire les données disponibles (non-bloquant)
+    $changed = @stream_select($read, $write, $except, 1);
+    if ($changed === false) {
+      usleep(100000);
+      continue;
+    }
+    
+    if ($changed > 0) {
+      foreach ($read as $pipe) {
+        if ($pipe === $pipes[1]) {
+          $data = stream_get_contents($pipes[1]);
+          if ($data !== false && $data !== '') $out .= $data;
+        } elseif ($pipe === $pipes[2]) {
+          $data = stream_get_contents($pipes[2]);
+          if ($data !== false && $data !== '') $err .= $data;
+        }
+      }
+    } else {
+      usleep(100000);
+    }
+  }
+  
+  // Lire les dernières données restantes
+  $remainingOut = stream_get_contents($pipes[1]);
+  $remainingErr = stream_get_contents($pipes[2]);
+  if ($remainingOut !== false) $out .= $remainingOut;
+  if ($remainingErr !== false) $err .= $remainingErr;
+  
+  fclose($pipes[1]);
+  fclose($pipes[2]);
+  
+  if (is_resource($proc)) {
+    $code = proc_close($proc);
+  }
 } else {
   $err = 'Impossible de créer le processus';
   $code = -1;
 }
 
 // Vérifier si le processus a échoué
-$success = ($code === 0 || $code === null);
-if (!$success && empty($err)) {
+$success = ($code === 0 && !$timeoutReached);
+if (!$success && empty($err) && !$timeoutReached) {
   $err = "Processus terminé avec le code de sortie: $code";
 }
 
@@ -100,6 +168,7 @@ echo json_encode([
   'stderr'   => trim($err),
   'last_run' => date('Y-m-d H:i:s'),
   'code'     => $code,
-  'success'  => $success
+  'success'  => $success,
+  'timeout'  => $timeoutReached
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
