@@ -1602,8 +1602,24 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     }
                 });
                 
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                const data = await r.json();
+                // Récupérer le texte brut d'abord pour gérer les erreurs de parsing
+                const txt = await r.text();
+                
+                let data;
+                try {
+                    data = JSON.parse(txt);
+                } catch(parseError) {
+                    console.error('[IONOS] Réponse non JSON reçue:', txt.substring(0, 200));
+                    console.error('[IONOS] Erreur parsing:', parseError);
+                    setState('fail', 'Import IONOS : réponse invalide');
+                    return;
+                }
+                
+                if (!r.ok) {
+                    const errorMsg = data.error || `HTTP ${r.status}`;
+                    setState('fail', `Import IONOS : ${errorMsg}`);
+                    return;
+                }
                 
                 if (!data.ok || !data.has_run || !data.last_run) {
                     setState('none', 'Import IONOS : —');
@@ -1624,7 +1640,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 }
             } catch(e) {
                 console.error('[IONOS] Erreur refresh:', e);
-                setState('fail', 'Import IONOS : erreur de lecture');
+                setState('fail', 'Import IONOS : erreur de connexion');
             }
         }
 
