@@ -55,62 +55,49 @@ if (!is_file($scriptPath)) {
     ], 500);
 }
 
-// Construire l'URL avec les paramètres
-$url = '/' . ltrim(str_replace($projectRoot, '', $scriptPath), '/');
-if ($force) {
-    $url .= '?force=1';
-}
+// Exécuter le script directement en capturant sa sortie
+// On va utiliser un buffer de sortie et simuler les paramètres
 
-// Utiliser curl pour appeler le script (ou file_get_contents avec contexte)
-// Mais comme c'est un script PHP, on peut aussi l'inclure directement
-// Cependant, pour éviter les problèmes de session/headers, on va utiliser un appel HTTP interne
+// Sauvegarder l'état actuel de GET/POST
+$originalGet = $_GET;
+$originalPost = $_POST;
 
-// Option 1 : Utiliser file_get_contents avec contexte HTTP
-$baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-$fullUrl = $baseUrl . $url;
-
-// Créer un contexte HTTP avec les cookies de session
-$context = stream_context_create([
-    'http' => [
-        'method' => 'POST',
-        'header' => [
-            'Cookie: ' . session_name() . '=' . session_id(),
-            'Content-Type: application/x-www-form-urlencoded'
-        ],
-        'timeout' => 120 // 2 minutes max
-    ]
-]);
-
-// Appeler le script
-$response = @file_get_contents($fullUrl, false, $context);
-
-// Si file_get_contents échoue, essayer d'exécuter directement le script
-if ($response === false) {
-    // Alternative : exécuter le script directement via include
-    // Mais cela peut causer des problèmes de headers/session
-    // On va plutôt utiliser un buffer de sortie
-    
-    ob_start();
-    try {
-        // Simuler les paramètres GET/POST
-        if ($force) {
-            $_GET['force'] = '1';
-            $_POST['force'] = '1';
-        }
-        
-        // Inclure le script
-        include $scriptPath;
-        
-        $response = ob_get_clean();
-    } catch (Throwable $e) {
-        ob_end_clean();
-        jsonResponse([
-            'ok' => false,
-            'error' => 'Erreur lors de l\'exécution du script',
-            'type' => $type,
-            'exception' => $e->getMessage()
-        ], 500);
+try {
+    // Simuler les paramètres pour le script
+    if ($force) {
+        $_GET['force'] = '1';
+        $_POST['force'] = '1';
+    } else {
+        unset($_GET['force'], $_POST['force']);
     }
+    
+    // Capturer la sortie du script
+    ob_start();
+    
+    // Inclure le script (il va générer du JSON)
+    include $scriptPath;
+    
+    $response = ob_get_clean();
+    
+    // Restaurer GET/POST
+    $_GET = $originalGet;
+    $_POST = $originalPost;
+    
+} catch (Throwable $e) {
+    // Restaurer GET/POST en cas d'erreur
+    $_GET = $originalGet;
+    $_POST = $originalPost;
+    
+    ob_end_clean();
+    
+    jsonResponse([
+        'ok' => false,
+        'error' => 'Erreur lors de l\'exécution du script',
+        'type' => $type,
+        'exception' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ], 500);
 }
 
 // Parser la réponse JSON
@@ -122,6 +109,7 @@ if (json_last_error() !== JSON_ERROR_NONE) {
         'ok' => false,
         'error' => 'Réponse invalide du script d\'import',
         'type' => $type,
+        'json_error' => json_last_error_msg(),
         'raw_response' => substr($response, 0, 500) // Limiter la taille
     ], 500);
 }

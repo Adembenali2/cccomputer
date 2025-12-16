@@ -59,7 +59,8 @@ $INTERVAL = (int)(getenv('SFTP_IMPORT_INTERVAL_SEC') ?: 20);
 $key      = 'sftp_last_run';
 
 // ---------- VERROU ANTI-PARALLÉLISME avec GET_LOCK ----------
-$lockName = 'import_compteur_sftp';
+// Lock dédié SFTP (séparé de IONOS)
+$lockName = 'import_sftp';
 $lockAcquired = false;
 try {
     // Tentative d'acquisition du verrou (timeout 0 = échec immédiat si verrouillé)
@@ -106,13 +107,26 @@ $releaseLock = function() use ($pdo, $lockName, &$lockAcquired) {
     }
 };
 
+// S'assurer que import_run existe
+$pdo->exec("
+  CREATE TABLE IF NOT EXISTS import_run (
+    id INT NOT NULL AUTO_INCREMENT,
+    ran_at DATETIME NOT NULL,
+    imported INT NOT NULL,
+    skipped INT NOT NULL,
+    ok TINYINT(1) NOT NULL,
+    msg TEXT,
+    PRIMARY KEY (id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+");
+
 // Log informatif (non bloquant) sur les imports récents
 try {
     $stmtRunning = $pdo->prepare("
         SELECT ran_at, imported 
         FROM import_run 
         WHERE ran_at > DATE_SUB(NOW(), INTERVAL 60 SECOND)
-        AND msg LIKE '%\"source\":\"SFTP\"%'
+        AND msg LIKE '%\"type\":\"sftp\"%'
         ORDER BY ran_at DESC 
         LIMIT 1
     ");
@@ -386,6 +400,34 @@ if ($errorMsg) {
         'stdout_length' => strlen($out),
         'stderr_length' => strlen($err)
     ];
+}
+
+// Logging dans import_run avec type sftp
+try {
+    $logMsg = json_encode([
+        'type' => 'sftp',
+        'detail' => $response['message'],
+        'inserted' => $inserted,
+        'updated' => $updated,
+        'skipped' => $skipped,
+        'success' => $success,
+        'error' => $errorMsg,
+        'duration_ms' => $response['duration_ms']
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    
+    $stmtLog = $pdo->prepare("
+        INSERT INTO import_run (ran_at, imported, skipped, ok, msg)
+        VALUES (NOW(), ?, ?, ?, ?)
+    ");
+    $stmtLog->execute([
+        $inserted + $updated,
+        $skipped,
+        $success ? 1 : 0,
+        $logMsg
+    ]);
+} catch (Throwable $e) {
+    debugLog("ERREUR lors du logging dans import_run", ['error' => $e->getMessage()]);
+    // Ne pas bloquer la réponse si le logging échoue
 }
 
 // Libérer le verrou dans TOUS les cas (finally équivalent)
