@@ -133,84 +133,59 @@ try {
     ], 3);
 }
 
-// À partir d'ici tu peux récupérer $pdo depuis ton include db.php
-// Et tu peux faire : log_import_run($pdo, ['source'=>'SFTP','stage'=>'bootstrap','msg'=>'autoload+db include OK'], true);
-
-/**
- * upload_compteur.php (version avec logs détaillés et gestion d'erreurs)
- * - Connexion SFTP avec timeout
- * - Import CSV compteur_relevee
- * - Log dans import_run
- * - Gestion complète des erreurs et timeouts
- */
-
-// ---------- Timeout global du script ----------
-// Maximum 50 secondes pour éviter les blocages (laisser 10s de marge avant le timeout du parent)
-set_time_limit(50);
-$scriptStartTime = time();
-$SCRIPT_TIMEOUT = 50;
-
-debugLog("=== DÉBUT DU SCRIPT D'IMPORT SFTP ===", [
-    'pid' => IMPORT_PID,
-    'script_start' => date('Y-m-d H:i:s'),
-    'timeout' => $SCRIPT_TIMEOUT,
-    'php_version' => PHP_VERSION,
-    'memory_limit' => ini_get('memory_limit')
-]);
-
-// ---------- 0) Normaliser les variables d'env pour db.php ----------
-debugLog("Étape 0: Normalisation des variables d'environnement MySQL");
-(function (): void {
-    $needs = !getenv('MYSQLHOST') || !getenv('MYSQLDATABASE') || !getenv('MYSQLUSER');
-    debugLog("Variables MySQL présentes", [
-        'MYSQLHOST' => getenv('MYSQLHOST') ? '✓' : '✗',
-        'MYSQLDATABASE' => getenv('MYSQLDATABASE') ? '✓' : '✗',
-        'MYSQLUSER' => getenv('MYSQLUSER') ? '✓' : '✗',
-        'needs_normalization' => $needs
-    ]);
-    
-    if (!$needs) {
-        debugLog("Variables MySQL déjà configurées, pas de normalisation nécessaire");
-        return;
-    }
-
-    $url = getenv('MYSQL_PUBLIC_URL') ?: getenv('DATABASE_URL') ?: '';
-    debugLog("Tentative de normalisation depuis URL", ['url_present' => !empty($url)]);
-    
-    if (!$url) {
-        debugLog("Aucune URL MySQL trouvée");
-        return;
-    }
-
-    $p = parse_url($url);
-    if (!$p || empty($p['host']) || empty($p['user']) || empty($p['path'])) {
-        debugLog("Échec du parsing de l'URL MySQL", ['parsed' => $p]);
-        return;
-    }
-
-    putenv("MYSQLHOST={$p['host']}");
-    putenv("MYSQLPORT=" . ($p['port'] ?? '3306'));
-    putenv("MYSQLUSER=" . urldecode($p['user']));
-    putenv("MYSQLPASSWORD=" . (isset($p['pass']) ? urldecode($p['pass']) : ''));
-    putenv("MYSQLDATABASE=" . ltrim($p['path'], '/'));
-    
-    debugLog("Variables MySQL normalisées", [
-        'host' => $p['host'],
-        'port' => $p['port'] ?? '3306',
-        'user' => urldecode($p['user']),
-        'database' => ltrim($p['path'], '/')
-    ]);
-})();
-
 // ====== STAGE: db_connect ======
+// NOTE: includes/db.php ne crée plus $pdo (déprécié, voir commentaire dans db.php)
+// Utiliser DatabaseConnection::getInstance() pour obtenir PDO
+try {
+    // Inclure db_connection.php si pas déjà fait
+    if (!class_exists('DatabaseConnection')) {
+        $dbConnectionPath = dirname(__DIR__, 2) . '/includes/db_connection.php';
+        if (!file_exists($dbConnectionPath)) {
+            // Essayer d'autres chemins possibles
+            $dbConnectionPaths = [
+                __DIR__ . '/../../includes/db_connection.php',
+                dirname(__DIR__, 2) . '/includes/db_connection.php',
+            ];
+            $dbConnectionPath = null;
+            foreach ($dbConnectionPaths as $p) {
+                if (file_exists($p)) {
+                    $dbConnectionPath = $p;
+                    break;
+                }
+            }
+        }
+        if ($dbConnectionPath && file_exists($dbConnectionPath)) {
+            require_once $dbConnectionPath;
+            log_import_run(null, ['source' => 'SFTP', 'stage' => 'db_connection_include', 'msg' => 'db_connection.php chargé', 'path' => $dbConnectionPath], true);
+        } else {
+            throw new RuntimeException('includes/db_connection.php introuvable');
+        }
+    }
+    
+    // Obtenir l'instance PDO via DatabaseConnection
+    $pdo = DatabaseConnection::getInstance();
+    
+    if (!($pdo instanceof PDO)) {
+        throw new RuntimeException('DatabaseConnection::getInstance() n\'a pas retourné une instance PDO');
+    }
+    
+    log_import_run($pdo, ['source' => 'SFTP', 'stage' => 'db_connect', 'msg' => 'Connexion PDO établie via DatabaseConnection', 'pdo_class' => get_class($pdo)], true);
+} catch (Throwable $e) {
+    debug_die(null, 'db_connect', 'Erreur lors de l\'initialisation PDO: ' . $e->getMessage(), [
+        'exception' => get_class($e),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+    ], 4);
+}
+
+// Vérification finale (sécurité)
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-    debug_die(null, 'db_connect', 'La variable $pdo n\'est pas définie ou n\'est pas une instance de PDO', [
+    debug_die(null, 'db_connect', 'La variable $pdo n\'est pas définie ou n\'est pas une instance de PDO après initialisation', [
         'pdo_set' => isset($pdo),
         'pdo_type' => gettype($pdo ?? null),
     ], 4);
 }
 
-log_import_run($pdo, ['source' => 'SFTP', 'stage' => 'db_connect', 'msg' => 'Connexion PDO établie', 'pdo_class' => get_class($pdo)], true);
 debugLog("Connexion PDO établie", [
     'pdo_class' => get_class($pdo),
     'connection_status' => 'OK'
