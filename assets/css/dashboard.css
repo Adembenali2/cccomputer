@@ -786,6 +786,77 @@ body {
 }
 
 
+/* ====== Badges import IONOS ====== */
+.import-badges {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.import-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  -webkit-backdrop-filter: saturate(180%) blur(6px);
+  backdrop-filter: saturate(180%) blur(6px);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.import-badge .ico {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.import-badge .ico.ok {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.import-badge .ico.run {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.import-badge .ico.fail {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.import-badge .txt {
+  white-space: nowrap;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .import-badge .txt {
+    display: none;
+  }
+}
+
+.import-badge[hidden] {
+  display: none !important;
+}
+
 /* ====== Responsive du contenu principal ====== */
 @media (max-width: 768px) {
   .dashboard-wrapper {

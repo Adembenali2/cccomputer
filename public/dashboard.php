@@ -134,6 +134,12 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     <div class="dashboard-wrapper">
         <div class="dashboard-header">
             <h2 class="dashboard-title">Tableau de Bord</h2>
+            <div class="import-badges">
+                <div class="import-badge" id="ionosBadge" aria-live="polite" title="État du dernier import IONOS">
+                    <span class="ico run" id="ionosIco">⏳</span>
+                    <span class="txt" id="ionosTxt">Import IONOS : vérification…</span>
+                </div>
+            </div>
         </div>
 
         <div class="dashboard-grid">
@@ -1558,6 +1564,76 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
     })();
 
+    // --- Badge Import IONOS (lecture seule du statut) ---
+    (function(){
+        const badge = document.getElementById('ionosBadge');
+        const ico   = document.getElementById('ionosIco');
+        const txt   = document.getElementById('ionosTxt');
+        
+        if (!badge || !ico || !txt) return;
+
+        function setState(state, label) {
+            ico.classList.remove('ok', 'run', 'fail');
+            
+            if (state === 'ok') {
+                ico.textContent = '✓';
+                ico.classList.add('ok');
+            } else if (state === 'run') {
+                ico.textContent = '⏳';
+                ico.classList.add('run');
+            } else if (state === 'fail') {
+                ico.textContent = '!';
+                ico.classList.add('fail');
+            } else {
+                ico.textContent = '⏳';
+                ico.classList.add('run');
+            }
+            
+            if (label) txt.textContent = label;
+        }
+
+        async function refresh() {
+            try {
+                const r = await fetch('/API/import/ionos_status.php', {
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const data = await r.json();
+                
+                if (!data.ok || !data.has_run || !data.last_run) {
+                    setState('none', 'Import IONOS : —');
+                    return;
+                }
+                
+                const run = data.last_run;
+                
+                if (run.ok) {
+                    const inserted = run.inserted || run.imported || 0;
+                    const label = `Import IONOS OK — ${inserted} inséré(s) — ${run.ran_at}`;
+                    setState('ok', label);
+                } else {
+                    const errorMsg = run.error || run.message || 'Erreur inconnue';
+                    const label = `Import IONOS KO — ${run.ran_at}`;
+                    setState('fail', label);
+                    badge.title = `Import IONOS KO — ${errorMsg}`;
+                }
+            } catch(e) {
+                console.error('[IONOS] Erreur refresh:', e);
+                setState('fail', 'Import IONOS : erreur de lecture');
+            }
+        }
+
+        // Rafraîchir immédiatement
+        refresh();
+        
+        // Rafraîchir toutes les 10-15 secondes
+        setInterval(refresh, 12000); // 12 secondes
+    })();
 
     </script>
 </body>
