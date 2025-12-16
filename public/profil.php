@@ -20,7 +20,6 @@ $pdo = getPdo();
 // ========================================================================
 const USERS_LIMIT = 300;
 const SEARCH_MAX_LENGTH = 120;
-const IMPORT_HISTORY_LIMIT = 20;
 const ROLES_CACHE_TTL = 3600; // 1 heure
 
 // ========================================================================
@@ -569,16 +568,6 @@ $editing = $editId > 0 ? safeFetch($pdo,
     'utilisateur_edit'
 ) : null;
 
-// Récupérer les imports (seulement si nécessaire pour l'affichage)
-$imports = [];
-if (true) { // Toujours charger pour l'icône
-$imports = safeFetchAll(
-    $pdo,
-    "SELECT id, ran_at, imported, skipped, ok, msg FROM import_run ORDER BY id DESC LIMIT " . IMPORT_HISTORY_LIMIT,
-    [],
-    'imports_history'
-);
-}
 
 // Calcul des statistiques (compte TOUS les utilisateurs, pas seulement ceux affichés)
 $stats = safeFetch($pdo, "
@@ -691,95 +680,6 @@ function decode_msg($row) {
         .import-mini {
             position: absolute; right: 0; top: 0;
             display: flex; align-items: center; gap: 8px;
-        }
-        .import-mini-btn {
-            display: inline-flex; align-items: center; justify-content: center;
-            width: 36px; height: 36px; border-radius: 999px;
-            background: var(--bg-primary); border: 1px solid var(--border-color);
-            cursor: pointer; transition: all 0.2s ease;
-            box-shadow: var(--shadow-sm);
-            font-size: 16px;
-        }
-        .import-mini-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-md);
-        }
-        .import-mini-btn.ok { color: #16a34a; border-color: rgba(22, 163, 74, 0.3); }
-        .import-mini-btn.ko { color: #dc2626; border-color: rgba(220, 38, 38, 0.3); }
-        .import-mini-btn.run { color: #4338ca; border-color: rgba(67, 56, 202, 0.3); }
-
-        .import-drop {
-            position: absolute; right: 0; top: 44px; z-index: 30;
-            width: min(520px, 92vw);
-            background: var(--bg-primary); border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-lg);
-            padding: 12px;
-            display: none;
-            animation: slideDown 0.2s ease;
-        }
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .import-drop.open { display: block; }
-        .import-drop h3 {
-            margin: 4px 6px 12px; font-size: 14px; font-weight: 700;
-            color: var(--text-primary);
-        }
-        .import-list {
-            max-height: 320px; overflow-y: auto; padding-right: 4px;
-        }
-        .import-list::-webkit-scrollbar {
-            width: 6px;
-        }
-        .import-list::-webkit-scrollbar-track {
-            background: var(--bg-secondary);
-            border-radius: 3px;
-        }
-        .import-list::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 3px;
-        }
-        .import-list::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted);
-        }
-        .imp-item {
-            display: grid; grid-template-columns: 28px 1fr auto; gap: 10px;
-            align-items: center; padding: 10px; border-radius: var(--radius-md);
-            transition: background-color 0.2s ease;
-        }
-        .imp-item:hover { background: var(--bg-secondary); }
-        .imp-item + .imp-item { border-top: 1px solid var(--border-color); }
-        .imp-ico {
-            width: 24px; height: 24px; border-radius: 999px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 700; font-size: 12px;
-        }
-        .imp-ico.ok { background: #dcfce7; color: #16a34a; }
-        .imp-ico.ko { background: #fee2e2; color: #dc2626; }
-        .imp-ico.run { background: #e0e7ff; color: #4338ca; }
-        .imp-main { min-width: 0; }
-        .imp-title {
-            font-size: 13px; font-weight: 600; color: var(--text-primary);
-        }
-        .imp-sub {
-            font-size: 12px; color: var(--text-secondary); margin-top: 2px;
-        }
-        .imp-badges {
-            display: flex; gap: 6px; flex-wrap: wrap;
-        }
-        .badge-mini {
-            font-size: 11px; padding: 3px 8px; border-radius: 999px;
-            background: var(--bg-secondary); color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-        }
-        .files {
-            margin-top: 4px; font-size: 11px; color: var(--text-secondary);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        @media (max-width: 640px) {
-            .import-drop { right: 6px; left: 6px; width: auto; }
         }
 
         /* Flash messages améliorés */
@@ -977,81 +877,6 @@ function decode_msg($row) {
         <p class="page-sub">Page réservée aux administrateurs (Admin), dirigeants, techniciens et livreurs pour créer, modifier et activer/désactiver des comptes.</p>
 
         <!-- Icône Import -->
-        <div class="import-mini" id="impMini">
-            <?php
-            $last = $imports[0] ?? null;
-            $stateClass = 'run';
-            $glyph = '⏳';
-            $title = 'Imports';
-            if ($last) {
-                if ((int)$last['ok'] === 1) {
-                    $stateClass = 'ok';
-                    $glyph = '✓';
-                    $title = 'Dernier import OK';
-                } elseif ((int)$last['ok'] === 0) {
-                    $stateClass = 'ko';
-                    $glyph = '!';
-                    $title = 'Dernier import KO';
-                }
-            }
-            ?>
-            <button class="import-mini-btn <?= h($stateClass) ?>" id="impBtn" type="button" 
-                    aria-haspopup="true" aria-expanded="false" title="<?= h($title) ?>" aria-label="<?= h($title) ?>">
-                <?= h($glyph) ?>
-            </button>
-
-            <div class="import-drop" id="impDrop" role="dialog" aria-label="Derniers imports" aria-modal="true">
-                <h3>Derniers imports</h3>
-                <div class="import-list">
-                    <?php if (empty($imports)): ?>
-                        <div class="imp-item">
-                            <div class="imp-ico run">⏳</div>
-                            <div class="imp-main">
-                                <div class="imp-title">Aucun import trouvé</div>
-                                <div class="imp-sub">Démarrez un import depuis le dashboard.</div>
-                            </div>
-                            <div class="imp-badges"></div>
-                        </div>
-                    <?php else: ?>
-                        <?php foreach ($imports as $row): ?>
-                            <?php
-                                $ok = (int)($row['ok'] ?? 0);
-                                $icoCls = $ok === 1 ? 'ok' : ($ok === 0 ? 'ko' : 'run');
-                                $icoTxt = $ok === 1 ? '✓' : ($ok === 0 ? '!' : '⏳');
-                                $msg = decode_msg($row);
-                                $files = $msg['files'] ?? null;
-                                $filesStr = '';
-                            if (is_array($files) && !empty($files)) {
-                                    $filesStr = implode(', ', array_slice($files, 0, 5));
-                                    if (count($files) > 5) $filesStr .= ' …';
-                                }
-                            ?>
-                            <div class="imp-item">
-                                <div class="imp-ico <?= h($icoCls) ?>" aria-label="<?= $ok === 1 ? 'Succès' : ($ok === 0 ? 'Erreur' : 'En cours') ?>">
-                                    <?= h($icoTxt) ?>
-                                </div>
-                                <div class="imp-main">
-                                    <div class="imp-title">
-                                        <?= $ok === 1 ? 'Import réussi' : ($ok === 0 ? 'Import échoué' : 'Import en cours') ?>
-                                    </div>
-                                    <div class="imp-sub">
-                                        Le <?= h($row['ran_at'] ?? '') ?> — id #<?= (int)$row['id'] ?>
-                                    </div>
-                                    <?php if ($filesStr !== ''): ?>
-                                        <div class="files" title="<?= h($filesStr) ?>"><?= h($filesStr) ?></div>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="imp-badges">
-                                    <span class="badge-mini">ok: <?= h((string)$row['ok']) ?></span>
-                                    <span class="badge-mini">importés: <?= (int)$row['imported'] ?></span>
-                                    <span class="badge-mini">erreurs: <?= (int)$row['skipped'] ?></span>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
     </header>
 
     <section class="profil-meta">
@@ -1422,42 +1247,6 @@ function decode_msg($row) {
 <?php endif; ?>
 
 <script>
-/* Gestion de l'icône import */
-(function() {
-    const btn = document.getElementById('impBtn');
-    const drop = document.getElementById('impDrop');
-
-    if (!btn || !drop) return;
-
-    function toggleDropdown() {
-        const isOpen = drop.classList.contains('open');
-        drop.classList.toggle('open', !isOpen);
-        btn.setAttribute('aria-expanded', String(!isOpen));
-    }
-    
-    btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        toggleDropdown();
-    });
-    
-    // Fermer au clic extérieur
-    document.addEventListener('click', function(e) {
-        if (!drop.classList.contains('open')) return;
-        if (btn.contains(e.target) || drop.contains(e.target)) return;
-        drop.classList.remove('open');
-        btn.setAttribute('aria-expanded', 'false');
-    });
-
-    // Fermer avec Échap
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && drop.classList.contains('open')) {
-            drop.classList.remove('open');
-            btn.setAttribute('aria-expanded', 'false');
-            btn.focus();
-        }
-    });
-})();
 
 /* Recherche intelligente en temps réel avec AJAX */
 (function() {
