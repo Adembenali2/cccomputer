@@ -6,9 +6,24 @@ composer.lock
 /logs/
 *.log
 
+# Temporary/Trash
+_trash/
+
 # Tests
 .phpunit.cache/
 coverage/
+/tests/
+
+# Debug/Diagnostic
+/debug/
+/monitoring/
+/audit/
+/reports/
+*debug*
+*diagnostic*
+*test_*.php
+*.dump
+*.trace
 
 # IDE
 .idea/
