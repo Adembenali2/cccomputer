@@ -1728,11 +1728,28 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     } else {
                         countText = '0 élément(s)';
                     }
-                    const label = `Import SFTP OK — ${countText} — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
+                    // Vérifier si c'est vraiment récent (moins de 10 minutes)
+                    const ranAtTime = new Date(d.ran_at).getTime();
+                    const now = Date.now();
+                    const isReallyRecent = (now - ranAtTime) < 600000; // 10 minutes
+                    
+                    const label = `Import SFTP OK — ${countText} — ${d.ran_at}` + (isReallyRecent ? ' (récent)' : '');
                     setState('ok', label, files);
                     
+                    // Logger dans la console pour debug
+                    console.log('[IMPORT] Badge mis à jour', {
+                        inserted,
+                        updated,
+                        ran_at: d.ran_at,
+                        is_recent: isReallyRecent,
+                        ran_at_timestamp: ranAtTime,
+                        now_timestamp: now,
+                        age_minutes: Math.round((now - ranAtTime) / 60000),
+                        summary: d.summary
+                    });
+                    
                     // Afficher un toast si c'est un import récent et qu'on a des résultats
-                    if (showToastOnUpdate && d.recent && (inserted > 0 || updated > 0)) {
+                    if (showToastOnUpdate && isReallyRecent && (inserted > 0 || updated > 0)) {
                         showToast(`Import SFTP automatique : ${countText}`, 'success');
                     }
                 } else {

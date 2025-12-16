@@ -358,19 +358,113 @@ function sftp_safe_move(SFTP $sftp, string $from, string $toDir): array {
     $basename = basename($from);
     // Normaliser le répertoire de destination
     $toDirNormalized = normalize_sftp_path($toDir);
+    
+    // Vérifier que le fichier source existe
+    $sourceStat = $sftp->stat($from);
+    if ($sourceStat === false) {
+        debugLog("ERREUR sftp_safe_move - Fichier source inexistant", [
+            'from' => $from,
+            'toDir' => $toDir
+        ]);
+        return [false, null];
+    }
+    
     // Construire le chemin cible : si toDir est /, alors target = /filename, sinon /toDir/filename
     if ($toDirNormalized === '/') {
         $target = '/' . $basename;
     } else {
         $target = $toDirNormalized . '/' . $basename;
     }
-    if ($sftp->rename($from, $target)) return [true, $target];
+    
+    debugLog("Tentative de déplacement SFTP", [
+        'from' => $from,
+        'to' => $target,
+        'toDir' => $toDirNormalized,
+        'source_exists' => $sourceStat !== false,
+        'source_size' => $sourceStat['size'] ?? 'N/A'
+    ]);
+    
+    // Vérifier que le répertoire de destination existe, sinon le créer
+    $targetDirStat = $sftp->stat($toDirNormalized);
+    if ($targetDirStat === false || !isset($targetDirStat['type']) || $targetDirStat['type'] !== 2) {
+        debugLog("Création du répertoire de destination", ['dir' => $toDirNormalized]);
+        try {
+            $mkdirResult = $sftp->mkdir($toDirNormalized, -1, true); // true = récursif
+            debugLog("Résultat création répertoire", [
+                'dir' => $toDirNormalized,
+                'success' => $mkdirResult
+            ]);
+        } catch (Throwable $e) {
+            debugLog("Erreur création répertoire (peut déjà exister)", [
+                'dir' => $toDirNormalized,
+                'error' => $e->getMessage()
+            ]);
+        }
+    } else {
+        debugLog("Répertoire de destination existe déjà", [
+            'dir' => $toDirNormalized,
+            'type' => $targetDirStat['type'] ?? 'N/A'
+        ]);
+    }
+    
+    // Tentative de déplacement
+    $renameResult = $sftp->rename($from, $target);
+    if ($renameResult) {
+        debugLog("Déplacement réussi (première tentative)", [
+            'from' => $from,
+            'to' => $target
+        ]);
+        
+        // Vérifier que le fichier a bien été déplacé
+        $verifySource = $sftp->stat($from);
+        $verifyTarget = $sftp->stat($target);
+        debugLog("Vérification après déplacement", [
+            'source_exists' => $verifySource !== false,
+            'target_exists' => $verifyTarget !== false,
+            'target_size' => $verifyTarget !== false ? ($verifyTarget['size'] ?? 'N/A') : 'N/A'
+        ]);
+        
+        return [true, $target];
+    }
+    
+    debugLog("Première tentative échouée, essai avec timestamp", [
+        'from' => $from,
+        'target' => $target,
+        'rename_result' => $renameResult
+    ]);
 
     // Fallback avec timestamp si le fichier existe déjà
     $alt = ($toDirNormalized === '/' ? '/' : $toDirNormalized . '/') 
          . pathinfo($basename, PATHINFO_FILENAME)
          . '_' . date('Ymd_His') . '.' . pathinfo($basename, PATHINFO_EXTENSION);
-    if ($sftp->rename($from, $alt)) return [true, $alt];
+    
+    $renameAltResult = $sftp->rename($from, $alt);
+    if ($renameAltResult) {
+        debugLog("Déplacement réussi (avec timestamp)", [
+            'from' => $from,
+            'to' => $alt
+        ]);
+        return [true, $alt];
+    }
+    
+    // Récupérer les erreurs SFTP si disponibles
+    $sftpErrors = [];
+    if (method_exists($sftp, 'getLastError')) {
+        $sftpErrors[] = $sftp->getLastError();
+    }
+    if (method_exists($sftp, 'getErrors')) {
+        $sftpErrors = array_merge($sftpErrors, $sftp->getErrors());
+    }
+    
+    debugLog("ERREUR - Toutes les tentatives de déplacement ont échoué", [
+        'from' => $from,
+        'target' => $target,
+        'alt' => $alt,
+        'rename_result' => $renameResult,
+        'rename_alt_result' => $renameAltResult,
+        'sftp_errors' => $sftpErrors,
+        'source_stat' => $sourceStat
+    ]);
 
     return [false, null];
 }
@@ -1331,18 +1425,57 @@ if (is_array($files) && count($files) > 0) {
                 echo "ℹ️ Fichier déjà dans $PROCESSED_DIR, pas de déplacement nécessaire\n";
             } else {
                 try {
+                    debugLog("Tentative de déplacement vers /processed", [
+                        'filename' => $entry,
+                        'remote' => $remote,
+                        'processed_dir' => $PROCESSED_DIR
+                    ]);
+                    
                     [$okMove, $target] = sftp_safe_move($sftp, $remote, $PROCESSED_DIR);
                     if (!$okMove) {
                         $fileDebug['moved_to'] = 'processed_failed';
+                        $fileDebug['move_error'] = 'sftp_safe_move retourné false';
                         echo "⚠️ Impossible de déplacer $entry vers $PROCESSED_DIR\n";
+                        debugLog("ERREUR - Déplacement échoué", [
+                            'filename' => $entry,
+                            'remote' => $remote,
+                            'processed_dir' => $PROCESSED_DIR,
+                            'target' => $target
+                        ]);
                     } else {
                         $fileDebug['moved_to'] = $target;
-                        echo "📦 Archivé: $entry → $PROCESSED_DIR\n";
+                        echo "📦 Archivé: $entry → $target\n";
+                        debugLog("Fichier déplacé avec succès", [
+                            'filename' => $entry,
+                            'from' => $remote,
+                            'to' => $target
+                        ]);
+                        
+                        // Vérifier que le fichier a bien été déplacé
+                        $verifyStat = $sftp->stat($target);
+                        if ($verifyStat === false) {
+                            debugLog("⚠️ ATTENTION - Fichier déplacé mais introuvable à la destination", [
+                                'target' => $target,
+                                'original' => $remote
+                            ]);
+                        } else {
+                            debugLog("✅ Vérification OK - Fichier présent à la destination", [
+                                'target' => $target,
+                                'size' => $verifyStat['size'] ?? 'N/A'
+                            ]);
+                        }
                     }
                 } catch (Throwable $e) {
                     $fileDebug['moved_to'] = 'processed_error';
                     $fileDebug['move_error'] = $e->getMessage();
                     echo "⚠️ Erreur lors du déplacement de $entry: " . $e->getMessage() . "\n";
+                    debugLog("EXCEPTION lors du déplacement", [
+                        'filename' => $entry,
+                        'remote' => $remote,
+                        'error' => $e->getMessage(),
+                        'exception' => get_class($e),
+                        'trace' => $e->getTraceAsString()
+                    ]);
                     // On continue quand même, le fichier est déjà traité
                 }
             }

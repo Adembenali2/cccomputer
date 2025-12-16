@@ -130,7 +130,8 @@ if ($inserted === null) {
     $inserted = (int)$row['imported'];
 }
 
-$recent = (time() - strtotime((string)$row['ran_at'])) < 180; // < 3 min
+// Considérer comme récent si moins de 5 minutes (pour voir les imports du cron)
+$recent = (time() - strtotime((string)$row['ran_at'])) < 300; // < 5 min
 
 // Logs debug (non sensibles)
 $debugInfo = [
