@@ -25,7 +25,14 @@ try {
     debugLog("includes/auth.php chargé");
 } catch (Throwable $e) {
     debugLog("ERREUR chargement auth.php", ['error' => $e->getMessage()]);
-    echo json_encode(['ran' => false, 'error' => 'Erreur chargement auth.php: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    http_response_code(500);
+    echo json_encode([
+        'ok' => false,
+        'ran' => false,
+        'reason' => 'auth_failed',
+        'error' => 'Erreur chargement auth.php: ' . $e->getMessage(),
+        'message' => 'Erreur d\'authentification'
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -64,8 +71,11 @@ try {
         debugLog("Verrou non acquis - import déjà en cours");
         echo json_encode([
             'ok' => false,
+            'ran' => false,
             'reason' => 'locked',
-            'message' => 'Un import est déjà en cours (verrou MySQL actif)'
+            'message' => 'Un import est déjà en cours (verrou MySQL actif)',
+            'last_run_at' => null,
+            'next_due_in_sec' => null
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
@@ -119,27 +129,35 @@ $forced = false;
 $stmt = $pdo->prepare("SELECT v FROM app_kv WHERE k = ? LIMIT 1");
 $stmt->execute([$key]);
 $last = $stmt->fetchColumn();
-$due  = (time() - ($last ? strtotime((string)$last) : 0)) >= $INTERVAL;
+$lastTimestamp = $last ? strtotime((string)$last) : 0;
+$elapsed = time() - $lastTimestamp;
+$due  = $elapsed >= $INTERVAL;
+$nextDueInSec = $due ? 0 : ($INTERVAL - $elapsed);
 
-// Si force=1, ignorer le check not_due mais conserver le lock
+// Si force=1, ignorer le check not_due mais conserver le lock et l'auth
 if (!$due && !$force) {
   $releaseLock();
   echo json_encode([
     'ok' => false, 
+    'ran' => false,
     'reason' => 'not_due', 
     'last_run' => $last,
-    'forced' => false
+    'last_run_at' => $last ? date('Y-m-d H:i:s', $lastTimestamp) : null,
+    'next_due_in_sec' => $nextDueInSec,
+    'forced' => false,
+    'message' => "Import non dû (dernier: $last, interval: {$INTERVAL}s, écoulé: {$elapsed}s)"
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   exit;
 }
 
-// Si force=1 et not_due, on force l'exécution
+// Si force=1 et not_due, on force l'exécution (bypass "due" mais garde auth + lock)
 if (!$due && $force) {
   $forced = true;
   debugLog("Mode FORCE activé - import exécuté même si not_due", [
     'last_run' => $last,
     'interval' => $INTERVAL,
-    'elapsed' => $last ? (time() - strtotime((string)$last)) : 0
+    'elapsed' => $elapsed,
+    'next_due_in_sec' => $nextDueInSec
   ]);
 }
 
@@ -160,10 +178,15 @@ debugLog("Vérification du script", ['path' => $scriptPath, 'exists' => is_file(
 if (!is_file($scriptPath)) {
   $error = 'Script upload_compteur.php introuvable';
   debugLog("ERREUR", ['error' => $error, 'path' => $scriptPath]);
+  $releaseLock();
+  http_response_code(500);
   echo json_encode([
+    'ok' => false,
     'ran' => false,
+    'reason' => 'script_not_found',
     'error' => $error,
-    'path' => $scriptPath
+    'path' => $scriptPath,
+    'message' => 'Script d\'import introuvable'
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   exit;
 }
@@ -320,11 +343,20 @@ if (!empty($err)) {
     $errors[] = trim($err);
 }
 
+// Calculer next_due_in_sec pour la réponse
+$stmtNext = $pdo->prepare("SELECT v FROM app_kv WHERE k = ? LIMIT 1");
+$stmtNext->execute([$key]);
+$nextLast = $stmtNext->fetchColumn();
+$nextLastTimestamp = $nextLast ? strtotime((string)$nextLast) : 0;
+$nextElapsed = time() - $nextLastTimestamp;
+$nextDueInSec = ($INTERVAL - $nextElapsed) > 0 ? ($INTERVAL - $nextElapsed) : 0;
+
 // Réponse JSON structurée
 $response = [
   'ok'           => $success,
   'ran'          => true,
   'forced'       => $forced,
+  'reason'        => $success ? 'started' : ($timeoutReached ? 'timeout' : 'script_error'),
   'inserted'     => $inserted,
   'updated'      => $updated,
   'skipped'      => $skipped,
@@ -332,10 +364,15 @@ $response = [
   'stdout'       => trim($out),
   'stderr'       => trim($err),
   'last_run'     => date('Y-m-d H:i:s'),
+  'last_run_at'  => date('Y-m-d H:i:s'),
+  'next_due_in_sec' => $nextDueInSec,
   'code'         => $code,
   'timeout'      => $timeoutReached,
   'error'        => $errorMsg,
-  'duration_ms'  => (time() - $startTime) * 1000
+  'duration_ms'  => (time() - $startTime) * 1000,
+  'message'      => $success 
+    ? "Import SFTP exécuté avec succès (inséré: $inserted, mis à jour: $updated, ignoré: $skipped)"
+    : ($errorMsg ?: "Import SFTP échoué (code: $code)")
 ];
 
 if ($errorMsg) {

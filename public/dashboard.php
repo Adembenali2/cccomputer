@@ -1575,6 +1575,33 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         const ico   = document.getElementById('impIco');
         const txt   = document.getElementById('impTxt');
 
+        // Fonction pour afficher un toast/notification
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                background: ${type === 'error' ? '#fee2e2' : type === 'success' ? '#d1fae5' : '#dbeafe'};
+                color: ${type === 'error' ? '#dc2626' : type === 'success' ? '#065f46' : '#1e40af'};
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                z-index: 10000;
+                max-width: 400px;
+                font-size: 0.9rem;
+                animation: slideIn 0.3s ease-out;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
         function setState(state, label, titleFiles) {
             ico.classList.remove('ok','run','fail');
 
@@ -1598,20 +1625,73 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         }
 
-        async function callJSON(url){
+        async function callJSON(url, showErrors = false){
             try{
-                const res = await fetch(url, {method:'POST', credentials:'same-origin'});
+                const res = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
                 const text = await res.text();
                 let data = null;
-                try { data = text ? JSON.parse(text) : null; } catch(e){}
-                if(!res.ok){
-                    console.error(`[IMPORT] ${url} → ${res.status} ${res.statusText}`, data || text);
-                    return { ok:false, status:res.status, body:(data||text) };
+                try { 
+                    data = text ? JSON.parse(text) : null; 
+                } catch(e){
+                    console.error(`[IMPORT] Erreur parsing JSON:`, e, text);
                 }
-                return { ok:true, status:res.status, body:data };
+                
+                // Logger dans la console
+                console.log(`[IMPORT] ${url} → ${res.status}`, data);
+                
+                if(!res.ok){
+                    const errorMsg = data?.error || data?.message || `HTTP ${res.status} ${res.statusText}`;
+                    console.error(`[IMPORT] ${url} → ${res.status} ${res.statusText}`, data || text);
+                    
+                    if (showErrors) {
+                        if (res.status === 401 || res.status === 403) {
+                            showToast(`Import SFTP: Erreur d'authentification (${res.status})`, 'error');
+                        } else if (res.status === 500) {
+                            showToast(`Import SFTP: Erreur serveur (${errorMsg})`, 'error');
+                        } else {
+                            showToast(`Import SFTP: ${errorMsg}`, 'error');
+                        }
+                    }
+                    
+                    return { 
+                        ok: false, 
+                        status: res.status, 
+                        body: data || text,
+                        reason: data?.reason || 'http_error',
+                        error: errorMsg
+                    };
+                }
+                
+                // Afficher un toast si "not_due" ou "locked"
+                if (showErrors && data) {
+                    if (data.reason === 'not_due') {
+                        const nextDue = data.next_due_in_sec || 0;
+                        const nextDueMin = Math.ceil(nextDue / 60);
+                        showToast(`Import SFTP: Déjà exécuté récemment (prochain dans ${nextDueMin} min)`, 'info');
+                    } else if (data.reason === 'locked') {
+                        showToast('Import SFTP: Un import est déjà en cours', 'info');
+                    } else if (data.ok && data.ran) {
+                        const count = (data.inserted || 0) + (data.updated || 0);
+                        if (count > 0) {
+                            showToast(`Import SFTP: ${count} élément(s) traité(s)`, 'success');
+                        }
+                    }
+                }
+                
+                return { ok: true, status: res.status, body: data };
             }catch(err){
                 console.error(`[IMPORT] ${url} → fetch failed`, err);
-                return { ok:false, error:String(err) };
+                if (showErrors) {
+                    showToast(`Import SFTP: Erreur de connexion (${err.message})`, 'error');
+                }
+                return { ok: false, error: String(err) };
             }
         }
 
@@ -1653,14 +1733,30 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         }
 
-        async function tick(){
-            await callJSON(SFTP_URL + '?limit=20'); // Limite de 20 fichiers CSV maximum
+        async function tick(showErrors = false){
+            const result = await callJSON(SFTP_URL + '?limit=20', showErrors); // Limite de 20 fichiers CSV maximum
             setTimeout(refresh, 1500);
+            return result;
         }
 
-        tick();        // premier run
-        refresh();     // premier badge
-        setInterval(tick, 20000); // toutes les 20s
+        // Appel immédiat au chargement avec force=1 (bypass "due" mais garde auth + lock)
+        (async function immediateImport(){
+            console.log('[IMPORT] Déclenchement immédiat de l\'import SFTP (force=1)');
+            setState('run', 'Import SFTP : démarrage...');
+            const result = await callJSON(SFTP_URL + '?limit=20&force=1', true);
+            
+            if (result.ok && result.body && result.body.ran) {
+                console.log('[IMPORT] Import immédiat lancé avec succès', result.body);
+                setTimeout(refresh, 2000); // Rafraîchir le badge après 2 secondes
+            } else {
+                console.warn('[IMPORT] Import immédiat non lancé', result);
+                // Rafraîchir quand même pour afficher l'état actuel
+                setTimeout(refresh, 1000);
+            }
+        })();
+        
+        refresh();     // premier badge (état actuel)
+        setInterval(() => tick(false), 20000); // toutes les 20s (sans afficher les erreurs pour ne pas spammer)
     })();
 
     // --- Import auto silencieux WEB_COMPTEUR + badge (tick 20s) ---
