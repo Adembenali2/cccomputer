@@ -1661,6 +1661,16 @@ if ($files_error > 0 && $compteurs_inserted === 0 && $files_processed > 0) {
     }
 }
 
+// Fermer proprement la connexion SFTP
+if (isset($sftp) && $sftp instanceof SFTP) {
+    try {
+        $sftp->disconnect();
+        debugLog("Connexion SFTP fermée proprement");
+    } catch (Throwable $e) {
+        debugLog("Avertissement: Erreur lors de la fermeture SFTP", ['error' => $e->getMessage()]);
+    }
+}
+
 echo "-----------------------------\n";
 $duration = time() - $scriptStartTime;
 debugLog("=== FIN DU SCRIPT D'IMPORT SFTP ===", [

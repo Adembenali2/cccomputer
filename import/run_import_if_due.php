@@ -63,7 +63,9 @@ $lockName = 'import_compteur_sftp';
 $lockAcquired = false;
 try {
     // Tentative d'acquisition du verrou (timeout 0 = échec immédiat si verrouillé)
-    $stmtLock = $pdo->query("SELECT GET_LOCK('$lockName', 0) as lock_result");
+    // Utilisation de prepare() pour éviter l'injection SQL
+    $stmtLock = $pdo->prepare("SELECT GET_LOCK(:lock_name, 0) as lock_result");
+    $stmtLock->execute([':lock_name' => $lockName]);
     $lockResult = $stmtLock->fetch(PDO::FETCH_ASSOC);
     $lockAcquired = (int)($lockResult['lock_result'] ?? 0) === 1;
     
@@ -93,7 +95,9 @@ try {
 $releaseLock = function() use ($pdo, $lockName, &$lockAcquired) {
     if ($lockAcquired) {
         try {
-            $pdo->query("SELECT RELEASE_LOCK('$lockName')");
+            // Utilisation de prepare() pour éviter l'injection SQL
+            $stmtRelease = $pdo->prepare("SELECT RELEASE_LOCK(:lock_name)");
+            $stmtRelease->execute([':lock_name' => $lockName]);
             debugLog("Verrou MySQL libéré");
             $lockAcquired = false;
         } catch (Throwable $e) {

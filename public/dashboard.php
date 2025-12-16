@@ -72,6 +72,8 @@ $config = require __DIR__ . '/../config/app.php';
 $limit = $config['limits']['clients_per_page'] ?? 500;
 $cacheTtl = $config['limits']['cache_ttl'] ?? 300;
 
+// Récupérer l'ID utilisateur depuis la session (défini dans auth.php)
+$user_id = currentUserId() ?? 0;
 $cacheKey = 'dashboard_clients_list_' . md5($user_id);
 $clients = CacheHelper::get($cacheKey, null);
 

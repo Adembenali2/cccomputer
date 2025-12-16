@@ -169,8 +169,9 @@ function initApi(): void {
         require_once __DIR__ . '/db_connection.php';
         $pdo = DatabaseConnection::getInstance();
         
-        // Tester la connexion
-        $pdo->query('SELECT 1');
+        // Tester la connexion avec prepare() pour cohérence
+        $stmt = $pdo->prepare('SELECT 1');
+        $stmt->execute();
         error_log('initApi: Connexion PDO initialisée via DatabaseConnection');
         
     } catch (Throwable $e) {
