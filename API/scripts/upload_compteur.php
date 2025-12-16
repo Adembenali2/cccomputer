@@ -495,6 +495,35 @@ function normalize_sftp_path(string $path): string {
     return $path;
 }
 
+/**
+ * Normalise une entrée retournée par nlist() pour extraire le nom de fichier
+ * et construire le chemin absolu correct.
+ * 
+ * @param string $entry L'entrée retournée par nlist() (peut être relative ou absolue)
+ * @param string $remoteDir Le répertoire remote depuis lequel nlist() a été appelé
+ * @return string Le chemin absolu normalisé
+ */
+function normalize_sftp_entry(string $entry, string $remoteDir): string {
+    // Ignorer . et ..
+    if ($entry === '.' || $entry === '..') {
+        return $entry;
+    }
+    
+    // Si l'entrée commence déjà par /, c'est un chemin absolu
+    if ($entry[0] === '/') {
+        return normalize_sftp_path($entry);
+    }
+    
+    // Sinon, c'est un chemin relatif, construire le chemin absolu
+    $remoteDirNormalized = normalize_sftp_path($remoteDir);
+    
+    if ($remoteDirNormalized === '/') {
+        return '/' . $entry;
+    }
+    
+    return normalize_sftp_path($remoteDirNormalized . '/' . $entry);
+}
+
 // ---------- 5) Parcours fichiers avec timeout et gestion d'erreurs ----------
 // ====== STAGE: scan_files ======
 // IMPORTANT: Le script d'import SFTP (cron) scanne TOUJOURS la racine "/" pour trouver les nouveaux CSV
@@ -851,11 +880,39 @@ if (is_array($files) && count($files) > 0) {
             
             $found = true;
             $files_processed++;
-            // Construire le chemin remote : si REMOTE_DIR est /, alors remote = /filename, sinon /REMOTE_DIR/filename
-            if ($REMOTE_DIR === '/') {
-                $remote = '/' . $entry;
-            } else {
-                $remote = $REMOTE_DIR . '/' . $entry;
+            
+            // Normaliser l'entrée pour obtenir le chemin absolu correct
+            // nlist() peut retourner des chemins relatifs ou absolus selon le serveur SFTP
+            $remote = normalize_sftp_entry($entry, $REMOTE_DIR);
+            
+            // Vérifier que le chemin est valide (pas . ou ..)
+            if ($remote === '.' || $remote === '..') {
+                debugLog("SKIP entrée invalide", ['entry' => $entry, 'remote' => $remote]);
+                continue;
+            }
+            
+            // Vérifier que le fichier existe sur le serveur SFTP avant de le télécharger
+            // Cela permet de détecter les erreurs de chemin plus tôt
+            $fileExists = false;
+            $stat = false;
+            try {
+                $stat = $sftp->stat($remote);
+                $fileExists = ($stat !== false && isset($stat['type']) && $stat['type'] !== 2); // Type 2 = directory
+            } catch (Throwable $e) {
+                debugLog("Erreur lors de la vérification stat()", [
+                    'remote' => $remote,
+                    'error' => $e->getMessage()
+                ]);
+                // Continuer quand même, stat() peut échouer pour certaines configurations
+                $stat = false;
+            }
+            
+            if (!$fileExists && $stat !== false) {
+                debugLog("SKIP - Fichier inexistant ou est un dossier", [
+                    'remote' => $remote,
+                    'stat' => $stat
+                ]);
+                continue;
             }
             
             // Récupérer les infos extraites du nom de fichier
@@ -884,48 +941,136 @@ if (is_array($files) && count($files) > 0) {
             $tmp = tempnam(sys_get_temp_dir(), 'csv_');
             
             // Tentative de téléchargement avec gestion d'erreur
-            debugLog("Téléchargement SFTP", ['remote' => $remote, 'local' => $tmp]);
+            debugLog("Téléchargement SFTP", [
+                'entry' => $entry,
+                'remote' => $remote,
+                'remote_dir' => $REMOTE_DIR,
+                'local' => $tmp,
+                'file_exists_check' => $fileExists
+            ]);
             $downloadStart = microtime(true);
             $downloadSuccess = false;
+            $downloadError = null;
             try {
-                $downloadSuccess = $sftp->get($remote, $tmp);
-                $downloadTime = round((microtime(true) - $downloadStart) * 1000, 2);
-                debugLog("Résultat du téléchargement", [
-                    'success' => $downloadSuccess,
-                    'duration_ms' => $downloadTime,
-                    'file_size' => $downloadSuccess && file_exists($tmp) ? filesize($tmp) : 'N/A'
-                ]);
+                // Utiliser realpath() pour s'assurer que le chemin est correct
+                $remoteRealpath = $sftp->realpath($remote);
+                if ($remoteRealpath === false) {
+                    $downloadError = "Impossible de résoudre le chemin réel: $remote";
+                    debugLog("ERREUR realpath()", [
+                        'remote' => $remote,
+                        'realpath_result' => false
+                    ]);
+                } else {
+                    // Utiliser le chemin réel résolu
+                    if ($remoteRealpath !== $remote) {
+                        debugLog("Chemin résolu via realpath()", [
+                            'original' => $remote,
+                            'resolved' => $remoteRealpath
+                        ]);
+                        $remote = $remoteRealpath;
+                    }
+                    
+                    $downloadSuccess = $sftp->get($remote, $tmp);
+                    $downloadTime = round((microtime(true) - $downloadStart) * 1000, 2);
+                    
+                    // Vérifier que le fichier a bien été téléchargé
+                    if ($downloadSuccess && file_exists($tmp)) {
+                        $downloadedSize = filesize($tmp);
+                        if ($downloadedSize === 0) {
+                            $downloadSuccess = false;
+                            $downloadError = "Fichier téléchargé mais vide (0 bytes)";
+                            debugLog("ERREUR - Fichier vide", [
+                                'remote' => $remote,
+                                'local' => $tmp
+                            ]);
+                        } else {
+                            debugLog("Résultat du téléchargement", [
+                                'success' => true,
+                                'duration_ms' => $downloadTime,
+                                'file_size' => $downloadedSize,
+                                'remote' => $remote
+                            ]);
+                        }
+                    } else if ($downloadSuccess) {
+                        $downloadSuccess = false;
+                        $downloadError = "Téléchargement réussi mais fichier local introuvable";
+                        debugLog("ERREUR - Fichier local introuvable", [
+                            'remote' => $remote,
+                            'local' => $tmp,
+                            'file_exists' => file_exists($tmp)
+                        ]);
+                    } else {
+                        $downloadError = "Échec du téléchargement (get() a retourné false)";
+                        debugLog("ERREUR - get() retourné false", [
+                            'remote' => $remote,
+                            'local' => $tmp
+                        ]);
+                    }
+                }
             } catch (Throwable $e) {
                 $downloadTime = round((microtime(true) - $downloadStart) * 1000, 2);
+                $downloadError = $e->getMessage();
                 debugLog("Exception lors du téléchargement", [
-                    'error' => $e->getMessage(),
+                    'error' => $downloadError,
                     'exception' => get_class($e),
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
-                    'duration_ms' => $downloadTime
+                    'duration_ms' => $downloadTime,
+                    'remote' => $remote,
+                    'trace' => $e->getTraceAsString()
                 ]);
-                echo "❌ Exception lors du téléchargement de $entry: " . $e->getMessage() . "\n";
+                echo "❌ Exception lors du téléchargement de $entry: " . $downloadError . "\n";
                 $downloadSuccess = false;
             }
             
             if (!$downloadSuccess) {
+                $fileDebug['download_error'] = $downloadError ?? 'Erreur inconnue';
                 $fileDebug['download_ok'] = false;
                 $fileDebug['moved_to'] = 'errors';
                 $downloadErrors++;
-                echo "❌ Erreur téléchargement $entry\n";
+                echo "❌ Erreur téléchargement $entry (remote: $remote)\n";
+                if ($downloadError) {
+                    echo "   Détail: $downloadError\n";
+                }
+                
+                // Ne déplacer vers /errors que si le fichier existe vraiment sur le serveur
+                // (pour éviter de déplacer des fichiers qui n'existent pas)
+                $shouldMove = false;
                 try {
-                    [$moved, $target] = sftp_safe_move($sftp, $remote, $ERRORS_DIR);
-                    $fileDebug['moved_to'] = $moved ? $target : 'errors_failed';
+                    $stat = $sftp->stat($remote);
+                    $shouldMove = ($stat !== false);
                 } catch (Throwable $e) {
-                    echo "⚠️ Impossible de déplacer $entry vers $ERRORS_DIR: " . $e->getMessage() . "\n";
-                    $fileDebug['move_error'] = $e->getMessage();
+                    debugLog("Impossible de vérifier stat() avant déplacement", [
+                        'remote' => $remote,
+                        'error' => $e->getMessage()
+                    ]);
+                    // En cas de doute, essayer quand même de déplacer
+                    $shouldMove = true;
+                }
+                
+                if ($shouldMove) {
+                    try {
+                        [$moved, $target] = sftp_safe_move($sftp, $remote, $ERRORS_DIR);
+                        $fileDebug['moved_to'] = $moved ? $target : 'errors_failed';
+                        if ($moved) {
+                            echo "   → Déplacé vers $target\n";
+                        }
+                    } catch (Throwable $e) {
+                        echo "⚠️ Impossible de déplacer $entry vers $ERRORS_DIR: " . $e->getMessage() . "\n";
+                        $fileDebug['move_error'] = $e->getMessage();
+                    }
+                } else {
+                    debugLog("Fichier inexistant, pas de déplacement", ['remote' => $remote]);
+                    $fileDebug['moved_to'] = 'skipped_not_exists';
                 }
                 
                 // Initialiser tmpFileMtime pour éviter les erreurs plus tard
                 $tmpFileMtime = time();
                 $tmpFileSize = 'N/A';
                 
-                @unlink($tmp);
+                if (isset($tmp) && file_exists($tmp)) {
+                    @unlink($tmp);
+                }
                 $files_error++;
                 log_import_run($pdo, array_merge(['source' => 'SFTP', 'stage' => 'process_file'], $fileDebug), false);
                 continue;
