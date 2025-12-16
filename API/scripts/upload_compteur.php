@@ -51,7 +51,7 @@ function debug_die(?PDO $pdo, string $stage, string $error, array $extra = [], i
 }
 
 // Fonction de debug - centralisée dans includes/debug_helpers.php
-require_once __DIR__ . '/../../../includes/debug_helpers.php';
+require_once __DIR__ . '/../../includes/debug_helpers.php';
 // Wrapper pour préserver la compatibilité avec les appels existants (signature: message, context)
 if (!function_exists('debugLog')) {
     function debugLog(string $message, array $context = []): void {
