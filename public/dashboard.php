@@ -1695,9 +1695,15 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         }
 
-        async function refresh(){
+        async function refresh(showToastOnUpdate = false){
             try{
-                const r = await fetch('/import/last_import.php', {credentials:'same-origin'});
+                const r = await fetch('/import/last_import.php', {
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
                 if (!r.ok) throw new Error('HTTP '+r.status);
                 const d = await r.json();
 
@@ -1724,11 +1730,17 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     }
                     const label = `Import SFTP OK — ${countText} — ${d.ran_at}` + (d.recent ? ' (récent)' : '');
                     setState('ok', label, files);
+                    
+                    // Afficher un toast si c'est un import récent et qu'on a des résultats
+                    if (showToastOnUpdate && d.recent && (inserted > 0 || updated > 0)) {
+                        showToast(`Import SFTP automatique : ${countText}`, 'success');
+                    }
                 } else {
                     const label = `Import SFTP KO — ${d.ran_at}`;
                     setState('fail', label, files);
                 }
             } catch(e){
+                console.error('[IMPORT] Erreur refresh:', e);
                 setState('fail', 'Import SFTP : erreur de lecture');
             }
         }
@@ -1747,16 +1759,23 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             
             if (result.ok && result.body && result.body.ran) {
                 console.log('[IMPORT] Import immédiat lancé avec succès', result.body);
-                setTimeout(refresh, 2000); // Rafraîchir le badge après 2 secondes
+                // Attendre que l'import se termine (environ 5-10 secondes) puis rafraîchir
+                setTimeout(() => refresh(true), 5000); // Rafraîchir après 5 secondes avec toast
             } else {
                 console.warn('[IMPORT] Import immédiat non lancé', result);
-                // Rafraîchir quand même pour afficher l'état actuel
-                setTimeout(refresh, 1000);
+                // Rafraîchir quand même pour afficher l'état actuel depuis la DB
+                setTimeout(() => refresh(false), 1000);
             }
         })();
         
-        refresh();     // premier badge (état actuel)
-        setInterval(() => tick(false), 20000); // toutes les 20s (sans afficher les erreurs pour ne pas spammer)
+        // Rafraîchir immédiatement pour afficher l'état actuel depuis la DB (imports du cron)
+        refresh(false);
+        
+        // Rafraîchir le badge toutes les 10 secondes pour voir les imports automatiques (cron)
+        setInterval(() => refresh(true), 10000);
+        
+        // Tick régulier toutes les 20s (sans afficher les erreurs pour ne pas spammer)
+        setInterval(() => tick(false), 20000);
     })();
 
     // --- Import auto silencieux WEB_COMPTEUR + badge (tick 20s) ---
