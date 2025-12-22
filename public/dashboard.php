@@ -240,6 +240,55 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             </div>
         </div>
 
+        <!-- Import SFTP Card -->
+        <div class="sftp-import-card">
+            <div class="sftp-import-header">
+                <h3 class="sftp-import-title">Import SFTP</h3>
+                <div class="sftp-import-actions">
+                    <button class="sftp-import-trigger" id="sftpTriggerBtn" aria-label="Lancer l'import">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                        Lancer l'import
+                    </button>
+                    <button class="sftp-import-refresh" id="sftpRefreshBtn" aria-label="Rafraîchir le statut">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="sftp-import-content" id="sftpImportContent" style="display: none;">
+                <!-- Détails cachés -->
+            </div>
+        </div>
+        
+        <!-- Import IONOS Card -->
+        <div class="sftp-import-card ionos-import-card">
+            <div class="sftp-import-header">
+                <h3 class="sftp-import-title">Import IONOS</h3>
+                <div class="sftp-import-actions">
+                    <button class="sftp-import-trigger" id="ionosTriggerBtn" aria-label="Lancer l'import">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                        Lancer l'import
+                    </button>
+                    <button class="sftp-import-refresh" id="ionosRefreshBtn" aria-label="Rafraîchir le statut">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="sftp-import-content" id="ionosImportContent" style="display: none;">
+                <!-- Détails cachés -->
+            </div>
+        </div>
     </div>
 
     <!-- Popup Support -->
