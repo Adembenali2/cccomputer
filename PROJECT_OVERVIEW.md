@@ -1129,7 +1129,9 @@ php scripts/import_sftp_cron.php
 - Rafraîchissement automatique toutes les 30 secondes
 - Bouton de rafraîchissement manuel
 
-**📖 Guide d'installation complet** : Voir `docs/SFTP_IMPORT_SETUP.md` pour les instructions détaillées d'installation cron, dépannage et configuration Windows/Linux.
+**📖 Guides d'installation** :
+- `docs/SFTP_IMPORT_SETUP.md` : Instructions détaillées pour Linux/Windows
+- `docs/RAILWAY_SETUP.md` : Configuration spécifique pour Railway (service worker)
 
 ---
 

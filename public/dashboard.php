@@ -1624,6 +1624,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         let isFetching = false;
         let refreshInterval = null;
         const REFRESH_INTERVAL_MS = 30000; // 30 secondes
+        let lastRunId = null; // Pour détecter les nouveaux runs
         
         function setStatusBadge(statusValue) {
             const badge = document.getElementById('sftpStatusBadge');
@@ -1686,7 +1687,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         async function refreshStatus() {
             // Ne pas rafraîchir si une requête est en cours
             if (isFetching) {
-                return;
+                return Promise.resolve();
             }
             
             // Ne pas rafraîchir si l'onglet est caché
@@ -1737,6 +1738,10 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     document.getElementById('sftpFilesProcessed').textContent = '—';
                     document.getElementById('sftpFilesDeleted').textContent = '—';
                     document.getElementById('sftpInsertedRows').textContent = '—';
+                    // Initialiser lastRunId si c'est le premier chargement
+                    if (lastRunId === null) {
+                        lastRunId = null; // Pas de run encore
+                    }
                     return;
                 }
                 
@@ -1755,12 +1760,43 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 document.getElementById('sftpFilesDeleted').textContent = run.files_deleted ?? '—';
                 document.getElementById('sftpInsertedRows').textContent = run.inserted_rows ?? '—';
                 
-                // Afficher une notification toast si nouveau run réussi
-                if (displayStatus === 'RUN_OK' && run.inserted_rows > 0) {
-                    showNotification('✅ Import réussi', `${run.inserted_rows} ligne(s) insérée(s) depuis ${run.files_processed} fichier(s)`, 'success');
-                } else if (displayStatus === 'RUN_FAILED') {
-                    showNotification('❌ Erreur import', run.error || 'Erreur lors de l\'import SFTP', 'error');
+                // Détecter les nouveaux runs et afficher les notifications
+                const currentRunId = run.id;
+                // Initialiser lastRunId au premier chargement (pour ne pas notifier le run actuel)
+                if (lastRunId === null) {
+                    lastRunId = currentRunId;
                 }
+                const isNewRun = lastRunId !== null && currentRunId !== lastRunId;
+                
+                if (isNewRun) {
+                    // Nouveau run détecté - afficher notification
+                    if (displayStatus === 'RUN_OK' && run.files_processed > 0) {
+                        const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                        const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
+                        showNotification(
+                            '✅ Import réussi',
+                            `${run.files_processed} ${filesText} importé(s) en ${durationSeconds}s`,
+                            'success'
+                        );
+                    } else if (displayStatus === 'PARTIAL' && run.files_processed > 0) {
+                        const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                        showNotification(
+                            '⚠️ Import partiel',
+                            `${run.files_processed} fichier(s) traité(s) en ${durationSeconds}s (certains fichiers ont échoué)`,
+                            'info'
+                        );
+                    } else if (displayStatus === 'RUN_FAILED') {
+                        const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                        showNotification(
+                            '❌ Erreur import',
+                            `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import SFTP'}`,
+                            'error'
+                        );
+                    }
+                }
+                
+                // Mettre à jour le dernier run_id vu
+                lastRunId = currentRunId;
                 
                 // Afficher l'erreur si présente
                 if (run.error) {
