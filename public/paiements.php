@@ -7,117 +7,93 @@
     <title>Paiement - CC Computer</title>
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <style>
+        /* ====== Layout Page Paiement ====== */
         .paiement-page {
-            max-width: 800px;
-            margin: 2rem auto;
-            padding: 0 1rem;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+            min-height: calc(100vh - 200px);
         }
 
+        /* ====== Header Section ====== */
         .paiement-header {
-            margin-bottom: 2rem;
-        }
-
-        .paiement-header h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 0.5rem;
-        }
-
-        .paiement-card {
-            background: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            padding: 2rem;
-            box-shadow: var(--shadow-md);
-        }
-
-        .paiement-card-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .paiement-form {
+            margin-bottom: 2.5rem;
             display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .paiement-form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .paiement-form-group label {
-            font-weight: 600;
-            color: var(--text-primary);
-            font-size: 0.95rem;
-        }
-
-        .paiement-form-group input,
-        .paiement-form-group select,
-        .paiement-form-group textarea {
-            padding: 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-md);
-            font-size: 1rem;
-            color: var(--text-primary);
-            background-color: var(--bg-secondary);
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-            width: 100%;
-        }
-
-        .paiement-form-group input:focus,
-        .paiement-form-group select:focus,
-        .paiement-form-group textarea:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .paiement-form-group textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        .paiement-form-actions {
-            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
             gap: 1rem;
-            margin-top: 1rem;
         }
 
-        .btn-payer {
-            background-color: var(--accent-primary);
-            color: #fff;
-            border: none;
-            border-radius: var(--radius-md);
-            padding: 0.875rem 2rem;
-            font-weight: 600;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
+        .paiement-header-content {
             flex: 1;
         }
 
-        .btn-payer:hover {
-            background-color: var(--accent-secondary);
+        .paiement-header h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0 0 0.5rem;
+            line-height: 1.2;
         }
 
-        .btn-payer:disabled {
-            background-color: var(--text-muted);
-            cursor: not-allowed;
+        .paiement-header p {
+            color: var(--text-secondary);
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .paiement-header-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-md);
+        }
+
+        .paiement-header-icon svg {
+            width: 32px;
+            height: 32px;
+            fill: white;
+        }
+
+        /* ====== Message Container ====== */
+        .message-container {
+            margin-bottom: 1.5rem;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .message {
-            padding: 1rem;
+            padding: 1rem 1.25rem;
             border-radius: var(--radius-md);
-            margin-bottom: 1.5rem;
-            display: none;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 500;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
         }
 
         .message.success {
@@ -132,23 +108,319 @@
             border: 1px solid #fca5a5;
         }
 
-        .message.show {
-            display: block;
+        .message.warning {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
         }
 
+        .message-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        /* ====== Main Card ====== */
+        .paiement-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem;
+            box-shadow: var(--shadow-md);
+            transition: box-shadow 0.3s ease;
+        }
+
+        .paiement-card:hover {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .paiement-card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .paiement-card-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin: 0 0 2rem;
+        }
+
+        .paiement-card-divider {
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent-primary), transparent);
+            border: none;
+            margin: 0 0 2rem;
+        }
+
+        /* ====== Form Layout ====== */
+        .paiement-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.75rem;
+        }
+
+        /* ====== Form Groups ====== */
+        .paiement-form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .paiement-form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .paiement-form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .paiement-form-group label {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .paiement-form-group label .required {
+            color: #ef4444;
+            font-weight: 700;
+        }
+
+        .paiement-form-group input,
+        .paiement-form-group select,
+        .paiement-form-group textarea {
+            padding: 0.875rem 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            color: var(--text-primary);
+            background-color: var(--bg-secondary);
+            transition: all 0.2s ease;
+            width: 100%;
+            font-family: inherit;
+        }
+
+        .paiement-form-group input:hover,
+        .paiement-form-group select:hover,
+        .paiement-form-group textarea:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .paiement-form-group input:focus,
+        .paiement-form-group select:focus,
+        .paiement-form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            background-color: var(--bg-primary);
+        }
+
+        .paiement-form-group input:invalid:not(:placeholder-shown),
+        .paiement-form-group select:invalid:not(:placeholder-shown) {
+            border-color: #ef4444;
+        }
+
+        .paiement-form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .paiement-form-group .input-hint {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* ====== Montant Input Special ====== */
+        .montant-wrapper {
+            position: relative;
+        }
+
+        .montant-wrapper::before {
+            content: '€';
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-weight: 600;
+            pointer-events: none;
+        }
+
+        .montant-wrapper input {
+            padding-right: 2.5rem;
+        }
+
+        /* ====== Form Actions ====== */
+        .paiement-form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .btn {
+            padding: 0.875rem 2rem;
+            font-weight: 600;
+            font-size: 1rem;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: #fff;
+            flex: 1;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            background: var(--text-muted);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+        }
+
+        .btn-icon {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* ====== Loading State ====== */
+        .btn-primary.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .btn-primary.loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ====== Responsive Design ====== */
         @media (max-width: 768px) {
             .paiement-page {
-                margin: 1rem auto;
-                padding: 0 0.5rem;
+                padding: 1.5rem 1rem;
+            }
+
+            .paiement-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .paiement-header h1 {
+                font-size: 1.75rem;
+            }
+
+            .paiement-header-icon {
+                width: 56px;
+                height: 56px;
+            }
+
+            .paiement-header-icon svg {
+                width: 28px;
+                height: 28px;
             }
 
             .paiement-card {
                 padding: 1.5rem;
             }
 
-            .paiement-header h1 {
-                font-size: 1.5rem;
+            .paiement-form-row {
+                grid-template-columns: 1fr;
+                gap: 1.25rem;
             }
+
+            .paiement-form-actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .paiement-page {
+                padding: 1rem 0.75rem;
+            }
+
+            .paiement-card {
+                padding: 1.25rem;
+            }
+
+            .paiement-form {
+                gap: 1.5rem;
+            }
+        }
+
+        /* ====== Dark Theme Adjustments ====== */
+        [data-theme="dark"] .message.success {
+            background-color: #064e3b;
+            border-color: #059669;
+        }
+
+        [data-theme="dark"] .message.error {
+            background-color: #7f1d1d;
+            border-color: #dc2626;
+        }
+
+        [data-theme="dark"] .message.warning {
+            background-color: #78350f;
+            border-color: #d97706;
         }
     </style>
 </head>
@@ -161,60 +433,172 @@
     ?>
 
     <div class="paiement-page">
+        <!-- Header Section -->
         <div class="paiement-header">
-            <h1>Paiement</h1>
+            <div class="paiement-header-content">
+                <h1>Paiement</h1>
+                <p>Enregistrez un nouveau paiement pour un client</p>
+            </div>
+            <div class="paiement-header-icon">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+                </svg>
+            </div>
         </div>
 
-        <div id="messageContainer"></div>
+        <!-- Message Container -->
+        <div id="messageContainer" class="message-container"></div>
 
+        <!-- Main Form Card -->
         <div class="paiement-card">
-            <h2 class="paiement-card-title">Facturation</h2>
+            <h2 class="paiement-card-title">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                    <line x1="1" y1="10" x2="23" y2="10"></line>
+                </svg>
+                Informations de facturation
+            </h2>
+            <p class="paiement-card-subtitle">Remplissez les informations ci-dessous pour enregistrer le paiement</p>
+            <hr class="paiement-card-divider" />
             
-            <form id="paiementForm" class="paiement-form">
-                <div class="paiement-form-group">
-                    <label for="nom">Nom *</label>
-                    <input type="text" id="nom" name="nom" required placeholder="Nom du client">
+            <form id="paiementForm" class="paiement-form" novalidate>
+                <!-- Row 1: Nom et Email -->
+                <div class="paiement-form-row">
+                    <div class="paiement-form-group">
+                        <label for="nom">
+                            Nom
+                            <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="nom" 
+                            name="nom" 
+                            required 
+                            placeholder="Nom complet du client"
+                            autocomplete="name"
+                        >
+                        <span class="input-hint">Nom complet du client</span>
+                    </div>
+
+                    <div class="paiement-form-group">
+                        <label for="email">
+                            Email
+                            <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            required 
+                            placeholder="email@exemple.com"
+                            autocomplete="email"
+                        >
+                        <span class="input-hint">Adresse email du client</span>
+                    </div>
                 </div>
 
-                <div class="paiement-form-group">
-                    <label for="email">Email *</label>
-                    <input type="email" id="email" name="email" required placeholder="email@exemple.com">
+                <!-- Row 2: Référence et Montant -->
+                <div class="paiement-form-row">
+                    <div class="paiement-form-group">
+                        <label for="reference">Référence client</label>
+                        <input 
+                            type="text" 
+                            id="reference" 
+                            name="reference" 
+                            placeholder="Référence optionnelle"
+                            autocomplete="off"
+                        >
+                        <span class="input-hint">Numéro de référence client (optionnel)</span>
+                    </div>
+
+                    <div class="paiement-form-group">
+                        <label for="montant">
+                            Montant
+                            <span class="required">*</span>
+                        </label>
+                        <div class="montant-wrapper">
+                            <input 
+                                type="number" 
+                                id="montant" 
+                                name="montant" 
+                                step="0.01" 
+                                min="0" 
+                                required
+                                placeholder="0.00"
+                            >
+                        </div>
+                        <span class="input-hint">Montant du paiement en euros</span>
+                    </div>
                 </div>
 
-                <div class="paiement-form-group">
-                    <label for="reference">Référence client</label>
-                    <input type="text" id="reference" name="reference" placeholder="Référence optionnelle">
-                </div>
-
-                <div class="paiement-form-group">
-                    <label for="montant">Montant (€)</label>
-                    <input type="number" id="montant" name="montant" step="0.01" min="0" placeholder="0.00">
-                </div>
-
-                <div class="paiement-form-group">
+                <!-- Row 3: Commentaire (Full Width) -->
+                <div class="paiement-form-group full-width">
                     <label for="commentaire">Commentaire</label>
-                    <textarea id="commentaire" name="commentaire" placeholder="Commentaire optionnel"></textarea>
+                    <textarea 
+                        id="commentaire" 
+                        name="commentaire" 
+                        placeholder="Ajoutez un commentaire optionnel sur ce paiement..."
+                        rows="4"
+                    ></textarea>
+                    <span class="input-hint">Commentaire ou notes supplémentaires (optionnel)</span>
                 </div>
 
+                <!-- Form Actions -->
                 <div class="paiement-form-actions">
-                    <button type="submit" class="btn-payer" id="btnPayer">Payer</button>
+                    <button type="button" class="btn btn-secondary" id="btnReset">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                            <path d="M21 3v5h-5"></path>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                            <path d="M3 21v-5h5"></path>
+                        </svg>
+                        Réinitialiser
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="btnPayer">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                        Enregistrer le paiement
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <script>
-            document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('paiementForm');
             const messageContainer = document.getElementById('messageContainer');
             const btnPayer = document.getElementById('btnPayer');
+            const btnReset = document.getElementById('btnReset');
 
-            function showMessage(text, type) {
-                messageContainer.innerHTML = `<div class="message ${type} show">${text}</div>`;
+            /**
+             * Affiche un message à l'utilisateur
+             * @param {string} text - Texte du message
+             * @param {string} type - Type de message (success, error, warning)
+             */
+            function showMessage(text, type = 'success') {
+                const iconMap = {
+                    success: '<svg class="message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>',
+                    error: '<svg class="message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+                    warning: '<svg class="message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>'
+                };
+
+                messageContainer.innerHTML = `
+                    <div class="message ${type}">
+                        ${iconMap[type] || ''}
+                        <span>${text}</span>
+                    </div>
+                `;
+
+                // Auto-hide après 5 secondes
                 setTimeout(() => {
                     const message = messageContainer.querySelector('.message');
                     if (message) {
-                        message.classList.remove('show');
+                        message.style.opacity = '0';
+                        message.style.transform = 'translateY(-10px)';
+                        message.style.transition = 'all 0.3s ease-out';
                         setTimeout(() => {
                             messageContainer.innerHTML = '';
                         }, 300);
@@ -222,51 +606,140 @@
                 }, 5000);
             }
 
+            /**
+             * Valide le formulaire
+             * @returns {boolean} - True si valide, false sinon
+             */
             function validateForm() {
                 const nom = document.getElementById('nom').value.trim();
                 const email = document.getElementById('email').value.trim();
+                const montant = document.getElementById('montant').value;
                 
+                // Validation nom
                 if (!nom) {
                     showMessage('Le nom est requis.', 'error');
+                    document.getElementById('nom').focus();
+                    return false;
+                }
+
+                if (nom.length < 2) {
+                    showMessage('Le nom doit contenir au moins 2 caractères.', 'error');
+                    document.getElementById('nom').focus();
                     return false;
                 }
                 
+                // Validation email
                 if (!email) {
                     showMessage('L\'email est requis.', 'error');
+                    document.getElementById('email').focus();
                     return false;
                 }
                 
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailRegex.test(email)) {
                     showMessage('Veuillez entrer un email valide.', 'error');
+                    document.getElementById('email').focus();
+                    return false;
+                }
+
+                // Validation montant
+                if (!montant || parseFloat(montant) <= 0) {
+                    showMessage('Le montant doit être supérieur à 0.', 'error');
+                    document.getElementById('montant').focus();
+                    return false;
+                }
+
+                if (parseFloat(montant) > 999999.99) {
+                    showMessage('Le montant est trop élevé (maximum 999 999,99 €).', 'error');
+                    document.getElementById('montant').focus();
                     return false;
                 }
                 
                 return true;
             }
 
+            /**
+             * Formate le montant avec 2 décimales
+             */
+            function formatMontant() {
+                const montantInput = document.getElementById('montant');
+                montantInput.addEventListener('blur', function() {
+                    const value = parseFloat(this.value);
+                    if (!isNaN(value) && value >= 0) {
+                        this.value = value.toFixed(2);
+                    }
+                });
+            }
+
+            /**
+             * Gère la soumission du formulaire
+             */
             form.addEventListener('submit', function(e) {
-            e.preventDefault();
+                e.preventDefault();
                 
                 if (!validateForm()) {
                     return;
                 }
 
-                // Désactiver le bouton pendant le traitement
+                // Désactiver le bouton et afficher l'état de chargement
                 btnPayer.disabled = true;
-                btnPayer.textContent = 'Traitement...';
+                btnPayer.classList.add('loading');
+                btnPayer.textContent = '';
 
-                // Simulation d'un traitement (à remplacer par un appel API réel si nécessaire)
+                // Simulation d'un traitement (à remplacer par un appel API réel)
                 setTimeout(() => {
-                    showMessage('Paiement enregistré avec succès !', 'success');
+                    // Récupérer les données du formulaire
+                    const formData = {
+                        nom: document.getElementById('nom').value.trim(),
+                        email: document.getElementById('email').value.trim(),
+                        reference: document.getElementById('reference').value.trim(),
+                        montant: parseFloat(document.getElementById('montant').value),
+                        commentaire: document.getElementById('commentaire').value.trim()
+                    };
+
+                    // Afficher un message de succès
+                    showMessage(
+                        `Paiement de ${formData.montant.toFixed(2)} € enregistré avec succès pour ${formData.nom} !`, 
+                        'success'
+                    );
+
+                    // Réinitialiser le formulaire
                     form.reset();
+                    
+                    // Réactiver le bouton
                     btnPayer.disabled = false;
-                    btnPayer.textContent = 'Payer';
+                    btnPayer.classList.remove('loading');
+                    btnPayer.innerHTML = `
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                        Enregistrer le paiement
+                    `;
+
+                    // Focus sur le premier champ
+                    document.getElementById('nom').focus();
                 }, 1500);
             });
+
+            /**
+             * Gère la réinitialisation du formulaire
+             */
+            btnReset.addEventListener('click', function() {
+                if (confirm('Êtes-vous sûr de vouloir réinitialiser le formulaire ?')) {
+                    form.reset();
+                    messageContainer.innerHTML = '';
+                    document.getElementById('nom').focus();
+                    showMessage('Formulaire réinitialisé.', 'warning');
+                }
+            });
+
+            // Initialiser le formatage du montant
+            formatMontant();
+
+            // Focus automatique sur le premier champ
+            document.getElementById('nom').focus();
         });
     </script>
 </body>
 </html>
-
-
