@@ -1274,7 +1274,10 @@ function decode_msg($row) {
                     ok,
                     msg
                 FROM import_run
-                WHERE msg LIKE '%\"type\":\"sftp\"%' OR msg LIKE '%\"type\":\"ionos\"%'
+                WHERE msg LIKE '%\"type\":\"sftp\"%' 
+                   OR msg LIKE '%\"type\":\"ionos\"%'
+                   OR msg LIKE '%\"type\":\"sftp_check\"%'
+                   OR msg LIKE '%\"type\":\"ionos_check\"%'
                 ORDER BY ran_at DESC
                 LIMIT 50
             ", [], 'import_history');
@@ -1318,6 +1321,12 @@ function decode_msg($row) {
                 
                 $type = $data['type'] ?? 'sftp';
                 
+                // Gérer les types 'sftp_check' et 'ionos_check' (vérifications manuelles)
+                $isCheck = strpos($type, '_check') !== false;
+                if ($isCheck) {
+                    $type = str_replace('_check', '', $type);
+                }
+                
                 // Pour SFTP, utiliser files_* et inserted_rows
                 // Pour IONOS, utiliser rows_* et rows_inserted
                 if ($type === 'ionos') {
@@ -1333,7 +1342,7 @@ function decode_msg($row) {
                         'inserted_rows' => (int)($data['rows_inserted'] ?? 0),
                         'duration_ms' => (int)($data['duration_ms'] ?? 0),
                         'error' => $data['error'] ?? null,
-                        'message' => $data['message'] ?? null
+                        'message' => ($isCheck ? 'Vérification manuelle' : null)
                     ];
                 } else {
                     return [
@@ -1348,7 +1357,7 @@ function decode_msg($row) {
                         'inserted_rows' => (int)($data['inserted_rows'] ?? 0),
                         'duration_ms' => (int)($data['duration_ms'] ?? 0),
                         'error' => $data['error'] ?? null,
-                        'message' => $data['message'] ?? null
+                        'message' => ($isCheck ? 'Vérification manuelle' : null)
                     ];
                 }
             }
@@ -1405,6 +1414,9 @@ function decode_msg($row) {
                             <?php foreach ($importHistory as $run): ?>
                                 <?php 
                                 $msgData = parseImportMessage($run['msg']);
+                                // Décoder aussi pour vérifier si c'est une vérification manuelle
+                                $rawData = json_decode($run['msg'], true);
+                                $isManualCheck = isset($rawData['source']) && $rawData['source'] === 'manual_check';
                                 $status = getImportStatus((int)$run['ok'] === 1, $msgData);
                                 $statusLabels = [
                                     'success' => 'Succès',
@@ -1430,8 +1442,13 @@ function decode_msg($row) {
                                         <?= formatDateTime($run['ran_at'], 'd/m/Y H:i:s') ?>
                                     </td>
                                     <td data-label="Type" role="cell">
-                                        <span class="badge <?= $msgData['type'] === 'ionos' ? 'role' : 'success' ?>">
-                                            <?= h(strtoupper($msgData['type'] ?? 'sftp')) ?>
+                                        <?php
+                                        $typeDisplay = $msgData['type'] ?? 'sftp';
+                                        $typeBadgeClass = $typeDisplay === 'ionos' ? 'role' : 'success';
+                                        $typeLabel = strtoupper($typeDisplay) . ($isManualCheck ? ' (Vérif)' : '');
+                                        ?>
+                                        <span class="badge <?= $typeBadgeClass ?>">
+                                            <?= h($typeLabel) ?>
                                         </span>
                                     </td>
                                     <td data-label="Statut" role="cell">

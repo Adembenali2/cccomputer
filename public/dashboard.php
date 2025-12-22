@@ -1619,6 +1619,8 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             const originalText = checkImportBtn.textContent;
             checkImportBtn.textContent = 'Vérification...';
             
+            const checksToLog = []; // Pour enregistrer dans l'historique
+            
             try {
                 // Charger les statuts SFTP et IONOS en parallèle
                 const [sftpResponse, ionosResponse] = await Promise.all([
@@ -1627,11 +1629,18 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 ]);
                 
                 // Traiter SFTP - Afficher uniquement si résultat réel
+                let sftpCheck = { type: 'sftp', has_run: false, status: 'UNKNOWN', last_run: null, error: null };
                 if (sftpResponse && sftpResponse.ok) {
                     const sftpData = await sftpResponse.json();
+                    sftpCheck.has_run = sftpData.has_run || false;
+                    sftpCheck.error = sftpData.error || null;
+                    
                     if (sftpData.ok && sftpData.has_run && sftpData.lastRun) {
                         const run = sftpData.lastRun;
                         const status = run.status || 'UNKNOWN';
+                        sftpCheck.status = status;
+                        sftpCheck.last_run = run;
+                        
                         const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
                         const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
                         
@@ -1655,17 +1664,25 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 'error'
                             );
                         }
-                        // Ne rien afficher si statut UNKNOWN ou autre
                     }
-                    // Ne rien afficher si aucune exécution enregistrée
+                } else if (sftpResponse && !sftpResponse.ok) {
+                    sftpCheck.error = 'Erreur HTTP ' + sftpResponse.status;
                 }
+                checksToLog.push(sftpCheck);
                 
                 // Traiter IONOS - Afficher uniquement si résultat réel
+                let ionosCheck = { type: 'ionos', has_run: false, status: 'UNKNOWN', last_run: null, error: null };
                 if (ionosResponse && ionosResponse.ok) {
                     const ionosData = await ionosResponse.json();
+                    ionosCheck.has_run = ionosData.has_run || false;
+                    ionosCheck.error = ionosData.error || null;
+                    
                     if (ionosData.ok && ionosData.has_run && ionosData.lastRun) {
                         const run = ionosData.lastRun;
                         const status = run.status || 'UNKNOWN';
+                        ionosCheck.status = status;
+                        ionosCheck.last_run = run;
+                        
                         const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
                         const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
                         
@@ -1689,13 +1706,26 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 'error'
                             );
                         }
-                        // Ne rien afficher si statut UNKNOWN ou autre
                     }
-                    // Ne rien afficher si aucune exécution enregistrée
+                } else if (ionosResponse && !ionosResponse.ok) {
+                    ionosCheck.error = 'Erreur HTTP ' + ionosResponse.status;
                 }
+                checksToLog.push(ionosCheck);
                 
-                // Si aucune notification n'a été affichée, informer l'utilisateur
-                // (cette partie est gérée par l'absence de notifications)
+                // Enregistrer les vérifications dans l'historique (toujours, même si pas de résultat)
+                try {
+                    await fetch('/API/import/check_log.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ checks: checksToLog })
+                    });
+                } catch (logError) {
+                    // Ne pas bloquer si l'enregistrement échoue, juste logger
+                    console.warn('[Import] Erreur enregistrement historique:', logError);
+                }
                 
             } catch (error) {
                 console.error('[Import] Erreur:', error);
