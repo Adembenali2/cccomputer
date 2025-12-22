@@ -725,6 +725,49 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     // Données clients fournies côté serveur
     const CLIENTS_DATA = <?= json_encode($clients, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
 
+    // Fonction pour afficher une notification toast (partagée entre SFTP et IONOS)
+    function showNotification(title, message, type = 'info') {
+        // Créer l'élément de notification
+        const notification = document.createElement('div');
+        notification.className = `sftp-notification sftp-notification-${type}`;
+        notification.innerHTML = `
+            <div class="sftp-notification-content">
+                <strong>${title}</strong>
+                <span>${message}</span>
+            </div>
+            <button class="sftp-notification-close" aria-label="Fermer">&times;</button>
+        `;
+        
+        // Ajouter au body
+        document.body.appendChild(notification);
+        
+        // Animation d'entrée
+        setTimeout(() => {
+            notification.classList.add('sftp-notification-show');
+        }, 10);
+        
+        // Fermeture automatique après 5 secondes
+        const autoClose = setTimeout(() => {
+            closeNotification(notification);
+        }, 5000);
+        
+        // Bouton de fermeture
+        const closeBtn = notification.querySelector('.sftp-notification-close');
+        closeBtn.addEventListener('click', () => {
+            clearTimeout(autoClose);
+            closeNotification(notification);
+        });
+    }
+    
+    function closeNotification(notification) {
+        notification.classList.remove('sftp-notification-show');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }
+
     // --- Ouverture / fermeture popup ---
     (function() {
         const btn = document.getElementById('supportButton');
@@ -2252,50 +2295,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 clearInterval(refreshInterval);
             }
         });
-    })();
-    
-    // Fonction pour afficher une notification toast (partagée entre SFTP et IONOS)
-    function showNotification(title, message, type = 'info') {
-            // Créer l'élément de notification
-            const notification = document.createElement('div');
-            notification.className = `sftp-notification sftp-notification-${type}`;
-            notification.innerHTML = `
-                <div class="sftp-notification-content">
-                    <strong>${title}</strong>
-                    <span>${message}</span>
-                </div>
-                <button class="sftp-notification-close" aria-label="Fermer">&times;</button>
-            `;
-            
-            // Ajouter au body
-            document.body.appendChild(notification);
-            
-            // Animation d'entrée
-            setTimeout(() => {
-                notification.classList.add('sftp-notification-show');
-            }, 10);
-            
-            // Fermeture automatique après 5 secondes
-            const autoClose = setTimeout(() => {
-                closeNotification(notification);
-            }, 5000);
-            
-            // Bouton de fermeture
-            const closeBtn = notification.querySelector('.sftp-notification-close');
-            closeBtn.addEventListener('click', () => {
-                clearTimeout(autoClose);
-                closeNotification(notification);
-            });
-        }
-        
-        function closeNotification(notification) {
-            notification.classList.remove('sftp-notification-show');
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }
     })();
 
     </script>
