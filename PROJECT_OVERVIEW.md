@@ -1018,8 +1018,9 @@ chatroom_messages
      - Conversion types (int pour nombres, datetime pour Timestamp)
      - Insertion dans `compteur_relevee`
      - `DateInsertion = NOW()` (automatique)
-   - Si succès → Suppression fichier sur SFTP
-   - Si erreur → Log erreur, fichier conservé
+   - Si succès → Déplacement fichier vers `processed/<filename>` (ou suppression si `SFTP_DELETE_AFTER_SUCCESS=1`)
+   - Si erreur → Déplacement fichier vers `errors/<filename>`
+   - Les dossiers `processed/` et `errors/` sont créés automatiquement si absents
 
 6. **Journalisation** :
    - Log principal dans `import_run` :
@@ -1061,7 +1062,7 @@ php scripts/import_sftp_cron.php
 SFTP_HOST=sftp.example.com \
 SFTP_USER=user \
 SFTP_PASS=password \
-SFTP_DIR=/inbox \
+SFTP_DIR=. \
 php scripts/import_sftp_cron.php
 ```
 
@@ -1523,7 +1524,8 @@ mysql -u user -p database < sql/railway.sql
 - `SFTP_USER` : Nom d'utilisateur SFTP (requis)
 - `SFTP_PASS` : Mot de passe SFTP (requis, ne peut pas être vide)
 - `SFTP_PORT` : Port SFTP (défaut: 22)
-- `SFTP_DIR` : Répertoire SFTP à scanner (défaut: /inbox)
+- `SFTP_DIR` : Répertoire SFTP à scanner (défaut: `.` = répertoire racine du compte SFTP)
+- `SFTP_DELETE_AFTER_SUCCESS` : Si défini à `1`, supprime les fichiers après succès au lieu de les déplacer vers `processed/` (défaut: déplacement)
 - `SFTP_IMPORT_DRY_RUN` : Mode dry-run (1 pour activer, désactive insertion et suppression)
 
 **Sentry** (si configuré) :

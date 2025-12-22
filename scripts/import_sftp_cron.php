@@ -10,7 +10,8 @@
  * - Connexion SFTP via variables d'environnement
  * - Téléchargement et parsing de fichiers CSV (format clé/valeur)
  * - Insertion dans compteur_relevee avec anti-doublon
- * - Suppression fichiers après succès
+ * - Déplacement fichiers vers processed/ après succès (ou suppression si SFTP_DELETE_AFTER_SUCCESS=1)
+ * - Déplacement fichiers en erreur vers errors/
  * - Lock MySQL anti-concurrence
  * - Transactions par fichier
  * - Logs détaillés dans import_run et import_run_item
@@ -188,7 +189,8 @@ try {
     $sftpUser = getenv('SFTP_USER');
     $sftpPass = getenv('SFTP_PASS');
     $sftpPort = (int)(getenv('SFTP_PORT') ?: '22');
-    $sftpDir = getenv('SFTP_DIR') ?: '/inbox';
+    $sftpDir = getenv('SFTP_DIR') ?: '.'; // Défaut: répertoire racine du compte SFTP
+    $deleteAfterSuccess = !empty(getenv('SFTP_DELETE_AFTER_SUCCESS')) && getenv('SFTP_DELETE_AFTER_SUCCESS') === '1';
     
     if (empty($sftpHost) || empty($sftpUser)) {
         logMessage("ERREUR: Variables d'environnement SFTP_HOST et SFTP_USER requises", 'ERROR');
@@ -239,21 +241,44 @@ try {
         }
         logMessage("Connexion SFTP réussie");
         
-        // Changer de répertoire
-        if (!$sftp->chdir($sftpDir)) {
-            throw new RuntimeException("Impossible d'accéder au répertoire SFTP: $sftpDir");
-        }
-        logMessage("Répertoire SFTP: $sftpDir");
+        // Déterminer le répertoire de travail (robuste)
+        $workingDir = null;
+        $dirsToTry = [$sftpDir, '.', '/'];
         
-        // Lister les fichiers CSV
+        foreach ($dirsToTry as $dir) {
+            if ($sftp->chdir($dir)) {
+                // Vérifier qu'on peut lister (test d'accès réel)
+                $testList = $sftp->nlist('.');
+                if ($testList !== false) {
+                    $workingDir = $dir;
+                    logMessage("Répertoire SFTP accessible: $dir" . ($dir !== $sftpDir ? " (fallback depuis $sftpDir)" : ""));
+                    break;
+                }
+            }
+        }
+        
+        if ($workingDir === null) {
+            throw new RuntimeException("Impossible d'accéder à un répertoire SFTP valide (tenté: " . implode(', ', $dirsToTry) . ")");
+        }
+        
+        // Lister les fichiers CSV (uniquement dans le répertoire courant, pas récursif)
         $files = $sftp->nlist('.');
         if ($files === false) {
             throw new RuntimeException("Impossible de lister les fichiers");
         }
         
-        // Filtrer les fichiers .csv
+        // Filtrer les fichiers .csv et exclure les dossiers processed/ et errors/
         $csvFiles = array_filter($files, function($file) {
-            return $file !== '.' && $file !== '..' && strtolower(substr($file, -4)) === '.csv';
+            // Ignorer les entrées spéciales
+            if ($file === '.' || $file === '..') {
+                return false;
+            }
+            // Ignorer les dossiers processed et errors
+            if (strtolower($file) === 'processed' || strtolower($file) === 'errors') {
+                return false;
+            }
+            // Ne garder que les fichiers .csv (pas les dossiers)
+            return strtolower(substr($file, -4)) === '.csv';
         });
         
         // Trier par nom (ordre stable)
@@ -418,16 +443,53 @@ try {
                         $fileStatus = 'success';
                         logMessage("  → Insertion réussie (mac_norm=$macNorm, timestamp=$timestamp)");
                         
-                        // Supprimer le fichier sur SFTP (sauf en dry-run)
+                        // Traitement post-import : déplacer vers processed/ ou supprimer
                         if (!$dryRun) {
-                            if (!$sftp->delete($filename)) {
-                                logMessage("  ⚠ ATTENTION: Impossible de supprimer le fichier sur SFTP", 'WARN');
+                            if ($deleteAfterSuccess) {
+                                // Mode suppression (priorité)
+                                if (!$sftp->delete($filename)) {
+                                    logMessage("  ⚠ ATTENTION: Impossible de supprimer le fichier sur SFTP", 'WARN');
+                                } else {
+                                    logMessage("  → Fichier supprimé sur SFTP");
+                                    $stats['files_deleted']++;
+                                }
                             } else {
-                                logMessage("  → Fichier supprimé sur SFTP");
-                                $stats['files_deleted']++;
+                                // Mode déplacement vers processed/
+                                $targetDir = 'processed';
+                                $targetPath = $targetDir . '/' . $filename;
+                                
+                                // Créer le dossier processed/ s'il n'existe pas
+                                if (!$sftp->file_exists($targetDir)) {
+                                    if (!$sftp->mkdir($targetDir, -1, true)) {
+                                        logMessage("  ⚠ ATTENTION: Impossible de créer le dossier $targetDir, suppression du fichier", 'WARN');
+                                        if ($sftp->delete($filename)) {
+                                            logMessage("  → Fichier supprimé (fallback)");
+                                            $stats['files_deleted']++;
+                                        }
+                                        continue; // Passer au fichier suivant
+                                    }
+                                }
+                                
+                                // Déplacer le fichier
+                                if ($sftp->file_exists($targetDir)) {
+                                    if (!$sftp->rename($filename, $targetPath)) {
+                                        logMessage("  ⚠ ATTENTION: Impossible de déplacer vers $targetPath, suppression du fichier", 'WARN');
+                                        if ($sftp->delete($filename)) {
+                                            logMessage("  → Fichier supprimé (fallback)");
+                                            $stats['files_deleted']++;
+                                        }
+                                    } else {
+                                        logMessage("  → Fichier déplacé vers $targetPath");
+                                        $stats['files_deleted']++; // Comptabilisé comme "traité"
+                                    }
+                                }
                             }
                         } else {
-                            logMessage("  → [DRY-RUN] Fichier serait supprimé sur SFTP");
+                            if ($deleteAfterSuccess) {
+                                logMessage("  → [DRY-RUN] Fichier serait supprimé sur SFTP");
+                            } else {
+                                logMessage("  → [DRY-RUN] Fichier serait déplacé vers processed/$filename");
+                            }
                         }
                         
                     } catch (Throwable $e) {
@@ -443,7 +505,30 @@ try {
                 $fileError = $e->getMessage();
                 logMessage("  ✗ ERREUR sur fichier $filename: $fileError", 'ERROR');
                 $stats['errors'][] = "$filename: $fileError";
-                // Ne pas supprimer le fichier en cas d'erreur
+                
+                // Déplacer le fichier en erreur vers errors/ (sauf en dry-run)
+                if (!$dryRun) {
+                    $targetDir = 'errors';
+                    $targetPath = $targetDir . '/' . $filename;
+                    
+                    // Créer le dossier errors/ s'il n'existe pas
+                    if (!$sftp->file_exists($targetDir)) {
+                        if (!$sftp->mkdir($targetDir, -1, true)) {
+                            logMessage("  ⚠ ATTENTION: Impossible de créer le dossier $targetDir, fichier conservé", 'WARN');
+                        }
+                    }
+                    
+                    // Déplacer le fichier en erreur
+                    if ($sftp->file_exists($targetDir)) {
+                        if (!$sftp->rename($filename, $targetPath)) {
+                            logMessage("  ⚠ ATTENTION: Impossible de déplacer vers $targetPath, fichier conservé", 'WARN');
+                        } else {
+                            logMessage("  → Fichier déplacé vers $targetPath (erreur)");
+                        }
+                    }
+                } else {
+                    logMessage("  → [DRY-RUN] Fichier serait déplacé vers errors/$filename");
+                }
             }
             
             // Logger le fichier
