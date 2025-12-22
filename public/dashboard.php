@@ -1626,7 +1626,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     fetch('/API/import/ionos_status.php', { cache: 'no-store', credentials: 'same-origin' }).catch(() => null)
                 ]);
                 
-                // Traiter SFTP
+                // Traiter SFTP - Afficher uniquement si résultat réel
                 if (sftpResponse && sftpResponse.ok) {
                     const sftpData = await sftpResponse.json();
                     if (sftpData.ok && sftpData.has_run && sftpData.lastRun) {
@@ -1635,6 +1635,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
                         const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
                         
+                        // Afficher uniquement pour les statuts significatifs (succès, erreur, partiel)
                         if (status === 'RUN_OK') {
                             showNotification(
                                 '✅ Import SFTP réussi',
@@ -1653,23 +1654,13 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 run.error || 'Échec lors de l\'import',
                                 'error'
                             );
-                        } else {
-                            showNotification(
-                                '⚠️ Import SFTP inconnu',
-                                'Aucune information disponible',
-                                'info'
-                            );
                         }
-                    } else {
-                        showNotification(
-                            '⚠️ Import SFTP',
-                            'Aucune exécution enregistrée',
-                            'info'
-                        );
+                        // Ne rien afficher si statut UNKNOWN ou autre
                     }
+                    // Ne rien afficher si aucune exécution enregistrée
                 }
                 
-                // Traiter IONOS
+                // Traiter IONOS - Afficher uniquement si résultat réel
                 if (ionosResponse && ionosResponse.ok) {
                     const ionosData = await ionosResponse.json();
                     if (ionosData.ok && ionosData.has_run && ionosData.lastRun) {
@@ -1678,6 +1669,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
                         const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
                         
+                        // Afficher uniquement pour les statuts significatifs (succès, erreur, partiel)
                         if (status === 'RUN_OK') {
                             showNotification(
                                 '✅ Import IONOS réussi',
@@ -1696,21 +1688,14 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 run.error || 'Échec lors de l\'import',
                                 'error'
                             );
-                        } else {
-                            showNotification(
-                                '⚠️ Import IONOS inconnu',
-                                'Aucune information disponible',
-                                'info'
-                            );
                         }
-                    } else {
-                        showNotification(
-                            '⚠️ Import IONOS',
-                            'Aucune exécution enregistrée',
-                            'info'
-                        );
+                        // Ne rien afficher si statut UNKNOWN ou autre
                     }
+                    // Ne rien afficher si aucune exécution enregistrée
                 }
+                
+                // Si aucune notification n'a été affichée, informer l'utilisateur
+                // (cette partie est gérée par l'absence de notifications)
                 
             } catch (error) {
                 console.error('[Import] Erreur:', error);
