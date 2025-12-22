@@ -1769,31 +1769,38 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 }
                 const isNewRun = lastRunId !== null && currentRunId !== lastRunId;
                 
-                if (isNewRun) {
-                    // Nouveau run détecté - afficher notification
-                    if (displayStatus === 'RUN_OK' && run.files_processed > 0) {
-                        const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
-                        const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
+                if (isNewRun && run.files_processed > 0) {
+                    // Nouveau run détecté - afficher notification avec nombre de fichiers et temps
+                    const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                    const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
+                    
+                    if (displayStatus === 'RUN_OK') {
                         showNotification(
                             '✅ Import réussi',
                             `${run.files_processed} ${filesText} importé(s) en ${durationSeconds}s`,
                             'success'
                         );
-                    } else if (displayStatus === 'PARTIAL' && run.files_processed > 0) {
-                        const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                    } else if (displayStatus === 'PARTIAL') {
                         showNotification(
                             '⚠️ Import partiel',
-                            `${run.files_processed} fichier(s) traité(s) en ${durationSeconds}s (certains fichiers ont échoué)`,
+                            `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
                             'info'
                         );
                     } else if (displayStatus === 'RUN_FAILED') {
-                        const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
                         showNotification(
                             '❌ Erreur import',
                             `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import SFTP'}`,
                             'error'
                         );
                     }
+                } else if (isNewRun && displayStatus === 'RUN_FAILED') {
+                    // Notification même si aucun fichier traité mais erreur
+                    const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                    showNotification(
+                        '❌ Erreur import',
+                        `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import SFTP'}`,
+                        'error'
+                    );
                 }
                 
                 // Mettre à jour le dernier run_id vu
