@@ -93,13 +93,13 @@ try {
         exit;
     }
     
-    // Exécuter le script via CLI
+    // Exécuter le script via CLI avec le flag --all pour importer tous les fichiers
     $startTime = microtime(true);
     $output = [];
     $returnCode = 0;
     
-    // Exécuter le script PHP en CLI
-    $command = 'php ' . escapeshellarg($scriptPath) . ' 2>&1';
+    // Exécuter le script PHP en CLI avec --all pour importer tous les fichiers
+    $command = 'php ' . escapeshellarg($scriptPath) . ' --all 2>&1';
     exec($command, $output, $returnCode);
     
     $duration = round((microtime(true) - $startTime) * 1000); // ms

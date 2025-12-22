@@ -24,7 +24,10 @@ declare(strict_types=1);
 
 // Configuration
 $projectRoot = dirname(__DIR__);
-$maxFiles = 20;
+// Limite de fichiers : si SFTP_IMPORT_ALL=1 ou si --all est passé en argument, pas de limite
+$importAll = !empty(getenv('SFTP_IMPORT_ALL')) && getenv('SFTP_IMPORT_ALL') === '1';
+$importAll = $importAll || (isset($argv[1]) && $argv[1] === '--all');
+$maxFiles = $importAll ? PHP_INT_MAX : 20;
 $lockName = 'import_sftp';
 $startTime = microtime(true);
 $dryRun = !empty(getenv('SFTP_IMPORT_DRY_RUN')) && getenv('SFTP_IMPORT_DRY_RUN') === '1';
@@ -286,10 +289,11 @@ try {
         // Trier par nom (ordre stable)
         sort($csvFiles, SORT_STRING);
         
-        // Limiter à maxFiles
-        $filesToProcess = array_slice($csvFiles, 0, $maxFiles);
+        // Limiter à maxFiles (si maxFiles est PHP_INT_MAX, traiter tous les fichiers)
+        $filesToProcess = ($maxFiles === PHP_INT_MAX) ? $csvFiles : array_slice($csvFiles, 0, $maxFiles);
         $totalFiles = count($csvFiles);
-        logMessage("Fichiers CSV trouvés: $totalFiles (limite: $maxFiles)");
+        $limitText = $maxFiles === PHP_INT_MAX ? 'tous' : $maxFiles;
+        logMessage("Fichiers CSV trouvés: $totalFiles (limite: $limitText)");
         
         if (empty($filesToProcess)) {
             logMessage("Aucun fichier CSV à traiter");
