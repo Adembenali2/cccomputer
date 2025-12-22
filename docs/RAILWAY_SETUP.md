@@ -22,33 +22,13 @@ Railway permet de créer plusieurs services dans un même projet. Créez un serv
    - `SFTP_PORT` (optionnel, défaut: 22)
    - `SFTP_DIR` (optionnel, défaut: `.`)
 
-### Configuration via railway.json
+### Configuration via Railway Dashboard (Méthode recommandée)
 
-Le fichier `railway.json` peut être utilisé pour définir plusieurs services :
+Railway détecte automatiquement le Dockerfile et utilise la commande `CMD` définie dans le Dockerfile (`apache2-foreground`). Vous n'avez pas besoin de définir de `startCommand` pour le service web.
 
-```json
-{
-  "services": [
-    {
-      "name": "web",
-      "source": {
-        "repo": "https://github.com/votre-username/cccomputer"
-      },
-      "deploy": {
-        "startCommand": "php -S 0.0.0.0:$PORT -t public"
-      }
-    },
-    {
-      "name": "sftp-import-cron",
-      "source": {
-        "repo": "https://github.com/votre-username/cccomputer"
-      },
-      "deploy": {
-        "startCommand": "while true; do php scripts/import_sftp_cron.php; sleep 60; done"
-      }
-    }
-  ]
-}
+Pour le service worker cron, créez un nouveau service via le Dashboard avec la commande :
+```bash
+while true; do php scripts/import_sftp_cron.php; sleep 60; done
 ```
 
 ## Option 2 : Cron Job via Railway Cron
