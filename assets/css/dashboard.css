@@ -121,43 +121,14 @@ body {
 
 .dashboard-header {
   margin-bottom: 2rem;
-  position: relative;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
+  position: relative; /* pour positionner le badge import */
 }
 
 .dashboard-title {
   font-size: 1.875rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0;
-}
-
-.btn-check-import {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: var(--shadow-sm);
-}
-
-.btn-check-import:hover:not(:disabled) {
-  background-color: var(--bg-tertiary);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.btn-check-import:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  margin: 0 0 0.5rem;
 }
 
 .dashboard-subtitle {
