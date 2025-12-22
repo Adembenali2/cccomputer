@@ -1612,6 +1612,198 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
     })();
 
+    // --- Import SFTP Status (Admin uniquement) ---
+    (function(){
+        const content = document.getElementById('sftpImportContent');
+        const loading = document.getElementById('sftpImportLoading');
+        const status = document.getElementById('sftpImportStatus');
+        const refreshBtn = document.getElementById('sftpRefreshBtn');
+        
+        if (!content || !loading || !status || !refreshBtn) return;
+        
+        let isFetching = false;
+        let refreshInterval = null;
+        const REFRESH_INTERVAL_MS = 30000; // 30 secondes
+        
+        function setStatusBadge(statusValue) {
+            const badge = document.getElementById('sftpStatusBadge');
+            if (!badge) return;
+            
+            badge.className = 'sftp-status-badge';
+            let text = 'Inconnu';
+            let className = 'status-unknown';
+            
+            switch(statusValue) {
+                case 'RUN_OK':
+                    text = 'OK';
+                    className = 'status-ok';
+                    break;
+                case 'RUN_FAILED':
+                    text = 'KO';
+                    className = 'status-ko';
+                    break;
+                case 'PARTIAL':
+                    text = 'Partiel';
+                    className = 'status-warn';
+                    break;
+                default:
+                    text = 'Inconnu';
+                    className = 'status-unknown';
+            }
+            
+            badge.className = `sftp-status-badge ${className}`;
+            badge.innerHTML = `<span class="${className}">${text}</span>`;
+        }
+        
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '—';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch(e) {
+                return dateStr;
+            }
+        }
+        
+        function checkIfDelayed(endedAt) {
+            if (!endedAt) return false;
+            try {
+                const endDate = new Date(endedAt);
+                const now = new Date();
+                const diffMinutes = (now - endDate) / (1000 * 60);
+                return diffMinutes > 10; // Plus de 10 minutes
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        async function refreshStatus() {
+            // Ne pas rafraîchir si une requête est en cours
+            if (isFetching) {
+                return;
+            }
+            
+            // Ne pas rafraîchir si l'onglet est caché
+            if (document.hidden) {
+                return;
+            }
+            
+            isFetching = true;
+            loading.style.display = 'block';
+            status.style.display = 'none';
+            
+            try {
+                const response = await fetch('/API/import/sftp_status.php', {
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                const text = await response.text();
+                let data;
+                
+                try {
+                    data = JSON.parse(text);
+                } catch(parseError) {
+                    console.error('[SFTP] Réponse non JSON:', text.substring(0, 200));
+                    throw new Error('Réponse invalide du serveur');
+                }
+                
+                loading.style.display = 'none';
+                status.style.display = 'block';
+                
+                if (!response.ok || !data.ok) {
+                    const errorMsg = data.error || `HTTP ${response.status}`;
+                    document.getElementById('sftpErrorText').textContent = errorMsg;
+                    document.getElementById('sftpImportError').style.display = 'block';
+                    setStatusBadge('UNKNOWN');
+                    return;
+                }
+                
+                // Masquer l'erreur si succès
+                document.getElementById('sftpImportError').style.display = 'none';
+                
+                if (!data.has_run || !data.lastRun) {
+                    setStatusBadge('UNKNOWN');
+                    document.getElementById('sftpLastRun').textContent = 'Aucune exécution';
+                    document.getElementById('sftpFilesProcessed').textContent = '—';
+                    document.getElementById('sftpFilesDeleted').textContent = '—';
+                    document.getElementById('sftpInsertedRows').textContent = '—';
+                    return;
+                }
+                
+                const run = data.lastRun;
+                
+                // Déterminer le statut (avec vérification retard)
+                let displayStatus = run.status || 'UNKNOWN';
+                if (displayStatus === 'RUN_OK' && checkIfDelayed(run.ended_at)) {
+                    displayStatus = 'PARTIAL'; // Afficher comme warning si retard
+                }
+                setStatusBadge(displayStatus);
+                
+                // Afficher les métriques
+                document.getElementById('sftpLastRun').textContent = formatDateTime(run.ended_at);
+                document.getElementById('sftpFilesProcessed').textContent = run.files_processed ?? '—';
+                document.getElementById('sftpFilesDeleted').textContent = run.files_deleted ?? '—';
+                document.getElementById('sftpInsertedRows').textContent = run.inserted_rows ?? '—';
+                
+                // Afficher l'erreur si présente
+                if (run.error) {
+                    document.getElementById('sftpErrorText').textContent = run.error;
+                    document.getElementById('sftpImportError').style.display = 'block';
+                } else {
+                    document.getElementById('sftpImportError').style.display = 'none';
+                }
+                
+            } catch(error) {
+                console.error('[SFTP] Erreur refresh:', error);
+                loading.style.display = 'none';
+                status.style.display = 'block';
+                document.getElementById('sftpErrorText').textContent = error.message || 'Erreur de connexion';
+                document.getElementById('sftpImportError').style.display = 'block';
+                setStatusBadge('UNKNOWN');
+            } finally {
+                isFetching = false;
+            }
+        }
+        
+        // Bouton refresh
+        refreshBtn.addEventListener('click', refreshStatus);
+        
+        // Rafraîchir immédiatement
+        refreshStatus();
+        
+        // Rafraîchir automatiquement toutes les 30 secondes
+        refreshInterval = setInterval(() => {
+            if (!document.hidden && !isFetching) {
+                refreshStatus();
+            }
+        }, REFRESH_INTERVAL_MS);
+        
+        // Pause/resume selon visibilité onglet
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !isFetching) {
+                // Reprendre le refresh si l'onglet redevient visible
+                refreshStatus();
+            }
+        });
+        
+        // Nettoyer l'intervalle si la page est déchargée
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    })();
+
     </script>
 </body>
 </html>

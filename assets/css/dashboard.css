@@ -785,6 +785,137 @@ body {
   }
 }
 
+/* ====== Card Import SFTP ====== */
+.sftp-import-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-top: 2rem;
+  box-shadow: var(--shadow-md);
+}
+
+.sftp-import-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.sftp-import-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sftp-import-refresh {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.sftp-import-refresh:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.sftp-import-refresh:active {
+  transform: rotate(180deg);
+}
+
+.sftp-import-loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.sftp-import-status {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sftp-status-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  width: fit-content;
+}
+
+.sftp-status-badge .status-ok {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.sftp-status-badge .status-ko {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.sftp-status-badge .status-warn {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.sftp-status-badge .status-unknown {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.sftp-import-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.sftp-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sftp-metric-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.sftp-metric-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sftp-import-error {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  color: #991b1b;
+  font-size: 0.875rem;
+}
+
+.sftp-import-error strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .sftp-import-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ====== Responsive du contenu principal ====== */
 @media (max-width: 768px) {
   .dashboard-wrapper {
