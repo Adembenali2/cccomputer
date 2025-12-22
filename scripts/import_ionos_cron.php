@@ -447,22 +447,17 @@ try {
                     $rowInserted = 0;
                     $stats['rows_skipped']++;
                 } else {
-                    // Pré-normaliser MacAddress pour éviter que mac_norm généré par MySQL dépasse 12 caractères
+                    // IMPORTANT: Pré-normaliser MacAddress pour éviter que mac_norm généré par MySQL dépasse 12 caractères
                     // La colonne mac_norm est générée avec: REPLACE(UPPER(MacAddress), ':', '')
-                    // Donc on doit s'assurer que MacAddress normalisé (sans :) fait max 12 caractères hex
-                    // On utilise la version normalisée mais on la formate en format MAC standard si possible
-                    $macAddressToInsert = $macAddress; // Par défaut, utiliser l'original
+                    // Donc on DOIT insérer une MacAddress qui, après UPPER() et suppression des ':', fait max 12 caractères hex
+                    // On utilise TOUJOURS la version normalisée nettoyée (macNorm), jamais l'original qui peut contenir des caractères invalides
                     
                     // Si la MAC normalisée fait 12 caractères hex, reformater en format standard XX:XX:XX:XX:XX:XX
                     if (strlen($macNorm) === 12 && preg_match('/^[0-9A-F]{12}$/', $macNorm)) {
                         $macAddressToInsert = implode(':', str_split($macNorm, 2));
-                    } elseif (strlen($macNorm) <= 12) {
-                        // Si moins de 12 caractères, utiliser la version normalisée telle quelle
-                        // Mais on doit s'assurer que MySQL pourra générer mac_norm correctement
-                        // On utilise directement macNorm comme MacAddress (sans séparateurs)
-                        $macAddressToInsert = $macNorm;
                     } else {
-                        // Si plus de 12 caractères (ne devrait pas arriver après troncature), utiliser la version tronquée
+                        // Si moins de 12 caractères (ou autre), utiliser directement macNorm (sans séparateurs)
+                        // Cela garantit que MySQL générera mac_norm = macNorm (déjà nettoyé et tronqué à 12 max)
                         $macAddressToInsert = $macNorm;
                     }
                     
