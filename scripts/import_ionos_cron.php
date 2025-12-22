@@ -50,16 +50,19 @@ function logMessage(string $message, string $level = 'INFO'): void {
 // Fonction pour normaliser MAC (identique à la colonne générée mac_norm)
 // La colonne mac_norm est CHAR(12), donc on doit limiter à 12 caractères hexadécimaux
 function normalizeMac(string $mac): string {
-    // Supprimer tous les séparateurs possibles (:, -, espaces)
+    // Supprimer tous les séparateurs possibles (:, -, espaces, points)
     $normalized = strtoupper(str_replace([':', '-', ' ', '.'], '', trim($mac)));
     
     // Extraire uniquement les caractères hexadécimaux (0-9, A-F)
     $normalized = preg_replace('/[^0-9A-F]/', '', $normalized);
     
-    // Limiter à 12 caractères maximum (une MAC standard fait 12 caractères hex)
+    // Tronquer strictement à 12 caractères maximum (CHAR(12) en base)
     if (strlen($normalized) > 12) {
         $normalized = substr($normalized, 0, 12);
     }
+    
+    // Si moins de 12 caractères, on peut laisser tel quel (la base acceptera)
+    // mais idéalement une MAC fait 12 caractères
     
     return $normalized;
 }
@@ -276,22 +279,72 @@ try {
         
         // Parser le HTML
         logMessage("Parsing du HTML...");
-        $rows = parseIonosHtml($html);
-        $totalRows = count($rows);
+        $allRows = parseIonosHtml($html);
+        $totalRows = count($allRows);
         logMessage("Lignes trouvées dans le tableau: $totalRows");
         
-        if ($totalRows === 0) {
-            logMessage("Aucune ligne à traiter");
+        // Récupérer le dernier compteur_id traité depuis le dernier import réussi
+        $lastProcessedId = null;
+        try {
+            $lastRunStmt = $pdo->prepare("
+                SELECT msg 
+                FROM import_run 
+                WHERE msg LIKE '%\"type\":\"ionos\"%' 
+                  AND ok = 1
+                ORDER BY ran_at DESC 
+                LIMIT 1
+            ");
+            $lastRunStmt->execute();
+            $lastRun = $lastRunStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($lastRun && !empty($lastRun['msg'])) {
+                $lastRunData = json_decode($lastRun['msg'], true);
+                $lastProcessedId = $lastRunData['last_processed_id'] ?? null;
+            }
+        } catch (Throwable $e) {
+            logMessage("Impossible de récupérer le dernier ID traité: " . $e->getMessage(), 'WARN');
+        }
+        
+        // Filtrer les lignes : ne traiter que celles avec un compteur_id supérieur au dernier traité
+        $rowsToProcess = [];
+        if ($lastProcessedId !== null) {
+            logMessage("Dernier compteur_id traité: $lastProcessedId - Filtrage des lignes à traiter");
+            foreach ($allRows as $row) {
+                $compteurId = (int)($row['compteur_id'] ?? 0);
+                if ($compteurId > $lastProcessedId) {
+                    $rowsToProcess[] = $row;
+                }
+            }
+        } else {
+            // Première exécution ou pas de dernier ID trouvé : prendre toutes les lignes
+            $rowsToProcess = $allRows;
+        }
+        
+        // Trier par compteur_id (croissant) pour traiter dans l'ordre
+        usort($rowsToProcess, function($a, $b) {
+            $idA = (int)($a['compteur_id'] ?? 0);
+            $idB = (int)($b['compteur_id'] ?? 0);
+            return $idA <=> $idB;
+        });
+        
+        // Limiter à maxRowsPerRun lignes
+        $rows = array_slice($rowsToProcess, 0, $maxRowsPerRun);
+        $filteredCount = count($rows);
+        logMessage("Lignes à traiter (après filtrage): $filteredCount (limite: $maxRowsPerRun)");
+        
+        if ($filteredCount === 0) {
+            logMessage("Aucune nouvelle ligne à traiter");
             logToImportRun($pdo, [
                 'imported' => 0,
                 'skipped' => 0,
                 'ok' => true,
                 'msg' => [
                     'type' => 'ionos',
-                    'message' => 'Aucune ligne à traiter',
-                    'rows_seen' => 0,
+                    'message' => 'Aucune nouvelle ligne à traiter',
+                    'rows_seen' => $totalRows,
                     'rows_processed' => 0,
                     'rows_inserted' => 0,
+                    'last_processed_id' => $lastProcessedId,
                     'error' => null
                 ]
             ]);
@@ -304,7 +357,8 @@ try {
             'rows_processed' => 0,
             'rows_inserted' => 0,
             'rows_skipped' => 0,
-            'errors' => []
+            'errors' => [],
+            'last_processed_id' => $lastProcessedId
         ];
         
         // Préparer les requêtes SQL
@@ -368,9 +422,10 @@ try {
                     throw new RuntimeException("MacAddress invalide ou vide");
                 }
                 
-                // Valider que mac_norm fait exactement 12 caractères (requis par la base)
-                if (strlen($macNorm) !== 12) {
-                    throw new RuntimeException("MacAddress normalisée invalide (doit faire 12 caractères, obtenu: " . strlen($macNorm) . "): $macAddress -> $macNorm");
+                // Si mac_norm fait plus de 12 caractères, tronquer (déjà fait dans normalizeMac, mais double vérification)
+                if (strlen($macNorm) > 12) {
+                    $macNorm = substr($macNorm, 0, 12);
+                    logMessage("  ⚠ MAC tronquée à 12 caractères: $macNorm", 'WARN');
                 }
                 
                 // Vérifier si déjà présent (anti-doublon)
@@ -439,6 +494,12 @@ try {
                 $stats['rows_processed']++;
                 $stats['rows_inserted'] += $rowInserted;
                 
+                // Mettre à jour le dernier ID traité
+                $compteurId = (int)($row['compteur_id'] ?? 0);
+                if ($compteurId > 0 && ($stats['last_processed_id'] === null || $compteurId > $stats['last_processed_id'])) {
+                    $stats['last_processed_id'] = $compteurId;
+                }
+                
             } catch (Throwable $e) {
                 $rowError = $e->getMessage();
                 logMessage("  ✗ ERREUR sur ligne $rowId: $rowError", 'ERROR');
@@ -455,6 +516,9 @@ try {
         $hasError = !empty($stats['errors']);
         $finalOk = !$hasError && $stats['rows_processed'] > 0;
         
+        // Le dernier ID traité est le plus grand compteur_id traité avec succès ou skip
+        $finalLastProcessedId = $stats['last_processed_id'] ?? $lastProcessedId;
+        
         logToImportRun($pdo, [
             'imported' => $stats['rows_inserted'],
             'skipped' => $stats['rows_skipped'],
@@ -466,6 +530,7 @@ try {
                 'rows_processed' => $stats['rows_processed'],
                 'rows_inserted' => $stats['rows_inserted'],
                 'rows_skipped' => $stats['rows_skipped'],
+                'last_processed_id' => $finalLastProcessedId,
                 'duration_ms' => (int)round($duration),
                 'error' => $hasError ? implode('; ', array_slice($stats['errors'], 0, 5)) : null,
                 'error_count' => count($stats['errors']),
