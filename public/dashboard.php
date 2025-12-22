@@ -237,9 +237,10 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         </div>
 
         <?php
-        // Afficher la card Import SFTP uniquement pour les admins
-        $userRole = currentUserRole();
-        if ($userRole === 'Admin'):
+        // Afficher la card Import SFTP
+        // Pour limiter aux admins, décommenter les lignes suivantes:
+        // $userRole = currentUserRole();
+        // if ($userRole === 'Admin'):
         ?>
         <div class="sftp-import-card">
             <div class="sftp-import-header">
@@ -288,7 +289,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 </div>
             </div>
         </div>
-        <?php endif; ?>
+        <?php // endif; ?>
     </div>
 
     <!-- Popup Support -->
