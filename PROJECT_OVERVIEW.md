@@ -1018,7 +1018,7 @@ chatroom_messages
      - Conversion types (int pour nombres, datetime pour Timestamp)
      - Insertion dans `compteur_relevee`
      - `DateInsertion = NOW()` (automatique)
-   - Si succès → Déplacement fichier vers `processed/<filename>` (ou suppression si `SFTP_DELETE_AFTER_SUCCESS=1`)
+   - Si succès → Suppression du fichier sur SFTP (ou déplacement vers `processed/<filename>` si `SFTP_MOVE_TO_PROCESSED=1`)
    - Si erreur → Déplacement fichier vers `errors/<filename>`
    - Les dossiers `processed/` et `errors/` sont créés automatiquement si absents
 
@@ -1525,7 +1525,7 @@ mysql -u user -p database < sql/railway.sql
 - `SFTP_PASS` : Mot de passe SFTP (requis, ne peut pas être vide)
 - `SFTP_PORT` : Port SFTP (défaut: 22)
 - `SFTP_DIR` : Répertoire SFTP à scanner (défaut: `.` = répertoire racine du compte SFTP)
-- `SFTP_DELETE_AFTER_SUCCESS` : Si défini à `1`, supprime les fichiers après succès au lieu de les déplacer vers `processed/` (défaut: déplacement)
+- `SFTP_MOVE_TO_PROCESSED` : Si défini à `1`, déplace les fichiers vers `processed/` après succès au lieu de les supprimer (défaut: suppression)
 - `SFTP_IMPORT_DRY_RUN` : Mode dry-run (1 pour activer, désactive insertion et suppression)
 
 **Sentry** (si configuré) :

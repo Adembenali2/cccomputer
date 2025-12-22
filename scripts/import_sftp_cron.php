@@ -10,7 +10,7 @@
  * - Connexion SFTP via variables d'environnement
  * - Téléchargement et parsing de fichiers CSV (format clé/valeur)
  * - Insertion dans compteur_relevee avec anti-doublon
- * - Déplacement fichiers vers processed/ après succès (ou suppression si SFTP_DELETE_AFTER_SUCCESS=1)
+ * - Suppression des fichiers après succès (ou déplacement vers processed/ si SFTP_MOVE_TO_PROCESSED=1)
  * - Déplacement fichiers en erreur vers errors/
  * - Lock MySQL anti-concurrence
  * - Transactions par fichier
@@ -190,7 +190,9 @@ try {
     $sftpPass = getenv('SFTP_PASS');
     $sftpPort = (int)(getenv('SFTP_PORT') ?: '22');
     $sftpDir = getenv('SFTP_DIR') ?: '.'; // Défaut: répertoire racine du compte SFTP
-    $deleteAfterSuccess = !empty(getenv('SFTP_DELETE_AFTER_SUCCESS')) && getenv('SFTP_DELETE_AFTER_SUCCESS') === '1';
+    // Par défaut, supprimer les fichiers après succès. Si SFTP_MOVE_TO_PROCESSED=1, les déplacer vers processed/
+    $moveToProcessed = !empty(getenv('SFTP_MOVE_TO_PROCESSED')) && getenv('SFTP_MOVE_TO_PROCESSED') === '1';
+    $deleteAfterSuccess = !$moveToProcessed; // Supprimer par défaut
     
     if (empty($sftpHost) || empty($sftpUser)) {
         logMessage("ERREUR: Variables d'environnement SFTP_HOST et SFTP_USER requises", 'ERROR');
