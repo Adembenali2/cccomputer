@@ -48,8 +48,20 @@ function logMessage(string $message, string $level = 'INFO'): void {
 }
 
 // Fonction pour normaliser MAC (identique à la colonne générée mac_norm)
+// La colonne mac_norm est CHAR(12), donc on doit limiter à 12 caractères hexadécimaux
 function normalizeMac(string $mac): string {
-    return strtoupper(str_replace(':', '', $mac));
+    // Supprimer tous les séparateurs possibles (:, -, espaces)
+    $normalized = strtoupper(str_replace([':', '-', ' ', '.'], '', trim($mac)));
+    
+    // Extraire uniquement les caractères hexadécimaux (0-9, A-F)
+    $normalized = preg_replace('/[^0-9A-F]/', '', $normalized);
+    
+    // Limiter à 12 caractères maximum (une MAC standard fait 12 caractères hex)
+    if (strlen($normalized) > 12) {
+        $normalized = substr($normalized, 0, 12);
+    }
+    
+    return $normalized;
 }
 
 // Fonction pour convertir valeur en int (null si vide/non numérique)
@@ -354,6 +366,11 @@ try {
                 
                 if (empty($macNorm)) {
                     throw new RuntimeException("MacAddress invalide ou vide");
+                }
+                
+                // Valider que mac_norm fait exactement 12 caractères (requis par la base)
+                if (strlen($macNorm) !== 12) {
+                    throw new RuntimeException("MacAddress normalisée invalide (doit faire 12 caractères, obtenu: " . strlen($macNorm) . "): $macAddress -> $macNorm");
                 }
                 
                 // Vérifier si déjà présent (anti-doublon)
