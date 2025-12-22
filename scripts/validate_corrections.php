@@ -42,7 +42,8 @@ try {
 }
 
 // ====================================================================
-// TEST 2 : Requêtes SQL préparées dans run_import_if_due.php
+// TEST 2 : Requêtes SQL préparées (GET_LOCK/RELEASE_LOCK)
+// Note: Les scripts d'import ont été supprimés
 // ====================================================================
 echo "\nTEST 2 : Requêtes SQL préparées (GET_LOCK/RELEASE_LOCK)\n";
 try {
@@ -157,15 +158,7 @@ if (strpos($dashboardContent, 'currentUserId()') !== false) {
     echo "  ✗ dashboard.php n'utilise pas currentUserId()\n";
 }
 
-// Vérifier que run_import_if_due.php utilise prepare() pour GET_LOCK
-$importContent = file_get_contents(__DIR__ . '/../import/run_import_if_due.php');
-if (strpos($importContent, "SELECT GET_LOCK(:lock_name") !== false) {
-    $success[] = "✓ run_import_if_due.php utilise prepare() pour GET_LOCK";
-    echo "  ✓ run_import_if_due.php utilise prepare() pour GET_LOCK\n";
-} else {
-    $errors[] = "✗ run_import_if_due.php n'utilise pas prepare() pour GET_LOCK";
-    echo "  ✗ run_import_if_due.php n'utilise pas prepare() pour GET_LOCK\n";
-}
+// Note: run_import_if_due.php et les scripts d'import ont été supprimés
 
 // Vérifier que api_helpers.php utilise prepare() pour SELECT 1
 $apiHelpersContent = file_get_contents(__DIR__ . '/../includes/api_helpers.php');

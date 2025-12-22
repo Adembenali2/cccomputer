@@ -97,10 +97,7 @@ function checkCorrectionsActive(): array {
             'pattern' => 'currentUserId\\(\\)',
             'description' => 'Utilisation de currentUserId() pour $user_id'
         ],
-        'import/run_import_if_due.php' => [
-            'pattern' => 'SELECT GET_LOCK\\(:lock_name',
-            'description' => 'GET_LOCK avec prepare()'
-        ],
+        // Note: Les scripts d'import ont été supprimés
         'includes/api_helpers.php' => [
             'pattern' => '\\$stmt = \\$pdo->prepare\\(\\\'SELECT 1\\\'\\\\)',
             'description' => 'SELECT 1 avec prepare()'
@@ -148,30 +145,8 @@ function checkRecentErrors(PDO $pdo): array {
     ];
     
     try {
-        // Vérifier les imports récents avec erreurs
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) as error_count
-            FROM import_run
-            WHERE ran_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-            AND ok = 0
-        ");
-        $stmt->execute();
-        $errorCount = (int)$stmt->fetchColumn();
-        
-        if ($errorCount === 0) {
-            $results['checks']['import_errors'] = [
-                'status' => 'ok',
-                'message' => 'Aucune erreur d\'import dans les dernières 24h'
-            ];
-            logMessage("Recent errors: Aucune erreur d'import récente", 'INFO');
-        } else {
-            $results['status'] = 'warning';
-            $results['checks']['import_errors'] = [
-                'status' => 'warning',
-                'message' => "$errorCount erreur(s) d'import dans les dernières 24h"
-            ];
-            logMessage("Recent errors: $errorCount erreur(s) d'import récente(s)", 'WARNING');
-        }
+        // Note: La vérification des erreurs d'import a été désactivée (imports supprimés)
+        // La table import_run existe toujours mais peut être utilisée pour d'autres logs
     } catch (Throwable $e) {
         $results['checks']['import_errors'] = [
             'status' => 'error',

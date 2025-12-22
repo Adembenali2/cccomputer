@@ -378,15 +378,7 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
 5. Affichage détaillé (N&B, couleur, montants)
 
 **Importer des relevés** :
-1. Automatique : Script SFTP s'exécute toutes les 20 secondes (si "due")
-2. Manuel : Via `/public/run-import.php` ou appel API avec `force=1`
-3. Processus :
-   - Connexion SFTP
-   - Téléchargement fichiers CSV (pattern `COPIEUR_MAC-*.csv`)
-   - Parsing CSV
-   - Insertion dans `compteur_relevee` (avec vérification doublons)
-   - Déplacement fichier vers `/processed` ou `/errors`
-   - Log dans `import_run`
+- Note : Les fonctionnalités d'import automatique (SFTP, IONOS) ont été supprimées et sont à reconstruire
 
 ### Déconnexion / expiration session
 
@@ -448,10 +440,7 @@ cccomputer/
 │   ├── rate_limiter.php    # Rate limiting
 │   ├── security_headers.php # Headers de sécurité
 │   └── session_config.php  # Configuration session
-├── import/                # Scripts d'import
-│   ├── run_import_if_due.php      # Orchestrateur import SFTP
-│   ├── run_import_web_if_due.php  # Orchestrateur import IONOS
-│   └── *.php              # Autres scripts d'import
+├── import/                # Scripts d'import (supprimés, à reconstruire)
 ├── public/                # Pages publiques (vues)
 │   ├── *.php              # Pages principales
 │   └── ajax/              # Endpoints AJAX
@@ -977,8 +966,7 @@ chatroom_messages
 
 ---
 
-### Scénario 2 : Import automatique SFTP
-
+### Scénario 2 : Import automatique (supprimé)
 - Note : Les fonctionnalités d'import automatique SFTP et IONOS ont été supprimées et sont à reconstruire
 
 ---
@@ -1250,7 +1238,7 @@ chatroom_messages
 **Tous les endpoints** (sauf login et health) :
 - `/public/*.php` : Require `includes/auth.php`
 - `/API/*.php` : Require `includes/auth.php`
-- `/import/*.php` : Require `includes/auth.php`
+- Note : Les scripts d'import `/import/*.php` ont été supprimés
 
 **Endpoints publics** :
 - `/public/login.php` : Connexion
@@ -1422,13 +1410,10 @@ mysql -u user -p database < sql/railway.sql
 - `MYSQLUSER` : Utilisateur MySQL (défaut: root)
 - `MYSQLPASSWORD` : Mot de passe MySQL (défaut: vide)
 
-**Import SFTP** :
-- `SFTP_IMPORT_INTERVAL_SEC` : Intervalle minimum entre imports (défaut: 20)
-
 **Sentry** (si configuré) :
 - `SENTRY_DSN` : DSN Sentry pour monitoring
 
-**À noter** : Les credentials SFTP ne sont pas dans les variables d'environnement identifiées. À confirmer où ils sont stockés (probablement dans un fichier de config non versionné).
+**Note** : Les variables d'environnement liées aux imports (SFTP_IMPORT_INTERVAL_SEC, IONOS_IMPORT_INTERVAL_SEC, credentials SFTP) ont été supprimées avec les fonctionnalités d'import.
 
 ---
 
