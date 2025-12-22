@@ -11,6 +11,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Paiement - CC Computer</title>
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         /* ====== Layout Page Paiement ====== */
         .paiement-page {
@@ -427,6 +428,124 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             background-color: #78350f;
             border-color: #d97706;
         }
+
+        /* ====== Graphique Section ====== */
+        .stats-section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-md);
+        }
+
+        .stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .stats-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .stats-filters {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .stats-filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .stats-filter-group label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .stats-filter-group select {
+            padding: 0.5rem 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            background-color: var(--bg-secondary);
+            min-width: 150px;
+        }
+
+        .stats-filter-group select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .btn-export {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-export:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 1.5rem;
+        }
+
+        .chart-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 400px;
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 768px) {
+            .stats-section {
+                padding: 1.5rem;
+            }
+
+            .stats-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .stats-filters {
+                width: 100%;
+            }
+
+            .stats-filter-group {
+                flex: 1;
+                min-width: 120px;
+            }
+
+            .chart-container {
+                height: 300px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -450,6 +569,61 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
         <!-- Message Container -->
         <div id="messageContainer" class="message-container"></div>
+
+        <!-- Statistics Section with Graph -->
+        <div class="stats-section">
+            <div class="stats-header">
+                <h2 class="stats-title">Statistiques d'impression</h2>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <button class="btn-export" id="btnExportExcel">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Exporter Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="stats-filters">
+                <div class="stats-filter-group">
+                    <label for="filterClient">Client</label>
+                    <select id="filterClient">
+                        <option value="">Tous les clients</option>
+                    </select>
+                </div>
+                <div class="stats-filter-group">
+                    <label for="filterMois">Mois</label>
+                    <select id="filterMois">
+                        <option value="">Tous les mois</option>
+                        <option value="1">Janvier</option>
+                        <option value="2">Février</option>
+                        <option value="3">Mars</option>
+                        <option value="4">Avril</option>
+                        <option value="5">Mai</option>
+                        <option value="6">Juin</option>
+                        <option value="7">Juillet</option>
+                        <option value="8">Août</option>
+                        <option value="9">Septembre</option>
+                        <option value="10">Octobre</option>
+                        <option value="11">Novembre</option>
+                        <option value="12">Décembre</option>
+                    </select>
+                </div>
+                <div class="stats-filter-group">
+                    <label for="filterAnnee">Année</label>
+                    <select id="filterAnnee">
+                        <option value="">Toutes les années</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-loading" id="chartLoading">Chargement des données...</div>
+                <canvas id="statsChart" style="display: none;"></canvas>
+            </div>
+        </div>
 
         <!-- Main Form Card -->
         <div class="paiement-card">
@@ -569,11 +743,18 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
     </div>
 
     <script>
+        // Variables globales pour le graphique
+        let statsChart = null;
+        let currentData = null;
+
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('paiementForm');
             const messageContainer = document.getElementById('messageContainer');
             const btnPayer = document.getElementById('btnPayer');
             const btnReset = document.getElementById('btnReset');
+
+            // Initialisation de la section statistiques
+            initStatsSection();
 
             /**
              * Affiche un message à l'utilisateur
@@ -742,6 +923,182 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             // Focus automatique sur le premier champ
             document.getElementById('nom').focus();
         });
+
+        /**
+         * Initialise la section statistiques
+         */
+        function initStatsSection() {
+            // Charger la liste des clients
+            loadClients();
+            
+            // Remplir les années (5 dernières années)
+            const yearSelect = document.getElementById('filterAnnee');
+            const currentYear = new Date().getFullYear();
+            for (let i = currentYear; i >= currentYear - 5; i--) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                yearSelect.appendChild(option);
+            }
+            
+            // Définir l'année en cours par défaut
+            yearSelect.value = currentYear;
+            
+            // Charger les données initiales
+            loadStatsData();
+            
+            // Écouter les changements de filtres
+            document.getElementById('filterClient').addEventListener('change', loadStatsData);
+            document.getElementById('filterMois').addEventListener('change', loadStatsData);
+            document.getElementById('filterAnnee').addEventListener('change', loadStatsData);
+            
+            // Bouton export Excel
+            document.getElementById('btnExportExcel').addEventListener('click', exportToExcel);
+        }
+
+        /**
+         * Charge la liste des clients
+         */
+        async function loadClients() {
+            try {
+                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000');
+                const data = await response.json();
+                
+                if (data.ok && data.clients) {
+                    const clientSelect = document.getElementById('filterClient');
+                    data.clients.forEach(client => {
+                        const option = document.createElement('option');
+                        option.value = client.id;
+                        option.textContent = client.name;
+                        clientSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des clients:', error);
+            }
+        }
+
+        /**
+         * Charge les données statistiques
+         */
+        async function loadStatsData() {
+            const loadingDiv = document.getElementById('chartLoading');
+            const canvas = document.getElementById('statsChart');
+            
+            loadingDiv.style.display = 'flex';
+            canvas.style.display = 'none';
+            
+            const clientId = document.getElementById('filterClient').value;
+            const mois = document.getElementById('filterMois').value;
+            const annee = document.getElementById('filterAnnee').value;
+            
+            const params = new URLSearchParams();
+            if (clientId) params.append('client_id', clientId);
+            if (mois) params.append('mois', mois);
+            if (annee) params.append('annee', annee);
+            
+            try {
+                const response = await fetch(`/API/paiements_get_stats.php?${params.toString()}`);
+                const data = await response.json();
+                
+                if (data.ok && data.data) {
+                    currentData = data.data;
+                    updateChart(data.data);
+                    loadingDiv.style.display = 'none';
+                    canvas.style.display = 'block';
+                } else {
+                    loadingDiv.textContent = 'Aucune donnée disponible';
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des statistiques:', error);
+                loadingDiv.textContent = 'Erreur lors du chargement des données';
+            }
+        }
+
+        /**
+         * Met à jour le graphique
+         */
+        function updateChart(data) {
+            const ctx = document.getElementById('statsChart').getContext('2d');
+            
+            // Détruire le graphique existant si présent
+            if (statsChart) {
+                statsChart.destroy();
+            }
+            
+            // Créer le nouveau graphique
+            statsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Noir et Blanc',
+                            data: data.noir_blanc,
+                            borderColor: '#1f2937',
+                            backgroundColor: 'rgba(31, 41, 55, 0.1)',
+                            tension: 0.4,
+                            fill: false
+                        },
+                        {
+                            label: 'Couleur',
+                            data: data.couleur,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            fill: false
+                        },
+                        {
+                            label: 'Total Pages',
+                            data: data.total_pages,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Évolution des impressions par mois'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString('fr-FR');
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Exporte les données en Excel
+         */
+        function exportToExcel() {
+            const clientId = document.getElementById('filterClient').value;
+            const mois = document.getElementById('filterMois').value;
+            const annee = document.getElementById('filterAnnee').value;
+            
+            const params = new URLSearchParams();
+            if (clientId) params.append('client_id', clientId);
+            if (mois) params.append('mois', mois);
+            if (annee) params.append('annee', annee);
+            
+            window.location.href = `/API/paiements_export_excel.php?${params.toString()}`;
+        }
     </script>
 </body>
 </html>
