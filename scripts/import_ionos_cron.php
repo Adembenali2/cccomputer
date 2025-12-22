@@ -422,10 +422,16 @@ try {
                     throw new RuntimeException("MacAddress invalide ou vide");
                 }
                 
-                // Si mac_norm fait plus de 12 caractères, tronquer (déjà fait dans normalizeMac, mais double vérification)
+                // Si mac_norm fait plus de 12 caractères, tronquer strictement (CHAR(12) en base)
                 if (strlen($macNorm) > 12) {
                     $macNorm = substr($macNorm, 0, 12);
-                    logMessage("  ⚠ MAC tronquée à 12 caractères: $macNorm", 'WARN');
+                    logMessage("  ⚠ MAC tronquée à 12 caractères: $macNorm (original: $macAddress)", 'WARN');
+                }
+                
+                // Si mac_norm fait moins de 12 caractères, on l'accepte quand même (certaines MAC peuvent être partielles)
+                // La base de données acceptera, mais on log un avertissement si c'est très court (< 6 caractères)
+                if (strlen($macNorm) < 6) {
+                    logMessage("  ⚠ MAC très courte ($macNorm), possiblement invalide (original: $macAddress)", 'WARN');
                 }
                 
                 // Vérifier si déjà présent (anti-doublon)
@@ -441,6 +447,25 @@ try {
                     $rowInserted = 0;
                     $stats['rows_skipped']++;
                 } else {
+                    // Pré-normaliser MacAddress pour éviter que mac_norm généré par MySQL dépasse 12 caractères
+                    // La colonne mac_norm est générée avec: REPLACE(UPPER(MacAddress), ':', '')
+                    // Donc on doit s'assurer que MacAddress normalisé (sans :) fait max 12 caractères hex
+                    // On utilise la version normalisée mais on la formate en format MAC standard si possible
+                    $macAddressToInsert = $macAddress; // Par défaut, utiliser l'original
+                    
+                    // Si la MAC normalisée fait 12 caractères hex, reformater en format standard XX:XX:XX:XX:XX:XX
+                    if (strlen($macNorm) === 12 && preg_match('/^[0-9A-F]{12}$/', $macNorm)) {
+                        $macAddressToInsert = implode(':', str_split($macNorm, 2));
+                    } elseif (strlen($macNorm) <= 12) {
+                        // Si moins de 12 caractères, utiliser la version normalisée telle quelle
+                        // Mais on doit s'assurer que MySQL pourra générer mac_norm correctement
+                        // On utilise directement macNorm comme MacAddress (sans séparateurs)
+                        $macAddressToInsert = $macNorm;
+                    } else {
+                        // Si plus de 12 caractères (ne devrait pas arriver après troncature), utiliser la version tronquée
+                        $macAddressToInsert = $macNorm;
+                    }
+                    
                     // Insertion dans une transaction
                     if (!$dryRun) {
                         $pdo->beginTransaction();
@@ -454,7 +479,7 @@ try {
                                 ':Nom' => !empty($row['marque']) ? $row['marque'] : null,
                                 ':Model' => !empty($row['modele']) ? $row['modele'] : null,
                                 ':SerialNumber' => !empty($row['serial']) ? $row['serial'] : null,
-                                ':MacAddress' => $macAddress,
+                                ':MacAddress' => $macAddressToInsert,
                                 ':Status' => null, // Non disponible dans IONOS
                                 ':TonerBlack' => $row['toner_k'],
                                 ':TonerCyan' => $row['toner_c'],
