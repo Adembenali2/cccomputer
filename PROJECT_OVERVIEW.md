@@ -28,7 +28,6 @@
 - Architecture MVC légère (app/Models, app/Repositories, app/Services)
 
 **Dépendances principales (composer.json) :**
-- `phpseclib/phpseclib` : Connexions SFTP pour import de fichiers
 - `tecnickcom/tcpdf` : Génération de PDF
 - `phpmailer/phpmailer` : Envoi d'emails
 - `monolog/monolog` : Logging
@@ -49,9 +48,8 @@
 Le site permet de :
 1. **Gérer les clients** : CRUD complet, fiches détaillées, géolocalisation
 2. **Suivre les photocopieurs** : Attribution aux clients, relevés de compteurs automatiques
-3. **Importer les relevés** : Via SFTP (fichiers CSV) ou API IONOS
-4. **Calculer les dettes** : Basé sur la consommation (N&B et couleur)
-5. **Gérer les livraisons** : Planification, suivi, assignation aux livreurs
+3. **Calculer les dettes** : Basé sur la consommation (N&B et couleur)
+4. **Gérer les livraisons** : Planification, suivi, assignation aux livreurs
 6. **Gérer le SAV** : Tickets, assignation aux techniciens, suivi
 7. **Gérer le stock** : Papier, toner, LCD, PC avec mouvements
 8. **Communiquer** : Messagerie interne et chatroom en temps réel
@@ -123,16 +121,9 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
 - Géolocalisation automatique (géocodage)
 - Recherche avancée
 
-**2. Import automatique des relevés**
-- **Import SFTP** : Téléchargement de fichiers CSV depuis un serveur SFTP
-  - Pattern de fichiers : `COPIEUR_MAC-*.csv`
-  - Déplacement automatique vers `/processed` après traitement
-  - Gestion des erreurs (déplacement vers `/errors`)
-  - Verrou MySQL pour éviter les exécutions parallèles
-  - Intervalle configurable (20 secondes par défaut)
-  - Badge dans le dashboard avec statut en temps réel
-- **Import IONOS** : Import depuis une API IONOS (à confirmer dans le code)
+**2. Import des relevés**
 - **Import ancien** : Import depuis l'ancien système (table `compteur_relevee_ancien`)
+- **Note** : Les fonctionnalités d'import SFTP et IONOS ont été supprimées et sont à reconstruire
 
 **3. Calcul des dettes**
 - Basé sur la consommation entre deux relevés
@@ -202,8 +193,6 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
    - Techniciens : Accès SAV et notes techniques
    - Système ACL : Permissions granulaires par page via `user_permissions`
 
-3. **Import SFTP** :
-   - Intervalle minimum : 20 secondes (configurable via `SFTP_IMPORT_INTERVAL_SEC`)
    - Verrou MySQL pour éviter les doublons
    - Déplacement automatique des fichiers traités
    - Gestion des erreurs avec logs détaillés
@@ -294,13 +283,6 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
    - Nombre de clients (limité à 500 par défaut)
    - Statistiques stock (catégories, produits)
    - Historique par jour
-   - Badges d'import SFTP et IONOS (statut en temps réel)
-
-2. Import automatique SFTP :
-   - Déclenchement immédiat au chargement (avec `force=1`)
-   - Vérification toutes les 20 secondes (si "due")
-   - Badge mis à jour automatiquement
-   - Toasts pour les erreurs/succès
 
 3. Navigation :
    - Menu header avec liens vers toutes les pages
@@ -437,7 +419,7 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
 cccomputer/
 ├── API/                    # Endpoints API REST (JSON)
 │   ├── clients/            # API clients
-│   ├── scripts/            # Scripts d'import
+│   ├── scripts/            # Scripts utilitaires
 │   └── *.php              # Endpoints API (chatroom, messagerie, dashboard, etc.)
 ├── app/                    # Architecture MVC légère
 │   ├── Models/             # Modèles de données (Client, Photocopieur, Releve)
@@ -860,10 +842,8 @@ cccomputer/
 **`app_kv`** : Key-value store pour configuration
 - `k` (VARCHAR(64), PK), `v` (TEXT)
 
-**`ionos_cursor`** : Curseur pour import IONOS
 - `id` (TINYINT), `last_ts` (DATETIME), `last_mac` (CHAR(12))
 
-**`sftp_jobs`** : Jobs d'import SFTP (à confirmer utilisation)
 - `id`, `status` (ENUM), `created_at`, `started_at`, `finished_at`, `summary` (JSON), `error`, `triggered_by`
 
 **`client_geocode`** : Géocodage des clients (si migration appliquée)
@@ -999,89 +979,7 @@ chatroom_messages
 
 ### Scénario 2 : Import automatique SFTP
 
-**Page déclencheuse** : `/public/dashboard.php` (chargement automatique)
-
-**Flow complet** :
-
-1. **Appel JavaScript** (au chargement du dashboard)
-   ```javascript
-   fetch('/import/run_import_if_due.php?limit=20&force=1', {
-     method: 'POST',
-     credentials: 'same-origin'
-   })
-   ```
-
-2. **Vérification auth** (`/import/run_import_if_due.php`)
-   - `require_once 'includes/auth.php'` → Redirection si non connecté
-
-3. **Acquisition verrou MySQL**
-   ```sql
-   SELECT GET_LOCK('import_compteur_sftp', 0)
-   ```
-   - Si verrou non acquis : Retour JSON `{"ok": false, "reason": "locked"}`
-
-4. **Vérification "due"**
-   - Lecture `app_kv` : `SELECT v FROM app_kv WHERE k = 'sftp_last_run'`
-   - Calcul : `elapsed = time() - lastTimestamp`
-   - Si `elapsed < INTERVAL` et `!force` : Retour JSON `{"ok": false, "reason": "not_due"}`
-
-5. **Exécution script import**
-   - `exec("php API/scripts/upload_compteur.php", $output, $code)`
-   - Timeout : 60 secondes max
-
-6. **Script upload_compteur.php** :
-   - Connexion SFTP (phpseclib)
-   - Liste fichiers : Pattern `COPIEUR_MAC-*.csv`
-   - Pour chaque fichier :
-     - Téléchargement
-     - Parsing CSV
-     - Insertion dans `compteur_relevee` (avec vérification doublons via `mac_norm` + `Timestamp`)
-     - Déplacement vers `/processed` ou `/errors`
-   - Log dans `import_run`
-
-7. **Mise à jour timestamp**
-   ```sql
-   INSERT INTO app_kv (k, v) VALUES ('sftp_last_run', NOW())
-   ON DUPLICATE KEY UPDATE v = NOW()
-   ```
-
-8. **Libération verrou**
-   ```sql
-   SELECT RELEASE_LOCK('import_compteur_sftp')
-   ```
-
-9. **Réponse JSON**
-   ```json
-   {
-     "ok": true,
-     "ran": true,
-     "inserted": 5,
-     "updated": 2,
-     "skipped": 0,
-     "next_due_in_sec": 280
-   }
-   ```
-
-10. **Mise à jour UI**
-    - Badge import mis à jour avec le résultat
-    - Toast de succès si éléments traités
-
-**Validations** :
-- Auth : Session valide
-- Lock : Pas d'import en cours
-- Due : Intervalle respecté (ou force=1)
-- SFTP : Connexion réussie
-- CSV : Format valide
-- DB : Pas de doublons (mac_norm + Timestamp)
-
-**Lecture DB** :
-- `app_kv` : Dernière exécution
-- `compteur_relevee` : Vérification doublons
-
-**Écriture DB** :
-- `compteur_relevee` : Insertion nouveaux relevés
-- `import_run` : Log de l'import
-- `app_kv` : Mise à jour timestamp
+- Note : Les fonctionnalités d'import automatique SFTP et IONOS ont été supprimées et sont à reconstruire
 
 ---
 
@@ -1368,7 +1266,6 @@ chatroom_messages
 
 **Variables d'environnement** :
 - `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD` : Connexion DB
-- `SFTP_IMPORT_INTERVAL_SEC` : Intervalle import SFTP (défaut: 20)
 - Variables Sentry (si configuré) : `SENTRY_DSN`, etc.
 
 **Configuration** :
@@ -1418,15 +1315,7 @@ chatroom_messages
 - Service : OSRM (Open Source Routing Machine)
 - Utilisation : Calcul d'itinéraires entre points sur la carte
 
-**3. Import IONOS :**
-- Script : `/import/run_import_web_if_due.php`
-- Service : API IONOS (à confirmer)
-- Utilisation : Import de relevés depuis l'API IONOS
-
-**4. SFTP :**
-- Bibliothèque : `phpseclib/phpseclib`
-- Utilisation : Connexion SFTP pour téléchargement fichiers CSV
-- Configuration : Credentials SFTP (à confirmer où stockés)
+**Note** : Les fonctionnalités d'import SFTP et IONOS ont été supprimées et sont à reconstruire
 
 **5. Sentry (monitoring) :**
 - Package : `sentry/sentry ^4.0`
@@ -1549,12 +1438,12 @@ Ce document (`PROJECT_OVERVIEW.md`) constitue la synthèse complète du projet C
 
 ### Résumé exécutif
 
-Application web PHP fullstack de gestion de photocopieurs avec import automatique de relevés, calcul de dettes, gestion SAV/livraisons/stock, messagerie interne, et cartes interactives.
+Application web PHP fullstack de gestion de photocopieurs avec calcul de dettes, gestion SAV/livraisons/stock, messagerie interne, et cartes interactives.
 
 ### Fonctionnalités
 
 - Gestion clients complète
-- Import automatique relevés (SFTP, IONOS)
+- Note : Les fonctionnalités d'import automatique ont été supprimées et sont à reconstruire
 - Calcul dettes basé sur consommation
 - Gestion SAV avec tickets et assignation techniciens
 - Gestion livraisons avec assignation livreurs
@@ -1581,7 +1470,6 @@ Application web PHP fullstack de gestion de photocopieurs avec import automatiqu
 ### Flux clés
 
 - Authentification avec session PHP
-- Import automatique SFTP toutes les 20 secondes
 - Création livraisons/SAV avec permissions
 - Calcul dettes via services dédiés
 - Messagerie en temps réel

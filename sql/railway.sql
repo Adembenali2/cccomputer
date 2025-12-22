@@ -192,13 +192,6 @@ CREATE TABLE `import_run` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2891 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-DROP TABLE IF EXISTS `ionos_cursor`;
-CREATE TABLE `ionos_cursor` (
-  `id` tinyint NOT NULL DEFAULT '1',
-  `last_ts` datetime DEFAULT NULL,
-  `last_mac` char(12) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 DROP TABLE IF EXISTS `lcd_catalog`;
 CREATE TABLE `lcd_catalog` (
@@ -435,18 +428,6 @@ CREATE TABLE `sav_pieces_utilisees` (
   CONSTRAINT `fk_sav_pieces_sav` FOREIGN KEY (`id_sav`) REFERENCES `sav` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-DROP TABLE IF EXISTS `sftp_jobs`;
-CREATE TABLE `sftp_jobs` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `status` enum('pending','running','done','failed') NOT NULL DEFAULT 'pending',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `started_at` datetime DEFAULT NULL,
-  `finished_at` datetime DEFAULT NULL,
-  `summary` json DEFAULT NULL,
-  `error` text,
-  `triggered_by` int DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 DROP TABLE IF EXISTS `toner_catalog`;
 CREATE TABLE `toner_catalog` (

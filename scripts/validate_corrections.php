@@ -128,9 +128,7 @@ try {
 echo "\nTEST 5 : Vérification des fichiers modifiés\n";
 $filesToCheck = [
     'public/dashboard.php',
-    'import/run_import_if_due.php',
     'includes/api_helpers.php',
-    'API/scripts/upload_compteur.php'
 ];
 
 foreach ($filesToCheck as $file) {
@@ -179,15 +177,7 @@ if (strpos($apiHelpersContent, '$stmt = $pdo->prepare(\'SELECT 1\')') !== false)
     echo "  ✗ api_helpers.php n'utilise pas prepare() pour SELECT 1\n";
 }
 
-// Vérifier que upload_compteur.php ferme la connexion SFTP
-$uploadContent = file_get_contents(__DIR__ . '/../API/scripts/upload_compteur.php');
-if (strpos($uploadContent, '$sftp->disconnect()') !== false) {
-    $success[] = "✓ upload_compteur.php ferme la connexion SFTP";
-    echo "  ✓ upload_compteur.php ferme la connexion SFTP\n";
-} else {
-    $errors[] = "✗ upload_compteur.php ne ferme pas la connexion SFTP";
-    echo "  ✗ upload_compteur.php ne ferme pas la connexion SFTP\n";
-}
+// Note: upload_compteur.php et les fonctionnalités SFTP ont été supprimées
 
 // ====================================================================
 // RÉSUMÉ

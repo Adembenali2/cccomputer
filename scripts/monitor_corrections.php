@@ -105,10 +105,6 @@ function checkCorrectionsActive(): array {
             'pattern' => '\\$stmt = \\$pdo->prepare\\(\\\'SELECT 1\\\'\\\\)',
             'description' => 'SELECT 1 avec prepare()'
         ],
-        'API/scripts/upload_compteur.php' => [
-            'pattern' => '\\$sftp->disconnect\\(\\)',
-            'description' => 'Fermeture de la connexion SFTP'
-        ]
     ];
     
     foreach ($filesToCheck as $file => $check) {
