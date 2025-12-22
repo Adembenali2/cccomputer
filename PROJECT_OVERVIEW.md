@@ -193,9 +193,7 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
    - Techniciens : Accès SAV et notes techniques
    - Système ACL : Permissions granulaires par page via `user_permissions`
 
-   - Verrou MySQL pour éviter les doublons
-   - Déplacement automatique des fichiers traités
-   - Gestion des erreurs avec logs détaillés
+   - Note : Les règles métier liées aux imports automatiques ont été supprimées
 
 4. **Stock** :
    - Stock calculé dynamiquement via SUM des `qty_delta` dans les tables `*_moves`

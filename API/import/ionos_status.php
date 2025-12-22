@@ -11,6 +11,8 @@
 if (!headers_sent()) {
     header('Content-Type: application/json; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
 }
 
 // Nettoyer toute sortie bufferisée
@@ -21,6 +23,7 @@ while (ob_get_level() > 0) {
 http_response_code(501);
 echo json_encode([
     'ok' => false,
+    'code' => 'IMPORT_REMOVED',
     'error' => 'Import removed, to be rebuilt',
     'message' => 'This import endpoint has been removed and is pending reconstruction.',
     'server_time' => date('Y-m-d H:i:s')
