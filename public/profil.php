@@ -675,11 +675,23 @@ function decode_msg($row) {
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/profil.css">
     <style>
-        /* Import icon styles */
-        .page-header { position: relative; }
+        /* Import history toggle button */
+        .page-header { 
+            position: relative; 
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .page-header > div:first-child {
+            flex: 1;
+        }
         .import-mini {
-            position: absolute; right: 0; top: 0;
-            display: flex; align-items: center; gap: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
         }
 
         /* Flash messages améliorés */
@@ -875,8 +887,21 @@ function decode_msg($row) {
     <header class="page-header">
         <h1 class="page-title">Gestion des utilisateurs</h1>
         <p class="page-sub">Page réservée aux administrateurs (Admin), dirigeants, techniciens et livreurs pour créer, modifier et activer/désactiver des comptes.</p>
-
-        <!-- Icône Import -->
+        
+        <?php if ($isAdminOrDirigeant): ?>
+        <div class="import-mini">
+            <button class="btn btn-secondary" id="toggleImportHistory" aria-expanded="false" aria-controls="importHistoryPanel">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem; vertical-align: middle;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                Historique des Imports SFTP
+            </button>
+        </div>
+        <?php endif; ?>
     </header>
 
     <section class="profil-meta">
@@ -1234,8 +1259,8 @@ function decode_msg($row) {
     <?php endif; ?>
     
     <?php if ($isAdminOrDirigeant): ?>
-        <!-- Section Historique des Imports SFTP -->
-        <section class="panel import-history-panel" id="importHistoryPanel">
+        <!-- Section Historique des Imports SFTP (masquée par défaut) -->
+        <section class="panel import-history-panel" id="importHistoryPanel" style="display: none;">
             <h2 class="panel-title">Historique des Imports SFTP</h2>
             <p class="panel-subtitle">Historique complet des exécutions d'import SFTP avec détails (fichiers traités, lignes insérées, erreurs, etc.).</p>
             
@@ -1604,6 +1629,34 @@ function decode_msg($row) {
             permissionCheckboxes.forEach(function(cb) {
                 cb.checked = false;
             });
+        });
+    }
+})();
+
+/* Toggle historique des imports SFTP */
+(function() {
+    const toggleBtn = document.getElementById('toggleImportHistory');
+    const historyPanel = document.getElementById('importHistoryPanel');
+    
+    if (toggleBtn && historyPanel) {
+        toggleBtn.addEventListener('click', function() {
+            const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+            const isHidden = historyPanel.style.display === 'none';
+            
+            if (isHidden || !isExpanded) {
+                // Afficher la section
+                historyPanel.style.display = 'block';
+                toggleBtn.setAttribute('aria-expanded', 'true');
+                
+                // Scroll vers la section avec animation
+                setTimeout(function() {
+                    historyPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 10);
+            } else {
+                // Masquer la section
+                historyPanel.style.display = 'none';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            }
         });
     }
 })();
