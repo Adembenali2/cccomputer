@@ -1067,16 +1067,69 @@ php scripts/import_sftp_cron.php
 ```
 
 **Configuration cron (toutes les 1 minute)** :
+
+**Linux/Unix (production)** :
 ```bash
-# Éditer crontab
+# Option 1: Utiliser le fichier crontab.example
+cp crontab.example /tmp/crontab_current
+# Éditer le fichier pour ajuster le chemin
+nano /tmp/crontab_current
+# Installer le crontab
+crontab /tmp/crontab_current
+
+# Option 2: Éditer directement le crontab
 crontab -e
 
-# Ajouter la ligne (ajuster le chemin)
-* * * * * cd /path/to/cccomputer && /usr/bin/php scripts/import_sftp_cron.php >> /var/log/cccomputer_import_sftp.log 2>&1
+# Ajouter cette ligne (ajuster le chemin selon votre installation)
+* * * * * cd /var/www/html && /usr/bin/php scripts/import_sftp_cron.php >> /var/www/html/logs/sftp_import.log 2>&1
+
+# Créer le dossier logs si nécessaire
+mkdir -p /var/www/html/logs && chmod 755 /var/www/html/logs
+
+# Option 3: Utiliser le script helper (si exécutable)
+chmod +x scripts/run_sftp_import.sh
+* * * * * cd /var/www/html && ./scripts/run_sftp_import.sh >> /var/www/html/logs/sftp_import.log 2>&1
+```
+
+**Windows (développement local)** :
+```powershell
+# Utiliser le Planificateur de tâches Windows (Task Scheduler)
+# 1. Ouvrir le Planificateur de tâches
+# 2. Créer une tâche de base
+# 3. Déclencheur: Toutes les minutes (1 minute)
+# 4. Action: Démarrer un programme
+#    - Programme: C:\xampp\php\php.exe
+#    - Arguments: C:\xampp\htdocs\cccomputer\scripts\import_sftp_cron.php
+#    - Démarrer dans: C:\xampp\htdocs\cccomputer
+
+# Ou utiliser le script batch (double-clic pour test)
+# scripts\run_sftp_import.bat
+```
+
+**Vérification** :
+```bash
+# Vérifier que le cron fonctionne
+crontab -l
+
+# Voir les logs
+tail -f /var/www/html/logs/sftp_import.log
+
+# Tester manuellement
+php scripts/import_sftp_cron.php
 ```
 
 **Endpoint de statut** :
 - `/API/import/sftp_status.php` : Retourne dernier run et fichiers en erreur
+
+**Notifications Dashboard** :
+- Affichage automatique sur `/public/dashboard.php` (Admin uniquement)
+- Badge de statut (OK/KO/Partiel/Inconnu)
+- Métriques : dernière exécution, fichiers traités/supprimés, lignes insérées
+- Notifications toast pour les nouveaux runs réussis ou en erreur
+- Rafraîchissement automatique toutes les 30 secondes
+- Bouton de rafraîchissement manuel
+
+**📖 Guide d'installation complet** : Voir `docs/SFTP_IMPORT_SETUP.md` pour les instructions détaillées d'installation cron, dépannage et configuration Windows/Linux.
 
 ---
 
