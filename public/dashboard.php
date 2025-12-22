@@ -240,7 +240,12 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             </div>
         </div>
 
-        <!-- Import SFTP Card -->
+        <?php
+        // Afficher la card Import SFTP
+        // Pour limiter aux admins, décommenter les lignes suivantes:
+        // $userRole = currentUserRole();
+        // if ($userRole === 'Admin'):
+        ?>
         <div class="sftp-import-card">
             <div class="sftp-import-header">
                 <h3 class="sftp-import-title">Import SFTP</h3>
@@ -260,12 +265,50 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 </div>
             </div>
             
-            <div class="sftp-import-content" id="sftpImportContent" style="display: none;">
-                <!-- Détails cachés -->
+            <div class="sftp-import-content" id="sftpImportContent">
+                <div class="sftp-import-loading" id="sftpImportLoading">
+                    <span>Chargement...</span>
+                </div>
+                
+                <div class="sftp-import-status" id="sftpImportStatus" style="display: none;">
+                    <div class="sftp-status-badge" id="sftpStatusBadge">
+                        <span class="status-unknown">Inconnu</span>
+                    </div>
+                    
+                    <div class="sftp-import-metrics" id="sftpImportMetrics">
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Dernière exécution:</span>
+                            <span class="sftp-metric-value" id="sftpLastRun">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Fichiers traités:</span>
+                            <span class="sftp-metric-value" id="sftpFilesProcessed">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Fichiers supprimés:</span>
+                            <span class="sftp-metric-value" id="sftpFilesDeleted">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Lignes insérées:</span>
+                            <span class="sftp-metric-value" id="sftpInsertedRows">—</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sftp-import-error" id="sftpImportError" style="display: none;">
+                        <strong>Erreur:</strong>
+                        <span id="sftpErrorText"></span>
+                    </div>
+                </div>
             </div>
         </div>
+        <?php // endif; ?>
         
         <!-- Import IONOS Card -->
+        <?php
+        // Pour limiter aux admins, décommenter les lignes suivantes:
+        // $userRole = currentUserRole();
+        // if ($userRole === 'Admin'):
+        ?>
         <div class="sftp-import-card ionos-import-card">
             <div class="sftp-import-header">
                 <h3 class="sftp-import-title">Import IONOS</h3>
@@ -285,10 +328,43 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 </div>
             </div>
             
-            <div class="sftp-import-content" id="ionosImportContent" style="display: none;">
-                <!-- Détails cachés -->
+            <div class="sftp-import-content" id="ionosImportContent">
+                <div class="sftp-import-loading" id="ionosImportLoading">
+                    <span>Chargement...</span>
+                </div>
+                
+                <div class="sftp-import-status" id="ionosImportStatus" style="display: none;">
+                    <div class="sftp-status-badge" id="ionosStatusBadge">
+                        <span class="status-unknown">Inconnu</span>
+                    </div>
+                    
+                    <div class="sftp-import-metrics" id="ionosImportMetrics">
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Dernière exécution:</span>
+                            <span class="sftp-metric-value" id="ionosLastRun">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Lignes vues:</span>
+                            <span class="sftp-metric-value" id="ionosRowsSeen">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Lignes traitées:</span>
+                            <span class="sftp-metric-value" id="ionosRowsProcessed">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Lignes insérées:</span>
+                            <span class="sftp-metric-value" id="ionosRowsInserted">—</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sftp-import-error" id="ionosImportError" style="display: none;">
+                        <strong>Erreur:</strong>
+                        <span id="ionosErrorText"></span>
+                    </div>
+                </div>
             </div>
         </div>
+        <?php // endif; ?>
     </div>
 
     <!-- Popup Support -->
@@ -1655,7 +1731,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
     })();
 
-    // --- Import SFTP Status ---
+    // --- Import SFTP Status (Admin uniquement) ---
     (function(){
         const content = document.getElementById('sftpImportContent');
         const loading = document.getElementById('sftpImportLoading');
@@ -1871,83 +1947,67 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         // Bouton refresh
         refreshBtn.addEventListener('click', refreshStatus);
         
-        // Fonction pour lancer l'import SFTP (réutilisable)
-        async function triggerSftpImport() {
-            const triggerBtn = document.getElementById('sftpTriggerBtn');
-            const wasDisabled = triggerBtn ? triggerBtn.disabled : false;
-            const originalText = triggerBtn ? triggerBtn.innerHTML : '';
-            
-            // Désactiver le bouton pendant l'exécution (si visible)
-            if (triggerBtn) {
+        // Bouton trigger (lancer l'import)
+        const triggerBtn = document.getElementById('sftpTriggerBtn');
+        if (triggerBtn) {
+            triggerBtn.addEventListener('click', async function() {
+                // Désactiver le bouton pendant l'exécution
                 triggerBtn.disabled = true;
+                const originalText = triggerBtn.innerHTML;
                 triggerBtn.innerHTML = '<span>Import en cours...</span>';
-            }
-            
-            try {
-                const response = await fetch('/API/import/sftp_trigger.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    credentials: 'same-origin',
-                    body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
-                });
                 
-                const result = await response.json();
-                
-                if (result.ok && result.last_run) {
-                    const run = result.last_run;
-                    const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
-                    const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
+                try {
+                    const response = await fetch('/API/import/sftp_trigger.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        credentials: 'same-origin',
+                        body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
+                    });
                     
-                    showNotification(
-                        '✅ Import terminé',
-                        `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
-                        'success'
-                    );
+                    const result = await response.json();
                     
-                    // Rafraîchir le statut après un court délai
-                    setTimeout(() => {
-                        lastRunId = null; // Forcer la détection du nouveau run
-                        refreshStatus();
-                    }, 1000);
-                } else {
+                    if (result.ok && result.last_run) {
+                        const run = result.last_run;
+                        const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
+                        const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
+                        
+                        showNotification(
+                            '✅ Import terminé',
+                            `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
+                            'success'
+                        );
+                        
+                        // Rafraîchir le statut après un court délai
+                        setTimeout(() => {
+                            lastRunId = null; // Forcer la détection du nouveau run
+                            refreshStatus();
+                        }, 1000);
+                    } else {
+                        showNotification(
+                            '❌ Erreur',
+                            result.error || 'Erreur lors de l\'import',
+                            'error'
+                        );
+                    }
+                } catch (error) {
+                    console.error('[SFTP] Erreur trigger:', error);
                     showNotification(
                         '❌ Erreur',
-                        result.error || 'Erreur lors de l\'import',
+                        'Impossible de lancer l\'import: ' + error.message,
                         'error'
                     );
-                }
-            } catch (error) {
-                console.error('[SFTP] Erreur trigger:', error);
-                showNotification(
-                    '❌ Erreur',
-                    'Impossible de lancer l\'import: ' + error.message,
-                    'error'
-                );
-            } finally {
-                // Réactiver le bouton (si visible)
-                if (triggerBtn && !wasDisabled) {
+                } finally {
+                    // Réactiver le bouton
                     triggerBtn.disabled = false;
                     triggerBtn.innerHTML = originalText;
                 }
-            }
-        }
-        
-        // Bouton trigger (lancer l'import manuellement)
-        const triggerBtn = document.getElementById('sftpTriggerBtn');
-        if (triggerBtn) {
-            triggerBtn.addEventListener('click', triggerSftpImport);
+            });
         }
         
         // Rafraîchir immédiatement
         refreshStatus();
-        
-        // Lancer automatiquement l'import au chargement de la page
-        // Attendre un court délai pour que la page soit complètement chargée
-        setTimeout(() => {
-            triggerSftpImport();
-        }, 1000);
         
         // Rafraîchir automatiquement toutes les 30 secondes
         refreshInterval = setInterval(() => {
@@ -2156,82 +2216,64 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         // Bouton refresh
         refreshBtn.addEventListener('click', refreshStatus);
         
-        // Fonction pour lancer l'import IONOS (réutilisable)
-        async function triggerIonosImport() {
-            const triggerBtn = document.getElementById('ionosTriggerBtn');
-            const wasDisabled = triggerBtn ? triggerBtn.disabled : false;
-            const originalText = triggerBtn ? triggerBtn.innerHTML : '';
-            
-            // Désactiver le bouton pendant l'exécution (si visible)
-            if (triggerBtn) {
+        // Bouton trigger (lancer l'import)
+        const triggerBtn = document.getElementById('ionosTriggerBtn');
+        if (triggerBtn) {
+            triggerBtn.addEventListener('click', async function() {
                 triggerBtn.disabled = true;
+                const originalText = triggerBtn.innerHTML;
                 triggerBtn.innerHTML = '<span>Import en cours...</span>';
-            }
-            
-            try {
-                const response = await fetch('/API/import/ionos_trigger.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    credentials: 'same-origin',
-                    body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
-                });
                 
-                const result = await response.json();
-                
-                if (result.ok && result.last_run) {
-                    const run = result.last_run;
-                    const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
-                    const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
+                try {
+                    const response = await fetch('/API/import/ionos_trigger.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        credentials: 'same-origin',
+                        body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
+                    });
                     
-                    showNotification(
-                        '✅ Import IONOS terminé',
-                        `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
-                        'success'
-                    );
+                    const result = await response.json();
                     
-                    setTimeout(() => {
-                        lastRunId = null;
-                        refreshStatus();
-                    }, 1000);
-                } else {
+                    if (result.ok && result.last_run) {
+                        const run = result.last_run;
+                        const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
+                        const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
+                        
+                        showNotification(
+                            '✅ Import IONOS terminé',
+                            `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
+                            'success'
+                        );
+                        
+                        setTimeout(() => {
+                            lastRunId = null;
+                            refreshStatus();
+                        }, 1000);
+                    } else {
+                        showNotification(
+                            '❌ Erreur',
+                            result.error || 'Erreur lors de l\'import IONOS',
+                            'error'
+                        );
+                    }
+                } catch (error) {
+                    console.error('[IONOS] Erreur trigger:', error);
                     showNotification(
                         '❌ Erreur',
-                        result.error || 'Erreur lors de l\'import IONOS',
+                        'Impossible de lancer l\'import IONOS: ' + error.message,
                         'error'
                     );
-                }
-            } catch (error) {
-                console.error('[IONOS] Erreur trigger:', error);
-                showNotification(
-                    '❌ Erreur',
-                    'Impossible de lancer l\'import IONOS: ' + error.message,
-                    'error'
-                );
-            } finally {
-                // Réactiver le bouton (si visible)
-                if (triggerBtn && !wasDisabled) {
+                } finally {
                     triggerBtn.disabled = false;
                     triggerBtn.innerHTML = originalText;
                 }
-            }
-        }
-        
-        // Bouton trigger (lancer l'import manuellement)
-        const triggerBtn = document.getElementById('ionosTriggerBtn');
-        if (triggerBtn) {
-            triggerBtn.addEventListener('click', triggerIonosImport);
+            });
         }
         
         // Rafraîchir immédiatement
         refreshStatus();
-        
-        // Lancer automatiquement l'import au chargement de la page
-        // Attendre un court délai pour que la page soit complètement chargée
-        setTimeout(() => {
-            triggerIonosImport();
-        }, 1500);
         
         // Rafraîchir automatiquement toutes les 30 secondes
         refreshInterval = setInterval(() => {
