@@ -800,6 +800,14 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sftp-import-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .sftp-import-title {
@@ -807,6 +815,38 @@ body {
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.sftp-import-trigger {
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.sftp-import-trigger:hover:not(:disabled) {
+  background: var(--accent-secondary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.sftp-import-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sftp-import-trigger svg {
+  width: 16px;
+  height: 16px;
 }
 
 .sftp-import-refresh {

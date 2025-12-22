@@ -127,6 +127,10 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <script src="/assets/js/api.js"></script>
     <script src="/assets/js/dashboard.js" defer></script>
+    <script>
+        // CSRF token pour les requêtes AJAX
+        window.CSRF_TOKEN = '<?= htmlspecialchars(ensureCsrfToken(), ENT_QUOTES, 'UTF-8') ?>';
+    </script>
 </head>
 <body class="page-dashboard">
     <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -245,12 +249,20 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         <div class="sftp-import-card">
             <div class="sftp-import-header">
                 <h3 class="sftp-import-title">Import SFTP</h3>
-                <button class="sftp-import-refresh" id="sftpRefreshBtn" aria-label="Rafraîchir le statut">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                    </svg>
-                </button>
+                <div class="sftp-import-actions">
+                    <button class="sftp-import-trigger" id="sftpTriggerBtn" aria-label="Lancer l'import">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                        Lancer l'import
+                    </button>
+                    <button class="sftp-import-refresh" id="sftpRefreshBtn" aria-label="Rafraîchir le statut">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             
             <div class="sftp-import-content" id="sftpImportContent">
@@ -1828,6 +1840,65 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
         // Bouton refresh
         refreshBtn.addEventListener('click', refreshStatus);
+        
+        // Bouton trigger (lancer l'import)
+        const triggerBtn = document.getElementById('sftpTriggerBtn');
+        if (triggerBtn) {
+            triggerBtn.addEventListener('click', async function() {
+                // Désactiver le bouton pendant l'exécution
+                triggerBtn.disabled = true;
+                const originalText = triggerBtn.innerHTML;
+                triggerBtn.innerHTML = '<span>Import en cours...</span>';
+                
+                try {
+                    const response = await fetch('/API/import/sftp_trigger.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        credentials: 'same-origin',
+                        body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.ok && result.last_run) {
+                        const run = result.last_run;
+                        const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
+                        const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
+                        
+                        showNotification(
+                            '✅ Import terminé',
+                            `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
+                            'success'
+                        );
+                        
+                        // Rafraîchir le statut après un court délai
+                        setTimeout(() => {
+                            lastRunId = null; // Forcer la détection du nouveau run
+                            refreshStatus();
+                        }, 1000);
+                    } else {
+                        showNotification(
+                            '❌ Erreur',
+                            result.error || 'Erreur lors de l\'import',
+                            'error'
+                        );
+                    }
+                } catch (error) {
+                    console.error('[SFTP] Erreur trigger:', error);
+                    showNotification(
+                        '❌ Erreur',
+                        'Impossible de lancer l\'import: ' + error.message,
+                        'error'
+                    );
+                } finally {
+                    // Réactiver le bouton
+                    triggerBtn.disabled = false;
+                    triggerBtn.innerHTML = originalText;
+                }
+            });
+        }
         
         // Rafraîchir immédiatement
         refreshStatus();
