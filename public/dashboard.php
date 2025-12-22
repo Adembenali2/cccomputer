@@ -302,6 +302,69 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             </div>
         </div>
         <?php // endif; ?>
+        
+        <!-- Import IONOS Card -->
+        <?php
+        // Pour limiter aux admins, décommenter les lignes suivantes:
+        // $userRole = currentUserRole();
+        // if ($userRole === 'Admin'):
+        ?>
+        <div class="sftp-import-card ionos-import-card">
+            <div class="sftp-import-header">
+                <h3 class="sftp-import-title">Import IONOS</h3>
+                <div class="sftp-import-actions">
+                    <button class="sftp-import-trigger" id="ionosTriggerBtn" aria-label="Lancer l'import">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                        Lancer l'import
+                    </button>
+                    <button class="sftp-import-refresh" id="ionosRefreshBtn" aria-label="Rafraîchir le statut">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="sftp-import-content" id="ionosImportContent">
+                <div class="sftp-import-loading" id="ionosImportLoading">
+                    <span>Chargement...</span>
+                </div>
+                
+                <div class="sftp-import-status" id="ionosImportStatus" style="display: none;">
+                    <div class="sftp-status-badge" id="ionosStatusBadge">
+                        <span class="status-unknown">Inconnu</span>
+                    </div>
+                    
+                    <div class="sftp-import-metrics" id="ionosImportMetrics">
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Dernière exécution:</span>
+                            <span class="sftp-metric-value" id="ionosLastRun">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Lignes vues:</span>
+                            <span class="sftp-metric-value" id="ionosRowsSeen">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Lignes traitées:</span>
+                            <span class="sftp-metric-value" id="ionosRowsProcessed">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Lignes insérées:</span>
+                            <span class="sftp-metric-value" id="ionosRowsInserted">—</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sftp-import-error" id="ionosImportError" style="display: none;">
+                        <strong>Erreur:</strong>
+                        <span id="ionosErrorText"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php // endif; ?>
     </div>
 
     <!-- Popup Support -->
@@ -1924,9 +1987,275 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 clearInterval(refreshInterval);
             }
         });
+    })();
+    
+    // === Import IONOS ===
+    (function() {
+        const content = document.getElementById('ionosImportContent');
+        const loading = document.getElementById('ionosImportLoading');
+        const status = document.getElementById('ionosImportStatus');
+        const refreshBtn = document.getElementById('ionosRefreshBtn');
         
-        // Fonction pour afficher une notification toast
-        function showNotification(title, message, type = 'info') {
+        if (!content || !loading || !status || !refreshBtn) return;
+        
+        let isFetching = false;
+        let refreshInterval = null;
+        const REFRESH_INTERVAL_MS = 30000; // 30 secondes
+        let lastRunId = null; // Pour détecter les nouveaux runs
+        
+        function setStatusBadge(statusValue) {
+            const badge = document.getElementById('ionosStatusBadge');
+            if (!badge) return;
+            
+            badge.className = 'sftp-status-badge';
+            let text = 'Inconnu';
+            let className = 'status-unknown';
+            
+            switch(statusValue) {
+                case 'RUN_OK':
+                    text = 'OK';
+                    className = 'status-ok';
+                    break;
+                case 'RUN_FAILED':
+                    text = 'KO';
+                    className = 'status-ko';
+                    break;
+                case 'PARTIAL':
+                    text = 'Partiel';
+                    className = 'status-warn';
+                    break;
+                default:
+                    text = 'Inconnu';
+                    className = 'status-unknown';
+            }
+            
+            badge.innerHTML = `<span class="${className}">${text}</span>`;
+        }
+        
+        function formatDateTime(dateStr) {
+            if (!dateStr || dateStr === '—') return '—';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch(e) {
+                return dateStr;
+            }
+        }
+        
+        function checkIfDelayed(dateStr) {
+            if (!dateStr) return false;
+            try {
+                const date = new Date(dateStr);
+                const now = new Date();
+                const diffMinutes = (now - date) / (1000 * 60);
+                return diffMinutes > 10; // Plus de 10 minutes = retard
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        async function refreshStatus() {
+            if (isFetching) return;
+            isFetching = true;
+            
+            loading.style.display = 'block';
+            status.style.display = 'none';
+            
+            try {
+                const response = await fetch('/API/import/ionos_status.php', {
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.ok || !data.has_run) {
+                    loading.style.display = 'none';
+                    status.style.display = 'block';
+                    setStatusBadge('UNKNOWN');
+                    document.getElementById('ionosLastRun').textContent = '—';
+                    document.getElementById('ionosRowsSeen').textContent = '—';
+                    document.getElementById('ionosRowsProcessed').textContent = '—';
+                    document.getElementById('ionosRowsInserted').textContent = '—';
+                    document.getElementById('ionosImportError').style.display = 'none';
+                    return;
+                }
+                
+                loading.style.display = 'none';
+                status.style.display = 'block';
+                
+                const run = data.lastRun;
+                
+                // Déterminer le statut (avec vérification retard)
+                let displayStatus = run.status || 'UNKNOWN';
+                if (displayStatus === 'RUN_OK' && checkIfDelayed(run.ended_at)) {
+                    displayStatus = 'PARTIAL'; // Afficher comme warning si retard
+                }
+                setStatusBadge(displayStatus);
+                
+                // Afficher les métriques
+                document.getElementById('ionosLastRun').textContent = formatDateTime(run.ended_at);
+                document.getElementById('ionosRowsSeen').textContent = run.rows_seen ?? '—';
+                document.getElementById('ionosRowsProcessed').textContent = run.rows_processed ?? '—';
+                document.getElementById('ionosRowsInserted').textContent = run.rows_inserted ?? '—';
+                
+                // Détecter les nouveaux runs et afficher les notifications
+                const currentRunId = run.id;
+                if (lastRunId === null) {
+                    lastRunId = currentRunId;
+                }
+                const isNewRun = lastRunId !== null && currentRunId !== lastRunId;
+                
+                if (isNewRun && run.rows_processed > 0) {
+                    const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                    const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
+                    
+                    if (displayStatus === 'RUN_OK') {
+                        showNotification(
+                            '✅ Import IONOS réussi',
+                            `${run.rows_processed} ${rowsText} importée(s) en ${durationSeconds}s`,
+                            'success'
+                        );
+                    } else if (displayStatus === 'PARTIAL') {
+                        showNotification(
+                            '⚠️ Import IONOS partiel',
+                            `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
+                            'info'
+                        );
+                    } else if (displayStatus === 'RUN_FAILED') {
+                        showNotification(
+                            '❌ Erreur import IONOS',
+                            `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import IONOS'}`,
+                            'error'
+                        );
+                    }
+                } else if (isNewRun && displayStatus === 'RUN_FAILED') {
+                    const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                    showNotification(
+                        '❌ Erreur import IONOS',
+                        `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import IONOS'}`,
+                        'error'
+                    );
+                }
+                
+                lastRunId = currentRunId;
+                
+                // Afficher l'erreur si présente
+                if (run.error) {
+                    document.getElementById('ionosErrorText').textContent = run.error;
+                    document.getElementById('ionosImportError').style.display = 'block';
+                } else {
+                    document.getElementById('ionosImportError').style.display = 'none';
+                }
+                
+            } catch(error) {
+                console.error('[IONOS] Erreur refresh:', error);
+                loading.style.display = 'none';
+                status.style.display = 'block';
+                document.getElementById('ionosErrorText').textContent = error.message || 'Erreur de connexion';
+                document.getElementById('ionosImportError').style.display = 'block';
+                setStatusBadge('UNKNOWN');
+            } finally {
+                isFetching = false;
+            }
+        }
+        
+        // Bouton refresh
+        refreshBtn.addEventListener('click', refreshStatus);
+        
+        // Bouton trigger (lancer l'import)
+        const triggerBtn = document.getElementById('ionosTriggerBtn');
+        if (triggerBtn) {
+            triggerBtn.addEventListener('click', async function() {
+                triggerBtn.disabled = true;
+                const originalText = triggerBtn.innerHTML;
+                triggerBtn.innerHTML = '<span>Import en cours...</span>';
+                
+                try {
+                    const response = await fetch('/API/import/ionos_trigger.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        credentials: 'same-origin',
+                        body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.ok && result.last_run) {
+                        const run = result.last_run;
+                        const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
+                        const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
+                        
+                        showNotification(
+                            '✅ Import IONOS terminé',
+                            `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
+                            'success'
+                        );
+                        
+                        setTimeout(() => {
+                            lastRunId = null;
+                            refreshStatus();
+                        }, 1000);
+                    } else {
+                        showNotification(
+                            '❌ Erreur',
+                            result.error || 'Erreur lors de l\'import IONOS',
+                            'error'
+                        );
+                    }
+                } catch (error) {
+                    console.error('[IONOS] Erreur trigger:', error);
+                    showNotification(
+                        '❌ Erreur',
+                        'Impossible de lancer l\'import IONOS: ' + error.message,
+                        'error'
+                    );
+                } finally {
+                    triggerBtn.disabled = false;
+                    triggerBtn.innerHTML = originalText;
+                }
+            });
+        }
+        
+        // Rafraîchir immédiatement
+        refreshStatus();
+        
+        // Rafraîchir automatiquement toutes les 30 secondes
+        refreshInterval = setInterval(() => {
+            if (!document.hidden && !isFetching) {
+                refreshStatus();
+            }
+        }, REFRESH_INTERVAL_MS);
+        
+        // Pause/resume selon visibilité onglet
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !isFetching) {
+                refreshStatus();
+            }
+        });
+        
+        // Nettoyer l'intervalle si la page est déchargée
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    })();
+    
+    // Fonction pour afficher une notification toast (partagée entre SFTP et IONOS)
+    function showNotification(title, message, type = 'info') {
             // Créer l'élément de notification
             const notification = document.createElement('div');
             notification.className = `sftp-notification sftp-notification-${type}`;

@@ -1259,13 +1259,13 @@ function decode_msg($row) {
     <?php endif; ?>
     
     <?php if ($isAdminOrDirigeant): ?>
-        <!-- Section Historique des Imports SFTP (masquée par défaut) -->
+        <!-- Section Historique des Imports SFTP et IONOS (masquée par défaut) -->
         <section class="panel import-history-panel" id="importHistoryPanel" style="display: none;">
-            <h2 class="panel-title">Historique des Imports SFTP</h2>
-            <p class="panel-subtitle">Historique complet des exécutions d'import SFTP avec détails (fichiers traités, lignes insérées, erreurs, etc.).</p>
+            <h2 class="panel-title">Historique des Imports (SFTP & IONOS)</h2>
+            <p class="panel-subtitle">Historique complet des exécutions d'import SFTP et IONOS avec détails (fichiers/lignes traités, lignes insérées, erreurs, etc.).</p>
             
             <?php
-            // Récupérer l'historique des imports SFTP
+            // Récupérer l'historique des imports SFTP et IONOS
             $importHistory = safeFetchAll($pdo, "
                 SELECT 
                     id,
@@ -1275,10 +1275,10 @@ function decode_msg($row) {
                     ok,
                     msg
                 FROM import_run
-                WHERE msg LIKE '%\"type\":\"sftp\"%'
+                WHERE msg LIKE '%\"type\":\"sftp\"%' OR msg LIKE '%\"type\":\"ionos\"%'
                 ORDER BY ran_at DESC
                 LIMIT 50
-            ", [], 'import_history_sftp');
+            ", [], 'import_history');
             
             // Fonction pour parser le message JSON et extraire les informations
             function parseImportMessage($msg): array {
@@ -1288,6 +1288,10 @@ function decode_msg($row) {
                         'files_seen' => 0,
                         'files_processed' => 0,
                         'files_deleted' => 0,
+                        'rows_seen' => 0,
+                        'rows_processed' => 0,
+                        'rows_inserted' => 0,
+                        'rows_skipped' => 0,
                         'inserted_rows' => 0,
                         'duration_ms' => 0,
                         'error' => null,
@@ -1302,6 +1306,10 @@ function decode_msg($row) {
                         'files_seen' => 0,
                         'files_processed' => 0,
                         'files_deleted' => 0,
+                        'rows_seen' => 0,
+                        'rows_processed' => 0,
+                        'rows_inserted' => 0,
+                        'rows_skipped' => 0,
                         'inserted_rows' => 0,
                         'duration_ms' => 0,
                         'error' => 'Erreur de parsing JSON',
@@ -1309,16 +1317,41 @@ function decode_msg($row) {
                     ];
                 }
                 
-                return [
-                    'type' => $data['type'] ?? 'sftp',
-                    'files_seen' => (int)($data['files_seen'] ?? 0),
-                    'files_processed' => (int)($data['files_processed'] ?? 0),
-                    'files_deleted' => (int)($data['files_deleted'] ?? 0),
-                    'inserted_rows' => (int)($data['inserted_rows'] ?? 0),
-                    'duration_ms' => (int)($data['duration_ms'] ?? 0),
-                    'error' => $data['error'] ?? null,
-                    'message' => $data['message'] ?? null
-                ];
+                $type = $data['type'] ?? 'sftp';
+                
+                // Pour SFTP, utiliser files_* et inserted_rows
+                // Pour IONOS, utiliser rows_* et rows_inserted
+                if ($type === 'ionos') {
+                    return [
+                        'type' => 'ionos',
+                        'files_seen' => 0,
+                        'files_processed' => 0,
+                        'files_deleted' => 0,
+                        'rows_seen' => (int)($data['rows_seen'] ?? 0),
+                        'rows_processed' => (int)($data['rows_processed'] ?? 0),
+                        'rows_inserted' => (int)($data['rows_inserted'] ?? 0),
+                        'rows_skipped' => (int)($data['rows_skipped'] ?? 0),
+                        'inserted_rows' => (int)($data['rows_inserted'] ?? 0),
+                        'duration_ms' => (int)($data['duration_ms'] ?? 0),
+                        'error' => $data['error'] ?? null,
+                        'message' => $data['message'] ?? null
+                    ];
+                } else {
+                    return [
+                        'type' => 'sftp',
+                        'files_seen' => (int)($data['files_seen'] ?? 0),
+                        'files_processed' => (int)($data['files_processed'] ?? 0),
+                        'files_deleted' => (int)($data['files_deleted'] ?? 0),
+                        'rows_seen' => 0,
+                        'rows_processed' => 0,
+                        'rows_inserted' => 0,
+                        'rows_skipped' => 0,
+                        'inserted_rows' => (int)($data['inserted_rows'] ?? 0),
+                        'duration_ms' => (int)($data['duration_ms'] ?? 0),
+                        'error' => $data['error'] ?? null,
+                        'message' => $data['message'] ?? null
+                    ];
+                }
             }
             
             // Fonction pour déterminer le statut
@@ -1326,11 +1359,24 @@ function decode_msg($row) {
                 if (!$ok || !empty($msgData['error'])) {
                     return 'error';
                 }
-                if ($msgData['files_processed'] > 0 && $msgData['files_processed'] === $msgData['files_deleted']) {
-                    return 'success';
-                }
-                if ($msgData['files_processed'] > 0) {
-                    return 'partial';
+                $type = $msgData['type'] ?? 'sftp';
+                
+                if ($type === 'ionos') {
+                    // Pour IONOS, vérifier rows_processed et rows_inserted
+                    if ($msgData['rows_processed'] > 0 && $msgData['rows_inserted'] > 0) {
+                        return 'success';
+                    }
+                    if ($msgData['rows_processed'] > 0) {
+                        return 'partial';
+                    }
+                } else {
+                    // Pour SFTP, vérifier files_processed et files_deleted
+                    if ($msgData['files_processed'] > 0 && $msgData['files_processed'] === $msgData['files_deleted']) {
+                        return 'success';
+                    }
+                    if ($msgData['files_processed'] > 0) {
+                        return 'partial';
+                    }
                 }
                 return 'empty';
             }
@@ -1341,9 +1387,10 @@ function decode_msg($row) {
                     <thead>
                         <tr>
                             <th scope="col">Date/Heure</th>
+                            <th scope="col">Type</th>
                             <th scope="col">Statut</th>
-                            <th scope="col">Fichiers vus</th>
-                            <th scope="col">Fichiers traités</th>
+                            <th scope="col">Fichiers/Lignes vus</th>
+                            <th scope="col">Fichiers/Lignes traités</th>
                             <th scope="col">Fichiers supprimés</th>
                             <th scope="col">Lignes insérées</th>
                             <th scope="col">Durée</th>
@@ -1353,7 +1400,7 @@ function decode_msg($row) {
                     <tbody>
                         <?php if (empty($importHistory)): ?>
                             <tr>
-                                <td colspan="8" class="aucun" role="cell">Aucun import enregistré.</td>
+                                <td colspan="9" class="aucun" role="cell">Aucun import enregistré.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($importHistory as $run): ?>
@@ -1383,17 +1430,28 @@ function decode_msg($row) {
                                     <td data-label="Date/Heure" role="cell">
                                         <?= formatDateTime($run['ran_at'], 'd/m/Y H:i:s') ?>
                                     </td>
+                                    <td data-label="Type" role="cell">
+                                        <span class="badge <?= $msgData['type'] === 'ionos' ? 'role' : 'success' ?>">
+                                            <?= h(strtoupper($msgData['type'] ?? 'sftp')) ?>
+                                        </span>
+                                    </td>
                                     <td data-label="Statut" role="cell">
                                         <span class="badge <?= $statusClass ?>"><?= h($statusLabel) ?></span>
                                     </td>
-                                    <td data-label="Fichiers vus" role="cell">
-                                        <?= h((string)$msgData['files_seen']) ?>
+                                    <td data-label="Fichiers/Lignes vus" role="cell">
+                                        <?php
+                                        $seen = $msgData['type'] === 'ionos' ? $msgData['rows_seen'] : $msgData['files_seen'];
+                                        echo h((string)$seen);
+                                        ?>
                                     </td>
-                                    <td data-label="Fichiers traités" role="cell">
-                                        <?= h((string)$msgData['files_processed']) ?>
+                                    <td data-label="Fichiers/Lignes traités" role="cell">
+                                        <?php
+                                        $processed = $msgData['type'] === 'ionos' ? $msgData['rows_processed'] : $msgData['files_processed'];
+                                        echo h((string)$processed);
+                                        ?>
                                     </td>
                                     <td data-label="Fichiers supprimés" role="cell">
-                                        <?= h((string)$msgData['files_deleted']) ?>
+                                        <?= $msgData['type'] === 'ionos' ? '—' : h((string)$msgData['files_deleted']) ?>
                                     </td>
                                     <td data-label="Lignes insérées" role="cell">
                                         <?= h((string)$msgData['inserted_rows']) ?>

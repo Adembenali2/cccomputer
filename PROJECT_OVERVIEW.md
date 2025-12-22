@@ -128,6 +128,12 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
   - Anti-doublon basé sur (mac_norm, Timestamp)
   - Suppression automatique des fichiers après succès
   - Logs détaillés dans `import_run` et `import_run_item`
+- **Import IONOS** : Import automatique depuis IONOS (via test_compteur.php)
+  - Récupération HTML depuis URL configurable
+  - Parsing du tableau HTML pour extraire les relevés
+  - Anti-doublon basé sur (mac_norm, Timestamp)
+  - Traitement automatique toutes les minutes (cron)
+  - Logs détaillés dans `import_run` et `import_run_item`
 - **Import ancien** : Import depuis l'ancien système (table `compteur_relevee_ancien`)
 
 **3. Calcul des dettes**
@@ -381,7 +387,8 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
 5. Affichage détaillé (N&B, couleur, montants)
 
 **Importer des relevés** :
-- Note : Les fonctionnalités d'import automatique (SFTP, IONOS) ont été supprimées et sont à reconstruire
+- **Import SFTP** : Via script `/scripts/import_sftp_cron.php` (fichiers CSV depuis serveur SFTP)
+- **Import IONOS** : Via script `/scripts/import_ionos_cron.php` (parsing HTML depuis test_compteur.php)
 
 ### Déconnexion / expiration session
 
@@ -1135,6 +1142,93 @@ php scripts/import_sftp_cron.php
 
 ---
 
+### 2.2. Import IONOS
+
+**Script** : `/scripts/import_ionos_cron.php`
+
+**Flow complet** :
+
+1. **Déclenchement** (cron toutes les 1 minute)
+   ```bash
+   * * * * * cd /path/to/cccomputer && php scripts/import_ionos_cron.php
+   ```
+
+2. **Vérification lock MySQL**
+   ```sql
+   SELECT GET_LOCK('import_ionos', 0)
+   ```
+   - Si verrou non acquis : Retour erreur + log, exit
+
+3. **Récupération HTML depuis IONOS**
+   - Lecture variable d'environnement : `IONOS_URL` (défaut: `https://cccomputer.fr/test_compteur.php`)
+   - Requête HTTP GET avec timeout 30s
+   - Parsing HTML avec DOMDocument/DOMXPath
+
+4. **Extraction des données du tableau HTML**
+   - Parse le tableau `#tableReleves` (ou premier tableau trouvé)
+   - Colonnes extraites :
+     - ID Relevé, Date relevé, Ref Client, Marque, Modèle
+     - MAC, N° de série, Total NB, Total Couleur
+     - Compteur du mois, Toner K/C/M/Y (avec extraction pourcentage)
+
+5. **Traitement chaque ligne** :
+   - Normalisation MAC : `mac_norm = UPPER(REPLACE(MacAddress, ':', ''))`
+   - Vérification anti-doublon : `SELECT 1 FROM compteur_relevee WHERE mac_norm = :mac_norm AND Timestamp = :timestamp LIMIT 1`
+   - Si absent → Insertion dans `compteur_relevee` :
+     - Mapping colonnes : `date_releve` → `Timestamp`, `mac` → `MacAddress`, `total_nb` → `TotalBW`, `total_couleur` → `TotalColor`
+     - Toners extraits depuis HTML (ex: "85%<div>...</div>" → 85)
+     - `DateInsertion = NOW()`
+   - Transaction par ligne (rollback en cas d'erreur)
+
+6. **Logging** :
+   - `import_run` : Résumé global (type: "ionos", rows_seen, rows_processed, rows_inserted, rows_skipped, duration_ms, error)
+   - `import_run_item` : Détail par ligne (row_id, status, inserted_rows, error, duration_ms)
+
+**Format de données attendu (HTML)** :
+- Tableau HTML avec colonnes : ID Relevé, Date relevé, Ref Client, Marque, Modèle, MAC, N° de série, Total NB, Total Couleur, Compteur du mois, Toner K/C/M/Y
+- Les toners sont affichés en pourcentage (ex: "85%") avec éventuellement du HTML supplémentaire
+
+**Exécution manuelle** :
+```bash
+# Mode dry-run (test sans insertion)
+IONOS_IMPORT_DRY_RUN=1 php scripts/import_ionos_cron.php
+
+# Exécution normale
+php scripts/import_ionos_cron.php
+
+# Avec URL personnalisée
+IONOS_URL=https://example.com/test_compteur.php php scripts/import_ionos_cron.php
+```
+
+**Configuration cron (toutes les 1 minute)** :
+- Identique à l'import SFTP (voir section précédente)
+- Utiliser le même crontab avec une ligne supplémentaire pour IONOS :
+  ```bash
+  * * * * * cd /var/www/html && /usr/bin/php scripts/import_ionos_cron.php >> /var/www/html/logs/ionos_import.log 2>&1
+  ```
+
+**Endpoint de statut** :
+- `/API/import/ionos_status.php` : Retourne dernier run et lignes en erreur
+
+**Endpoint trigger** :
+- `/API/import/ionos_trigger.php` : Déclenche l'import manuellement (POST avec CSRF token)
+
+**Notifications Dashboard** :
+- Affichage automatique sur `/public/dashboard.php` (tous utilisateurs, temporairement)
+- Badge de statut (OK/KO/Partiel/Inconnu)
+- Métriques : dernière exécution, lignes vues/traitées/insérées
+- Notifications toast pour les nouveaux runs réussis ou en erreur
+- Rafraîchissement automatique toutes les 30 secondes
+- Bouton de rafraîchissement manuel
+- Bouton "Lancer l'import" pour déclencher manuellement
+
+**Historique** :
+- Section "Historique des Imports (SFTP & IONOS)" dans `/public/profil.php` (Admin/Dirigeant uniquement)
+- Affichage des 50 derniers runs (SFTP + IONOS)
+- Colonnes : Date/Heure, Type, Statut, Fichiers/Lignes vus/traités, Lignes insérées, Durée, Détails
+
+---
+
 ### Scénario 3 : Création d'une livraison
 
 **Page déclencheuse** : `/public/dashboard.php` (clic sur bouton "Créer livraison")
@@ -1467,7 +1561,9 @@ php scripts/import_sftp_cron.php
 - Service : OSRM (Open Source Routing Machine)
 - Utilisation : Calcul d'itinéraires entre points sur la carte
 
-**Note** : Les fonctionnalités d'import SFTP et IONOS ont été supprimées et sont à reconstruire
+**Import IONOS** :
+- `IONOS_URL` : URL du script test_compteur.php (défaut: `https://cccomputer.fr/test_compteur.php`)
+- `IONOS_IMPORT_DRY_RUN` : Mode dry-run (1 pour activer, désactive insertion)
 
 **5. Sentry (monitoring) :**
 - Package : `sentry/sentry ^4.0`
