@@ -659,6 +659,249 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 padding: 1.25rem;
             }
         }
+
+        /* ====== Modal Facture ====== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            display: none;
+            flex-direction: column;
+            z-index: 1001;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: var(--bg-primary);
+            z-index: 10;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0.5rem;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .modal-form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-form-group label {
+            display: block;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .modal-form-group input,
+        .modal-form-group select,
+        .modal-form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            color: var(--text-primary);
+            background-color: var(--bg-secondary);
+            transition: all 0.2s;
+        }
+
+        .modal-form-group input:focus,
+        .modal-form-group select:focus,
+        .modal-form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .modal-form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .facture-lignes-container {
+            margin-top: 1.5rem;
+        }
+
+        .facture-lignes-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .facture-ligne {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .facture-ligne-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .facture-ligne-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .facture-ligne-field label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .facture-ligne-field input,
+        .facture-ligne-field select {
+            padding: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .facture-ligne-actions {
+            display: flex;
+            align-items: center;
+        }
+
+        .btn-remove-ligne {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .btn-remove-ligne:hover {
+            background: #dc2626;
+        }
+
+        .btn-add-ligne {
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .btn-add-ligne:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .facture-totaux {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 2px solid var(--border-color);
+        }
+
+        .facture-totaux-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            font-size: 1.1rem;
+        }
+
+        .facture-totaux-row.total {
+            font-weight: 700;
+            font-size: 1.25rem;
+            border-top: 2px solid var(--border-color);
+            margin-top: 0.5rem;
+            padding-top: 1rem;
+        }
+
+        .modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            position: sticky;
+            bottom: 0;
+            background: var(--bg-primary);
+        }
+
+        @media (max-width: 768px) {
+            .facture-ligne-row {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+
+            .modal {
+                max-width: 100%;
+                max-height: 100vh;
+                border-radius: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -839,6 +1082,82 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         </div>
     </div>
 
+    <!-- Modal Générer Facture -->
+    <div class="modal-overlay" id="factureModalOverlay" onclick="closeFactureModal()"></div>
+    <div class="modal" id="factureModal">
+        <div class="modal-header">
+            <h2 class="modal-title">Générer une facture</h2>
+            <button class="modal-close" onclick="closeFactureModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="factureForm" onsubmit="submitFactureForm(event)">
+                <div class="modal-form-row">
+                    <div class="modal-form-group">
+                        <label for="factureClient">Client <span style="color: #ef4444;">*</span></label>
+                        <select id="factureClient" name="factureClient" required>
+                            <option value="">Chargement...</option>
+                        </select>
+                    </div>
+                    <div class="modal-form-group">
+                        <label for="factureDate">Date de facture <span style="color: #ef4444;">*</span></label>
+                        <input type="date" id="factureDate" name="factureDate" required value="<?= date('Y-m-d') ?>">
+                    </div>
+                    <div class="modal-form-group">
+                        <label for="factureType">Type <span style="color: #ef4444;">*</span></label>
+                        <select id="factureType" name="factureType" required>
+                            <option value="Consommation">Consommation</option>
+                            <option value="Achat">Achat</option>
+                            <option value="Service">Service</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-form-row">
+                    <div class="modal-form-group">
+                        <label for="factureDateDebut">Date début période</label>
+                        <input type="date" id="factureDateDebut" name="factureDateDebut">
+                    </div>
+                    <div class="modal-form-group">
+                        <label for="factureDateFin">Date fin période</label>
+                        <input type="date" id="factureDateFin" name="factureDateFin">
+                    </div>
+                </div>
+
+                <div class="facture-lignes-container">
+                    <div class="facture-lignes-header">
+                        <h3 style="margin: 0; font-size: 1.1rem;">Lignes de facture</h3>
+                        <button type="button" class="btn-add-ligne" onclick="addFactureLigne()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 5v14M5 12h14"></path>
+                            </svg>
+                            Ajouter une ligne
+                        </button>
+                    </div>
+                    <div id="factureLignes"></div>
+                </div>
+
+                <div class="facture-totaux">
+                    <div class="facture-totaux-row">
+                        <span>Total HT :</span>
+                        <span><input type="number" id="factureMontantHT" name="montant_ht" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 600; width: 120px;"> €</span>
+                    </div>
+                    <div class="facture-totaux-row">
+                        <span>TVA (20%) :</span>
+                        <span><input type="number" id="factureTVA" name="tva" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 600; width: 120px; -moz-appearance: textfield;"> €</span>
+                    </div>
+                    <div class="facture-totaux-row total">
+                        <span>Total TTC :</span>
+                        <span><input type="number" id="factureMontantTTC" name="montant_ttc" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 700; width: 120px; font-size: 1.25rem;"> €</span>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeFactureModal()">Annuler</button>
+            <button type="submit" form="factureForm" class="btn btn-primary" id="btnGenererFacture">Générer la facture</button>
+        </div>
+    </div>
+
     <script>
         // Variables globales pour le graphique
         let statsChart = null;
@@ -848,10 +1167,231 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
          * Ouvre une section spécifique
          */
         function openSection(section) {
-            // TODO: Implémenter la navigation vers les différentes sections
-            console.log('Ouverture de la section:', section);
-            // Pour l'instant, on affiche juste un message
-            alert(`Section "${section}" - À implémenter`);
+            if (section === 'generer-facture') {
+                openFactureModal();
+            } else {
+                // TODO: Implémenter les autres sections
+                console.log('Ouverture de la section:', section);
+                alert(`Section "${section}" - À implémenter`);
+            }
+        }
+
+        /**
+         * Ouvre le modal de génération de facture
+         */
+        function openFactureModal() {
+            const modal = document.getElementById('factureModal');
+            const overlay = document.getElementById('factureModalOverlay');
+            if (modal && overlay) {
+                modal.classList.add('active');
+                overlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+                // Charger la liste des clients
+                loadClientsForFacture();
+            }
+        }
+
+        /**
+         * Ferme le modal de génération de facture
+         */
+        function closeFactureModal() {
+            const modal = document.getElementById('factureModal');
+            const overlay = document.getElementById('factureModalOverlay');
+            if (modal && overlay) {
+                modal.classList.remove('active');
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+                // Réinitialiser le formulaire
+                document.getElementById('factureForm').reset();
+                document.getElementById('factureLignes').innerHTML = '';
+                addFactureLigne();
+            }
+        }
+
+        /**
+         * Charge la liste des clients pour le select
+         */
+        async function loadClientsForFacture() {
+            try {
+                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000');
+                const data = await response.json();
+                
+                if (data.ok && data.clients) {
+                    const clientSelect = document.getElementById('factureClient');
+                    clientSelect.innerHTML = '<option value="">Sélectionner un client</option>';
+                    data.clients.forEach(client => {
+                        const option = document.createElement('option');
+                        option.value = client.id;
+                        option.textContent = `${client.name} (${client.code})`;
+                        clientSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des clients:', error);
+            }
+        }
+
+        /**
+         * Ajoute une ligne de facture
+         */
+        function addFactureLigne() {
+            const container = document.getElementById('factureLignes');
+            const ligneIndex = container.children.length;
+            const ligneDiv = document.createElement('div');
+            ligneDiv.className = 'facture-ligne';
+            ligneDiv.innerHTML = `
+                <div class="facture-ligne-row">
+                    <div class="facture-ligne-field">
+                        <label>Description</label>
+                        <input type="text" name="lignes[${ligneIndex}][description]" required placeholder="Description de la ligne">
+                    </div>
+                    <div class="facture-ligne-field">
+                        <label>Type</label>
+                        <select name="lignes[${ligneIndex}][type]" required>
+                            <option value="N&B">Noir et Blanc</option>
+                            <option value="Couleur">Couleur</option>
+                            <option value="Service">Service</option>
+                            <option value="Produit">Produit</option>
+                        </select>
+                    </div>
+                    <div class="facture-ligne-field">
+                        <label>Quantité</label>
+                        <input type="number" name="lignes[${ligneIndex}][quantite]" step="0.01" min="0" value="1" required>
+                    </div>
+                    <div class="facture-ligne-field">
+                        <label>Prix unitaire HT (€)</label>
+                        <input type="number" name="lignes[${ligneIndex}][prix_unitaire]" step="0.01" min="0" value="0" required>
+                    </div>
+                    <div class="facture-ligne-field">
+                        <label>Total HT (€)</label>
+                        <input type="number" name="lignes[${ligneIndex}][total_ht]" step="0.01" min="0" value="0" readonly class="ligne-total">
+                    </div>
+                    <div class="facture-ligne-actions">
+                        <button type="button" class="btn-remove-ligne" onclick="removeFactureLigne(this)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6L6 18M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(ligneDiv);
+            
+            // Ajouter les event listeners pour calculer le total
+            const inputs = ligneDiv.querySelectorAll('input[name*="[quantite]"], input[name*="[prix_unitaire]"]');
+            inputs.forEach(input => {
+                input.addEventListener('input', calculateLigneTotal);
+            });
+        }
+
+        /**
+         * Supprime une ligne de facture
+         */
+        function removeFactureLigne(btn) {
+            if (document.getElementById('factureLignes').children.length > 1) {
+                btn.closest('.facture-ligne').remove();
+                calculateFactureTotal();
+            }
+        }
+
+        /**
+         * Calcule le total d'une ligne
+         */
+        function calculateLigneTotal(e) {
+            const ligne = e.target.closest('.facture-ligne');
+            const quantite = parseFloat(ligne.querySelector('input[name*="[quantite]"]').value) || 0;
+            const prixUnitaire = parseFloat(ligne.querySelector('input[name*="[prix_unitaire]"]').value) || 0;
+            const total = quantite * prixUnitaire;
+            ligne.querySelector('.ligne-total').value = total.toFixed(2);
+            calculateFactureTotal();
+        }
+
+        /**
+         * Calcule le total de la facture
+         */
+        function calculateFactureTotal() {
+            let totalHT = 0;
+            document.querySelectorAll('.ligne-total').forEach(input => {
+                totalHT += parseFloat(input.value) || 0;
+            });
+            
+            const tauxTVA = 20; // TVA à 20%
+            const tva = totalHT * (tauxTVA / 100);
+            const totalTTC = totalHT + tva;
+            
+            document.getElementById('factureMontantHT').value = totalHT.toFixed(2);
+            document.getElementById('factureTVA').value = tva.toFixed(2);
+            document.getElementById('factureMontantTTC').value = totalTTC.toFixed(2);
+        }
+
+        /**
+         * Soumet le formulaire de facture
+         */
+        async function submitFactureForm(e) {
+            e.preventDefault();
+            
+            const form = document.getElementById('factureForm');
+            const formData = new FormData(form);
+            const data = {};
+            
+            // Convertir FormData en objet
+            for (let [key, value] of formData.entries()) {
+                if (key.startsWith('lignes[')) {
+                    const match = key.match(/lignes\[(\d+)\]\[(\w+)\]/);
+                    if (match) {
+                        const index = parseInt(match[1]);
+                        const field = match[2];
+                        if (!data.lignes) data.lignes = [];
+                        if (!data.lignes[index]) data.lignes[index] = {};
+                        data.lignes[index][field] = value;
+                    }
+                } else {
+                    data[key] = value;
+                }
+            }
+            
+            // Validation
+            if (!data.factureClient) {
+                alert('Veuillez sélectionner un client');
+                return;
+            }
+            
+            if (!data.lignes || data.lignes.length === 0) {
+                alert('Veuillez ajouter au moins une ligne de facture');
+                return;
+            }
+            
+            const btnSubmit = document.getElementById('btnGenererFacture');
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = 'Génération en cours...';
+            
+            try {
+                const response = await fetch('/API/factures_generer.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    alert('Facture générée avec succès !');
+                    if (result.pdf_url) {
+                        window.open(result.pdf_url, '_blank');
+                    }
+                    closeFactureModal();
+                } else {
+                    alert('Erreur : ' + (result.error || 'Erreur inconnue'));
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                alert('Erreur lors de la génération de la facture');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Générer la facture';
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -859,6 +1399,22 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
             // Initialisation de la section statistiques
             initStatsSection();
+
+            // Ajouter la première ligne de facture
+            addFactureLigne();
+
+            // Calculer le total initial
+            calculateFactureTotal();
+
+            // Fermer le modal avec Escape
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const modal = document.getElementById('factureModal');
+                    if (modal && modal.classList.contains('active')) {
+                        closeFactureModal();
+                    }
+                }
+            });
 
         });
 
