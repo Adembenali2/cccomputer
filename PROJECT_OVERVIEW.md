@@ -122,8 +122,13 @@ Les rôles sont stockés dans la table `utilisateurs` avec le champ `Emploi` (EN
 - Recherche avancée
 
 **2. Import des relevés**
+- **Import SFTP** : Import automatique depuis serveur SFTP (fichiers CSV)
+  - Format CSV clé/valeur (Champ,Valeur)
+  - Traitement automatique toutes les minutes (cron)
+  - Anti-doublon basé sur (mac_norm, Timestamp)
+  - Suppression automatique des fichiers après succès
+  - Logs détaillés dans `import_run` et `import_run_item`
 - **Import ancien** : Import depuis l'ancien système (table `compteur_relevee_ancien`)
-- **Note** : Les fonctionnalités d'import SFTP et IONOS ont été supprimées et sont à reconstruire
 
 **3. Calcul des dettes**
 - Basé sur la consommation entre deux relevés
@@ -964,8 +969,113 @@ chatroom_messages
 
 ---
 
-### Scénario 2 : Import automatique (supprimé)
-- Note : Les fonctionnalités d'import automatique SFTP et IONOS ont été supprimées et sont à reconstruire
+### Scénario 2 : Import automatique SFTP
+
+**Script** : `/scripts/import_sftp_cron.php`
+
+**Flow complet** :
+
+1. **Déclenchement** (cron toutes les 1 minute)
+   ```bash
+   * * * * * cd /path/to/cccomputer && php scripts/import_sftp_cron.php
+   ```
+
+2. **Vérification lock MySQL**
+   ```sql
+   SELECT GET_LOCK('import_sftp', 0)
+   ```
+   - Si verrou non acquis : Retour erreur + log, exit
+
+3. **Connexion SFTP**
+   - Lecture variables d'environnement : `SFTP_HOST`, `SFTP_USER`, `SFTP_PASS`, `SFTP_PORT`, `SFTP_DIR`
+   - Connexion via phpseclib
+   - Vérification répertoire accessible
+
+4. **Liste fichiers CSV**
+   - Filtre fichiers `.csv`
+   - Tri par nom (ordre stable)
+   - Limitation à 20 fichiers maximum
+
+5. **Traitement chaque fichier** :
+   - Téléchargement contenu
+   - Parsing CSV clé/valeur :
+     ```
+     Champ,Valeur
+     Timestamp,2025-12-16 13:45:00
+     MacAddress,00:26:73:46:97:CC
+     TotalPages,239192
+     ...
+     ```
+   - Validation champs minimum : `Timestamp`, `MacAddress`
+   - Normalisation MAC : `mac_norm = UPPER(REPLACE(MacAddress, ':', ''))`
+   - Vérification anti-doublon :
+     ```sql
+     SELECT 1 FROM compteur_relevee 
+     WHERE mac_norm = :mac_norm AND Timestamp = :timestamp 
+     LIMIT 1
+     ```
+   - Si absent → Insertion dans transaction :
+     - Conversion types (int pour nombres, datetime pour Timestamp)
+     - Insertion dans `compteur_relevee`
+     - `DateInsertion = NOW()` (automatique)
+   - Si succès → Suppression fichier sur SFTP
+   - Si erreur → Log erreur, fichier conservé
+
+6. **Journalisation** :
+   - Log principal dans `import_run` :
+     - `type: 'sftp'`
+     - `files_seen`, `files_processed`, `files_deleted`, `inserted_rows`
+     - `duration_ms`, `error`
+   - Log détaillé par fichier dans `import_run_item` (si table existe) :
+     - `filename`, `status` (success/error/skipped)
+     - `inserted_rows`, `error`, `duration_ms`
+
+7. **Libération lock**
+   ```sql
+   SELECT RELEASE_LOCK('import_sftp')
+   ```
+
+**Format CSV attendu** :
+- Première ligne optionnelle : `Champ,Valeur` (ignorée)
+- Lignes suivantes : `Clé,Valeur` (trim automatique)
+- Champs supportés : tous les champs de `compteur_relevee`
+- Validation stricte :
+  - `Timestamp` : Format `YYYY-MM-DD HH:MM:SS`
+  - Champs int : conversion automatique (NULL si non numérique)
+  - Valeurs vides → NULL
+
+**Mode dry-run** :
+- Variable `SFTP_IMPORT_DRY_RUN=1`
+- Désactive insertion DB et suppression fichiers
+- Log uniquement ce qui serait fait
+
+**Lancement manuel** :
+```bash
+# Test avec dry-run
+SFTP_IMPORT_DRY_RUN=1 php scripts/import_sftp_cron.php
+
+# Exécution normale
+php scripts/import_sftp_cron.php
+
+# Avec variables d'environnement
+SFTP_HOST=sftp.example.com \
+SFTP_USER=user \
+SFTP_PASS=password \
+SFTP_DIR=/inbox \
+php scripts/import_sftp_cron.php
+```
+
+**Configuration cron (toutes les 1 minute)** :
+```bash
+# Éditer crontab
+crontab -e
+
+# Ajouter la ligne (ajuster le chemin)
+* * * * * cd /path/to/cccomputer && /usr/bin/php scripts/import_sftp_cron.php >> /var/log/cccomputer_import_sftp.log 2>&1
+```
+
+**Endpoint de statut** :
+- `/API/import/sftp_status.php` : Retourne dernier run et fichiers en erreur
 
 ---
 
@@ -1408,10 +1518,16 @@ mysql -u user -p database < sql/railway.sql
 - `MYSQLUSER` : Utilisateur MySQL (défaut: root)
 - `MYSQLPASSWORD` : Mot de passe MySQL (défaut: vide)
 
+**Import SFTP** :
+- `SFTP_HOST` : Adresse du serveur SFTP (requis)
+- `SFTP_USER` : Nom d'utilisateur SFTP (requis)
+- `SFTP_PASS` : Mot de passe SFTP (requis, ne peut pas être vide)
+- `SFTP_PORT` : Port SFTP (défaut: 22)
+- `SFTP_DIR` : Répertoire SFTP à scanner (défaut: /inbox)
+- `SFTP_IMPORT_DRY_RUN` : Mode dry-run (1 pour activer, désactive insertion et suppression)
+
 **Sentry** (si configuré) :
 - `SENTRY_DSN` : DSN Sentry pour monitoring
-
-**Note** : Les variables d'environnement liées aux imports (SFTP_IMPORT_INTERVAL_SEC, IONOS_IMPORT_INTERVAL_SEC, credentials SFTP) ont été supprimées avec les fonctionnalités d'import.
 
 ---
 

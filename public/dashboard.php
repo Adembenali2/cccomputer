@@ -235,6 +235,60 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 <p class="card-count"><?= htmlspecialchars($nHistorique, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
         </div>
+
+        <?php
+        // Afficher la card Import SFTP uniquement pour les admins
+        $userRole = currentUserRole();
+        if ($userRole === 'Admin'):
+        ?>
+        <div class="sftp-import-card">
+            <div class="sftp-import-header">
+                <h3 class="sftp-import-title">Import SFTP</h3>
+                <button class="sftp-import-refresh" id="sftpRefreshBtn" aria-label="Rafraîchir le statut">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="sftp-import-content" id="sftpImportContent">
+                <div class="sftp-import-loading" id="sftpImportLoading">
+                    <span>Chargement...</span>
+                </div>
+                
+                <div class="sftp-import-status" id="sftpImportStatus" style="display: none;">
+                    <div class="sftp-status-badge" id="sftpStatusBadge">
+                        <span class="status-unknown">Inconnu</span>
+                    </div>
+                    
+                    <div class="sftp-import-metrics" id="sftpImportMetrics">
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Dernière exécution:</span>
+                            <span class="sftp-metric-value" id="sftpLastRun">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Fichiers traités:</span>
+                            <span class="sftp-metric-value" id="sftpFilesProcessed">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Fichiers supprimés:</span>
+                            <span class="sftp-metric-value" id="sftpFilesDeleted">—</span>
+                        </div>
+                        <div class="sftp-metric">
+                            <span class="sftp-metric-label">Lignes insérées:</span>
+                            <span class="sftp-metric-value" id="sftpInsertedRows">—</span>
+                        </div>
+                    </div>
+                    
+                    <div class="sftp-import-error" id="sftpImportError" style="display: none;">
+                        <strong>Erreur:</strong>
+                        <span id="sftpErrorText"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Popup Support -->
