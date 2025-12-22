@@ -138,6 +138,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     <div class="dashboard-wrapper">
         <div class="dashboard-header">
             <h2 class="dashboard-title">Tableau de Bord</h2>
+            <button class="btn-check-import" id="checkImportBtn" aria-label="Vérifier l'import">
+                Vérifier l'import
+            </button>
         </div>
 
         <div class="dashboard-grid">
@@ -240,131 +243,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             </div>
         </div>
 
-        <?php
-        // Afficher la card Import SFTP
-        // Pour limiter aux admins, décommenter les lignes suivantes:
-        // $userRole = currentUserRole();
-        // if ($userRole === 'Admin'):
-        ?>
-        <div class="sftp-import-card">
-            <div class="sftp-import-header">
-                <h3 class="sftp-import-title">Import SFTP</h3>
-                <div class="sftp-import-actions">
-                    <button class="sftp-import-trigger" id="sftpTriggerBtn" aria-label="Lancer l'import">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                        Lancer l'import
-                    </button>
-                    <button class="sftp-import-refresh" id="sftpRefreshBtn" aria-label="Rafraîchir le statut">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="sftp-import-content" id="sftpImportContent">
-                <div class="sftp-import-loading" id="sftpImportLoading">
-                    <span>Chargement...</span>
-                </div>
-                
-                <div class="sftp-import-status" id="sftpImportStatus" style="display: none;">
-                    <div class="sftp-status-badge" id="sftpStatusBadge">
-                        <span class="status-unknown">Inconnu</span>
-                    </div>
-                    
-                    <div class="sftp-import-metrics" id="sftpImportMetrics">
-                        <div class="sftp-metric">
-                            <span class="sftp-metric-label">Dernière exécution:</span>
-                            <span class="sftp-metric-value" id="sftpLastRun">—</span>
-                        </div>
-                        <div class="sftp-metric">
-                            <span class="sftp-metric-label">Fichiers traités:</span>
-                            <span class="sftp-metric-value" id="sftpFilesProcessed">—</span>
-                        </div>
-                        <div class="sftp-metric">
-                            <span class="sftp-metric-label">Fichiers supprimés:</span>
-                            <span class="sftp-metric-value" id="sftpFilesDeleted">—</span>
-                        </div>
-                        <div class="sftp-metric">
-                            <span class="sftp-metric-label">Lignes insérées:</span>
-                            <span class="sftp-metric-value" id="sftpInsertedRows">—</span>
-                        </div>
-                    </div>
-                    
-                    <div class="sftp-import-error" id="sftpImportError" style="display: none;">
-                        <strong>Erreur:</strong>
-                        <span id="sftpErrorText"></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php // endif; ?>
-        
-        <!-- Import IONOS Card -->
-        <?php
-        // Pour limiter aux admins, décommenter les lignes suivantes:
-        // $userRole = currentUserRole();
-        // if ($userRole === 'Admin'):
-        ?>
-        <div class="sftp-import-card ionos-import-card">
-            <div class="sftp-import-header">
-                <h3 class="sftp-import-title">Import IONOS</h3>
-                <div class="sftp-import-actions">
-                    <button class="sftp-import-trigger" id="ionosTriggerBtn" aria-label="Lancer l'import">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                        Lancer l'import
-                    </button>
-                    <button class="sftp-import-refresh" id="ionosRefreshBtn" aria-label="Rafraîchir le statut">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="sftp-import-content" id="ionosImportContent">
-                <div class="sftp-import-loading" id="ionosImportLoading">
-                    <span>Chargement...</span>
-                </div>
-                
-                <div class="sftp-import-status" id="ionosImportStatus" style="display: none;">
-                    <div class="sftp-status-badge" id="ionosStatusBadge">
-                        <span class="status-unknown">Inconnu</span>
-                    </div>
-                    
-                    <div class="sftp-import-metrics" id="ionosImportMetrics">
-                        <div class="sftp-metric">
-                            <span class="sftp-metric-label">Dernière exécution:</span>
-                            <span class="sftp-metric-value" id="ionosLastRun">—</span>
-                        </div>
-                        <div class="sftp-metric">
-                            <span class="sftp-metric-label">Lignes vues:</span>
-                            <span class="sftp-metric-value" id="ionosRowsSeen">—</span>
-                        </div>
-                        <div class="sftp-metric">
-                            <span class="sftp-metric-label">Lignes traitées:</span>
-                            <span class="sftp-metric-value" id="ionosRowsProcessed">—</span>
-                        </div>
-                        <div class="sftp-metric">
-                            <span class="sftp-metric-label">Lignes insérées:</span>
-                            <span class="sftp-metric-value" id="ionosRowsInserted">—</span>
-                        </div>
-                    </div>
-                    
-                    <div class="sftp-import-error" id="ionosImportError" style="display: none;">
-                        <strong>Erreur:</strong>
-                        <span id="ionosErrorText"></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php // endif; ?>
     </div>
 
     <!-- Popup Support -->
@@ -1731,7 +1609,125 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
     })();
 
-    // --- Import SFTP Status (Admin uniquement) ---
+    // --- Vérification Import (SFTP + IONOS) ---
+    (function(){
+        const checkImportBtn = document.getElementById('checkImportBtn');
+        if (!checkImportBtn) return;
+        
+        checkImportBtn.addEventListener('click', async function() {
+            checkImportBtn.disabled = true;
+            const originalText = checkImportBtn.textContent;
+            checkImportBtn.textContent = 'Vérification...';
+            
+            try {
+                // Charger les statuts SFTP et IONOS en parallèle
+                const [sftpResponse, ionosResponse] = await Promise.all([
+                    fetch('/API/import/sftp_status.php', { cache: 'no-store', credentials: 'same-origin' }).catch(() => null),
+                    fetch('/API/import/ionos_status.php', { cache: 'no-store', credentials: 'same-origin' }).catch(() => null)
+                ]);
+                
+                // Traiter SFTP
+                if (sftpResponse && sftpResponse.ok) {
+                    const sftpData = await sftpResponse.json();
+                    if (sftpData.ok && sftpData.has_run && sftpData.lastRun) {
+                        const run = sftpData.lastRun;
+                        const status = run.status || 'UNKNOWN';
+                        const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                        const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
+                        
+                        if (status === 'RUN_OK') {
+                            showNotification(
+                                '✅ Import SFTP réussi',
+                                `${run.files_processed} ${filesText} importé(s) en ${durationSeconds}s`,
+                                'success'
+                            );
+                        } else if (status === 'PARTIAL') {
+                            showNotification(
+                                '⚠️ Import SFTP partiel',
+                                `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
+                                'info'
+                            );
+                        } else if (status === 'RUN_FAILED') {
+                            showNotification(
+                                '❌ Erreur import SFTP',
+                                run.error || 'Échec lors de l\'import',
+                                'error'
+                            );
+                        } else {
+                            showNotification(
+                                '⚠️ Import SFTP inconnu',
+                                'Aucune information disponible',
+                                'info'
+                            );
+                        }
+                    } else {
+                        showNotification(
+                            '⚠️ Import SFTP',
+                            'Aucune exécution enregistrée',
+                            'info'
+                        );
+                    }
+                }
+                
+                // Traiter IONOS
+                if (ionosResponse && ionosResponse.ok) {
+                    const ionosData = await ionosResponse.json();
+                    if (ionosData.ok && ionosData.has_run && ionosData.lastRun) {
+                        const run = ionosData.lastRun;
+                        const status = run.status || 'UNKNOWN';
+                        const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
+                        const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
+                        
+                        if (status === 'RUN_OK') {
+                            showNotification(
+                                '✅ Import IONOS réussi',
+                                `${run.rows_processed} ${rowsText} importée(s) en ${durationSeconds}s`,
+                                'success'
+                            );
+                        } else if (status === 'PARTIAL') {
+                            showNotification(
+                                '⚠️ Import IONOS partiel',
+                                `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
+                                'info'
+                            );
+                        } else if (status === 'RUN_FAILED') {
+                            showNotification(
+                                '❌ Erreur import IONOS',
+                                run.error || 'Échec lors de l\'import',
+                                'error'
+                            );
+                        } else {
+                            showNotification(
+                                '⚠️ Import IONOS inconnu',
+                                'Aucune information disponible',
+                                'info'
+                            );
+                        }
+                    } else {
+                        showNotification(
+                            '⚠️ Import IONOS',
+                            'Aucune exécution enregistrée',
+                            'info'
+                        );
+                    }
+                }
+                
+            } catch (error) {
+                console.error('[Import] Erreur:', error);
+                showNotification(
+                    '❌ Erreur',
+                    'Impossible de vérifier les imports: ' + error.message,
+                    'error'
+                );
+            } finally {
+                checkImportBtn.disabled = false;
+                checkImportBtn.textContent = originalText;
+            }
+        });
+    })();
+    
+    // --- Ancien code Import SFTP (supprimé) ---
+    /*
     (function(){
         const content = document.getElementById('sftpImportContent');
         const loading = document.getElementById('sftpImportLoading');
@@ -2031,8 +2027,10 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         });
     })();
+    */
     
-    // === Import IONOS ===
+    // --- Ancien code Import IONOS (supprimé) ---
+    /*
     (function() {
         const content = document.getElementById('ionosImportContent');
         const loading = document.getElementById('ionosImportLoading');
@@ -2296,6 +2294,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         });
     })();
+    */
 
     </script>
 </body>
