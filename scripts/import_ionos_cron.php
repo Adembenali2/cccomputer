@@ -452,14 +452,30 @@ try {
                     // Donc on DOIT insérer une MacAddress qui, après UPPER() et suppression des ':', fait max 12 caractères hex
                     // On utilise TOUJOURS la version normalisée nettoyée (macNorm), jamais l'original qui peut contenir des caractères invalides
                     
+                    // IMPORTANT: Toujours utiliser macNorm (nettoyé) pour éviter que MySQL génère une mac_norm > 12 chars
+                    // MySQL génère mac_norm avec: REPLACE(UPPER(MacAddress), ':', '')
+                    // macNorm est déjà nettoyé (seulement hex 0-9A-F) et tronqué à max 12 caractères
+                    
                     // Si la MAC normalisée fait 12 caractères hex, reformater en format standard XX:XX:XX:XX:XX:XX
                     if (strlen($macNorm) === 12 && preg_match('/^[0-9A-F]{12}$/', $macNorm)) {
                         $macAddressToInsert = implode(':', str_split($macNorm, 2));
                     } else {
-                        // Si moins de 12 caractères (ou autre), utiliser directement macNorm (sans séparateurs)
-                        // Cela garantit que MySQL générera mac_norm = macNorm (déjà nettoyé et tronqué à 12 max)
+                        // Si moins de 12 caractères, utiliser directement macNorm (sans séparateurs)
+                        // Cela garantit que MySQL générera mac_norm = macNorm exactement
                         $macAddressToInsert = $macNorm;
                     }
+                    
+                    // Double vérification de sécurité: s'assurer que ce qu'on insère ne générera jamais > 12 chars
+                    // Si on insère "XX:XX:XX:XX:XX:XX", MySQL fait REPLACE(UPPER(...), ':', '') = "XXXXXXXXXXXX" (12 chars) ✓
+                    // Si on insère "26730184E0", MySQL fait REPLACE(UPPER(...), ':', '') = "26730184E0" (10 chars) ✓
+                    $testMacNormLength = strlen(str_replace(':', '', strtoupper($macAddressToInsert)));
+                    if ($testMacNormLength > 12) {
+                        // Ceci ne devrait jamais arriver, mais sécurité supplémentaire
+                        $macAddressToInsert = substr(str_replace(':', '', strtoupper($macAddressToInsert)), 0, 12);
+                        logMessage("  ⚠⚠ SECURITE: MacAddress corrigée pour éviter dépassement (original: $macAddress)", 'WARN');
+                    }
+                    
+                    logMessage("  → Insertion avec MacAddress='$macAddressToInsert' (normalisé depuis: $macAddress, macNorm: $macNorm)");
                     
                     // Insertion dans une transaction
                     if (!$dryRun) {
@@ -570,7 +586,7 @@ try {
             logMessage("Erreurs: " . count($stats['errors']), 'WARN');
             exit(1);
         } else {
-            exit(0);
+        exit(0);
         }
         
     } finally {
