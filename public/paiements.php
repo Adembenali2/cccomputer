@@ -546,6 +546,119 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 height: 300px;
             }
         }
+
+        /* ====== Sections Grid ====== */
+        .sections-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .section-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--accent-primary);
+        }
+
+        .section-card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .section-card-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .section-card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .section-card-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .section-card-description {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .section-card-btn {
+            padding: 0.75rem 1.25rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            margin-top: auto;
+        }
+
+        .section-card-btn:hover {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+            transform: translateX(4px);
+        }
+
+        .section-card-btn svg {
+            transition: transform 0.2s ease;
+        }
+
+        .section-card-btn:hover svg {
+            transform: translateX(2px);
+        }
+
+        @media (max-width: 768px) {
+            .sections-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .section-card {
+                padding: 1.25rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -557,8 +670,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         <!-- Header Section -->
         <div class="paiement-header">
             <div class="paiement-header-content">
-                <h1>Paiement</h1>
-                <p>Enregistrez un nouveau paiement pour un client</p>
+                <h1>Paiements & Factures</h1>
+                <p>Gérez les paiements et factures de vos clients</p>
             </div>
             <div class="paiement-header-icon">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -625,120 +738,104 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             </div>
         </div>
 
-        <!-- Main Form Card -->
-        <div class="paiement-card">
-            <h2 class="paiement-card-title">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                    <line x1="1" y1="10" x2="23" y2="10"></line>
-                </svg>
-                Informations de facturation
-            </h2>
-            <p class="paiement-card-subtitle">Remplissez les informations ci-dessous pour enregistrer le paiement</p>
-            <hr class="paiement-card-divider" />
-            
-            <form id="paiementForm" class="paiement-form" novalidate>
-                <!-- Row 1: Nom et Email -->
-                <div class="paiement-form-row">
-                    <div class="paiement-form-group">
-                        <label for="nom">
-                            Nom
-                            <span class="required">*</span>
-                        </label>
-                        <input 
-                            type="text" 
-                            id="nom" 
-                            name="nom" 
-                            required 
-                            placeholder="Nom complet du client"
-                            autocomplete="name"
-                        >
-                        <span class="input-hint">Nom complet du client</span>
-                    </div>
-
-                    <div class="paiement-form-group">
-                        <label for="email">
-                            Email
-                            <span class="required">*</span>
-                        </label>
-                        <input 
-                            type="email" 
-                            id="email" 
-                            name="email" 
-                            required 
-                            placeholder="email@exemple.com"
-                            autocomplete="email"
-                        >
-                        <span class="input-hint">Adresse email du client</span>
-                    </div>
-                </div>
-
-                <!-- Row 2: Référence et Montant -->
-                <div class="paiement-form-row">
-                    <div class="paiement-form-group">
-                        <label for="reference">Référence client</label>
-                        <input 
-                            type="text" 
-                            id="reference" 
-                            name="reference" 
-                            placeholder="Référence optionnelle"
-                            autocomplete="off"
-                        >
-                        <span class="input-hint">Numéro de référence client (optionnel)</span>
-                    </div>
-
-                    <div class="paiement-form-group">
-                        <label for="montant">
-                            Montant
-                            <span class="required">*</span>
-                        </label>
-                        <div class="montant-wrapper">
-                            <input 
-                                type="number" 
-                                id="montant" 
-                                name="montant" 
-                                step="0.01" 
-                                min="0" 
-                                required
-                                placeholder="0.00"
-                            >
-                        </div>
-                        <span class="input-hint">Montant du paiement en euros</span>
-                    </div>
-                </div>
-
-                <!-- Row 3: Commentaire (Full Width) -->
-                <div class="paiement-form-group full-width">
-                    <label for="commentaire">Commentaire</label>
-                    <textarea 
-                        id="commentaire" 
-                        name="commentaire" 
-                        placeholder="Ajoutez un commentaire optionnel sur ce paiement..."
-                        rows="4"
-                    ></textarea>
-                    <span class="input-hint">Commentaire ou notes supplémentaires (optionnel)</span>
-                </div>
-
-                <!-- Form Actions -->
-                <div class="paiement-form-actions">
-                    <button type="button" class="btn btn-secondary" id="btnReset">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
-                            <path d="M21 3v5h-5"></path>
-                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
-                            <path d="M3 21v-5h5"></path>
+        <!-- Sections Grid -->
+        <div class="sections-grid">
+            <!-- Section Paiements -->
+            <div class="section-card" id="sectionPaiements">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                            <line x1="1" y1="10" x2="23" y2="10"></line>
                         </svg>
-                        Réinitialiser
-                    </button>
-                    <button type="submit" class="btn btn-primary" id="btnPayer">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    </div>
+                    <h3 class="section-card-title">Paiements</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Consultez et gérez tous les paiements enregistrés</p>
+                    <button class="section-card-btn" onclick="openSection('paiements')">
+                        Voir les paiements
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14"></path>
                             <path d="M12 5l7 7-7 7"></path>
                         </svg>
-                        Enregistrer le paiement
                     </button>
                 </div>
-            </form>
+            </div>
+
+            <!-- Section Factures -->
+            <div class="section-card" id="sectionFactures">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </div>
+                    <h3 class="section-card-title">Factures</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Liste de toutes les factures générées</p>
+                    <button class="section-card-btn" onclick="openSection('factures')">
+                        Voir les factures
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Section Générer facture -->
+            <div class="section-card" id="sectionGenererFacture">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h3 class="section-card-title">Générer facture</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Créez une nouvelle facture pour un client</p>
+                    <button class="section-card-btn" onclick="openSection('generer-facture')">
+                        Créer une facture
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Section Payer -->
+            <div class="section-card" id="sectionPayer">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                    <h3 class="section-card-title">Payer</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Enregistrez un nouveau paiement</p>
+                    <button class="section-card-btn" onclick="openSection('payer')">
+                        Enregistrer un paiement
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -747,181 +844,22 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         let statsChart = null;
         let currentData = null;
 
+        /**
+         * Ouvre une section spécifique
+         */
+        function openSection(section) {
+            // TODO: Implémenter la navigation vers les différentes sections
+            console.log('Ouverture de la section:', section);
+            // Pour l'instant, on affiche juste un message
+            alert(`Section "${section}" - À implémenter`);
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('paiementForm');
             const messageContainer = document.getElementById('messageContainer');
-            const btnPayer = document.getElementById('btnPayer');
-            const btnReset = document.getElementById('btnReset');
 
             // Initialisation de la section statistiques
             initStatsSection();
 
-            /**
-             * Affiche un message à l'utilisateur
-             * @param {string} text - Texte du message
-             * @param {string} type - Type de message (success, error, warning)
-             */
-            function showMessage(text, type = 'success') {
-                const iconMap = {
-                    success: '<svg class="message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>',
-                    error: '<svg class="message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>',
-                    warning: '<svg class="message-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>'
-                };
-
-                messageContainer.innerHTML = `
-                    <div class="message ${type}">
-                        ${iconMap[type] || ''}
-                        <span>${text}</span>
-                    </div>
-                `;
-
-                // Auto-hide après 5 secondes
-                setTimeout(() => {
-                    const message = messageContainer.querySelector('.message');
-                    if (message) {
-                        message.style.opacity = '0';
-                        message.style.transform = 'translateY(-10px)';
-                        message.style.transition = 'all 0.3s ease-out';
-                        setTimeout(() => {
-                            messageContainer.innerHTML = '';
-                        }, 300);
-                    }
-                }, 5000);
-            }
-
-            /**
-             * Valide le formulaire
-             * @returns {boolean} - True si valide, false sinon
-             */
-            function validateForm() {
-                const nom = document.getElementById('nom').value.trim();
-                const email = document.getElementById('email').value.trim();
-                const montant = document.getElementById('montant').value;
-                
-                // Validation nom
-                if (!nom) {
-                    showMessage('Le nom est requis.', 'error');
-                    document.getElementById('nom').focus();
-                    return false;
-                }
-
-                if (nom.length < 2) {
-                    showMessage('Le nom doit contenir au moins 2 caractères.', 'error');
-                    document.getElementById('nom').focus();
-                    return false;
-                }
-                
-                // Validation email
-                if (!email) {
-                    showMessage('L\'email est requis.', 'error');
-                    document.getElementById('email').focus();
-                    return false;
-                }
-                
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(email)) {
-                    showMessage('Veuillez entrer un email valide.', 'error');
-                    document.getElementById('email').focus();
-                    return false;
-                }
-
-                // Validation montant
-                if (!montant || parseFloat(montant) <= 0) {
-                    showMessage('Le montant doit être supérieur à 0.', 'error');
-                    document.getElementById('montant').focus();
-                    return false;
-                }
-
-                if (parseFloat(montant) > 999999.99) {
-                    showMessage('Le montant est trop élevé (maximum 999 999,99 €).', 'error');
-                    document.getElementById('montant').focus();
-                    return false;
-                }
-                
-                return true;
-            }
-
-            /**
-             * Formate le montant avec 2 décimales
-             */
-            function formatMontant() {
-                const montantInput = document.getElementById('montant');
-                montantInput.addEventListener('blur', function() {
-                    const value = parseFloat(this.value);
-                    if (!isNaN(value) && value >= 0) {
-                        this.value = value.toFixed(2);
-                    }
-                });
-            }
-
-            /**
-             * Gère la soumission du formulaire
-             */
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                if (!validateForm()) {
-                    return;
-                }
-
-                // Désactiver le bouton et afficher l'état de chargement
-                btnPayer.disabled = true;
-                btnPayer.classList.add('loading');
-                btnPayer.textContent = '';
-
-                // Simulation d'un traitement (à remplacer par un appel API réel)
-                setTimeout(() => {
-                    // Récupérer les données du formulaire
-                    const formData = {
-                        nom: document.getElementById('nom').value.trim(),
-                        email: document.getElementById('email').value.trim(),
-                        reference: document.getElementById('reference').value.trim(),
-                        montant: parseFloat(document.getElementById('montant').value),
-                        commentaire: document.getElementById('commentaire').value.trim()
-                    };
-
-                    // Afficher un message de succès
-                    showMessage(
-                        `Paiement de ${formData.montant.toFixed(2)} € enregistré avec succès pour ${formData.nom} !`, 
-                        'success'
-                    );
-
-                    // Réinitialiser le formulaire
-                    form.reset();
-                    
-                    // Réactiver le bouton
-                    btnPayer.disabled = false;
-                    btnPayer.classList.remove('loading');
-                    btnPayer.innerHTML = `
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14"></path>
-                            <path d="M12 5l7 7-7 7"></path>
-                        </svg>
-                        Enregistrer le paiement
-                    `;
-
-                    // Focus sur le premier champ
-                    document.getElementById('nom').focus();
-                }, 1500);
-            });
-
-            /**
-             * Gère la réinitialisation du formulaire
-             */
-            btnReset.addEventListener('click', function() {
-                if (confirm('Êtes-vous sûr de vouloir réinitialiser le formulaire ?')) {
-                    form.reset();
-                    messageContainer.innerHTML = '';
-                    document.getElementById('nom').focus();
-                    showMessage('Formulaire réinitialisé.', 'warning');
-                }
-            });
-
-            // Initialiser le formatage du montant
-            formatMontant();
-
-            // Focus automatique sur le premier champ
-            document.getElementById('nom').focus();
         });
 
         /**
