@@ -1232,6 +1232,171 @@ function decode_msg($row) {
             </form>
         </section>
     <?php endif; ?>
+    
+    <?php if ($isAdminOrDirigeant): ?>
+        <!-- Section Historique des Imports SFTP -->
+        <section class="panel import-history-panel" id="importHistoryPanel">
+            <h2 class="panel-title">Historique des Imports SFTP</h2>
+            <p class="panel-subtitle">Historique complet des exécutions d'import SFTP avec détails (fichiers traités, lignes insérées, erreurs, etc.).</p>
+            
+            <?php
+            // Récupérer l'historique des imports SFTP
+            $importHistory = safeFetchAll($pdo, "
+                SELECT 
+                    id,
+                    ran_at,
+                    imported,
+                    skipped,
+                    ok,
+                    msg
+                FROM import_run
+                WHERE msg LIKE '%\"type\":\"sftp\"%'
+                ORDER BY ran_at DESC
+                LIMIT 50
+            ", [], 'import_history_sftp');
+            
+            // Fonction pour parser le message JSON et extraire les informations
+            function parseImportMessage($msg): array {
+                if (empty($msg)) {
+                    return [
+                        'type' => 'sftp',
+                        'files_seen' => 0,
+                        'files_processed' => 0,
+                        'files_deleted' => 0,
+                        'inserted_rows' => 0,
+                        'duration_ms' => 0,
+                        'error' => null,
+                        'message' => null
+                    ];
+                }
+                
+                $data = json_decode($msg, true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    return [
+                        'type' => 'sftp',
+                        'files_seen' => 0,
+                        'files_processed' => 0,
+                        'files_deleted' => 0,
+                        'inserted_rows' => 0,
+                        'duration_ms' => 0,
+                        'error' => 'Erreur de parsing JSON',
+                        'message' => null
+                    ];
+                }
+                
+                return [
+                    'type' => $data['type'] ?? 'sftp',
+                    'files_seen' => (int)($data['files_seen'] ?? 0),
+                    'files_processed' => (int)($data['files_processed'] ?? 0),
+                    'files_deleted' => (int)($data['files_deleted'] ?? 0),
+                    'inserted_rows' => (int)($data['inserted_rows'] ?? 0),
+                    'duration_ms' => (int)($data['duration_ms'] ?? 0),
+                    'error' => $data['error'] ?? null,
+                    'message' => $data['message'] ?? null
+                ];
+            }
+            
+            // Fonction pour déterminer le statut
+            function getImportStatus($ok, $msgData): string {
+                if (!$ok || !empty($msgData['error'])) {
+                    return 'error';
+                }
+                if ($msgData['files_processed'] > 0 && $msgData['files_processed'] === $msgData['files_deleted']) {
+                    return 'success';
+                }
+                if ($msgData['files_processed'] > 0) {
+                    return 'partial';
+                }
+                return 'empty';
+            }
+            ?>
+            
+            <div class="table-responsive">
+                <table class="users-table" role="table" aria-label="Historique des imports SFTP">
+                    <thead>
+                        <tr>
+                            <th scope="col">Date/Heure</th>
+                            <th scope="col">Statut</th>
+                            <th scope="col">Fichiers vus</th>
+                            <th scope="col">Fichiers traités</th>
+                            <th scope="col">Fichiers supprimés</th>
+                            <th scope="col">Lignes insérées</th>
+                            <th scope="col">Durée</th>
+                            <th scope="col">Détails</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($importHistory)): ?>
+                            <tr>
+                                <td colspan="8" class="aucun" role="cell">Aucun import enregistré.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($importHistory as $run): ?>
+                                <?php 
+                                $msgData = parseImportMessage($run['msg']);
+                                $status = getImportStatus((int)$run['ok'] === 1, $msgData);
+                                $statusLabels = [
+                                    'success' => 'Succès',
+                                    'error' => 'Erreur',
+                                    'partial' => 'Partiel',
+                                    'empty' => 'Aucun fichier'
+                                ];
+                                $statusClasses = [
+                                    'success' => 'success',
+                                    'error' => 'muted',
+                                    'partial' => 'role',
+                                    'empty' => 'muted'
+                                ];
+                                $statusLabel = $statusLabels[$status] ?? 'Inconnu';
+                                $statusClass = $statusClasses[$status] ?? 'muted';
+                                
+                                // Formater la durée
+                                $durationSeconds = $msgData['duration_ms'] > 0 ? ($msgData['duration_ms'] / 1000) : 0;
+                                $durationFormatted = $durationSeconds > 0 ? number_format($durationSeconds, 1) . 's' : '—';
+                                ?>
+                                <tr role="row">
+                                    <td data-label="Date/Heure" role="cell">
+                                        <?= formatDateTime($run['ran_at'], 'd/m/Y H:i:s') ?>
+                                    </td>
+                                    <td data-label="Statut" role="cell">
+                                        <span class="badge <?= $statusClass ?>"><?= h($statusLabel) ?></span>
+                                    </td>
+                                    <td data-label="Fichiers vus" role="cell">
+                                        <?= h((string)$msgData['files_seen']) ?>
+                                    </td>
+                                    <td data-label="Fichiers traités" role="cell">
+                                        <?= h((string)$msgData['files_processed']) ?>
+                                    </td>
+                                    <td data-label="Fichiers supprimés" role="cell">
+                                        <?= h((string)$msgData['files_deleted']) ?>
+                                    </td>
+                                    <td data-label="Lignes insérées" role="cell">
+                                        <?= h((string)$msgData['inserted_rows']) ?>
+                                    </td>
+                                    <td data-label="Durée" role="cell">
+                                        <?= h($durationFormatted) ?>
+                                    </td>
+                                    <td data-label="Détails" role="cell">
+                                        <?php if ($msgData['error']): ?>
+                                            <span class="text-muted" title="<?= h($msgData['error']) ?>" style="cursor: help;">
+                                                ⚠️ Erreur
+                                            </span>
+                                        <?php elseif ($msgData['message']): ?>
+                                            <span class="text-muted" title="<?= h($msgData['message']) ?>" style="cursor: help;">
+                                                ℹ️ Info
+                                            </span>
+                                        <?php else: ?>
+                                            —
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    <?php endif; ?>
 </main>
 
 <?php if ($editing): ?>
