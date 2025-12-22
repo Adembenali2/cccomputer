@@ -1,3 +1,8 @@
+<?php
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/auth_role.php';
+authorize_page('paiements', []); // Accessible à tous les utilisateurs connectés
+?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -426,9 +431,6 @@
 </head>
 <body>
     <?php
-    require_once __DIR__ . '/../includes/auth.php';
-    require_once __DIR__ . '/../includes/auth_role.php';
-    authorize_page('paiements', []); // Accessible à tous les utilisateurs connectés
     require_once __DIR__ . '/../source/templates/header.php';
     ?>
 
