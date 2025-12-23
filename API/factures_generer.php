@@ -1,7 +1,7 @@
 <?php
 /**
  * API pour générer une facture et son PDF
- * Version : Design ajusté (Décalage Logo/SSS, Numéro à droite, Tableau centré)
+ * Version : Logo Agrandi + Tableau Continu (Totaux intégrés dans la grille)
  */
 
 require_once __DIR__ . '/../includes/auth.php';
@@ -15,17 +15,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     $pdo = getPdo();
     
-    // Vérifier les tables
+    // Vérification basique des tables
     try {
-        $stmt = $pdo->query("SHOW TABLES LIKE 'factures'");
-        if ($stmt->rowCount() === 0) jsonResponse(['ok' => false, 'error' => 'Table factures manquante'], 500);
-        $stmt = $pdo->query("SHOW TABLES LIKE 'facture_lignes'");
-        if ($stmt->rowCount() === 0) jsonResponse(['ok' => false, 'error' => 'Table facture_lignes manquante'], 500);
+        $pdo->query("SELECT 1 FROM factures LIMIT 1");
+        $pdo->query("SELECT 1 FROM facture_lignes LIMIT 1");
     } catch (PDOException $e) {
-        jsonResponse(['ok' => false, 'error' => 'Erreur DB: ' . $e->getMessage()], 500);
+        jsonResponse(['ok' => false, 'error' => 'Tables introuvables ou erreur DB'], 500);
     }
     
-    // Récupérer et valider les données
+    // Récupération des données
     $input = file_get_contents('php://input');
     $data = json_decode($input, true);
     
@@ -33,16 +31,15 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
     }
     
-    // Récupérer Client
+    // Client
     $stmt = $pdo->prepare("SELECT * FROM clients WHERE id = :id LIMIT 1");
     $stmt->execute([':id' => (int)$data['factureClient']]);
     $client = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$client) jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
     
-    // Générer Numéro
+    // Calculs et Sauvegarde DB
     $numeroFacture = generateFactureNumber($pdo);
     
-    // Calculs
     $montantHT = 0;
     foreach ($data['lignes'] as $ligne) $montantHT += (float)($ligne['total_ht'] ?? 0);
     $tva = $montantHT * 0.20;
@@ -51,7 +48,7 @@ try {
     $pdo->beginTransaction();
     
     try {
-        // Insert Facture
+        // Insertion Facture
         $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, 'brouillon', :created_by)");
         $stmt->execute([
             ':id_client' => (int)$data['factureClient'],
@@ -65,7 +62,7 @@ try {
         ]);
         $factureId = $pdo->lastInsertId();
         
-        // Insert Lignes
+        // Insertion Lignes
         $stmtLigne = $pdo->prepare("INSERT INTO facture_lignes (id_facture, description, type, quantite, prix_unitaire_ht, total_ht, ordre) VALUES (:id_facture, :description, :type, :quantite, :prix_unitaire_ht, :total_ht, :ordre)");
         foreach ($data['lignes'] as $i => $l) {
             $stmtLigne->execute([
@@ -79,10 +76,10 @@ try {
             ]);
         }
         
-        // Générer PDF
+        // Génération PDF
         $pdfPath = generateFacturePDF($pdo, $factureId, $client, $data);
         
-        // Update PDF Path
+        // Mise à jour chemin PDF
         $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfPath, $factureId]);
         
         $pdo->commit();
@@ -105,7 +102,7 @@ function generateFactureNumber($pdo) {
 }
 
 /**
- * FONCTION DE GÉNÉRATION PDF MISE À JOUR
+ * GÉNÉRATION PDF - LOGO AGRANDI & TABLEAU COMPLET
  */
 function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data): string {
     require_once __DIR__ . '/../vendor/autoload.php';
@@ -124,24 +121,23 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $pdf->SetTitle('Facture ' . $facture['numero']);
     $pdf->setPrintHeader(false);
     $pdf->setPrintFooter(false);
-    $pdf->SetMargins(15, 10, 15); // Marges Gauche/Droite de 15mm
-    $pdf->SetAutoPageBreak(false);
+    $pdf->SetMargins(15, 10, 15);
+    $pdf->SetAutoPageBreak(false); // Gestion manuelle du bas de page
     $pdf->AddPage();
     $pdf->SetTextColor(0, 0, 0);
 
     // ==========================================
-    // 1. LOGO (Haut Gauche - Y=10)
+    // 1. LOGO (PLUS GRAND : Largeur 60mm)
     // ==========================================
     $logoPath = __DIR__ . '/../assets/logos/logo1.png';
     if (file_exists($logoPath)) {
-        // Image à X=15, Y=10
-        $pdf->Image($logoPath, 15, 10, 40, 0, 'PNG');
+        // Image(file, x, y, w, h) -> w=60mm (au lieu de 40)
+        $pdf->Image($logoPath, 15, 10, 60, 0, 'PNG');
     }
 
     // ==========================================
-    // 2. EXPÉDITEUR (Haut Droite - DÉCALÉ Y=25)
+    // 2. EXPÉDITEUR (Aligné Droite, Décalé Y=25)
     // ==========================================
-    // On force le curseur plus bas pour le texte "SSS"
     $pdf->SetY(25); 
     $pdf->SetFont('helvetica', '', 10);
     $pdf->Cell(0, 5, 'SSS international', 0, 1, 'R');
@@ -149,9 +145,9 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $pdf->Cell(0, 5, '93100 Stains', 0, 1, 'R');
 
     // ==========================================
-    // 3. CLIENT (Gauche - Y=50)
+    // 3. CLIENT (Gauche - Y=55)
     // ==========================================
-    $pdf->SetY(50); // Position verticale fixe pour le client
+    $pdf->SetY(55); // Un peu plus bas car le logo est plus grand
     $pdf->SetFont('helvetica', 'B', 11);
     $pdf->Cell(0, 5, 'Client :', 0, 1, 'L');
     $pdf->SetFont('helvetica', '', 10);
@@ -161,34 +157,30 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     if (!empty($client['siret'])) $pdf->Cell(0, 5, 'SIRET: ' . $client['siret'], 0, 1, 'L');
 
     // ==========================================
-    // 4. DATE (Gauche) et NUMÉRO (Strictement Droite)
+    // 4. DATE & NUMÉRO
     // ==========================================
-    $pdf->SetY(80); // On descend avant le tableau
+    $pdf->SetY(85);
     $pdf->SetFont('helvetica', '', 11);
-    
-    // Date à gauche
     $pdf->Cell(90, 6, 'Date : ' . date('d/m/Y', strtotime($facture['date_facture'])), 0, 0, 'L');
     
-    // Numéro STRICTEMENT à droite
     $pdf->SetFont('helvetica', 'B', 11);
-    // Cell(0) indique "jusqu'à la marge de droite", align 'R' plaque le texte à droite
     $pdf->Cell(0, 6, 'Facture N° : ' . $facture['numero'], 0, 1, 'R');
 
-    $pdf->Ln(5); // Espace avant tableau
+    $pdf->Ln(5); 
 
     // ==========================================
-    // 5. TABLEAU (Centré)
+    // 5. TABLEAU (Continu avec les totaux)
     // ==========================================
     $pdf->SetFont('helvetica', 'B', 10);
     $pdf->SetFillColor(240, 240, 240);
     
-    // Largeurs (Total 180mm)
+    // Définition des largeurs (Total 180mm)
+    // Desc(80) + Type(25) + Qty(20) + Prix(25) + Total(30)
     $wDesc = 80; $wType = 25; $wQty = 20; $wPrix = 25; $wTotal = 30;
     
-    // Pour centrer sur A4 (210mm) avec un tableau de 180mm, X doit commencer à 15mm.
-    // SetMargins(15...) le fait déjà, mais on force X pour être sûr.
-    $pdf->SetX(15);
+    $pdf->SetX(15); // Centrage forcé (Marge gauche)
     
+    // Header
     $pdf->Cell($wDesc, 8, 'Description', 1, 0, 'L', true);
     $pdf->Cell($wType, 8, 'Type', 1, 0, 'C', true);
     $pdf->Cell($wQty, 8, 'Qté', 1, 0, 'C', true);
@@ -197,9 +189,13 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     
     $pdf->SetFont('helvetica', '', 9);
     
+    // Lignes
     foreach ($lignes as $ligne) {
-        $pdf->SetX(15); // Re-centrage à chaque ligne
-        $desc = mb_substr($ligne['description'], 0, 60);
+        $pdf->SetX(15);
+        
+        // On retire la troncation trop stricte pour avoir le texte "complet"
+        // Si le texte est très long, on le coupe gentiment à 80 caractères
+        $desc = mb_substr($ligne['description'], 0, 80); 
         
         $pdf->Cell($wDesc, 7, $desc, 1, 0, 'L');
         $pdf->Cell($wType, 7, $ligne['type'], 1, 0, 'C');
@@ -209,41 +205,40 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     }
     
     // ==========================================
-    // 6. TOTAUX (Alignés sous les colonnes de droite)
+    // 6. TOTAUX INTÉGRÉS (Grille continue)
     // ==========================================
-    $pdf->SetFont('helvetica', '', 10);
-    // Offset X = Marge(15) + Desc(80) + Type(25) + Qty(20) + Prix(25) = 165
-    $xTotaux = 165; 
+    // On fusionne les 4 premières colonnes (80+25+20+25 = 150mm)
+    // Cela crée une ligne qui ferme parfaitement le tableau
     
-    $pdf->SetX(15); // Reset pour être propre, puis on utilise Cell pour pousser ou SetX direct
+    $wMerged = $wDesc + $wType + $wQty + $wPrix; // 150mm
+    
+    $pdf->SetFont('helvetica', '', 10);
     
     // Total HT
-    $pdf->SetX($xTotaux); // Positionnement précis
-    $pdf->Cell(25, 6, 'Total HT', 1, 0, 'R'); // Largeur match "Prix unit" (approx) ou juste label
+    $pdf->SetX(15);
+    $pdf->Cell($wMerged, 6, 'Total HT', 1, 0, 'R'); // Bordure '1' pour fermer la grille
     $pdf->Cell($wTotal, 6, number_format($facture['montant_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
     
     // TVA
-    $pdf->SetX($xTotaux);
-    $pdf->Cell(25, 6, 'TVA (20%)', 1, 0, 'R');
+    $pdf->SetX(15);
+    $pdf->Cell($wMerged, 6, 'TVA (20%)', 1, 0, 'R');
     $pdf->Cell($wTotal, 6, number_format($facture['tva'], 2, ',', ' ') . ' €', 1, 1, 'R');
     
-    // TTC
+    // Total TTC (en Gras)
     $pdf->SetFont('helvetica', 'B', 11);
-    $pdf->SetX($xTotaux);
-    $pdf->Cell(25, 8, 'Total TTC', 1, 0, 'R');
+    $pdf->SetX(15);
+    $pdf->Cell($wMerged, 8, 'Total TTC', 1, 0, 'R');
     $pdf->Cell($wTotal, 8, number_format($facture['montant_ttc'], 2, ',', ' ') . ' €', 1, 1, 'R');
 
     // ==========================================
-    // 7. IBAN
+    // 7. IBAN & FOOTER
     // ==========================================
     $pdf->Ln(5);
-    $pdf->SetX(15); // Retour à la marge gauche
+    $pdf->SetX(15);
     $pdf->SetFont('helvetica', '', 10);
     $pdf->Cell(0, 6, 'IBAN : FR76 1027 8063 4700 0229 4870 249 - BIC : CMCIFR2A', 0, 1, 'L');
 
-    // ==========================================
-    // 8. FOOTER (Fixe en bas)
-    // ==========================================
+    // Footer Fixe
     $pdf->SetY(-35); 
     $pdf->SetFont('helvetica', '', 8);
     
