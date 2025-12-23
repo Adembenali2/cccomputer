@@ -254,6 +254,23 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
         throw new RuntimeException('Le répertoire de stockage des factures n\'est pas accessible en écriture: ' . $uploadDir);
     }
     
+    // Informations de l'entreprise
+    $companyInfo = [
+        'nom' => 'SSS international',
+        'adresse' => '7, rue pierre brolet',
+        'code_postal' => '93100',
+        'ville' => 'Stains',
+        'iban' => 'FR76 1027 8063 4700 0229 4870 249',
+        'bic' => 'CMCIFR2A',
+        'raison_sociale' => 'Camson Group',
+        'adresse_complete' => '97, Boulevard Maurice Berteaux - SANNOIS SASU',
+        'siret' => '947 820 585 00018',
+        'rcs' => 'RCS Versailles',
+        'tva' => 'TVA FR81947820585',
+        'site' => 'www.camsongroup.fr',
+        'telephone' => '01 55 99 00 69'
+    ];
+    
     // Créer le PDF avec TCPDF
     // TCPDF utilise 'P' pour portrait, 'mm' pour millimètres, 'A4' pour le format
     $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
@@ -281,43 +298,46 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     
     // Logo en haut à gauche
     $logoPath = __DIR__ . '/../assets/logos/logo.png';
+    $logoY = 15;
+    $logoHeight = 0;
     if (file_exists($logoPath)) {
-        $pdf->Image($logoPath, 15, 15, 40, 0, '', '', '', false, 300, '', false, false, 0);
+        $pdf->Image($logoPath, 15, $logoY, 40, 0, '', '', '', false, 300, '', false, false, 0);
+        $logoHeight = 25; // Hauteur approximative du logo
     }
     
-    // En-tête à droite
-    $pdf->SetY(15);
-    $pdf->SetX(140);
-    $pdf->SetFont('helvetica', 'B', 20);
-    $pdf->Cell(55, 10, 'FACTURE', 0, 1, 'R');
-    
-    $pdf->SetX(140);
+    // Informations entreprise à droite, alignées avec le logo
+    $pdf->SetY($logoY);
+    $pdf->SetX(100);
     $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(55, 5, 'CC Computer', 0, 1, 'R');
+    $pdf->Cell(95, 5, $companyInfo['nom'], 0, 1, 'R');
+    $pdf->SetX(100);
+    $pdf->Cell(95, 5, $companyInfo['adresse'], 0, 1, 'R');
+    $pdf->SetX(100);
+    $pdf->Cell(95, 5, $companyInfo['code_postal'] . ' ' . $companyInfo['ville'], 0, 1, 'R');
     
-    $pdf->SetX(140);
-    $pdf->Cell(55, 5, 'Adresse de l\'entreprise', 0, 1, 'R');
+    // Espacement après logo et infos entreprise
+    $pdf->SetY($logoY + max($logoHeight, 15));
+    $pdf->Ln(5);
     
-    $pdf->SetX(140);
-    $pdf->Cell(55, 5, 'Email: contact@cccomputer.fr', 0, 1, 'R');
+    // Date à gauche et numéro de facture à droite (en face)
+    $pdf->SetFont('helvetica', '', 10);
+    $pdf->Cell(90, 5, 'Date : ' . date('d/m/Y', strtotime($facture['date_facture'])), 0, 0, 'L');
     
-    // Espacement après l'en-tête
-    $pdf->Ln(15);
-    
-    // Informations facture avec fond bleu clair pour le numéro
+    // Numéro de facture avec fond bleu clair à droite
     $pdf->SetFont('helvetica', 'B', 12);
     $pdf->SetFillColor($bleuClair[0], $bleuClair[1], $bleuClair[2]);
-    $pdf->SetTextColor(0, 0, 0);
-    $pdf->Cell(0, 8, 'Facture N°: ' . $facture['numero'], 0, 1, 'L', true);
+    $pdf->SetX(105);
+    $pdf->Cell(90, 8, 'Facture N° : ' . $facture['numero'], 0, 1, 'R', true);
+    
+    // Période si disponible
+    if ($facture['date_debut_periode'] && $facture['date_fin_periode']) {
+        $pdf->SetFillColor(255, 255, 255);
+        $pdf->SetFont('helvetica', '', 10);
+        $pdf->Cell(0, 5, 'Période : ' . date('d/m/Y', strtotime($facture['date_debut_periode'])) . ' au ' . date('d/m/Y', strtotime($facture['date_fin_periode'])), 0, 1, 'L');
+    }
     
     $pdf->SetFillColor(255, 255, 255);
-    $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(0, 5, 'Date: ' . date('d/m/Y', strtotime($facture['date_facture'])), 0, 1, 'L');
-    
-    if ($facture['date_debut_periode'] && $facture['date_fin_periode']) {
-        $pdf->Cell(0, 5, 'Période: ' . date('d/m/Y', strtotime($facture['date_debut_periode'])) . ' au ' . date('d/m/Y', strtotime($facture['date_fin_periode'])), 0, 1, 'L');
-    }
-    $pdf->Ln(8);
+    $pdf->Ln(10);
     
     // Informations client
     $pdf->SetFont('helvetica', 'B', 12);
@@ -372,10 +392,18 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $pdf->Cell(160, 8, 'Total TTC:', 1, 0, 'R');
     $pdf->Cell(30, 8, number_format($facture['montant_ttc'], 2, ',', ' ') . ' €', 1, 1, 'R');
     
-    // Pied de page
-    $pdf->Ln(15);
+    // IBAN et BIC en dessous du tableau à gauche
+    $pdf->Ln(10);
     $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(0, 5, 'Merci de votre confiance !', 0, 1, 'C');
+    $pdf->Cell(0, 5, 'IBAN : ' . $companyInfo['iban'] . ' - BIC : ' . $companyInfo['bic'], 0, 1, 'L');
+    
+    // Pied de page - Conditions de règlement et informations entreprise
+    $pdf->Ln(10);
+    $pdf->SetFont('helvetica', '', 9);
+    $pdf->Cell(0, 5, 'Conditions de règlement : Toutes nos factures sont payables au comptant net sans escompte. Taux de pénalités de retard applicable : 3 fois le taux légal. Indemnité forfaitaire pour frais de recouvrement : 40 €', 0, 1, 'L');
+    $pdf->Ln(2);
+    $pdf->Cell(0, 5, $companyInfo['raison_sociale'] . ' - ' . $companyInfo['adresse_complete'] . ' - Siret ' . $companyInfo['siret'] . ' ' . $companyInfo['rcs'] . ' ' . $companyInfo['tva'], 0, 1, 'L');
+    $pdf->Cell(0, 5, $companyInfo['site'] . ' - ' . $companyInfo['telephone'], 0, 1, 'L');
     
     // Générer le nom du fichier
     $filename = 'facture_' . $facture['numero'] . '_' . date('YmdHis') . '.pdf';
