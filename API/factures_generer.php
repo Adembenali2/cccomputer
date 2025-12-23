@@ -268,55 +268,92 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $pdf->setPrintHeader(false);
     $pdf->setPrintFooter(false);
     
+    // Marges
+    $pdf->SetMargins(15, 15, 15);
+    $pdf->SetAutoPageBreak(true, 15);
+    
     // Ajouter une page
     $pdf->AddPage();
     
     // Couleurs
     $pdf->SetTextColor(0, 0, 0);
+    $bleuClair = [173, 216, 230]; // RGB pour le fond bleu clair du numéro de facture
     
-    // En-tête
-    $pdf->SetFont('helvetica', 'B', 20);
-    $pdf->Cell(0, 10, 'FACTURE', 0, 1, 'R');
-    
-    $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(0, 5, 'CC Computer', 0, 1, 'R');
-    $pdf->Cell(0, 5, 'Adresse de l\'entreprise', 0, 1, 'R');
-    $pdf->Cell(0, 5, 'Email: contact@cccomputer.fr', 0, 1, 'R');
-    $pdf->Ln(10);
-    
-    // Informations facture
-    $pdf->SetFont('helvetica', 'B', 12);
-    $pdf->Cell(0, 8, 'Facture N°: ' . $facture['numero'], 0, 1);
-    $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(0, 5, 'Date: ' . date('d/m/Y', strtotime($facture['date_facture'])), 0, 1);
-    if ($facture['date_debut_periode'] && $facture['date_fin_periode']) {
-        $pdf->Cell(0, 5, 'Période: ' . date('d/m/Y', strtotime($facture['date_debut_periode'])) . ' au ' . date('d/m/Y', strtotime($facture['date_fin_periode'])), 0, 1);
+    // Logo en haut à gauche
+    $logoPath = __DIR__ . '/../assets/logos/logo.png';
+    if (file_exists($logoPath)) {
+        $pdf->Image($logoPath, 15, 15, 40, 0, '', '', '', false, 300, '', false, false, 0);
     }
-    $pdf->Ln(5);
+    
+    // En-tête à droite
+    $pdf->SetY(15);
+    $pdf->SetX(140);
+    $pdf->SetFont('helvetica', 'B', 20);
+    $pdf->Cell(55, 10, 'FACTURE', 0, 1, 'R');
+    
+    $pdf->SetX(140);
+    $pdf->SetFont('helvetica', '', 10);
+    $pdf->Cell(55, 5, 'CC Computer', 0, 1, 'R');
+    
+    $pdf->SetX(140);
+    $pdf->Cell(55, 5, 'Adresse de l\'entreprise', 0, 1, 'R');
+    
+    $pdf->SetX(140);
+    $pdf->Cell(55, 5, 'Email: contact@cccomputer.fr', 0, 1, 'R');
+    
+    // Espacement après l'en-tête
+    $pdf->Ln(15);
+    
+    // Informations facture avec fond bleu clair pour le numéro
+    $pdf->SetFont('helvetica', 'B', 12);
+    $pdf->SetFillColor($bleuClair[0], $bleuClair[1], $bleuClair[2]);
+    $pdf->SetTextColor(0, 0, 0);
+    $pdf->Cell(0, 8, 'Facture N°: ' . $facture['numero'], 0, 1, 'L', true);
+    
+    $pdf->SetFillColor(255, 255, 255);
+    $pdf->SetFont('helvetica', '', 10);
+    $pdf->Cell(0, 5, 'Date: ' . date('d/m/Y', strtotime($facture['date_facture'])), 0, 1, 'L');
+    
+    if ($facture['date_debut_periode'] && $facture['date_fin_periode']) {
+        $pdf->Cell(0, 5, 'Période: ' . date('d/m/Y', strtotime($facture['date_debut_periode'])) . ' au ' . date('d/m/Y', strtotime($facture['date_fin_periode'])), 0, 1, 'L');
+    }
+    $pdf->Ln(8);
     
     // Informations client
     $pdf->SetFont('helvetica', 'B', 12);
-    $pdf->Cell(0, 8, 'Client:', 0, 1);
+    $pdf->Cell(0, 8, 'Client:', 0, 1, 'L');
     $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(0, 5, $client['raison_sociale'], 0, 1);
-    $pdf->Cell(0, 5, $client['adresse'], 0, 1);
-    $pdf->Cell(0, 5, $client['code_postal'] . ' ' . $client['ville'], 0, 1);
+    $pdf->Cell(0, 5, $client['raison_sociale'], 0, 1, 'L');
+    if (!empty($client['adresse'])) {
+        $pdf->Cell(0, 5, $client['adresse'], 0, 1, 'L');
+    }
+    if (!empty($client['code_postal']) || !empty($client['ville'])) {
+        $pdf->Cell(0, 5, trim(($client['code_postal'] ?? '') . ' ' . ($client['ville'] ?? '')), 0, 1, 'L');
+    }
     if (!empty($client['siret'])) {
-        $pdf->Cell(0, 5, 'SIRET: ' . $client['siret'], 0, 1);
+        $pdf->Cell(0, 5, 'SIRET: ' . $client['siret'], 0, 1, 'L');
     }
     $pdf->Ln(10);
     
     // Tableau des lignes
     $pdf->SetFont('helvetica', 'B', 10);
-    $pdf->Cell(80, 8, 'Description', 1, 0, 'L');
-    $pdf->Cell(30, 8, 'Type', 1, 0, 'C');
-    $pdf->Cell(25, 8, 'Qté', 1, 0, 'C');
-    $pdf->Cell(25, 8, 'Prix unit.', 1, 0, 'R');
-    $pdf->Cell(30, 8, 'Total HT', 1, 1, 'R');
+    $pdf->SetFillColor(240, 240, 240);
+    $pdf->Cell(80, 8, 'Description', 1, 0, 'L', true);
+    $pdf->Cell(30, 8, 'Type', 1, 0, 'C', true);
+    $pdf->Cell(25, 8, 'Qté', 1, 0, 'C', true);
+    $pdf->Cell(25, 8, 'Prix unit.', 1, 0, 'R', true);
+    $pdf->Cell(30, 8, 'Total HT', 1, 1, 'R', true);
     
+    $pdf->SetFillColor(255, 255, 255);
     $pdf->SetFont('helvetica', '', 9);
     foreach ($lignes as $ligne) {
-        $pdf->Cell(80, 7, $ligne['description'], 1, 0, 'L');
+        // Gérer les descriptions longues
+        $description = mb_substr($ligne['description'], 0, 50);
+        if (mb_strlen($ligne['description']) > 50) {
+            $description .= '...';
+        }
+        
+        $pdf->Cell(80, 7, $description, 1, 0, 'L');
         $pdf->Cell(30, 7, $ligne['type'], 1, 0, 'C');
         $pdf->Cell(25, 7, number_format($ligne['quantite'], 2, ',', ' '), 1, 0, 'C');
         $pdf->Cell(25, 7, number_format($ligne['prix_unitaire_ht'], 2, ',', ' ') . ' €', 1, 0, 'R');
@@ -336,8 +373,8 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $pdf->Cell(30, 8, number_format($facture['montant_ttc'], 2, ',', ' ') . ' €', 1, 1, 'R');
     
     // Pied de page
-    $pdf->Ln(10);
-    $pdf->SetFont('helvetica', '', 9);
+    $pdf->Ln(15);
+    $pdf->SetFont('helvetica', '', 10);
     $pdf->Cell(0, 5, 'Merci de votre confiance !', 0, 1, 'C');
     
     // Générer le nom du fichier
