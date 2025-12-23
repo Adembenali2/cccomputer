@@ -81,6 +81,21 @@ try {
         // Génération PDF
         $pdfWebPath = generateFacturePDF($pdo, $factureId, $client, $data);
         
+        // Vérifier que le fichier existe vraiment avant de le stocker dans la DB
+        $baseUploadDir = __DIR__ . '/../uploads';
+        $facturesDir = $baseUploadDir . '/factures';
+        $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
+        $actualFilePath = $facturesDir . '/' . $relativePath;
+        
+        if (!file_exists($actualFilePath)) {
+            error_log('ERREUR CRITIQUE: Le fichier PDF n\'existe pas après génération: ' . $actualFilePath);
+            error_log('Chemin web retourné: ' . $pdfWebPath);
+            error_log('Chemin relatif: ' . $relativePath);
+            throw new RuntimeException('Le fichier PDF n\'a pas pu être créé ou n\'existe pas: ' . $actualFilePath);
+        }
+        
+        error_log('Vérification finale: Le fichier PDF existe bien: ' . $actualFilePath . ' (Taille: ' . filesize($actualFilePath) . ' bytes)');
+        
         // Mise à jour chemin PDF (on stocke le chemin web relatif)
         $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfWebPath, $factureId]);
         

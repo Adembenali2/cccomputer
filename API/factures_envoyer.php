@@ -102,23 +102,38 @@ try {
     $pdfPath = null;
     
     // Essayer plusieurs chemins possibles
-    $baseDir = dirname(__DIR__); // Racine du projet (un niveau au-dessus de API)
+    // Le pdfWebPath est de la forme: /uploads/factures/2025/facture_XXX.pdf
+    // Dans factures_generer.php, le fichier est créé dans: __DIR__ . '/../uploads/factures/YYYY/'
+    // Donc on doit utiliser exactement le même pattern
+    
+    // Pattern principal (identique à factures_generer.php)
+    $baseUploadDir = __DIR__ . '/../uploads';
+    $facturesDir = $baseUploadDir . '/factures';
+    
+    // Extraire l'année et le nom du fichier depuis le chemin web
+    // pdfWebPath = /uploads/factures/2025/facture_XXX.pdf
+    // On veut: 2025/facture_XXX.pdf
+    $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
+    
     $possiblePaths = [
+        // Chemin principal (identique à factures_generer.php)
+        $facturesDir . '/' . $relativePath,
+        // Chemin avec realpath
+        realpath($facturesDir) . '/' . $relativePath,
         // Chemin depuis la racine du projet
-        $baseDir . $pdfWebPath,
-        // Chemin relatif depuis le dossier API
-        __DIR__ . '/..' . $pdfWebPath,
+        dirname(__DIR__) . $pdfWebPath,
         // Chemin depuis la racine du document
         ($_SERVER['DOCUMENT_ROOT'] ?? '') . $pdfWebPath,
+        // Chemin relatif depuis le dossier API
+        __DIR__ . '/..' . $pdfWebPath,
         // Chemin absolu si déjà absolu
         $pdfWebPath
     ];
     
-    // Ajouter aussi le chemin avec realpath si possible
-    $realBaseDir = realpath($baseDir);
-    if ($realBaseDir !== false) {
-        $possiblePaths[] = $realBaseDir . $pdfWebPath;
-    }
+    // Filtrer les chemins null (realpath peut retourner false)
+    $possiblePaths = array_filter($possiblePaths, function($path) {
+        return $path !== false && !empty($path);
+    });
     
     error_log('Recherche du PDF - chemin web: ' . $pdfWebPath);
     error_log('Base directory: ' . $baseDir);
