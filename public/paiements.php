@@ -2069,8 +2069,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         async function runDiagnostic() {
             try {
                 console.log('Démarrage du diagnostic...');
-                // Utiliser le chemin complet avec le domaine pour éviter les problèmes de routage
-                const apiUrl = window.location.origin + '/API/factures_diagnostic.php';
+                // Utiliser l'API factures_liste avec le paramètre diagnostic
+                const apiUrl = '/API/factures_liste.php?diagnostic=1';
                 console.log('URL de l\'API:', apiUrl);
                 const response = await fetch(apiUrl, {
                     method: 'GET',
@@ -2103,22 +2103,23 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 const result = await response.json();
                 console.log('Réponse JSON reçue:', result);
                 
-                if (result.ok) {
+                if (result.ok && result.diagnostic) {
+                    const diag = result.diagnostic;
                     console.log('=== DIAGNOSTIC PDF ===');
-                    console.log('Informations système:', result.system_info);
-                    console.log('Factures analysées:', result.factures);
+                    console.log('Informations système:', diag.system_info);
+                    console.log('Factures analysées:', diag.factures);
                     
                     // Afficher dans une alerte formatée
                     let message = '=== DIAGNOSTIC PDF ===\n\n';
-                    message += 'DOCUMENT_ROOT: ' + (result.system_info.DOCUMENT_ROOT || 'Non défini') + '\n';
-                    message += '__DIR__: ' + result.system_info['__DIR__'] + '\n';
-                    message += 'dirname(__DIR__): ' + result.system_info['dirname(__DIR__)'] + '\n';
-                    message += '/app existe: ' + (result.system_info['/app exists'] ? 'Oui' : 'Non') + '\n';
-                    message += '/var/www/html existe: ' + (result.system_info['/var/www/html exists'] ? 'Oui' : 'Non') + '\n\n';
+                    message += 'DOCUMENT_ROOT: ' + (diag.system_info.DOCUMENT_ROOT || 'Non défini') + '\n';
+                    message += '__DIR__: ' + diag.system_info['__DIR__'] + '\n';
+                    message += 'dirname(__DIR__): ' + diag.system_info['dirname(__DIR__)'] + '\n';
+                    message += '/app existe: ' + (diag.system_info['/app exists'] ? 'Oui' : 'Non') + '\n';
+                    message += '/var/www/html existe: ' + (diag.system_info['/var/www/html exists'] ? 'Oui' : 'Non') + '\n\n';
                     
-                    if (result.factures && result.factures.length > 0) {
+                    if (diag.factures && diag.factures.length > 0) {
                         message += '=== FACTURES ===\n';
-                        result.factures.forEach((facture, index) => {
+                        diag.factures.forEach((facture, index) => {
                             message += `\n${index + 1}. Facture ${facture.numero} (ID: ${facture.facture_id})\n`;
                             message += `   Chemin DB: ${facture.pdf_path_db}\n`;
                             message += `   Fichier trouvé: ${facture.file_found ? 'OUI' : 'NON'}\n`;
@@ -2132,11 +2133,14 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                             }
                         });
                     } else {
-                        message += 'Aucune facture trouvée dans la base de données.\n';
+                        message += 'Aucune facture avec PDF trouvée dans la base de données.\n';
                     }
                     
                     alert(message);
                     console.log('Diagnostic complet. Voir la console pour plus de détails.');
+                } else if (result.ok) {
+                    alert('Diagnostic activé mais aucune information de diagnostic retournée. Vérifiez la console.');
+                    console.log('Réponse complète:', result);
                 } else {
                     const errorMsg = result.error || 'Erreur inconnue';
                     console.error('Erreur API:', errorMsg);

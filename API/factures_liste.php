@@ -64,11 +64,89 @@ try {
         ];
     }
     
-    jsonResponse([
+    // Ajouter les informations de diagnostic si demandé
+    $includeDiagnostic = isset($_GET['diagnostic']) && $_GET['diagnostic'] === '1';
+    
+    $response = [
         'ok' => true,
         'factures' => $formatted,
         'total' => count($formatted)
-    ]);
+    ];
+    
+    if ($includeDiagnostic) {
+        // Informations système pour le diagnostic
+        $systemInfo = [
+            'DOCUMENT_ROOT' => $_SERVER['DOCUMENT_ROOT'] ?? 'Non défini',
+            '__DIR__' => __DIR__,
+            'dirname(__DIR__)' => dirname(__DIR__),
+            '/app exists' => is_dir('/app'),
+            '/var/www/html exists' => is_dir('/var/www/html'),
+            'PHP version' => PHP_VERSION,
+            'Server software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Non défini'
+        ];
+        
+        // Tester les chemins pour chaque facture
+        $diagnosticResults = [];
+        foreach ($formatted as $facture) {
+            if (empty($facture['pdf_path'])) continue;
+            
+            $pdfWebPath = $facture['pdf_path'];
+            $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
+            
+            $result = [
+                'facture_id' => $facture['id'],
+                'numero' => $facture['numero'],
+                'pdf_path_db' => $pdfWebPath,
+                'paths_tested' => [],
+                'file_found' => false,
+                'actual_path' => null
+            ];
+            
+            // Tester plusieurs chemins possibles
+            $possibleBaseDirs = [];
+            $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+            if ($docRoot !== '' && is_dir($docRoot)) {
+                $possibleBaseDirs[] = $docRoot;
+            }
+            $projectDir = dirname(__DIR__);
+            if (is_dir($projectDir)) {
+                $possibleBaseDirs[] = $projectDir;
+            }
+            if (is_dir('/app')) {
+                $possibleBaseDirs[] = '/app';
+            }
+            if (is_dir('/var/www/html')) {
+                $possibleBaseDirs[] = '/var/www/html';
+            }
+            
+            foreach ($possibleBaseDirs as $baseDir) {
+                $testPath = $baseDir . '/uploads/factures/' . $relativePath;
+                $result['paths_tested'][] = [
+                    'base_dir' => $baseDir,
+                    'full_path' => $testPath,
+                    'exists' => file_exists($testPath),
+                    'is_file' => is_file($testPath),
+                    'readable' => is_readable($testPath),
+                    'size' => file_exists($testPath) ? filesize($testPath) : 0
+                ];
+                
+                if (file_exists($testPath) && is_file($testPath)) {
+                    $result['file_found'] = true;
+                    $result['actual_path'] = $testPath;
+                    break;
+                }
+            }
+            
+            $diagnosticResults[] = $result;
+        }
+        
+        $response['diagnostic'] = [
+            'system_info' => $systemInfo,
+            'factures' => $diagnosticResults
+        ];
+    }
+    
+    jsonResponse($response);
     
 } catch (PDOException $e) {
     error_log('factures_liste.php SQL error: ' . $e->getMessage());
