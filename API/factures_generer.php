@@ -151,8 +151,38 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $facture = $pdo->query("SELECT * FROM factures WHERE id = $factureId")->fetch(PDO::FETCH_ASSOC);
 
     // Setup Dossier
-    $uploadDir = __DIR__ . '/../uploads/factures/' . date('Y');
-    if (!is_dir($uploadDir)) @mkdir($uploadDir, 0755, true);
+    $baseUploadDir = __DIR__ . '/../uploads';
+    $facturesDir = $baseUploadDir . '/factures';
+    $uploadDir = $facturesDir . '/' . date('Y');
+    
+    // Créer le répertoire de base uploads s'il n'existe pas
+    if (!is_dir($baseUploadDir)) {
+        $created = @mkdir($baseUploadDir, 0755, true);
+        if (!$created) {
+            throw new RuntimeException('Impossible de créer le répertoire de base uploads: ' . $baseUploadDir);
+        }
+    }
+    
+    // Créer le répertoire factures s'il n'existe pas
+    if (!is_dir($facturesDir)) {
+        $created = @mkdir($facturesDir, 0755, true);
+        if (!$created) {
+            throw new RuntimeException('Impossible de créer le répertoire factures: ' . $facturesDir);
+        }
+    }
+    
+    // Créer le répertoire de l'année s'il n'existe pas
+    if (!is_dir($uploadDir)) {
+        $created = @mkdir($uploadDir, 0755, true);
+        if (!$created) {
+            throw new RuntimeException('Impossible de créer le répertoire de stockage des factures: ' . $uploadDir);
+        }
+    }
+    
+    // Vérifier que le répertoire est accessible en écriture
+    if (!is_writable($uploadDir)) {
+        throw new RuntimeException('Le répertoire de stockage des factures n\'est pas accessible en écriture: ' . $uploadDir);
+    }
     
     // Setup TCPDF
     $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
@@ -292,7 +322,43 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
 
     // Sauvegarde
     $filename = 'facture_' . $facture['numero'] . '_' . date('YmdHis') . '.pdf';
-    $pdf->Output($uploadDir . '/' . $filename, 'F');
-    return '/uploads/factures/' . date('Y') . '/' . $filename;
+    $filepath = $uploadDir . '/' . $filename;
+    
+    // Log pour débogage
+    error_log('Génération PDF - Chemin complet: ' . $filepath);
+    error_log('Génération PDF - Répertoire existe: ' . (is_dir($uploadDir) ? 'Oui' : 'Non'));
+    error_log('Génération PDF - Répertoire accessible en écriture: ' . (is_writable($uploadDir) ? 'Oui' : 'Non'));
+    
+    // Sauvegarder le PDF
+    try {
+        $pdf->Output($filepath, 'F');
+    } catch (Exception $e) {
+        error_log('Erreur lors de la sauvegarde du PDF: ' . $e->getMessage());
+        throw new RuntimeException('Erreur lors de la sauvegarde du PDF: ' . $e->getMessage());
+    }
+    
+    // Vérifier que le fichier a bien été créé
+    if (!file_exists($filepath)) {
+        error_log('ERREUR: Le fichier PDF n\'existe pas après sauvegarde: ' . $filepath);
+        error_log('Répertoire parent: ' . dirname($filepath));
+        error_log('Répertoire parent existe: ' . (is_dir(dirname($filepath)) ? 'Oui' : 'Non'));
+        throw new RuntimeException('Le fichier PDF n\'a pas pu être créé: ' . $filepath);
+    }
+    
+    // Vérifier que le fichier n'est pas vide
+    $fileSize = filesize($filepath);
+    if ($fileSize === 0) {
+        @unlink($filepath); // Supprimer le fichier vide
+        error_log('ERREUR: Le fichier PDF créé est vide: ' . $filepath);
+        throw new RuntimeException('Le fichier PDF créé est vide: ' . $filepath);
+    }
+    
+    error_log('PDF créé avec succès: ' . $filepath . ' (Taille: ' . $fileSize . ' bytes)');
+    
+    // Retourner le chemin relatif pour l'accès web
+    $webPath = '/uploads/factures/' . date('Y') . '/' . $filename;
+    error_log('Chemin web retourné: ' . $webPath);
+    
+    return $webPath;
 }
 ?>
