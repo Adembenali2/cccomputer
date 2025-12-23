@@ -694,12 +694,23 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             flex-direction: column;
             z-index: 1001;
             transform: scale(0.9);
-            transition: transform 0.3s ease;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            opacity: 0;
+            position: relative;
         }
 
-        .modal.active {
-            display: flex;
+        /* Afficher le modal quand l'overlay est actif */
+        .modal-overlay.active .modal {
+            display: flex !important;
             transform: scale(1);
+            opacity: 1;
+        }
+        
+        /* Compatibilité avec l'ancien système */
+        .modal.active {
+            display: flex !important;
+            transform: scale(1);
+            opacity: 1;
         }
 
         .modal-header {
@@ -1089,8 +1100,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
     </div>
 
     <!-- Modal Générer Facture -->
-    <div class="modal-overlay" id="factureModalOverlay" onclick="closeFactureModal()"></div>
-    <div class="modal" id="factureModal">
+    <div class="modal-overlay" id="factureModalOverlay" onclick="closeFactureModal()">
+        <div class="modal" id="factureModal" onclick="event.stopPropagation()">
         <div class="modal-header">
             <h2 class="modal-title">Générer une facture</h2>
             <button class="modal-close" onclick="closeFactureModal()">&times;</button>
@@ -1162,6 +1173,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             <button type="button" class="btn btn-secondary" onclick="closeFactureModal()">Annuler</button>
             <button type="submit" form="factureForm" class="btn btn-primary" id="btnGenererFacture">Générer la facture</button>
         </div>
+        </div>
     </div>
 
     <script>
@@ -1227,9 +1239,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 // Réinitialiser les totaux
                 calculateFactureTotal();
                 
-                // Afficher le modal
+                // Afficher le modal (seulement l'overlay a besoin de la classe active)
                 overlay.classList.add('active');
-                modal.classList.add('active');
+                // Le modal s'affichera automatiquement via le CSS .modal-overlay.active .modal
                 document.body.style.overflow = 'hidden';
                 
                 // Charger la liste des clients
@@ -1248,8 +1260,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             const modal = document.getElementById('factureModal');
             const overlay = document.getElementById('factureModalOverlay');
             if (modal && overlay) {
-                modal.classList.remove('active');
                 overlay.classList.remove('active');
+                // Le modal se cachera automatiquement
                 document.body.style.overflow = '';
                 // Réinitialiser le formulaire
                 const form = document.getElementById('factureForm');
