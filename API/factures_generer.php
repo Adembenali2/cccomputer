@@ -165,17 +165,36 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $lignes = $pdo->query("SELECT * FROM facture_lignes WHERE id_facture = $factureId ORDER BY ordre ASC")->fetchAll(PDO::FETCH_ASSOC);
     $facture = $pdo->query("SELECT * FROM factures WHERE id = $factureId")->fetch(PDO::FETCH_ASSOC);
 
-    // Setup Dossier
-    $baseUploadDir = __DIR__ . '/../uploads';
+    // Setup Dossier - Compatible Railway
+    // Sur Railway, le répertoire de travail est /app
+    // On utilise DOCUMENT_ROOT si disponible, sinon on utilise __DIR__
+    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+    if ($docRoot !== '' && is_dir($docRoot)) {
+        $baseUploadDir = $docRoot . '/uploads';
+    } else {
+        // Fallback: utiliser le répertoire du projet
+        $baseUploadDir = dirname(__DIR__) . '/uploads';
+    }
+    
     $facturesDir = $baseUploadDir . '/factures';
     $uploadDir = $facturesDir . '/' . date('Y');
     
+    error_log('Génération PDF - DOCUMENT_ROOT: ' . ($_SERVER['DOCUMENT_ROOT'] ?? 'Non défini'));
+    error_log('Génération PDF - __DIR__: ' . __DIR__);
+    error_log('Génération PDF - dirname(__DIR__): ' . dirname(__DIR__));
+    error_log('Génération PDF - Base upload dir: ' . $baseUploadDir);
+    error_log('Génération PDF - Base upload dir existe: ' . (is_dir($baseUploadDir) ? 'Oui' : 'Non'));
+    
     // Créer le répertoire de base uploads s'il n'existe pas
     if (!is_dir($baseUploadDir)) {
+        error_log('Génération PDF - Création du répertoire: ' . $baseUploadDir);
         $created = @mkdir($baseUploadDir, 0755, true);
         if (!$created) {
+            $error = error_get_last();
+            error_log('Génération PDF - Erreur création répertoire: ' . ($error['message'] ?? 'Erreur inconnue'));
             throw new RuntimeException('Impossible de créer le répertoire de base uploads: ' . $baseUploadDir);
         }
+        error_log('Génération PDF - Répertoire créé avec succès');
     }
     
     // Créer le répertoire factures s'il n'existe pas

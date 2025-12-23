@@ -103,11 +103,17 @@ try {
     
     // Essayer plusieurs chemins possibles
     // Le pdfWebPath est de la forme: /uploads/factures/2025/facture_XXX.pdf
-    // Dans factures_generer.php, le fichier est créé dans: __DIR__ . '/../uploads/factures/YYYY/'
-    // Donc on doit utiliser exactement le même pattern
+    // Sur Railway, on doit utiliser le même pattern que factures_generer.php
     
-    // Pattern principal (identique à factures_generer.php)
-    $baseUploadDir = __DIR__ . '/../uploads';
+    // Pattern principal (identique à factures_generer.php) - Compatible Railway
+    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+    if ($docRoot !== '' && is_dir($docRoot)) {
+        $baseUploadDir = $docRoot . '/uploads';
+    } else {
+        // Fallback: utiliser le répertoire du projet
+        $baseUploadDir = dirname(__DIR__) . '/uploads';
+    }
+    
     $facturesDir = $baseUploadDir . '/factures';
     
     // Extraire l'année et le nom du fichier depuis le chemin web
@@ -136,10 +142,14 @@ try {
     });
     
     error_log('Recherche du PDF - chemin web: ' . $pdfWebPath);
-    error_log('Base upload directory: ' . $baseUploadDir);
-    error_log('Factures directory: ' . $facturesDir);
-    error_log('Relative path: ' . $relativePath);
-    error_log('Real factures directory: ' . (realpath($facturesDir) !== false ? realpath($facturesDir) : 'Non disponible'));
+    error_log('Recherche du PDF - DOCUMENT_ROOT: ' . ($_SERVER['DOCUMENT_ROOT'] ?? 'Non défini'));
+    error_log('Recherche du PDF - __DIR__: ' . __DIR__);
+    error_log('Recherche du PDF - Base upload directory: ' . $baseUploadDir);
+    error_log('Recherche du PDF - Base upload dir existe: ' . (is_dir($baseUploadDir) ? 'Oui' : 'Non'));
+    error_log('Recherche du PDF - Factures directory: ' . $facturesDir);
+    error_log('Recherche du PDF - Factures dir existe: ' . (is_dir($facturesDir) ? 'Oui' : 'Non'));
+    error_log('Recherche du PDF - Relative path: ' . $relativePath);
+    error_log('Recherche du PDF - Real factures directory: ' . (realpath($facturesDir) !== false ? realpath($facturesDir) : 'Non disponible'));
     
     foreach ($possiblePaths as $testPath) {
         // Nettoyer le chemin
