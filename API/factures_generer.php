@@ -38,7 +38,9 @@ try {
     if (!$client) jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
     
     // Calculs et Sauvegarde DB
-    $numeroFacture = generateFactureNumber($pdo);
+    // Déterminer le préfixe selon le type de facture
+    $factureType = $data['factureType'] ?? 'Consommation';
+    $numeroFacture = generateFactureNumber($pdo, $factureType);
     
     $montantHT = 0;
     foreach ($data['lignes'] as $ligne) $montantHT += (float)($ligne['total_ht'] ?? 0);
@@ -95,10 +97,47 @@ try {
     jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
 }
 
-function generateFactureNumber($pdo) {
+function generateFactureNumber($pdo, $type) {
+    // Déterminer le préfixe selon le type
+    // Produit, Consommation, Achat → P
+    // Service → S
+    if (strtolower($type) === 'service') {
+        $prefix = 'S';
+    } else {
+        // Consommation, Achat, Produit → P
+        $prefix = 'P';
+    }
+    
     $year = date('Y');
-    $count = $pdo->query("SELECT COUNT(*) FROM factures WHERE numero LIKE 'FAC-$year-%'")->fetchColumn();
-    return sprintf("FAC-%s-%04d", $year, $count + 1);
+    $month = date('m');
+    
+    // Pattern pour rechercher les factures du même type, année et mois
+    $pattern = $prefix . $year . $month . '%';
+    
+    // Compter les factures existantes avec ce pattern
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM factures WHERE numero LIKE :pattern");
+    $stmt->execute([':pattern' => $pattern]);
+    $count = (int)$stmt->fetchColumn();
+    
+    // Générer le numéro : P/S + année + mois + numéro à 3 chiffres (001, 002, etc.)
+    $numero = sprintf("%s%s%s%03d", $prefix, $year, $month, $count + 1);
+    
+    // Vérifier l'unicité (au cas où il y aurait une collision)
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM factures WHERE numero = :numero");
+    $stmt->execute([':numero' => $numero]);
+    $exists = (int)$stmt->fetchColumn();
+    
+    // Si le numéro existe déjà, incrémenter jusqu'à trouver un numéro libre
+    $attempt = 1;
+    while ($exists > 0 && $attempt < 1000) {
+        $count++;
+        $numero = sprintf("%s%s%s%03d", $prefix, $year, $month, $count + 1);
+        $stmt->execute([':numero' => $numero]);
+        $exists = (int)$stmt->fetchColumn();
+        $attempt++;
+    }
+    
+    return $numero;
 }
 
 /**
