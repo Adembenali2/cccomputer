@@ -2129,6 +2129,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                                 message += `   Chemins testés:\n`;
                                 facture.paths_tested.forEach(path => {
                                     message += `     - ${path.full_path} (existe: ${path.exists ? 'Oui' : 'Non'})\n`;
+                                    if (path.files_in_directory && path.files_in_directory.length > 0) {
+                                        message += `       Fichiers dans le répertoire: ${path.files_in_directory.join(', ')}\n`;
+                                    }
                                 });
                             }
                         });

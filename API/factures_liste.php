@@ -121,16 +121,35 @@ try {
             
             foreach ($possibleBaseDirs as $baseDir) {
                 $testPath = $baseDir . '/uploads/factures/' . $relativePath;
+                $exists = file_exists($testPath);
+                $isFile = is_file($testPath);
+                $readable = is_readable($testPath);
+                $size = $exists ? filesize($testPath) : 0;
+                
                 $result['paths_tested'][] = [
                     'base_dir' => $baseDir,
                     'full_path' => $testPath,
-                    'exists' => file_exists($testPath),
-                    'is_file' => is_file($testPath),
-                    'readable' => is_readable($testPath),
-                    'size' => file_exists($testPath) ? filesize($testPath) : 0
+                    'exists' => $exists,
+                    'is_file' => $isFile,
+                    'readable' => $readable,
+                    'size' => $size
                 ];
                 
-                if (file_exists($testPath) && is_file($testPath)) {
+                // Si le fichier n'existe pas, vérifier ce qui existe dans le répertoire
+                if (!$exists) {
+                    $dirPath = dirname($testPath);
+                    if (is_dir($dirPath)) {
+                        $filesInDir = @scandir($dirPath);
+                        if ($filesInDir) {
+                            $filesList = array_filter($filesInDir, function($f) {
+                                return $f !== '.' && $f !== '..';
+                            });
+                            $result['paths_tested'][count($result['paths_tested']) - 1]['files_in_directory'] = array_values($filesList);
+                        }
+                    }
+                }
+                
+                if ($exists && $isFile) {
                     $result['file_found'] = true;
                     $result['actual_path'] = $testPath;
                     break;
