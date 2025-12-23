@@ -665,6 +665,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
+        /* ====== Filtres Paiements ====== */
+        .filter-btn.active {
+            background: var(--accent-primary) !important;
+            color: white !important;
+            border-color: var(--accent-primary) !important;
+        }
+
         /* ====== Modal Facture ====== */
         .modal-overlay {
             position: fixed;
@@ -1204,6 +1211,94 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         </div>
     </div>
 
+    <!-- Modal Paiements -->
+    <div class="modal-overlay" id="paiementsModalOverlay" onclick="closePaiementsModal()">
+        <div class="modal" id="paiementsModal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title">Gestion des paiements</h2>
+                <button class="modal-close" onclick="closePaiementsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="paiementsListLoading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Chargement des factures...
+                </div>
+                <div id="paiementsListContainer" style="display: none;">
+                    <!-- Barre de recherche -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="position: relative;">
+                            <input 
+                                type="text" 
+                                id="paiementsSearchInput" 
+                                placeholder="Rechercher par numéro de facture, client ou date..." 
+                                style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
+                                oninput="filterPaiements()"
+                            />
+                            <svg 
+                                width="18" 
+                                height="18" 
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                stroke-width="2"
+                                style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none;"
+                            >
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <!-- Filtres par statut -->
+                    <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="filter-btn active" data-status="all" onclick="filterPaiementsByStatus('all')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--accent-primary); color: white; cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            Tous
+                        </button>
+                        <button class="filter-btn" data-status="payee" onclick="filterPaiementsByStatus('payee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            Payé
+                        </button>
+                        <button class="filter-btn" data-status="envoyee" onclick="filterPaiementsByStatus('envoyee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            En attente
+                        </button>
+                        <button class="filter-btn" data-status="brouillon" onclick="filterPaiementsByStatus('brouillon')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            En cours
+                        </button>
+                        <button class="filter-btn" data-status="en_retard" onclick="filterPaiementsByStatus('en_retard')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            En retard
+                        </button>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                        <span><span id="paiementsCount">0</span> facture(s) trouvée(s)</span>
+                        <span id="paiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
+                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant TTC</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Statut</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paiementsListTableBody">
+                                <!-- Les factures seront ajoutées ici dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="paiementsListError" style="display: none; text-align: center; padding: 2rem; color: #ef4444;">
+                    Erreur lors du chargement des factures
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closePaiementsModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Générer Facture -->
     <div class="modal-overlay" id="factureModalOverlay" onclick="closeFactureModal()">
         <div class="modal" id="factureModal" onclick="event.stopPropagation()">
@@ -1299,6 +1394,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 openFactureModal();
             } else if (section === 'factures') {
                 openFacturesListModal();
+            } else if (section === 'paiements') {
+                openPaiementsModal();
             } else {
                 console.log('Ouverture de la section:', section);
                 alert(`Section "${section}" - À implémenter`);
@@ -1916,6 +2013,247 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             displayFactures(filtered);
         }
 
+        // ============================================
+        // GESTION DES PAIEMENTS
+        // ============================================
+        
+        let allPaiements = [];
+        let filteredPaiements = [];
+        let currentPaiementStatusFilter = 'all';
+
+        /**
+         * Ouvre le modal des paiements
+         */
+        function openPaiementsModal() {
+            const modal = document.getElementById('paiementsModal');
+            const overlay = document.getElementById('paiementsModalOverlay');
+            
+            if (!modal || !overlay) {
+                console.error('Modal paiements introuvable');
+                return;
+            }
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Charger les factures
+            loadPaiementsList();
+        }
+
+        /**
+         * Ferme le modal des paiements
+         */
+        function closePaiementsModal() {
+            const modal = document.getElementById('paiementsModal');
+            const overlay = document.getElementById('paiementsModalOverlay');
+            
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+
+        /**
+         * Charge la liste des factures pour les paiements
+         */
+        async function loadPaiementsList() {
+            const loadingDiv = document.getElementById('paiementsListLoading');
+            const container = document.getElementById('paiementsListContainer');
+            const errorDiv = document.getElementById('paiementsListError');
+            
+            loadingDiv.style.display = 'block';
+            container.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/API/factures_liste.php');
+                const result = await response.json();
+                
+                if (result.ok && result.factures) {
+                    allPaiements = result.factures;
+                    filteredPaiements = [...allPaiements];
+                    displayPaiements(allPaiements);
+                    
+                    // Mettre à jour le compteur
+                    document.getElementById('paiementsCount').textContent = allPaiements.length;
+                    
+                    loadingDiv.style.display = 'none';
+                    container.style.display = 'block';
+                } else {
+                    loadingDiv.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = result.error || 'Erreur lors du chargement des factures';
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des paiements:', error);
+                loadingDiv.style.display = 'none';
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Erreur lors du chargement des factures';
+            }
+        }
+
+        /**
+         * Affiche les factures dans le tableau des paiements
+         */
+        function displayPaiements(factures) {
+            const tableBody = document.getElementById('paiementsListTableBody');
+            const filteredCountSpan = document.getElementById('paiementsFilteredCount');
+            
+            tableBody.innerHTML = '';
+            
+            if (factures.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            Aucune facture trouvée
+                        </td>
+                    </tr>
+                `;
+                filteredCountSpan.textContent = '';
+            } else {
+                filteredCountSpan.textContent = `${factures.length} affichée(s)`;
+                
+                factures.forEach(facture => {
+                    const row = document.createElement('tr');
+                    row.style.borderBottom = '1px solid var(--border-color)';
+                    row.style.transition = 'background 0.2s';
+                    row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
+                    row.onmouseleave = function() { this.style.background = ''; };
+                    
+                    // Menu déroulant pour changer le statut
+                    const statutSelect = `
+                        <select 
+                            onchange="updatePaiementStatut(${facture.id}, this.value, '${facture.numero}')" 
+                            style="padding: 0.4rem 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem; cursor: pointer; min-width: 120px;"
+                        >
+                            <option value="brouillon" ${facture.statut === 'brouillon' ? 'selected' : ''}>En cours</option>
+                            <option value="envoyee" ${facture.statut === 'envoyee' ? 'selected' : ''}>En attente</option>
+                            <option value="payee" ${facture.statut === 'payee' ? 'selected' : ''}>Payé</option>
+                            <option value="en_retard" ${facture.statut === 'en_retard' ? 'selected' : ''}>En retard</option>
+                            <option value="annulee" ${facture.statut === 'annulee' ? 'selected' : ''}>Annulée</option>
+                        </select>
+                    `;
+                    
+                    row.innerHTML = `
+                        <td style="padding: 0.75rem; color: var(--text-primary); font-weight: 600;">${facture.numero}</td>
+                        <td style="padding: 0.75rem; color: var(--text-primary);">${facture.date_facture_formatted}</td>
+                        <td style="padding: 0.75rem; color: var(--text-primary);">
+                            ${facture.client_nom || 'Client inconnu'}
+                            ${facture.client_code ? ` (${facture.client_code})` : ''}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary); font-weight: 600;">
+                            ${facture.montant_ttc.toFixed(2).replace('.', ',')} €
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center;">
+                            ${statutSelect}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center;">
+                            ${facture.pdf_path ? `
+                                <button onclick="viewFacturePDFById(${facture.id}, '${facture.numero}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                                    PDF
+                                </button>
+                            ` : '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>'}
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+            }
+        }
+
+        /**
+         * Filtre les paiements selon le terme de recherche
+         */
+        function filterPaiements() {
+            const searchInput = document.getElementById('paiementsSearchInput');
+            const searchTerm = (searchInput.value || '').toLowerCase().trim();
+            
+            let filtered = allPaiements;
+            
+            // Filtrer par statut
+            if (currentPaiementStatusFilter !== 'all') {
+                filtered = filtered.filter(f => f.statut === currentPaiementStatusFilter);
+            }
+            
+            // Filtrer par recherche textuelle
+            if (searchTerm) {
+                filtered = filtered.filter(facture => {
+                    if (facture.numero && facture.numero.toLowerCase().includes(searchTerm)) return true;
+                    if (facture.date_facture_formatted && facture.date_facture_formatted.includes(searchTerm)) return true;
+                    if (facture.client_nom && facture.client_nom.toLowerCase().includes(searchTerm)) return true;
+                    if (facture.client_code && facture.client_code.toLowerCase().includes(searchTerm)) return true;
+                    return false;
+                });
+            }
+            
+            filteredPaiements = filtered;
+            displayPaiements(filtered);
+        }
+
+        /**
+         * Filtre les paiements par statut
+         */
+        function filterPaiementsByStatus(status) {
+            currentPaiementStatusFilter = status;
+            
+            // Mettre à jour les boutons de filtre
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.status === status) {
+                    btn.classList.add('active');
+                    btn.style.background = 'var(--accent-primary)';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = 'var(--accent-primary)';
+                } else {
+                    btn.style.background = 'var(--bg-secondary)';
+                    btn.style.color = 'var(--text-primary)';
+                    btn.style.borderColor = 'var(--border-color)';
+                }
+            });
+            
+            filterPaiements();
+        }
+
+        /**
+         * Met à jour le statut de paiement d'une facture
+         */
+        async function updatePaiementStatut(factureId, newStatut, factureNumero) {
+            if (!confirm(`Voulez-vous vraiment changer le statut de la facture ${factureNumero} ?`)) {
+                // Recharger pour annuler le changement
+                loadPaiementsList();
+                return;
+            }
+            
+            try {
+                const response = await fetch('/API/factures_update_statut.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        facture_id: factureId,
+                        statut: newStatut
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    // Recharger la liste
+                    loadPaiementsList();
+                } else {
+                    alert('Erreur : ' + (result.error || 'Impossible de mettre à jour le statut'));
+                    // Recharger pour annuler le changement
+                    loadPaiementsList();
+                }
+            } catch (error) {
+                console.error('Erreur lors de la mise à jour du statut:', error);
+                alert('Erreur lors de la mise à jour du statut');
+                // Recharger pour annuler le changement
+                loadPaiementsList();
+            }
+        }
+
         // Exposer les fonctions globalement pour les onclick
         window.openSection = openSection;
         window.openFactureModal = openFactureModal;
@@ -1930,6 +2268,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
         window.submitFactureForm = submitFactureForm;
+        window.openPaiementsModal = openPaiementsModal;
+        window.closePaiementsModal = closePaiementsModal;
+        window.filterPaiements = filterPaiements;
+        window.filterPaiementsByStatus = filterPaiementsByStatus;
+        window.updatePaiementStatut = updatePaiementStatut;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
@@ -1947,10 +2290,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const factureModalOverlay = document.getElementById('factureModalOverlay');
                     const facturesListModal = document.getElementById('facturesListModal');
                     const facturesListModalOverlay = document.getElementById('facturesListModalOverlay');
+                    const paiementsModalOverlay = document.getElementById('paiementsModalOverlay');
                     const pdfViewerModalOverlay = document.getElementById('pdfViewerModalOverlay');
                     
                     if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
                         closePDFViewer();
+                    } else if (paiementsModalOverlay && paiementsModalOverlay.classList.contains('active')) {
+                        closePaiementsModal();
                     } else if (factureModalOverlay && factureModalOverlay.classList.contains('active')) {
                         closeFactureModal();
                     } else if (facturesListModalOverlay && facturesListModalOverlay.classList.contains('active')) {
