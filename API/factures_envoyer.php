@@ -197,15 +197,28 @@ try {
     if (!$pdfPath) {
         error_log('ERREUR: Le fichier PDF n\'existe pas. Chemins testés:');
         foreach ($possiblePaths as $testPath) {
-            error_log('  - ' . $testPath);
+            error_log('  - ' . $testPath . ' (existe: ' . (file_exists($testPath) ? 'Oui' : 'Non') . ')');
         }
         error_log('  - pdf_path dans DB: ' . $pdfWebPath);
         error_log('  - __DIR__: ' . __DIR__);
         error_log('  - DOCUMENT_ROOT: ' . ($_SERVER['DOCUMENT_ROOT'] ?? 'Non défini'));
+        error_log('  - Base dir utilisé: ' . $baseDir);
+        error_log('  - Factures dir: ' . $facturesDir);
+        error_log('  - Factures dir existe: ' . (is_dir($facturesDir) ? 'Oui' : 'Non'));
+        
+        // Suggestion : Vérifier les logs de génération pour voir où le fichier a été créé
+        error_log('SUGGESTION: Vérifiez les logs de génération de la facture pour voir où le fichier a été créé.');
+        error_log('SUGGESTION: Utilisez /API/factures_diagnostic.php pour diagnostiquer le problème.');
         
         jsonResponse([
             'ok' => false, 
-            'error' => 'Le fichier PDF n\'existe pas sur le serveur. Vérifiez que le fichier a bien été créé lors de la génération de la facture.'
+            'error' => 'Le fichier PDF n\'existe pas sur le serveur. Vérifiez que le fichier a bien été créé lors de la génération de la facture. Utilisez /API/factures_diagnostic.php pour diagnostiquer.',
+            'debug' => [
+                'pdf_path_db' => $pdfWebPath,
+                'base_dir' => $baseDir,
+                'factures_dir' => $facturesDir,
+                'paths_tested' => array_values($possiblePaths)
+            ]
         ], 404);
     }
     
