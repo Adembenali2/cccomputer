@@ -1,7 +1,7 @@
 <?php
 /**
  * Script pour afficher/servir un PDF de facture
- * Gère le cas où le fichier n'existe pas et affiche un message d'erreur clair
+ * Régénère automatiquement le PDF s'il n'existe pas
  */
 
 require_once __DIR__ . '/../includes/auth.php';
@@ -18,11 +18,12 @@ if ($factureId <= 0) {
 try {
     $pdo = getPdo();
     
-    // Récupérer la facture
+    // Récupérer la facture avec toutes les données nécessaires
     $stmt = $pdo->prepare("
-        SELECT id, numero, pdf_path, id_client 
-        FROM factures 
-        WHERE id = :id
+        SELECT f.*, c.raison_sociale, c.adresse, c.code_postal, c.ville, c.nom_dirigeant, c.prenom_dirigeant
+        FROM factures f
+        LEFT JOIN clients c ON f.id_client = c.id
+        WHERE f.id = :id
         LIMIT 1
     ");
     $stmt->execute([':id' => $factureId]);
@@ -34,68 +35,109 @@ try {
     }
     
     $pdfWebPath = $facture['pdf_path'];
-    
-    // Si pas de chemin PDF, retourner une erreur
-    if (empty($pdfWebPath)) {
-        http_response_code(404);
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PDF introuvable</title></head><body>';
-        echo '<h1>PDF introuvable</h1>';
-        echo '<p>Aucun PDF associé à la facture <strong>' . htmlspecialchars($facture['numero']) . '</strong>.</p>';
-        echo '</body></html>';
-        exit;
-    }
-    
-    // Trouver le fichier PDF
-    $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
-    
-    // Tester plusieurs chemins possibles (compatible Railway)
-    $possibleBaseDirs = [];
-    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
-    if ($docRoot !== '' && is_dir($docRoot)) {
-        $possibleBaseDirs[] = $docRoot;
-    }
-    $projectDir = dirname(__DIR__);
-    if (is_dir($projectDir)) {
-        $possibleBaseDirs[] = $projectDir;
-    }
-    if (is_dir('/app')) {
-        $possibleBaseDirs[] = '/app';
-    }
-    if (is_dir('/var/www/html')) {
-        $possibleBaseDirs[] = '/var/www/html';
-    }
-    
     $pdfPath = null;
-    foreach ($possibleBaseDirs as $baseDir) {
-        $testPath = $baseDir . '/uploads/factures/' . $relativePath;
-        if (file_exists($testPath) && is_file($testPath)) {
-            $pdfPath = $testPath;
-            break;
-        }
-    }
     
-    // Si le fichier n'existe pas, afficher un message d'erreur clair
-    if (!$pdfPath) {
-        error_log('view_facture.php: Fichier PDF non trouvé pour facture ID: ' . $factureId);
-        error_log('view_facture.php: Chemin recherché: ' . $pdfWebPath);
-        error_log('view_facture.php: Chemins testés:');
-        foreach ($possibleBaseDirs as $baseDir) {
-            $testPath = $baseDir . '/uploads/factures/' . $relativePath;
-            error_log('  - ' . $testPath . ' (existe: ' . (file_exists($testPath) ? 'Oui' : 'Non') . ')');
+    // Si un chemin PDF existe, essayer de le trouver
+    if (!empty($pdfWebPath)) {
+        $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
+        
+        // Tester plusieurs chemins possibles (compatible Railway)
+        $possibleBaseDirs = [];
+        $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+        if ($docRoot !== '' && is_dir($docRoot)) {
+            $possibleBaseDirs[] = $docRoot;
+        }
+        $projectDir = dirname(__DIR__);
+        if (is_dir($projectDir)) {
+            $possibleBaseDirs[] = $projectDir;
+        }
+        if (is_dir('/app')) {
+            $possibleBaseDirs[] = '/app';
+        }
+        if (is_dir('/var/www/html')) {
+            $possibleBaseDirs[] = '/var/www/html';
         }
         
-        http_response_code(404);
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PDF introuvable</title>';
-        echo '<style>body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }</style>';
-        echo '</head><body>';
-        echo '<h1>PDF introuvable</h1>';
-        echo '<p>Le fichier PDF de la facture <strong>' . htmlspecialchars($facture['numero']) . '</strong> n\'existe pas sur le serveur.</p>';
-        echo '<p><strong>Cause probable :</strong> Sur Railway, les fichiers peuvent être perdus lors des redéploiements car le système de fichiers est éphémère.</p>';
-        echo '<p><strong>Solution :</strong> Régénérez la facture depuis la section "Générer facture" de la page Paiements.</p>';
-        echo '</body></html>';
-        exit;
+        foreach ($possibleBaseDirs as $baseDir) {
+            $testPath = $baseDir . '/uploads/factures/' . $relativePath;
+            if (file_exists($testPath) && is_file($testPath)) {
+                $pdfPath = $testPath;
+                break;
+            }
+        }
+    }
+    
+    // Si le fichier n'existe pas, régénérer le PDF automatiquement
+    if (!$pdfPath) {
+        error_log('view_facture.php: Fichier PDF non trouvé, régénération automatique pour facture ID: ' . $factureId);
+        
+        // Récupérer les lignes de facture
+        $stmtLignes = $pdo->prepare("SELECT * FROM facture_lignes WHERE id_facture = :id ORDER BY ordre ASC");
+        $stmtLignes->execute([':id' => $factureId]);
+        $lignes = $stmtLignes->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (empty($lignes)) {
+            http_response_code(404);
+            header('Content-Type: text/html; charset=utf-8');
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Erreur</title></head><body>';
+            echo '<h1>Erreur</h1>';
+            echo '<p>Impossible de régénérer le PDF : aucune ligne de facture trouvée.</p>';
+            echo '</body></html>';
+            exit;
+        }
+        
+        // Préparer les données pour la régénération
+        $data = [
+            'lignes' => []
+        ];
+        foreach ($lignes as $ligne) {
+            $data['lignes'][] = [
+                'description' => $ligne['description'],
+                'type' => $ligne['type'],
+                'quantite' => $ligne['quantite'],
+                'prix_unitaire_ht' => $ligne['prix_unitaire_ht']
+            ];
+        }
+        
+        // Préparer les données client
+        $client = [
+            'raison_sociale' => $facture['raison_sociale'] ?? '',
+            'adresse' => $facture['adresse'] ?? '',
+            'code_postal' => $facture['code_postal'] ?? '',
+            'ville' => $facture['ville'] ?? ''
+        ];
+        
+        // Inclure le fichier qui contient la fonction generateFacturePDF
+        require_once __DIR__ . '/../API/factures_generer.php';
+        
+        // Régénérer le PDF
+        $newPdfPath = generateFacturePDF($pdo, $factureId, $client, $data);
+        
+        // Mettre à jour le chemin dans la DB
+        $stmt = $pdo->prepare("UPDATE factures SET pdf_path = ? WHERE id = ?");
+        $stmt->execute([$newPdfPath, $factureId]);
+        
+        // Retrouver le fichier régénéré
+        $relativePath = preg_replace('#^/uploads/factures/#', '', $newPdfPath);
+        foreach ($possibleBaseDirs as $baseDir) {
+            $testPath = $baseDir . '/uploads/factures/' . $relativePath;
+            if (file_exists($testPath) && is_file($testPath)) {
+                $pdfPath = $testPath;
+                break;
+            }
+        }
+        
+        // Si toujours pas trouvé après régénération, erreur
+        if (!$pdfPath) {
+            error_log('view_facture.php: Impossible de trouver le PDF après régénération');
+            http_response_code(500);
+            header('Content-Type: text/html; charset=utf-8');
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Erreur</title></head><body>';
+            echo '<h1>Erreur</h1>';
+            echo '<p>Le PDF a été régénéré mais n\'a pas pu être trouvé sur le serveur.</p>';
+            echo '</body></html>';
+            exit;
+        }
     }
     
     // Vérifier que le fichier est lisible

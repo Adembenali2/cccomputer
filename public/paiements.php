@@ -1056,9 +1056,6 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                                 <path d="M12 5l7 7-7 7"></path>
                             </svg>
                         </button>
-                        <button class="section-card-btn" onclick="runDiagnostic()" style="background: #f59e0b; color: white; border-color: #f59e0b;">
-                            🔍 Diagnostic PDF
-                        </button>
                     </div>
                 </div>
             </div>
@@ -1933,102 +1930,6 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
         window.submitFactureForm = submitFactureForm;
-        
-        // Fonction de diagnostic pour les fichiers PDF
-        async function runDiagnostic() {
-            try {
-                console.log('Démarrage du diagnostic...');
-                // Utiliser l'API factures_liste avec le paramètre diagnostic
-                const apiUrl = '/API/factures_liste.php?diagnostic=1';
-                console.log('URL de l\'API:', apiUrl);
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-                
-                // Vérifier le type de contenu
-                const contentType = response.headers.get('content-type');
-                console.log('Content-Type:', contentType);
-                console.log('Status:', response.status);
-                console.log('URL:', response.url);
-                
-                if (!contentType || !contentType.includes('application/json')) {
-                    const text = await response.text();
-                    console.error('Réponse non-JSON reçue:', text.substring(0, 500));
-                    
-                    // Si c'est du HTML, c'est probablement une redirection
-                    if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-                        alert('Erreur: L\'API a été redirigée vers une page HTML. Le fichier API/factures_diagnostic.php n\'est peut-être pas accessible sur le serveur.\n\nVérifiez que le fichier existe et est déployé sur Railway.');
-                    } else {
-                        alert('Erreur: Le serveur a retourné du contenu non-JSON. Vérifiez la console pour plus de détails.');
-                    }
-                    return;
-                }
-                
-                const result = await response.json();
-                console.log('Réponse JSON reçue:', result);
-                
-                if (result.ok && result.diagnostic) {
-                    const diag = result.diagnostic;
-                    console.log('=== DIAGNOSTIC PDF ===');
-                    console.log('Informations système:', diag.system_info);
-                    console.log('Factures analysées:', diag.factures);
-                    
-                    // Afficher dans une alerte formatée
-                    let message = '=== DIAGNOSTIC PDF ===\n\n';
-                    message += 'DOCUMENT_ROOT: ' + (diag.system_info.DOCUMENT_ROOT || 'Non défini') + '\n';
-                    message += '__DIR__: ' + diag.system_info['__DIR__'] + '\n';
-                    message += 'dirname(__DIR__): ' + diag.system_info['dirname(__DIR__)'] + '\n';
-                    message += '/app existe: ' + (diag.system_info['/app exists'] ? 'Oui' : 'Non') + '\n';
-                    message += '/var/www/html existe: ' + (diag.system_info['/var/www/html exists'] ? 'Oui' : 'Non') + '\n\n';
-                    
-                    if (diag.factures && diag.factures.length > 0) {
-                        message += '=== FACTURES ===\n';
-                        diag.factures.forEach((facture, index) => {
-                            message += `\n${index + 1}. Facture ${facture.numero} (ID: ${facture.facture_id})\n`;
-                            message += `   Chemin DB: ${facture.pdf_path_db}\n`;
-                            message += `   Fichier trouvé: ${facture.file_found ? 'OUI' : 'NON'}\n`;
-                            if (facture.file_found) {
-                                message += `   Chemin réel: ${facture.actual_path}\n`;
-                            } else {
-                                message += `   Chemins testés:\n`;
-                                facture.paths_tested.forEach(path => {
-                                    message += `     - ${path.full_path} (existe: ${path.exists ? 'Oui' : 'Non'})\n`;
-                                    if (path.files_in_directory && path.files_in_directory.length > 0) {
-                                        message += `       Fichiers dans le répertoire: ${path.files_in_directory.join(', ')}\n`;
-                                    }
-                                });
-                            }
-                        });
-                    } else {
-                        message += 'Aucune facture avec PDF trouvée dans la base de données.\n';
-                    }
-                    
-                    alert(message);
-                    console.log('Diagnostic complet. Voir la console pour plus de détails.');
-                } else if (result.ok) {
-                    alert('Diagnostic activé mais aucune information de diagnostic retournée. Vérifiez la console.');
-                    console.log('Réponse complète:', result);
-                } else {
-                    const errorMsg = result.error || 'Erreur inconnue';
-                    console.error('Erreur API:', errorMsg);
-                    if (result.trace) {
-                        console.error('Trace:', result.trace);
-                    }
-                    alert('Erreur lors du diagnostic: ' + errorMsg);
-                }
-            } catch (error) {
-                console.error('Erreur diagnostic:', error);
-                console.error('Stack trace:', error.stack);
-                alert('Erreur lors du diagnostic: ' + error.message + '\n\nVérifiez la console pour plus de détails.');
-            }
-        }
-        
-        window.runDiagnostic = runDiagnostic;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
