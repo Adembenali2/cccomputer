@@ -2069,16 +2069,34 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         async function runDiagnostic() {
             try {
                 console.log('Démarrage du diagnostic...');
-                const response = await fetch('/API/factures_diagnostic.php');
+                // Utiliser le chemin complet avec le domaine pour éviter les problèmes de routage
+                const apiUrl = window.location.origin + '/API/factures_diagnostic.php';
+                console.log('URL de l\'API:', apiUrl);
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
                 
                 // Vérifier le type de contenu
                 const contentType = response.headers.get('content-type');
                 console.log('Content-Type:', contentType);
+                console.log('Status:', response.status);
+                console.log('URL:', response.url);
                 
                 if (!contentType || !contentType.includes('application/json')) {
                     const text = await response.text();
                     console.error('Réponse non-JSON reçue:', text.substring(0, 500));
-                    alert('Erreur: Le serveur a retourné du HTML au lieu de JSON. Vérifiez la console pour plus de détails.');
+                    
+                    // Si c'est du HTML, c'est probablement une redirection
+                    if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+                        alert('Erreur: L\'API a été redirigée vers une page HTML. Le fichier API/factures_diagnostic.php n\'est peut-être pas accessible sur le serveur.\n\nVérifiez que le fichier existe et est déployé sur Railway.');
+                    } else {
+                        alert('Erreur: Le serveur a retourné du contenu non-JSON. Vérifiez la console pour plus de détails.');
+                    }
                     return;
                 }
                 
