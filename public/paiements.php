@@ -1043,13 +1043,18 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 </div>
                 <div class="section-card-content">
                     <p class="section-card-description">Liste de toutes les factures générées</p>
-                    <button class="section-card-btn" onclick="openSection('factures')">
-                        Voir les factures
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14"></path>
-                            <path d="M12 5l7 7-7 7"></path>
-                        </svg>
-                    </button>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="section-card-btn" onclick="openSection('factures')">
+                            Voir les factures
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14"></path>
+                                <path d="M12 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                        <button class="section-card-btn" onclick="runDiagnostic()" style="background: #f59e0b; color: white; border-color: #f59e0b;">
+                            🔍 Diagnostic PDF
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -2059,6 +2064,54 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
         window.submitFactureForm = submitFactureForm;
+        
+        // Fonction de diagnostic pour les fichiers PDF
+        async function runDiagnostic() {
+            try {
+                console.log('Démarrage du diagnostic...');
+                const response = await fetch('/API/factures_diagnostic.php');
+                const result = await response.json();
+                
+                if (result.ok) {
+                    console.log('=== DIAGNOSTIC PDF ===');
+                    console.log('Informations système:', result.system_info);
+                    console.log('Factures analysées:', result.factures);
+                    
+                    // Afficher dans une alerte formatée
+                    let message = '=== DIAGNOSTIC PDF ===\n\n';
+                    message += 'DOCUMENT_ROOT: ' + (result.system_info.DOCUMENT_ROOT || 'Non défini') + '\n';
+                    message += '__DIR__: ' + result.system_info['__DIR__'] + '\n';
+                    message += 'dirname(__DIR__): ' + result.system_info['dirname(__DIR__)'] + '\n';
+                    message += '/app existe: ' + (result.system_info['/app exists'] ? 'Oui' : 'Non') + '\n';
+                    message += '/var/www/html existe: ' + (result.system_info['/var/www/html exists'] ? 'Oui' : 'Non') + '\n\n';
+                    
+                    message += '=== FACTURES ===\n';
+                    result.factures.forEach((facture, index) => {
+                        message += `\n${index + 1}. Facture ${facture.numero} (ID: ${facture.facture_id})\n`;
+                        message += `   Chemin DB: ${facture.pdf_path_db}\n`;
+                        message += `   Fichier trouvé: ${facture.file_found ? 'OUI' : 'NON'}\n`;
+                        if (facture.file_found) {
+                            message += `   Chemin réel: ${facture.actual_path}\n`;
+                        } else {
+                            message += `   Chemins testés:\n`;
+                            facture.paths_tested.forEach(path => {
+                                message += `     - ${path.full_path} (existe: ${path.exists ? 'Oui' : 'Non'})\n`;
+                            });
+                        }
+                    });
+                    
+                    alert(message);
+                    console.log('Diagnostic complet. Voir la console pour plus de détails.');
+                } else {
+                    alert('Erreur lors du diagnostic: ' + (result.error || 'Erreur inconnue'));
+                }
+            } catch (error) {
+                console.error('Erreur diagnostic:', error);
+                alert('Erreur lors du diagnostic: ' + error.message);
+            }
+        }
+        
+        window.runDiagnostic = runDiagnostic;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
