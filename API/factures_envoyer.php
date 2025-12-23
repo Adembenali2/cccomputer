@@ -56,11 +56,64 @@ try {
     }
     
     // Chemin complet du fichier PDF
-    $pdfPath = __DIR__ . '/..' . $facture['pdf_path'];
+    // Le pdf_path est stocké comme '/uploads/factures/2025/facture_XXX.pdf' (chemin web relatif)
+    // On doit le convertir en chemin absolu du système de fichiers
     
-    if (!file_exists($pdfPath)) {
-        jsonResponse(['ok' => false, 'error' => 'Le fichier PDF n\'existe pas sur le serveur'], 404);
+    $pdfWebPath = $facture['pdf_path'];
+    $pdfPath = null;
+    
+    // Essayer plusieurs chemins possibles
+    $baseDir = dirname(__DIR__); // Racine du projet (un niveau au-dessus de API)
+    $possiblePaths = [
+        // Chemin depuis la racine du projet
+        $baseDir . $pdfWebPath,
+        // Chemin relatif depuis le dossier API
+        __DIR__ . '/..' . $pdfWebPath,
+        // Chemin depuis la racine du document
+        ($_SERVER['DOCUMENT_ROOT'] ?? '') . $pdfWebPath,
+        // Chemin absolu si déjà absolu
+        $pdfWebPath
+    ];
+    
+    // Ajouter aussi le chemin avec realpath si possible
+    $realBaseDir = realpath($baseDir);
+    if ($realBaseDir !== false) {
+        $possiblePaths[] = $realBaseDir . $pdfWebPath;
     }
+    
+    error_log('Recherche du PDF - chemin web: ' . $pdfWebPath);
+    error_log('Base directory: ' . $baseDir);
+    error_log('Real base directory: ' . ($realBaseDir !== false ? $realBaseDir : 'Non disponible'));
+    
+    foreach ($possiblePaths as $testPath) {
+        // Nettoyer le chemin
+        $testPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $testPath);
+        $testPath = preg_replace('/[\/\\\\]+/', DIRECTORY_SEPARATOR, $testPath);
+        
+        error_log('Test chemin: ' . $testPath . ' - Existe: ' . (file_exists($testPath) ? 'Oui' : 'Non'));
+        
+        if (file_exists($testPath) && is_file($testPath)) {
+            $pdfPath = $testPath;
+            break;
+        }
+    }
+    
+    if (!$pdfPath) {
+        error_log('ERREUR: Le fichier PDF n\'existe pas. Chemins testés:');
+        foreach ($possiblePaths as $testPath) {
+            error_log('  - ' . $testPath);
+        }
+        error_log('  - pdf_path dans DB: ' . $pdfWebPath);
+        error_log('  - __DIR__: ' . __DIR__);
+        error_log('  - DOCUMENT_ROOT: ' . ($_SERVER['DOCUMENT_ROOT'] ?? 'Non défini'));
+        
+        jsonResponse([
+            'ok' => false, 
+            'error' => 'Le fichier PDF n\'existe pas sur le serveur. Vérifiez que le fichier a bien été créé lors de la génération de la facture.'
+        ], 404);
+    }
+    
+    error_log('PDF trouvé: ' . $pdfPath);
     
     // Préparer l'email
     $subject = 'Facture ' . $facture['numero'] . ' - ' . $facture['client_nom'];

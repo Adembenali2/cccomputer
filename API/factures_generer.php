@@ -79,13 +79,13 @@ try {
         }
         
         // Génération PDF
-        $pdfPath = generateFacturePDF($pdo, $factureId, $client, $data);
+        $pdfWebPath = generateFacturePDF($pdo, $factureId, $client, $data);
         
-        // Mise à jour chemin PDF
-        $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfPath, $factureId]);
+        // Mise à jour chemin PDF (on stocke le chemin web relatif)
+        $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfWebPath, $factureId]);
         
         $pdo->commit();
-        jsonResponse(['ok' => true, 'facture_id' => $factureId, 'numero' => $numeroFacture, 'pdf_url' => $pdfPath]);
+        jsonResponse(['ok' => true, 'facture_id' => $factureId, 'numero' => $numeroFacture, 'pdf_url' => $pdfWebPath]);
         
     } catch (Exception $e) {
         $pdo->rollBack();
@@ -355,9 +355,17 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     
     error_log('PDF créé avec succès: ' . $filepath . ' (Taille: ' . $fileSize . ' bytes)');
     
+    // Vérifier une dernière fois que le fichier existe et est accessible
+    if (!file_exists($filepath) || !is_readable($filepath)) {
+        error_log('ERREUR CRITIQUE: Le fichier PDF n\'est pas accessible après création: ' . $filepath);
+        throw new RuntimeException('Le fichier PDF créé n\'est pas accessible: ' . $filepath);
+    }
+    
     // Retourner le chemin relatif pour l'accès web
     $webPath = '/uploads/factures/' . date('Y') . '/' . $filename;
     error_log('Chemin web retourné: ' . $webPath);
+    error_log('Chemin absolu du fichier: ' . $filepath);
+    error_log('Vérification: Le fichier existe réellement: ' . (file_exists($filepath) ? 'OUI' : 'NON'));
     
     return $webPath;
 }
