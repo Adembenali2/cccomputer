@@ -673,10 +673,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             align-items: center;
             justify-content: center;
             padding: 1rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
         .modal-overlay.active {
             display: flex;
+            opacity: 1;
         }
 
         .modal {
@@ -690,10 +693,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             display: none;
             flex-direction: column;
             z-index: 1001;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
         }
 
         .modal.active {
             display: flex;
+            transform: scale(1);
         }
 
         .modal-header {
@@ -1163,14 +1169,18 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         let statsChart = null;
         let currentData = null;
 
+        // ============================================
+        // FONCTIONS GLOBALES - Doivent être définies en premier
+        // ============================================
+        
         /**
          * Ouvre une section spécifique
          */
         function openSection(section) {
+            console.log('openSection appelé avec:', section);
             if (section === 'generer-facture') {
                 openFactureModal();
             } else {
-                // TODO: Implémenter les autres sections
                 console.log('Ouverture de la section:', section);
                 alert(`Section "${section}" - À implémenter`);
             }
@@ -1180,14 +1190,54 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
          * Ouvre le modal de génération de facture
          */
         function openFactureModal() {
+            console.log('Ouverture du modal de facture');
             const modal = document.getElementById('factureModal');
             const overlay = document.getElementById('factureModalOverlay');
-            if (modal && overlay) {
-                modal.classList.add('active');
+            
+            if (!modal) {
+                console.error('Modal factureModal introuvable');
+                alert('Erreur: Le modal de facture est introuvable. Vérifiez la console pour plus de détails.');
+                return;
+            }
+            if (!overlay) {
+                console.error('Overlay factureModalOverlay introuvable');
+                alert('Erreur: L\'overlay du modal est introuvable. Vérifiez la console pour plus de détails.');
+                return;
+            }
+            
+            try {
+                // Réinitialiser le formulaire
+                const form = document.getElementById('factureForm');
+                if (form) {
+                    form.reset();
+                    // Réinitialiser la date à aujourd'hui
+                    const dateInput = document.getElementById('factureDate');
+                    if (dateInput) {
+                        dateInput.value = new Date().toISOString().split('T')[0];
+                    }
+                }
+                
+                // Réinitialiser les lignes
+                const lignesContainer = document.getElementById('factureLignes');
+                if (lignesContainer) {
+                    lignesContainer.innerHTML = '';
+                    addFactureLigne();
+                }
+                
+                // Réinitialiser les totaux
+                calculateFactureTotal();
+                
+                // Afficher le modal
                 overlay.classList.add('active');
+                modal.classList.add('active');
                 document.body.style.overflow = 'hidden';
+                
                 // Charger la liste des clients
                 loadClientsForFacture();
+                console.log('Modal ouvert avec succès');
+            } catch (error) {
+                console.error('Erreur lors de l\'ouverture du modal:', error);
+                alert('Erreur lors de l\'ouverture du modal: ' + error.message);
             }
         }
 
@@ -1202,9 +1252,15 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 overlay.classList.remove('active');
                 document.body.style.overflow = '';
                 // Réinitialiser le formulaire
-                document.getElementById('factureForm').reset();
-                document.getElementById('factureLignes').innerHTML = '';
-                addFactureLigne();
+                const form = document.getElementById('factureForm');
+                if (form) {
+                    form.reset();
+                }
+                const lignes = document.getElementById('factureLignes');
+                if (lignes) {
+                    lignes.innerHTML = '';
+                    addFactureLigne();
+                }
             }
         }
 
@@ -1394,17 +1450,22 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
+        // Exposer les fonctions globalement pour les onclick
+        window.openSection = openSection;
+        window.openFactureModal = openFactureModal;
+        window.closeFactureModal = closeFactureModal;
+        window.addFactureLigne = addFactureLigne;
+        window.removeFactureLigne = removeFactureLigne;
+        window.submitFactureForm = submitFactureForm;
+
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
 
             // Initialisation de la section statistiques
             initStatsSection();
 
-            // Ajouter la première ligne de facture
-            addFactureLigne();
-
-            // Calculer le total initial
-            calculateFactureTotal();
+            // Ne pas ajouter de ligne au chargement, seulement quand le modal s'ouvre
+            // addFactureLigne() sera appelé dans openFactureModal()
 
             // Fermer le modal avec Escape
             document.addEventListener('keydown', function(e) {
