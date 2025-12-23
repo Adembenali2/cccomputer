@@ -1103,6 +1103,52 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         </div>
     </div>
 
+    <!-- Modal Liste Factures -->
+    <div class="modal-overlay" id="facturesListModalOverlay" onclick="closeFacturesListModal()">
+        <div class="modal" id="facturesListModal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title">Liste des factures</h2>
+                <button class="modal-close" onclick="closeFacturesListModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="facturesListLoading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Chargement des factures...
+                </div>
+                <div id="facturesListContainer" style="display: none;">
+                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary);">
+                        <span id="facturesCount">0</span> facture(s) trouvée(s)
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Type</th>
+                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant HT</th>
+                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">TVA</th>
+                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Total TTC</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Statut</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facturesListTableBody">
+                                <!-- Les factures seront ajoutées ici dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="facturesListError" style="display: none; text-align: center; padding: 2rem; color: #ef4444;">
+                    Erreur lors du chargement des factures
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeFacturesListModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Générer Facture -->
     <div class="modal-overlay" id="factureModalOverlay" onclick="closeFactureModal()">
         <div class="modal" id="factureModal" onclick="event.stopPropagation()">
@@ -1196,6 +1242,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             console.log('openSection appelé avec:', section);
             if (section === 'generer-facture') {
                 openFactureModal();
+            } else if (section === 'factures') {
+                openFacturesListModal();
             } else {
                 console.log('Ouverture de la section:', section);
                 alert(`Section "${section}" - À implémenter`);
@@ -1482,10 +1530,136 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
+        /**
+         * Ouvre le modal de liste des factures
+         */
+        function openFacturesListModal() {
+            const modal = document.getElementById('facturesListModal');
+            const overlay = document.getElementById('facturesListModalOverlay');
+            
+            if (!modal || !overlay) {
+                console.error('Modal facturesListModal introuvable');
+                return;
+            }
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Charger les factures
+            loadFacturesList();
+        }
+
+        /**
+         * Ferme le modal de liste des factures
+         */
+        function closeFacturesListModal() {
+            const modal = document.getElementById('facturesListModal');
+            const overlay = document.getElementById('facturesListModalOverlay');
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+
+        /**
+         * Charge la liste des factures depuis l'API
+         */
+        async function loadFacturesList() {
+            const loadingDiv = document.getElementById('facturesListLoading');
+            const container = document.getElementById('facturesListContainer');
+            const errorDiv = document.getElementById('facturesListError');
+            const tableBody = document.getElementById('facturesListTableBody');
+            const countSpan = document.getElementById('facturesCount');
+            
+            loadingDiv.style.display = 'block';
+            container.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/API/factures_liste.php');
+                const data = await response.json();
+                
+                if (data.ok && data.factures) {
+                    tableBody.innerHTML = '';
+                    
+                    if (data.factures.length === 0) {
+                        tableBody.innerHTML = `
+                            <tr>
+                                <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                    Aucune facture trouvée
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        data.factures.forEach(facture => {
+                            const row = document.createElement('tr');
+                            row.style.borderBottom = '1px solid var(--border-color)';
+                            row.style.transition = 'background 0.2s';
+                            row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
+                            row.onmouseleave = function() { this.style.background = ''; };
+                            
+                            // Badge de statut
+                            const statutColors = {
+                                'brouillon': '#6b7280',
+                                'envoyee': '#3b82f6',
+                                'payee': '#10b981',
+                                'en_retard': '#ef4444',
+                                'annulee': '#9ca3af'
+                            };
+                            const statutLabels = {
+                                'brouillon': 'Brouillon',
+                                'envoyee': 'Envoyée',
+                                'payee': 'Payée',
+                                'en_retard': 'En retard',
+                                'annulee': 'Annulée'
+                            };
+                            const statutColor = statutColors[facture.statut] || '#6b7280';
+                            const statutLabel = statutLabels[facture.statut] || facture.statut;
+                            
+                            // Bouton PDF
+                            const pdfButton = facture.pdf_path 
+                                ? `<button onclick="window.open('${facture.pdf_path}', '_blank')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600;">Voir PDF</button>`
+                                : '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>';
+                            
+                            row.innerHTML = `
+                                <td style="padding: 0.75rem; font-weight: 600; color: var(--text-primary);">${facture.numero}</td>
+                                <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.date_facture_formatted}</td>
+                                <td style="padding: 0.75rem; color: var(--text-primary);">${facture.client_nom}${facture.client_code ? ' (' + facture.client_code + ')' : ''}</td>
+                                <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.type}</td>
+                                <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.montant_ht.toFixed(2).replace('.', ',')} €</td>
+                                <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.tva.toFixed(2).replace('.', ',')} €</td>
+                                <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">${facture.montant_ttc.toFixed(2).replace('.', ',')} €</td>
+                                <td style="padding: 0.75rem; text-align: center;">
+                                    <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: var(--radius-md); background: ${statutColor}20; color: ${statutColor}; font-size: 0.85rem; font-weight: 600;">${statutLabel}</span>
+                                </td>
+                                <td style="padding: 0.75rem; text-align: center;">${pdfButton}</td>
+                            `;
+                            tableBody.appendChild(row);
+                        });
+                    }
+                    
+                    countSpan.textContent = data.total || data.factures.length;
+                    loadingDiv.style.display = 'none';
+                    container.style.display = 'block';
+                } else {
+                    errorDiv.textContent = data.error || 'Erreur lors du chargement des factures';
+                    loadingDiv.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des factures:', error);
+                errorDiv.textContent = 'Erreur: ' + error.message;
+                loadingDiv.style.display = 'none';
+                errorDiv.style.display = 'block';
+            }
+        }
+
         // Exposer les fonctions globalement pour les onclick
         window.openSection = openSection;
         window.openFactureModal = openFactureModal;
         window.closeFactureModal = closeFactureModal;
+        window.openFacturesListModal = openFacturesListModal;
+        window.closeFacturesListModal = closeFacturesListModal;
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
         window.submitFactureForm = submitFactureForm;
@@ -1499,12 +1673,18 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             // Ne pas ajouter de ligne au chargement, seulement quand le modal s'ouvre
             // addFactureLigne() sera appelé dans openFactureModal()
 
-            // Fermer le modal avec Escape
+            // Fermer les modals avec Escape
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
-                    const modal = document.getElementById('factureModal');
-                    if (modal && modal.classList.contains('active')) {
+                    const factureModal = document.getElementById('factureModal');
+                    const factureModalOverlay = document.getElementById('factureModalOverlay');
+                    const facturesListModal = document.getElementById('facturesListModal');
+                    const facturesListModalOverlay = document.getElementById('facturesListModalOverlay');
+                    
+                    if (factureModalOverlay && factureModalOverlay.classList.contains('active')) {
                         closeFactureModal();
+                    } else if (facturesListModalOverlay && facturesListModalOverlay.classList.contains('active')) {
+                        closeFacturesListModal();
                     }
                 }
             });
