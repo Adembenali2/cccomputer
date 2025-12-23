@@ -136,8 +136,10 @@ try {
     });
     
     error_log('Recherche du PDF - chemin web: ' . $pdfWebPath);
-    error_log('Base directory: ' . $baseDir);
-    error_log('Real base directory: ' . ($realBaseDir !== false ? $realBaseDir : 'Non disponible'));
+    error_log('Base upload directory: ' . $baseUploadDir);
+    error_log('Factures directory: ' . $facturesDir);
+    error_log('Relative path: ' . $relativePath);
+    error_log('Real factures directory: ' . (realpath($facturesDir) !== false ? realpath($facturesDir) : 'Non disponible'));
     
     foreach ($possiblePaths as $testPath) {
         // Nettoyer le chemin
