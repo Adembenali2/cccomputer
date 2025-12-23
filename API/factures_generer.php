@@ -1,7 +1,7 @@
 <?php
 /**
  * API pour générer une facture et son PDF
- * Mise à jour : Layout spécifique SSS / ALR / Footer bas de page
+ * Version : Layout SSS International avec Logo (assets/logos/logo1.png)
  */
 
 require_once __DIR__ . '/../includes/auth.php';
@@ -172,12 +172,10 @@ function generateFactureNumber(PDO $pdo): string {
 }
 
 /**
- * Génère le PDF avec le design spécifique demandé :
+ * Génère le PDF avec le design spécifique :
+ * - LOGO (logo1.png) en haut à gauche
  * - Expéditeur à Droite
  * - Client à Gauche en dessous
- * - Date/Numéro au dessus du tableau
- * - Tableau centré
- * - Footer tout en bas
  * - Tout sur une seule page
  */
 function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data): string {
@@ -197,7 +195,7 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $stmt->execute([':id' => $factureId]);
     $facture = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // 3. Dossier
+    // 3. Dossier de sauvegarde
     $uploadDir = __DIR__ . '/../uploads/factures/' . date('Y');
     if (!is_dir($uploadDir)) @mkdir($uploadDir, 0755, true);
     
@@ -206,22 +204,35 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $pdf->SetCreator('System');
     $pdf->SetTitle('Facture ' . $facture['numero']);
     
-    // Suppression Header/Footer auto pour gérer manuellement le layout "Une seule page"
+    // Suppression Header/Footer auto
     $pdf->setPrintHeader(false);
     $pdf->setPrintFooter(false);
     
-    // Marges réduites pour tout faire tenir
+    // Marges
     $pdf->SetMargins(15, 10, 15); 
-    $pdf->SetAutoPageBreak(false); // IMPORTANT: Désactivé pour contrôler le footer manuellement
+    $pdf->SetAutoPageBreak(false);
     
     $pdf->AddPage();
     $pdf->SetTextColor(0, 0, 0);
 
     // ==========================================
+    // SECTION 0 : LOGO (Haut Gauche)
+    // ==========================================
+    // Chemin vers le logo
+    $logoPath = __DIR__ . '/../assets/logos/logo1.png';
+    
+    if (file_exists($logoPath)) {
+        // Image($file, $x, $y, $w, $h, $type, $link, $align, $resize, $dpi, $palign, $ismask, $imgmask, $border, $fitbox, $hidden, $fitonpage)
+        // Position X=15, Y=10, Largeur=40mm
+        $pdf->Image($logoPath, 15, 10, 40, 0, 'PNG', '', '', false, 300, '', false, false, 0);
+    }
+
+    // ==========================================
     // SECTION 1 : EXPÉDITEUR (Aligné à DROITE)
     // ==========================================
+    // On garde la même hauteur Y=10 pour que ce soit aligné horizontalement avec le logo
+    $pdf->SetY(10); 
     $pdf->SetFont('helvetica', '', 10);
-    // On utilise Cell(0, ...) avec align 'R' pour coller à droite
     $pdf->Cell(0, 5, 'SSS international', 0, 1, 'R');
     $pdf->Cell(0, 5, '7, rue pierre brolet', 0, 1, 'R');
     $pdf->Cell(0, 5, '93100 Stains', 0, 1, 'R');
@@ -229,7 +240,8 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     // ==========================================
     // SECTION 2 : CLIENT (Aligné à GAUCHE, en dessous)
     // ==========================================
-    $pdf->Ln(10); // Espace vertical après l'expéditeur
+    // On descend un peu plus pour éviter de chevaucher le logo
+    $pdf->SetY(40); 
     
     $pdf->SetFont('helvetica', 'B', 11);
     $pdf->Cell(0, 5, 'Client :', 0, 1, 'L');
@@ -243,38 +255,27 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     }
 
     // ==========================================
-    // SECTION 3 : DATE ET FACTURE (Juste au dessus du tableau)
+    // SECTION 3 : DATE ET FACTURE
     // ==========================================
-    $pdf->Ln(8); // Espace après le client
+    $pdf->Ln(8);
     
-    // On met Date et Numéro sur la même ligne ou l'un sous l'autre
     $pdf->SetFont('helvetica', '', 11);
     $dateStr = date('d/m/Y', strtotime($facture['date_facture']));
     
-    // Texte complet : "Date : XX/XX/XXXX   Facture N° : FAC-..."
-    // On peut utiliser des tabulations ou des cellules
     $pdf->Cell(50, 6, 'Date : ' . $dateStr, 0, 0, 'L');
     
     $pdf->SetFont('helvetica', 'B', 11);
     $pdf->Cell(0, 6, 'Facture N° : ' . $facture['numero'], 0, 1, 'L'); 
-    // Note: Le prompt demandait "un peu en bas", ici c'est juste avant le tableau.
 
-    $pdf->Ln(2); // Petit espace avant le tableau
+    $pdf->Ln(5);
 
     // ==========================================
-    // SECTION 4 : TABLEAU (Centré / Pleine largeur)
+    // SECTION 4 : TABLEAU
     // ==========================================
-    
-    // Entêtes
     $pdf->SetFont('helvetica', 'B', 10);
     $pdf->SetFillColor(240, 240, 240);
     
-    // Largeurs col: Total 180 (15+15 marges = 30, A4=210. Reste 180)
-    $wDesc = 80;
-    $wType = 25;
-    $wQty = 20;
-    $wPrix = 25;
-    $wTotal = 30;
+    $wDesc = 80; $wType = 25; $wQty = 20; $wPrix = 25; $wTotal = 30;
     
     $pdf->Cell($wDesc, 8, 'Description', 1, 0, 'L', true);
     $pdf->Cell($wType, 8, 'Type', 1, 0, 'C', true);
@@ -284,9 +285,8 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     
     $pdf->SetFont('helvetica', '', 9);
     
-    // Lignes
     foreach ($lignes as $ligne) {
-        $description = mb_substr($ligne['description'], 0, 60); // Tronquer si trop long
+        $description = mb_substr($ligne['description'], 0, 60);
         
         $pdf->Cell($wDesc, 7, $description, 1, 0, 'L');
         $pdf->Cell($wType, 7, $ligne['type'], 1, 0, 'C');
@@ -295,9 +295,9 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
         $pdf->Cell($wTotal, 7, number_format($ligne['total_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
     }
     
-    // Totaux (Alignés à droite du tableau)
+    // Totaux
     $pdf->SetFont('helvetica', '', 10);
-    $offsetLabels = $wDesc + $wType + $wQty + $wPrix; // Pour aligner sous la colonne prix
+    $offsetLabels = $wDesc + $wType + $wQty + $wPrix;
     
     $pdf->Cell($offsetLabels, 6, 'Total HT', 1, 0, 'R');
     $pdf->Cell($wTotal, 6, number_format($facture['montant_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
@@ -310,28 +310,22 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $pdf->Cell($wTotal, 8, number_format($facture['montant_ttc'], 2, ',', ' ') . ' €', 1, 1, 'R');
 
     // ==========================================
-    // SECTION 5 : IBAN (Juste sous le tableau)
+    // SECTION 5 : IBAN
     // ==========================================
-    $pdf->Ln(5); // Petit espace demandé "mais pas trop"
+    $pdf->Ln(5);
     $pdf->SetFont('helvetica', '', 10);
     $pdf->Cell(0, 6, 'IBAN : FR76 1027 8063 4700 0229 4870 249 - BIC : CMCIFR2A', 0, 1, 'L');
 
     // ==========================================
-    // SECTION 6 : FOOTER (Tout en bas de la feuille)
+    // SECTION 6 : FOOTER
     // ==========================================
-    
-    // On se positionne à 35mm du bas de la page (A4 = 297mm de haut)
-    // -35mm permet d'avoir assez de place pour le texte légal
     $pdf->SetY(-35); 
+    $pdf->SetFont('helvetica', '', 8);
     
-    $pdf->SetFont('helvetica', '', 8); // Police plus petite pour le footer
-    
-    // Texte légal concaténé
     $footerLigne1 = "Conditions de règlement : Toutes nos factures sont payables au comptant net sans escompte. Taux de pénalités de retard applicable : 3 fois le taux légal. Indemnité forfaitaire pour frais de recouvrement : 40 €";
     $footerLigne2 = "Camson Group - 97, Boulevard Maurice Berteaux - SANNOIS SASU - Siret 947 820 585 00018 RCS Versailles TVA FR81947820585";
     $footerLigne3 = "www.camsongroup.fr - 01 55 99 00 69";
     
-    // MultiCell pour gérer le retour à la ligne si la phrase est trop longue, centré ('C')
     $pdf->MultiCell(0, 4, $footerLigne1, 0, 'C', false, 1);
     $pdf->Ln(1);
     $pdf->Cell(0, 4, $footerLigne2, 0, 1, 'C');
