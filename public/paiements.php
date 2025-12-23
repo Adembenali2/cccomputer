@@ -1938,6 +1938,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             btnSend.textContent = 'Envoi en cours...';
             
             try {
+                console.log('Envoi email - Données:', data);
                 const response = await fetch('/API/factures_envoyer.php', {
                     method: 'POST',
                     headers: {
@@ -1946,7 +1947,22 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     body: JSON.stringify(data)
                 });
                 
+                console.log('Envoi email - Status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erreur HTTP:', response.status, errorText);
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        alert('Erreur : ' + (errorJson.error || 'Erreur HTTP ' + response.status));
+                    } catch {
+                        alert('Erreur HTTP ' + response.status + ': ' + errorText.substring(0, 200));
+                    }
+                    return;
+                }
+                
                 const result = await response.json();
+                console.log('Envoi email - Réponse:', result);
                 
                 if (result.ok) {
                     alert('Facture envoyée avec succès à ' + data.email);
@@ -1954,7 +1970,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     // Recharger la liste des factures pour mettre à jour le statut
                     loadFacturesList();
                 } else {
-                    alert('Erreur : ' + (result.error || 'Erreur lors de l\'envoi de l\'email'));
+                    const errorMsg = result.error || 'Erreur lors de l\'envoi de l\'email';
+                    console.error('Erreur API:', errorMsg);
+                    alert('Erreur : ' + errorMsg);
                 }
             } catch (error) {
                 console.error('Erreur lors de l\'envoi de l\'email:', error);

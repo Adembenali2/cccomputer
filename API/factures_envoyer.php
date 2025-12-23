@@ -3,8 +3,47 @@
  * API pour envoyer une facture par email au client
  */
 
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/api_helpers.php';
+// Gestionnaire d'erreurs global pour capturer toutes les erreurs PHP
+set_error_handler(function($severity, $message, $file, $line) {
+    if (error_reporting() & $severity) {
+        error_log("factures_envoyer.php PHP Error: $message in $file on line $line");
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'ok' => false,
+            'error' => 'Erreur PHP: ' . $message
+        ]);
+        exit;
+    }
+    return false;
+});
+
+// Gestionnaire d'exceptions non capturées
+set_exception_handler(function($exception) {
+    error_log("factures_envoyer.php Uncaught Exception: " . $exception->getMessage() . " in " . $exception->getFile() . " on line " . $exception->getLine());
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Erreur: ' . $exception->getMessage()
+    ]);
+    exit;
+});
+
+try {
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/api_helpers.php';
+} catch (Throwable $e) {
+    error_log('factures_envoyer.php - Erreur lors du chargement des includes: ' . $e->getMessage());
+    error_log('factures_envoyer.php - Trace: ' . $e->getTraceAsString());
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Erreur d\'initialisation: ' . $e->getMessage()
+    ]);
+    exit;
+}
 
 // Vérifier que c'est une requête POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -146,7 +185,22 @@ try {
     ";
     
     // Lire le contenu du PDF
-    $pdfContent = file_get_contents($pdfPath);
+    if (!is_readable($pdfPath)) {
+        error_log('ERREUR: Le fichier PDF n\'est pas lisible: ' . $pdfPath);
+        jsonResponse(['ok' => false, 'error' => 'Le fichier PDF n\'est pas accessible en lecture'], 500);
+    }
+    
+    $pdfContent = @file_get_contents($pdfPath);
+    if ($pdfContent === false) {
+        error_log('ERREUR: Impossible de lire le contenu du PDF: ' . $pdfPath);
+        jsonResponse(['ok' => false, 'error' => 'Impossible de lire le fichier PDF'], 500);
+    }
+    
+    if (empty($pdfContent)) {
+        error_log('ERREUR: Le fichier PDF est vide: ' . $pdfPath);
+        jsonResponse(['ok' => false, 'error' => 'Le fichier PDF est vide'], 500);
+    }
+    
     $pdfBase64 = base64_encode($pdfContent);
     $pdfFilename = 'facture_' . $facture['numero'] . '.pdf';
     
@@ -206,9 +260,12 @@ try {
     
 } catch (PDOException $e) {
     error_log('factures_envoyer.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('factures_envoyer.php SQL trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
 } catch (Throwable $e) {
     error_log('factures_envoyer.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
+    error_log('factures_envoyer.php error class: ' . get_class($e));
+    error_log('factures_envoyer.php trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur: ' . $e->getMessage()], 500);
 }
 
