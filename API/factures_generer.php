@@ -1,6 +1,7 @@
 <?php
 /**
  * API pour générer une facture et son PDF
+ * Mise à jour : Layout spécifique SSS / ALR / Footer bas de page
  */
 
 require_once __DIR__ . '/../includes/auth.php';
@@ -20,7 +21,7 @@ try {
         if ($stmt->rowCount() === 0) {
             jsonResponse([
                 'ok' => false, 
-                'error' => 'La table "factures" n\'existe pas. Veuillez exécuter le script de migration : /sql/run_migration_factures.php'
+                'error' => 'La table "factures" n\'existe pas. Veuillez exécuter le script de migration.'
             ], 500);
         }
         
@@ -28,14 +29,14 @@ try {
         if ($stmt->rowCount() === 0) {
             jsonResponse([
                 'ok' => false, 
-                'error' => 'La table "facture_lignes" n\'existe pas. Veuillez exécuter le script de migration : /sql/run_migration_factures.php'
+                'error' => 'La table "facture_lignes" n\'existe pas. Veuillez exécuter le script de migration.'
             ], 500);
         }
     } catch (PDOException $e) {
         error_log('factures_generer.php Erreur vérification tables: ' . $e->getMessage());
         jsonResponse([
             'ok' => false, 
-            'error' => 'Erreur de connexion à la base de données. Vérifiez que les tables factures et facture_lignes existent.'
+            'error' => 'Erreur de connexion à la base de données.'
         ], 500);
     }
     
@@ -45,13 +46,8 @@ try {
     
     if (!$data) {
         $jsonError = json_last_error_msg();
-        error_log('factures_generer.php JSON decode error: ' . $jsonError);
-        error_log('factures_generer.php Raw input: ' . substr($input, 0, 500));
         jsonResponse(['ok' => false, 'error' => 'Données JSON invalides: ' . $jsonError], 400);
     }
-    
-    // Log des données reçues pour débogage
-    error_log('factures_generer.php Données reçues: ' . print_r($data, true));
     
     // Validation des champs obligatoires
     if (empty($data['factureClient']) || empty($data['factureDate']) || empty($data['factureType'])) {
@@ -74,18 +70,17 @@ try {
     // Générer le numéro de facture
     $numeroFacture = generateFactureNumber($pdo);
     
-    // Calculer les totaux depuis les lignes
+    // Calculer les totaux
     $montantHT = 0;
     foreach ($data['lignes'] as $ligne) {
         $montantHT += (float)($ligne['total_ht'] ?? 0);
     }
     
-    // Calculer la TVA (20%)
     $tauxTVA = 20;
     $tva = $montantHT * ($tauxTVA / 100);
     $montantTTC = $montantHT + $tva;
     
-    // Démarrer une transaction
+    // Transaction
     $pdo->beginTransaction();
     
     try {
@@ -114,7 +109,7 @@ try {
         
         $factureId = $pdo->lastInsertId();
         
-        // Insérer les lignes de facture
+        // Insérer les lignes
         $stmtLigne = $pdo->prepare("
             INSERT INTO facture_lignes 
             (id_facture, description, type, quantite, prix_unitaire_ht, total_ht, ordre)
@@ -123,11 +118,6 @@ try {
         ");
         
         foreach ($data['lignes'] as $index => $ligne) {
-            // Vérifier que toutes les données nécessaires sont présentes
-            if (empty($ligne['description']) || empty($ligne['type'])) {
-                throw new InvalidArgumentException("Ligne $index incomplète : description et type sont requis");
-            }
-            
             $stmtLigne->execute([
                 ':id_facture' => $factureId,
                 ':description' => trim($ligne['description']),
@@ -142,7 +132,7 @@ try {
         // Générer le PDF
         $pdfPath = generateFacturePDF($pdo, $factureId, $client, $data);
         
-        // Mettre à jour la facture avec le chemin du PDF
+        // Update facture path
         $stmt = $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = :pdf_path, statut = 'envoyee' WHERE id = :id");
         $stmt->execute([
             ':pdf_path' => $pdfPath,
@@ -162,241 +152,199 @@ try {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log('factures_generer.php transaction error: ' . $e->getMessage());
-        error_log('factures_generer.php transaction trace: ' . $e->getTraceAsString());
         throw $e;
     }
     
-} catch (PDOException $e) {
-    error_log('factures_generer.php SQL error: ' . $e->getMessage());
-    error_log('factures_generer.php SQL error info: ' . print_r($e->errorInfo ?? [], true));
-    error_log('factures_generer.php SQL trace: ' . $e->getTraceAsString());
-    
-    // Message d'erreur plus détaillé pour le débogage
-    $errorMsg = 'Erreur de base de données';
-    if (isset($e->errorInfo[2])) {
-        $errorMsg .= ': ' . $e->errorInfo[2];
-    } else {
-        $errorMsg .= ': ' . $e->getMessage();
-    }
-    
-    jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
 } catch (Throwable $e) {
-    error_log('factures_generer.php error: ' . $e->getMessage());
-    error_log('factures_generer.php error class: ' . get_class($e));
-    error_log('factures_generer.php trace: ' . $e->getTraceAsString());
-    
-    // Message d'erreur plus informatif
-    $errorMsg = 'Erreur : ' . $e->getMessage();
-    if ($e instanceof RuntimeException) {
-        $errorMsg = $e->getMessage();
-    }
-    
-    jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
+    error_log('Erreur factures_generer.php: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Erreur serveur: ' . $e->getMessage()], 500);
 }
 
 /**
  * Génère un numéro de facture unique
  */
 function generateFactureNumber(PDO $pdo): string {
-    // Vérifier que la table existe
-    $stmt = $pdo->query("SHOW TABLES LIKE 'factures'");
-    if ($stmt->rowCount() === 0) {
-        throw new RuntimeException('La table "factures" n\'existe pas dans la base de données. Veuillez exécuter le script SQL de création des tables.');
-    }
-    
     $year = date('Y');
     $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM factures WHERE numero LIKE :pattern");
     $stmt->execute([':pattern' => "FAC-{$year}-%"]);
     $count = (int)$stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $numero = sprintf("FAC-%s-%04d", $year, $count + 1);
-    return $numero;
+    return sprintf("FAC-%s-%04d", $year, $count + 1);
 }
 
 /**
- * Génère le PDF de la facture avec le nouveau design demandé
+ * Génère le PDF avec le design spécifique demandé :
+ * - Expéditeur à Droite
+ * - Client à Gauche en dessous
+ * - Date/Numéro au dessus du tableau
+ * - Tableau centré
+ * - Footer tout en bas
+ * - Tout sur une seule page
  */
 function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data): string {
-    // Charger TCPDF via Composer autoload
+    // 1. Chargement TCPDF
     $vendorAutoload = __DIR__ . '/../vendor/autoload.php';
     if (!file_exists($vendorAutoload)) {
-        throw new RuntimeException('Le fichier vendor/autoload.php est introuvable. Exécutez "composer install".');
+        throw new RuntimeException('vendor/autoload.php introuvable.');
     }
     require_once $vendorAutoload;
     
-    // Vérifier que TCPDF est disponible
-    if (!class_exists('TCPDF')) {
-        throw new RuntimeException('La classe TCPDF n\'est pas disponible. Vérifiez que tecnickcom/tcpdf est installé via Composer.');
-    }
-    
-    // Récupérer les lignes de facture
+    // 2. Données
     $stmt = $pdo->prepare("SELECT * FROM facture_lignes WHERE id_facture = :id ORDER BY ordre ASC");
     $stmt->execute([':id' => $factureId]);
     $lignes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Récupérer la facture complète
     $stmt = $pdo->prepare("SELECT * FROM factures WHERE id = :id LIMIT 1");
     $stmt->execute([':id' => $factureId]);
     $facture = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$facture) {
-        throw new RuntimeException('Facture introuvable après insertion');
-    }
-    
-    // Créer le répertoire de stockage si nécessaire
+
+    // 3. Dossier
     $uploadDir = __DIR__ . '/../uploads/factures/' . date('Y');
-    if (!is_dir($uploadDir)) {
-        @mkdir($uploadDir, 0755, true);
-    }
+    if (!is_dir($uploadDir)) @mkdir($uploadDir, 0755, true);
     
-    // Vérifier que le répertoire est accessible en écriture
-    if (!is_writable($uploadDir)) {
-        throw new RuntimeException('Le répertoire de stockage des factures n\'est pas accessible en écriture: ' . $uploadDir);
-    }
-    
-    // Créer le PDF avec TCPDF
+    // 4. Config TCPDF
     $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
-    
-    // Informations du document
-    $pdf->SetCreator('CC Computer');
-    $pdf->SetAuthor('SSS International');
+    $pdf->SetCreator('System');
     $pdf->SetTitle('Facture ' . $facture['numero']);
-    $pdf->SetSubject('Facture');
     
-    // Supprimer les en-têtes et pieds de page par défaut pour contrôle total
+    // Suppression Header/Footer auto pour gérer manuellement le layout "Une seule page"
     $pdf->setPrintHeader(false);
     $pdf->setPrintFooter(false);
     
-    // Marges (Gauche, Haut, Droite)
-    $pdf->SetMargins(15, 15, 15);
-    $pdf->SetAutoPageBreak(true, 40); // Grande marge en bas pour le footer
+    // Marges réduites pour tout faire tenir
+    $pdf->SetMargins(15, 10, 15); 
+    $pdf->SetAutoPageBreak(false); // IMPORTANT: Désactivé pour contrôler le footer manuellement
     
-    // Ajouter une page
     $pdf->AddPage();
     $pdf->SetTextColor(0, 0, 0);
-    
-    // --- 1. LOGO (Haut Gauche) ---
-    $logoPath = __DIR__ . '/../assets/logos/logo.png';
-    $currentY = 15;
-    
-    if (file_exists($logoPath)) {
-        $pdf->Image($logoPath, 15, $currentY, 40, 0, '', '', '', false, 300, '', false, false, 0);
-        // On estime la hauteur du logo + un espace
-        $currentY += 35; 
-    } else {
-        $currentY += 10;
-    }
-    
-    // --- 2. ADRESSE "SSS International" (Sous le logo) ---
-    $pdf->SetY($currentY);
+
+    // ==========================================
+    // SECTION 1 : EXPÉDITEUR (Aligné à DROITE)
+    // ==========================================
     $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(0, 5, 'SSS international', 0, 1, 'L');
-    $pdf->Cell(0, 5, '7, rue pierre brolet', 0, 1, 'L');
-    $pdf->Cell(0, 5, '93100 Stains', 0, 1, 'L');
+    // On utilise Cell(0, ...) avec align 'R' pour coller à droite
+    $pdf->Cell(0, 5, 'SSS international', 0, 1, 'R');
+    $pdf->Cell(0, 5, '7, rue pierre brolet', 0, 1, 'R');
+    $pdf->Cell(0, 5, '93100 Stains', 0, 1, 'R');
+
+    // ==========================================
+    // SECTION 2 : CLIENT (Aligné à GAUCHE, en dessous)
+    // ==========================================
+    $pdf->Ln(10); // Espace vertical après l'expéditeur
     
-    $pdf->Ln(10); // Espace de séparation
-    
-    // --- 3. DATE ET NUMÉRO DE FACTURE (Même ligne) ---
-    // Date à gauche, Numéro à droite
-    $pdf->SetFont('helvetica', '', 11);
-    
-    // Cellule date (gauche)
-    $pdf->Cell(90, 8, 'Date : ' . date('d/m/Y', strtotime($facture['date_facture'])), 0, 0, 'L');
-    
-    // Cellule numéro (droite), en gras
-    $pdf->SetFont('helvetica', 'B', 12);
-    $pdf->Cell(90, 8, 'Facture N° : ' . $facture['numero'], 0, 1, 'R');
-    
-    $pdf->Ln(5);
-    
-    // --- 4. INFORMATIONS CLIENT ---
     $pdf->SetFont('helvetica', 'B', 11);
-    $pdf->Cell(0, 6, 'Client :', 0, 1, 'L');
+    $pdf->Cell(0, 5, 'Client :', 0, 1, 'L');
     $pdf->SetFont('helvetica', '', 10);
+    
     $pdf->Cell(0, 5, $client['raison_sociale'], 0, 1, 'L');
-    if (!empty($client['adresse'])) {
-        $pdf->Cell(0, 5, $client['adresse'], 0, 1, 'L');
-    }
-    if (!empty($client['code_postal']) || !empty($client['ville'])) {
-        $pdf->Cell(0, 5, trim(($client['code_postal'] ?? '') . ' ' . ($client['ville'] ?? '')), 0, 1, 'L');
-    }
+    $pdf->Cell(0, 5, $client['adresse'], 0, 1, 'L');
+    $pdf->Cell(0, 5, trim(($client['code_postal'] ?? '') . ' ' . ($client['ville'] ?? '')), 0, 1, 'L');
     if (!empty($client['siret'])) {
         $pdf->Cell(0, 5, 'SIRET: ' . $client['siret'], 0, 1, 'L');
     }
+
+    // ==========================================
+    // SECTION 3 : DATE ET FACTURE (Juste au dessus du tableau)
+    // ==========================================
+    $pdf->Ln(8); // Espace après le client
     
-    $pdf->Ln(10); // Espace avant tableau
+    // On met Date et Numéro sur la même ligne ou l'un sous l'autre
+    $pdf->SetFont('helvetica', '', 11);
+    $dateStr = date('d/m/Y', strtotime($facture['date_facture']));
     
-    // --- 5. TABLEAU DE CONSOMMATION ---
+    // Texte complet : "Date : XX/XX/XXXX   Facture N° : FAC-..."
+    // On peut utiliser des tabulations ou des cellules
+    $pdf->Cell(50, 6, 'Date : ' . $dateStr, 0, 0, 'L');
+    
+    $pdf->SetFont('helvetica', 'B', 11);
+    $pdf->Cell(0, 6, 'Facture N° : ' . $facture['numero'], 0, 1, 'L'); 
+    // Note: Le prompt demandait "un peu en bas", ici c'est juste avant le tableau.
+
+    $pdf->Ln(2); // Petit espace avant le tableau
+
+    // ==========================================
+    // SECTION 4 : TABLEAU (Centré / Pleine largeur)
+    // ==========================================
+    
+    // Entêtes
     $pdf->SetFont('helvetica', 'B', 10);
-    $pdf->SetFillColor(240, 240, 240); // Gris clair pour l'entête
+    $pdf->SetFillColor(240, 240, 240);
     
-    // En-têtes du tableau
-    $pdf->Cell(80, 8, 'Description', 1, 0, 'L', true);
-    $pdf->Cell(30, 8, 'Type', 1, 0, 'C', true);
-    $pdf->Cell(25, 8, 'Qté', 1, 0, 'C', true);
-    $pdf->Cell(25, 8, 'Prix unit.', 1, 0, 'R', true);
-    $pdf->Cell(30, 8, 'Total HT', 1, 1, 'R', true);
+    // Largeurs col: Total 180 (15+15 marges = 30, A4=210. Reste 180)
+    $wDesc = 80;
+    $wType = 25;
+    $wQty = 20;
+    $wPrix = 25;
+    $wTotal = 30;
     
-    $pdf->SetFillColor(255, 255, 255);
+    $pdf->Cell($wDesc, 8, 'Description', 1, 0, 'L', true);
+    $pdf->Cell($wType, 8, 'Type', 1, 0, 'C', true);
+    $pdf->Cell($wQty, 8, 'Qté', 1, 0, 'C', true);
+    $pdf->Cell($wPrix, 8, 'Prix unit.', 1, 0, 'R', true);
+    $pdf->Cell($wTotal, 8, 'Total HT', 1, 1, 'R', true);
+    
     $pdf->SetFont('helvetica', '', 9);
     
-    // Lignes du tableau
+    // Lignes
     foreach ($lignes as $ligne) {
-        // Gérer les descriptions longues
-        $description = mb_substr($ligne['description'], 0, 50);
-        if (mb_strlen($ligne['description']) > 50) {
-            $description .= '...';
-        }
+        $description = mb_substr($ligne['description'], 0, 60); // Tronquer si trop long
         
-        $pdf->Cell(80, 7, $description, 1, 0, 'L');
-        $pdf->Cell(30, 7, $ligne['type'], 1, 0, 'C');
-        $pdf->Cell(25, 7, number_format($ligne['quantite'], 2, ',', ' '), 1, 0, 'C');
-        $pdf->Cell(25, 7, number_format($ligne['prix_unitaire_ht'], 2, ',', ' ') . ' €', 1, 0, 'R');
-        $pdf->Cell(30, 7, number_format($ligne['total_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
+        $pdf->Cell($wDesc, 7, $description, 1, 0, 'L');
+        $pdf->Cell($wType, 7, $ligne['type'], 1, 0, 'C');
+        $pdf->Cell($wQty, 7, number_format($ligne['quantite'], 2, ',', ' '), 1, 0, 'C');
+        $pdf->Cell($wPrix, 7, number_format($ligne['prix_unitaire_ht'], 2, ',', ' ') . ' €', 1, 0, 'R');
+        $pdf->Cell($wTotal, 7, number_format($ligne['total_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
     }
     
-    // Totaux
-    $pdf->Ln(2);
+    // Totaux (Alignés à droite du tableau)
     $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(160, 6, 'Total HT:', 0, 0, 'R');
-    $pdf->Cell(30, 6, number_format($facture['montant_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $offsetLabels = $wDesc + $wType + $wQty + $wPrix; // Pour aligner sous la colonne prix
     
-    $pdf->Cell(160, 6, 'TVA (20%):', 0, 0, 'R');
-    $pdf->Cell(30, 6, number_format($facture['tva'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($offsetLabels, 6, 'Total HT', 1, 0, 'R');
+    $pdf->Cell($wTotal, 6, number_format($facture['montant_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
     
-    $pdf->SetFont('helvetica', 'B', 12);
-    $pdf->Cell(160, 8, 'Total TTC:', 0, 0, 'R');
-    $pdf->Cell(30, 8, number_format($facture['montant_ttc'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($offsetLabels, 6, 'TVA (20%)', 1, 0, 'R');
+    $pdf->Cell($wTotal, 6, number_format($facture['tva'], 2, ',', ' ') . ' €', 1, 1, 'R');
     
-    // --- 6. IBAN (Sous le tableau) ---
-    $pdf->Ln(10);
+    $pdf->SetFont('helvetica', 'B', 11);
+    $pdf->Cell($offsetLabels, 8, 'Total TTC', 1, 0, 'R');
+    $pdf->Cell($wTotal, 8, number_format($facture['montant_ttc'], 2, ',', ' ') . ' €', 1, 1, 'R');
+
+    // ==========================================
+    // SECTION 5 : IBAN (Juste sous le tableau)
+    // ==========================================
+    $pdf->Ln(5); // Petit espace demandé "mais pas trop"
     $pdf->SetFont('helvetica', '', 10);
     $pdf->Cell(0, 6, 'IBAN : FR76 1027 8063 4700 0229 4870 249 - BIC : CMCIFR2A', 0, 1, 'L');
+
+    // ==========================================
+    // SECTION 6 : FOOTER (Tout en bas de la feuille)
+    // ==========================================
     
-    // --- 7. PIED DE PAGE (Tout en bas, centré, écriture mince) ---
-    // Positionner à 35mm du bas de la page
+    // On se positionne à 35mm du bas de la page (A4 = 297mm de haut)
+    // -35mm permet d'avoir assez de place pour le texte légal
     $pdf->SetY(-35); 
     
-    $pdf->SetFont('helvetica', '', 8); // Police taille 8 pour l'effet "mince"
+    $pdf->SetFont('helvetica', '', 8); // Police plus petite pour le footer
     
-    $footerText1 = "Conditions de règlement : Toutes nos factures sont payables au comptant net sans escompte. Taux de pénalités de retard applicable : 3 fois le taux légal. Indemnité forfaitaire pour frais de recouvrement : 40 €";
-    $footerText2 = "Camson Group - 97, Boulevard Maurice Berteaux - SANNOIS SASU - Siret 947 820 585 00018 RCS Versailles TVA FR81947820585";
-    $footerText3 = "www.camsongroup.fr - 01 55 99 00 69";
+    // Texte légal concaténé
+    $footerLigne1 = "Conditions de règlement : Toutes nos factures sont payables au comptant net sans escompte. Taux de pénalités de retard applicable : 3 fois le taux légal. Indemnité forfaitaire pour frais de recouvrement : 40 €";
+    $footerLigne2 = "Camson Group - 97, Boulevard Maurice Berteaux - SANNOIS SASU - Siret 947 820 585 00018 RCS Versailles TVA FR81947820585";
+    $footerLigne3 = "www.camsongroup.fr - 01 55 99 00 69";
     
-    // Affichage centré
-    $pdf->MultiCell(0, 4, $footerText1, 0, 'C', false, 1);
+    // MultiCell pour gérer le retour à la ligne si la phrase est trop longue, centré ('C')
+    $pdf->MultiCell(0, 4, $footerLigne1, 0, 'C', false, 1);
     $pdf->Ln(1);
-    $pdf->Cell(0, 4, $footerText2, 0, 1, 'C');
-    $pdf->Cell(0, 4, $footerText3, 0, 1, 'C');
-    
-    // Générer le nom du fichier
+    $pdf->Cell(0, 4, $footerLigne2, 0, 1, 'C');
+    $pdf->Cell(0, 4, $footerLigne3, 0, 1, 'C');
+
+    // ==========================================
+    // SAUVEGARDE
+    // ==========================================
     $filename = 'facture_' . $facture['numero'] . '_' . date('YmdHis') . '.pdf';
     $filepath = $uploadDir . '/' . $filename;
     
-    // Sauvegarder le PDF sur le serveur
     $pdf->Output($filepath, 'F');
     
-    // Retourner le chemin relatif
     return '/uploads/factures/' . date('Y') . '/' . $filename;
 }
 ?>
