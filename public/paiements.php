@@ -686,10 +686,10 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
             background: var(--bg-primary);
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-xl);
-            max-width: 900px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
+            max-width: 1200px;
+            width: 95%;
+            max-height: 95vh;
+            overflow: hidden;
             display: none;
             flex-direction: column;
             z-index: 1001;
@@ -714,19 +714,18 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
         }
 
         .modal-header {
-            padding: 1.5rem;
+            padding: 1rem 1.5rem;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: sticky;
-            top: 0;
+            flex-shrink: 0;
             background: var(--bg-primary);
             z-index: 10;
         }
 
         .modal-title {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: 600;
             color: var(--text-primary);
             margin: 0;
@@ -748,29 +747,33 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
         }
 
         .modal-body {
-            padding: 1.5rem;
+            padding: 1rem 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+            max-height: calc(95vh - 140px);
         }
 
         .modal-form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
         }
 
         .modal-form-group label {
             display: block;
             font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 0.5rem;
-            font-size: 0.95rem;
+            margin-bottom: 0.35rem;
+            font-size: 0.85rem;
         }
 
         .modal-form-group input,
         .modal-form-group select,
         .modal-form-group textarea {
             width: 100%;
-            padding: 0.75rem;
+            padding: 0.5rem 0.75rem;
             border: 2px solid var(--border-color);
             border-radius: var(--radius-md);
-            font-size: 1rem;
+            font-size: 0.9rem;
             color: var(--text-primary);
             background-color: var(--bg-secondary);
             transition: all 0.2s;
@@ -786,33 +789,33 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
 
         .modal-form-row {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
         }
 
         .facture-lignes-container {
-            margin-top: 1.5rem;
+            margin-top: 1rem;
         }
 
         .facture-lignes-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
         }
 
         .facture-ligne {
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
-            padding: 1rem;
-            margin-bottom: 1rem;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
         }
 
         .facture-ligne-row {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
-            gap: 1rem;
+            grid-template-columns: 2fr 1fr 0.8fr 1fr 1fr auto;
+            gap: 0.75rem;
             align-items: end;
         }
 
@@ -823,15 +826,16 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
         }
 
         .facture-ligne-field label {
-            font-size: 0.875rem;
+            font-size: 0.8rem;
             font-weight: 600;
             color: var(--text-secondary);
+            margin-bottom: 0.25rem;
         }
 
         .facture-ligne-field input,
         .facture-ligne-field select {
-            padding: 0.5rem;
-            font-size: 0.95rem;
+            padding: 0.4rem 0.5rem;
+            font-size: 0.9rem;
         }
 
         .facture-ligne-actions {
@@ -861,12 +865,13 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
             color: white;
             border: none;
             border-radius: var(--radius-md);
-            padding: 0.75rem 1.5rem;
+            padding: 0.5rem 1rem;
             font-weight: 600;
+            font-size: 0.9rem;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
             transition: all 0.2s;
         }
 
@@ -876,34 +881,33 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
         }
 
         .facture-totaux {
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
             border-top: 2px solid var(--border-color);
         }
 
         .facture-totaux-row {
             display: flex;
             justify-content: space-between;
-            padding: 0.75rem 0;
-            font-size: 1.1rem;
+            padding: 0.5rem 0;
+            font-size: 1rem;
         }
 
         .facture-totaux-row.total {
             font-weight: 700;
-            font-size: 1.25rem;
+            font-size: 1.1rem;
             border-top: 2px solid var(--border-color);
             margin-top: 0.5rem;
-            padding-top: 1rem;
+            padding-top: 0.75rem;
         }
 
         .modal-footer {
-            padding: 1.5rem;
+            padding: 1rem 1.5rem;
             border-top: 1px solid var(--border-color);
             display: flex;
             justify-content: flex-end;
             gap: 1rem;
-            position: sticky;
-            bottom: 0;
+            flex-shrink: 0;
             background: var(--bg-primary);
         }
 
@@ -1142,7 +1146,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
 
                 <div class="facture-lignes-container">
                     <div class="facture-lignes-header">
-                        <h3 style="margin: 0; font-size: 1.1rem;">Lignes de facture</h3>
+                        <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Lignes de facture</h3>
                         <button type="button" class="btn-add-ligne" onclick="addFactureLigne()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M12 5v14M5 12h14"></path>
