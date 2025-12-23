@@ -14,18 +14,21 @@ if (!headers_sent()) {
 
 try {
     require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
     require_once __DIR__ . '/../includes/api_helpers.php';
+    // getPdo() est disponible via api_helpers.php qui charge helpers.php
 } catch (Throwable $e) {
     error_log('messagerie_get_first_clients.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation: ' . $e->getMessage()], 500);
 }
 
 if (empty($_SESSION['user_id'])) {
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
 }
 
-$limit = min((int)($_GET['limit'] ?? 3), 10);
+// Récupérer PDO via la fonction centralisée
+$pdo = getPdo();
+
+$limit = min((int)($_GET['limit'] ?? 3), 1000); // Augmenter la limite à 1000
 
 try {
     $sql = "
