@@ -2070,7 +2070,20 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             try {
                 console.log('Démarrage du diagnostic...');
                 const response = await fetch('/API/factures_diagnostic.php');
+                
+                // Vérifier le type de contenu
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+                
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('Réponse non-JSON reçue:', text.substring(0, 500));
+                    alert('Erreur: Le serveur a retourné du HTML au lieu de JSON. Vérifiez la console pour plus de détails.');
+                    return;
+                }
+                
                 const result = await response.json();
+                console.log('Réponse JSON reçue:', result);
                 
                 if (result.ok) {
                     console.log('=== DIAGNOSTIC PDF ===');
@@ -2085,29 +2098,39 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     message += '/app existe: ' + (result.system_info['/app exists'] ? 'Oui' : 'Non') + '\n';
                     message += '/var/www/html existe: ' + (result.system_info['/var/www/html exists'] ? 'Oui' : 'Non') + '\n\n';
                     
-                    message += '=== FACTURES ===\n';
-                    result.factures.forEach((facture, index) => {
-                        message += `\n${index + 1}. Facture ${facture.numero} (ID: ${facture.facture_id})\n`;
-                        message += `   Chemin DB: ${facture.pdf_path_db}\n`;
-                        message += `   Fichier trouvé: ${facture.file_found ? 'OUI' : 'NON'}\n`;
-                        if (facture.file_found) {
-                            message += `   Chemin réel: ${facture.actual_path}\n`;
-                        } else {
-                            message += `   Chemins testés:\n`;
-                            facture.paths_tested.forEach(path => {
-                                message += `     - ${path.full_path} (existe: ${path.exists ? 'Oui' : 'Non'})\n`;
-                            });
-                        }
-                    });
+                    if (result.factures && result.factures.length > 0) {
+                        message += '=== FACTURES ===\n';
+                        result.factures.forEach((facture, index) => {
+                            message += `\n${index + 1}. Facture ${facture.numero} (ID: ${facture.facture_id})\n`;
+                            message += `   Chemin DB: ${facture.pdf_path_db}\n`;
+                            message += `   Fichier trouvé: ${facture.file_found ? 'OUI' : 'NON'}\n`;
+                            if (facture.file_found) {
+                                message += `   Chemin réel: ${facture.actual_path}\n`;
+                            } else {
+                                message += `   Chemins testés:\n`;
+                                facture.paths_tested.forEach(path => {
+                                    message += `     - ${path.full_path} (existe: ${path.exists ? 'Oui' : 'Non'})\n`;
+                                });
+                            }
+                        });
+                    } else {
+                        message += 'Aucune facture trouvée dans la base de données.\n';
+                    }
                     
                     alert(message);
                     console.log('Diagnostic complet. Voir la console pour plus de détails.');
                 } else {
-                    alert('Erreur lors du diagnostic: ' + (result.error || 'Erreur inconnue'));
+                    const errorMsg = result.error || 'Erreur inconnue';
+                    console.error('Erreur API:', errorMsg);
+                    if (result.trace) {
+                        console.error('Trace:', result.trace);
+                    }
+                    alert('Erreur lors du diagnostic: ' + errorMsg);
                 }
             } catch (error) {
                 console.error('Erreur diagnostic:', error);
-                alert('Erreur lors du diagnostic: ' + error.message);
+                console.error('Stack trace:', error.stack);
+                alert('Erreur lors du diagnostic: ' + error.message + '\n\nVérifiez la console pour plus de détails.');
             }
         }
         
