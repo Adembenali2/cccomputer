@@ -1115,8 +1115,34 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     Chargement des factures...
                 </div>
                 <div id="facturesListContainer" style="display: none;">
-                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary);">
-                        <span id="facturesCount">0</span> facture(s) trouvée(s)
+                    <!-- Barre de recherche -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="position: relative;">
+                            <input 
+                                type="text" 
+                                id="facturesSearchInput" 
+                                placeholder="Rechercher par nom, prénom, raison sociale, numéro de facture ou date..." 
+                                style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
+                                oninput="filterFactures()"
+                            />
+                            <svg 
+                                width="18" 
+                                height="18" 
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                stroke-width="2"
+                                style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none;"
+                            >
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                        <span><span id="facturesCount">0</span> facture(s) trouvée(s)</span>
+                        <span id="facturesFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
                     </div>
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse;">
@@ -1561,6 +1587,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
+        // Variable globale pour stocker toutes les factures
+        let allFactures = [];
+
         /**
          * Charge la liste des factures depuis l'API
          */
@@ -1570,73 +1599,27 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             const errorDiv = document.getElementById('facturesListError');
             const tableBody = document.getElementById('facturesListTableBody');
             const countSpan = document.getElementById('facturesCount');
+            const searchInput = document.getElementById('facturesSearchInput');
             
             loadingDiv.style.display = 'block';
             container.style.display = 'none';
             errorDiv.style.display = 'none';
+            
+            // Réinitialiser la recherche
+            if (searchInput) {
+                searchInput.value = '';
+            }
             
             try {
                 const response = await fetch('/API/factures_liste.php');
                 const data = await response.json();
                 
                 if (data.ok && data.factures) {
-                    tableBody.innerHTML = '';
+                    // Stocker toutes les factures pour le filtrage
+                    allFactures = data.factures;
                     
-                    if (data.factures.length === 0) {
-                        tableBody.innerHTML = `
-                            <tr>
-                                <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                                    Aucune facture trouvée
-                                </td>
-                            </tr>
-                        `;
-                    } else {
-                        data.factures.forEach(facture => {
-                            const row = document.createElement('tr');
-                            row.style.borderBottom = '1px solid var(--border-color)';
-                            row.style.transition = 'background 0.2s';
-                            row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
-                            row.onmouseleave = function() { this.style.background = ''; };
-                            
-                            // Badge de statut
-                            const statutColors = {
-                                'brouillon': '#6b7280',
-                                'envoyee': '#3b82f6',
-                                'payee': '#10b981',
-                                'en_retard': '#ef4444',
-                                'annulee': '#9ca3af'
-                            };
-                            const statutLabels = {
-                                'brouillon': 'Brouillon',
-                                'envoyee': 'Envoyée',
-                                'payee': 'Payée',
-                                'en_retard': 'En retard',
-                                'annulee': 'Annulée'
-                            };
-                            const statutColor = statutColors[facture.statut] || '#6b7280';
-                            const statutLabel = statutLabels[facture.statut] || facture.statut;
-                            
-                            // Bouton PDF
-                            const pdfButton = facture.pdf_path 
-                                ? `<button onclick="window.open('${facture.pdf_path}', '_blank')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600;">Voir PDF</button>`
-                                : '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>';
-                            
-                            row.innerHTML = `
-                                <td style="padding: 0.75rem; font-weight: 600; color: var(--text-primary);">${facture.numero}</td>
-                                <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.date_facture_formatted}</td>
-                                <td style="padding: 0.75rem; color: var(--text-primary);">${facture.client_nom}${facture.client_code ? ' (' + facture.client_code + ')' : ''}</td>
-                                <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.type}</td>
-                                <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.montant_ht.toFixed(2).replace('.', ',')} €</td>
-                                <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.tva.toFixed(2).replace('.', ',')} €</td>
-                                <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">${facture.montant_ttc.toFixed(2).replace('.', ',')} €</td>
-                                <td style="padding: 0.75rem; text-align: center;">
-                                    <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: var(--radius-md); background: ${statutColor}20; color: ${statutColor}; font-size: 0.85rem; font-weight: 600;">${statutLabel}</span>
-                                </td>
-                                <td style="padding: 0.75rem; text-align: center;">${pdfButton}</td>
-                            `;
-                            tableBody.appendChild(row);
-                        });
-                    }
+                    // Afficher toutes les factures initialement
+                    displayFactures(allFactures);
                     
                     countSpan.textContent = data.total || data.factures.length;
                     loadingDiv.style.display = 'none';
@@ -1654,12 +1637,148 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
+        /**
+         * Affiche les factures dans le tableau
+         */
+        function displayFactures(factures) {
+            const tableBody = document.getElementById('facturesListTableBody');
+            const countSpan = document.getElementById('facturesCount');
+            const filteredCountSpan = document.getElementById('facturesFilteredCount');
+            
+            tableBody.innerHTML = '';
+            
+            if (factures.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            Aucune facture trouvée
+                        </td>
+                    </tr>
+                `;
+                filteredCountSpan.textContent = '';
+            } else {
+                factures.forEach(facture => {
+                    const row = document.createElement('tr');
+                    row.style.borderBottom = '1px solid var(--border-color)';
+                    row.style.transition = 'background 0.2s';
+                    row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
+                    row.onmouseleave = function() { this.style.background = ''; };
+                    
+                    // Badge de statut
+                    const statutColors = {
+                        'brouillon': '#6b7280',
+                        'envoyee': '#3b82f6',
+                        'payee': '#10b981',
+                        'en_retard': '#ef4444',
+                        'annulee': '#9ca3af'
+                    };
+                    const statutLabels = {
+                        'brouillon': 'Brouillon',
+                        'envoyee': 'Envoyée',
+                        'payee': 'Payée',
+                        'en_retard': 'En retard',
+                        'annulee': 'Annulée'
+                    };
+                    const statutColor = statutColors[facture.statut] || '#6b7280';
+                    const statutLabel = statutLabels[facture.statut] || facture.statut;
+                    
+                    // Bouton PDF
+                    const pdfButton = facture.pdf_path 
+                        ? `<button onclick="window.open('${facture.pdf_path}', '_blank')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600;">Voir PDF</button>`
+                        : '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>';
+                    
+                    row.innerHTML = `
+                        <td style="padding: 0.75rem; font-weight: 600; color: var(--text-primary);">${facture.numero}</td>
+                        <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.date_facture_formatted}</td>
+                        <td style="padding: 0.75rem; color: var(--text-primary);">${facture.client_nom}${facture.client_code ? ' (' + facture.client_code + ')' : ''}</td>
+                        <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.type}</td>
+                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.montant_ht.toFixed(2).replace('.', ',')} €</td>
+                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.tva.toFixed(2).replace('.', ',')} €</td>
+                        <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">${facture.montant_ttc.toFixed(2).replace('.', ',')} €</td>
+                        <td style="padding: 0.75rem; text-align: center;">
+                            <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: var(--radius-md); background: ${statutColor}20; color: ${statutColor}; font-size: 0.85rem; font-weight: 600;">${statutLabel}</span>
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center;">${pdfButton}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                
+                // Afficher le nombre de résultats filtrés si différent du total
+                if (factures.length !== allFactures.length) {
+                    filteredCountSpan.textContent = `(${factures.length} sur ${allFactures.length})`;
+                } else {
+                    filteredCountSpan.textContent = '';
+                }
+            }
+        }
+
+        /**
+         * Filtre les factures selon le terme de recherche
+         */
+        function filterFactures() {
+            const searchInput = document.getElementById('facturesSearchInput');
+            const searchTerm = (searchInput.value || '').toLowerCase().trim();
+            
+            if (!searchTerm) {
+                // Afficher toutes les factures si la recherche est vide
+                displayFactures(allFactures);
+                return;
+            }
+            
+            // Filtrer les factures
+            const filtered = allFactures.filter(facture => {
+                // Rechercher dans le numéro de facture
+                if (facture.numero && facture.numero.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // Rechercher dans la date (format français et format ISO)
+                if (facture.date_facture_formatted && facture.date_facture_formatted.includes(searchTerm)) {
+                    return true;
+                }
+                if (facture.date_facture && facture.date_facture.includes(searchTerm)) {
+                    return true;
+                }
+                
+                // Rechercher dans le nom du client (raison sociale)
+                if (facture.client_nom && facture.client_nom.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // Rechercher dans le code client
+                if (facture.client_code && facture.client_code.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // Rechercher dans le nom du dirigeant
+                if (facture.client_nom_dirigeant && facture.client_nom_dirigeant.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // Rechercher dans le prénom du dirigeant
+                if (facture.client_prenom_dirigeant && facture.client_prenom_dirigeant.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // Rechercher dans le type
+                if (facture.type && facture.type.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                return false;
+            });
+            
+            // Afficher les factures filtrées
+            displayFactures(filtered);
+        }
+
         // Exposer les fonctions globalement pour les onclick
         window.openSection = openSection;
         window.openFactureModal = openFactureModal;
         window.closeFactureModal = closeFactureModal;
         window.openFacturesListModal = openFacturesListModal;
         window.closeFacturesListModal = closeFacturesListModal;
+        window.filterFactures = filterFactures;
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
         window.submitFactureForm = submitFactureForm;

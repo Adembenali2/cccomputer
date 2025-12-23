@@ -24,7 +24,9 @@ try {
             f.created_at,
             c.id as client_id,
             c.raison_sociale as client_nom,
-            c.numero_client as client_code
+            c.numero_client as client_code,
+            c.nom_dirigeant as client_nom_dirigeant,
+            c.prenom_dirigeant as client_prenom_dirigeant
         FROM factures f
         LEFT JOIN clients c ON f.id_client = c.id
         ORDER BY f.date_facture DESC, f.created_at DESC
@@ -50,6 +52,8 @@ try {
             'client_id' => (int)$facture['client_id'],
             'client_nom' => $facture['client_nom'] ?? 'Client inconnu',
             'client_code' => $facture['client_code'] ?? '',
+            'client_nom_dirigeant' => $facture['client_nom_dirigeant'] ?? '',
+            'client_prenom_dirigeant' => $facture['client_prenom_dirigeant'] ?? '',
             'created_at' => $facture['created_at']
         ];
     }
