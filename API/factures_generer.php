@@ -82,10 +82,45 @@ try {
         $pdfWebPath = generateFacturePDF($pdo, $factureId, $client, $data);
         
         // Vérifier que le fichier existe vraiment avant de le stocker dans la DB
-        $baseUploadDir = __DIR__ . '/../uploads';
+        // Utiliser le même pattern que dans generateFacturePDF
+        $possibleBaseDirs = [];
+        
+        $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+        if ($docRoot !== '' && is_dir($docRoot)) {
+            $possibleBaseDirs[] = $docRoot;
+        }
+        
+        $projectDir = dirname(__DIR__);
+        if (is_dir($projectDir)) {
+            $possibleBaseDirs[] = $projectDir;
+        }
+        
+        if (is_dir('/app')) {
+            $possibleBaseDirs[] = '/app';
+        }
+        if (is_dir('/var/www/html')) {
+            $possibleBaseDirs[] = '/var/www/html';
+        }
+        
+        $baseDir = null;
+        foreach ($possibleBaseDirs as $dir) {
+            if (is_dir($dir)) {
+                $baseDir = $dir;
+                break;
+            }
+        }
+        
+        if (!$baseDir) {
+            $baseDir = dirname(__DIR__);
+        }
+        
+        $baseUploadDir = $baseDir . '/uploads';
         $facturesDir = $baseUploadDir . '/factures';
         $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
         $actualFilePath = $facturesDir . '/' . $relativePath;
+        
+        error_log('Vérification fichier - Base dir: ' . $baseDir);
+        error_log('Vérification fichier - Chemin testé: ' . $actualFilePath);
         
         if (!file_exists($actualFilePath)) {
             error_log('ERREUR CRITIQUE: Le fichier PDF n\'existe pas après génération: ' . $actualFilePath);
@@ -166,22 +201,53 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $facture = $pdo->query("SELECT * FROM factures WHERE id = $factureId")->fetch(PDO::FETCH_ASSOC);
 
     // Setup Dossier - Compatible Railway
-    // Sur Railway, le répertoire de travail est /app
-    // On utilise DOCUMENT_ROOT si disponible, sinon on utilise __DIR__
+    // Sur Railway, le répertoire peut être /app ou /var/www/html selon la config
+    // On essaie plusieurs chemins possibles pour trouver le bon répertoire
+    
+    $possibleBaseDirs = [];
+    
+    // 1. DOCUMENT_ROOT (le plus fiable)
     $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
     if ($docRoot !== '' && is_dir($docRoot)) {
-        $baseUploadDir = $docRoot . '/uploads';
-    } else {
-        // Fallback: utiliser le répertoire du projet
-        $baseUploadDir = dirname(__DIR__) . '/uploads';
+        $possibleBaseDirs[] = $docRoot;
     }
     
+    // 2. Répertoire du projet (dirname(__DIR__))
+    $projectDir = dirname(__DIR__);
+    if (is_dir($projectDir)) {
+        $possibleBaseDirs[] = $projectDir;
+    }
+    
+    // 3. Chemins Railway courants
+    if (is_dir('/app')) {
+        $possibleBaseDirs[] = '/app';
+    }
+    if (is_dir('/var/www/html')) {
+        $possibleBaseDirs[] = '/var/www/html';
+    }
+    
+    // Utiliser le premier répertoire valide trouvé
+    $baseDir = null;
+    foreach ($possibleBaseDirs as $dir) {
+        if (is_dir($dir) && is_writable($dir)) {
+            $baseDir = $dir;
+            break;
+        }
+    }
+    
+    // Si aucun répertoire valide, utiliser dirname(__DIR__) par défaut
+    if (!$baseDir) {
+        $baseDir = dirname(__DIR__);
+    }
+    
+    $baseUploadDir = $baseDir . '/uploads';
     $facturesDir = $baseUploadDir . '/factures';
     $uploadDir = $facturesDir . '/' . date('Y');
     
     error_log('Génération PDF - DOCUMENT_ROOT: ' . ($_SERVER['DOCUMENT_ROOT'] ?? 'Non défini'));
     error_log('Génération PDF - __DIR__: ' . __DIR__);
     error_log('Génération PDF - dirname(__DIR__): ' . dirname(__DIR__));
+    error_log('Génération PDF - Base dir sélectionné: ' . $baseDir);
     error_log('Génération PDF - Base upload dir: ' . $baseUploadDir);
     error_log('Génération PDF - Base upload dir existe: ' . (is_dir($baseUploadDir) ? 'Oui' : 'Non'));
     
@@ -399,7 +465,15 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $webPath = '/uploads/factures/' . date('Y') . '/' . $filename;
     error_log('Chemin web retourné: ' . $webPath);
     error_log('Chemin absolu du fichier: ' . $filepath);
-    error_log('Vérification: Le fichier existe réellement: ' . (file_exists($filepath) ? 'OUI' : 'NON'));
+    error_log('Vérification finale: Le fichier existe réellement: ' . (file_exists($filepath) ? 'OUI' : 'NON'));
+    error_log('Vérification finale: Le fichier est lisible: ' . (is_readable($filepath) ? 'OUI' : 'NON'));
+    error_log('Vérification finale: Taille du fichier: ' . filesize($filepath) . ' bytes');
+    
+    // Dernière vérification avant de retourner
+    if (!file_exists($filepath) || !is_readable($filepath)) {
+        error_log('ERREUR FINALE: Le fichier n\'est pas accessible avant retour');
+        throw new RuntimeException('Le fichier PDF créé n\'est pas accessible: ' . $filepath);
+    }
     
     return $webPath;
 }

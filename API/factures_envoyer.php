@@ -106,14 +106,44 @@ try {
     // Sur Railway, on doit utiliser le même pattern que factures_generer.php
     
     // Pattern principal (identique à factures_generer.php) - Compatible Railway
+    // Essayer plusieurs chemins possibles pour trouver le bon répertoire
+    $possibleBaseDirs = [];
+    
+    // 1. DOCUMENT_ROOT (le plus fiable)
     $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
     if ($docRoot !== '' && is_dir($docRoot)) {
-        $baseUploadDir = $docRoot . '/uploads';
-    } else {
-        // Fallback: utiliser le répertoire du projet
-        $baseUploadDir = dirname(__DIR__) . '/uploads';
+        $possibleBaseDirs[] = $docRoot;
     }
     
+    // 2. Répertoire du projet (dirname(__DIR__))
+    $projectDir = dirname(__DIR__);
+    if (is_dir($projectDir)) {
+        $possibleBaseDirs[] = $projectDir;
+    }
+    
+    // 3. Chemins Railway courants
+    if (is_dir('/app')) {
+        $possibleBaseDirs[] = '/app';
+    }
+    if (is_dir('/var/www/html')) {
+        $possibleBaseDirs[] = '/var/www/html';
+    }
+    
+    // Utiliser le premier répertoire valide trouvé
+    $baseDir = null;
+    foreach ($possibleBaseDirs as $dir) {
+        if (is_dir($dir)) {
+            $baseDir = $dir;
+            break;
+        }
+    }
+    
+    // Si aucun répertoire valide, utiliser dirname(__DIR__) par défaut
+    if (!$baseDir) {
+        $baseDir = dirname(__DIR__);
+    }
+    
+    $baseUploadDir = $baseDir . '/uploads';
     $facturesDir = $baseUploadDir . '/factures';
     
     // Extraire l'année et le nom du fichier depuis le chemin web
