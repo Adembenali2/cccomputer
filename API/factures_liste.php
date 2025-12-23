@@ -26,7 +26,10 @@ try {
             c.raison_sociale as client_nom,
             c.numero_client as client_code,
             c.nom_dirigeant as client_nom_dirigeant,
-            c.prenom_dirigeant as client_prenom_dirigeant
+            c.prenom_dirigeant as client_prenom_dirigeant,
+            c.email as client_email,
+            f.email_envoye,
+            f.date_envoi_email
         FROM factures f
         LEFT JOIN clients c ON f.id_client = c.id
         ORDER BY f.date_facture DESC, f.created_at DESC
@@ -54,6 +57,9 @@ try {
             'client_code' => $facture['client_code'] ?? '',
             'client_nom_dirigeant' => $facture['client_nom_dirigeant'] ?? '',
             'client_prenom_dirigeant' => $facture['client_prenom_dirigeant'] ?? '',
+            'client_email' => $facture['client_email'] ?? '',
+            'email_envoye' => (bool)($facture['email_envoye'] ?? false),
+            'date_envoi_email' => $facture['date_envoi_email'] ?? null,
             'created_at' => $facture['created_at']
         ];
     }

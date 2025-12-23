@@ -1124,6 +1124,39 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         </div>
     </div>
 
+    <!-- Modal Envoyer Email -->
+    <div class="modal-overlay" id="sendEmailModalOverlay" onclick="closeSendEmailModal()">
+        <div class="modal" id="sendEmailModal" onclick="event.stopPropagation()" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="sendEmailTitle">Envoyer la facture par email</h2>
+                <button class="modal-close" onclick="closeSendEmailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="sendEmailForm" onsubmit="sendFactureEmail(event)">
+                    <input type="hidden" id="sendEmailFactureId" name="facture_id">
+                    <div class="modal-form-group">
+                        <label for="sendEmailAddress">Adresse email <span style="color: #ef4444;">*</span></label>
+                        <input 
+                            type="email" 
+                            id="sendEmailAddress" 
+                            name="email" 
+                            required 
+                            placeholder="email@exemple.com"
+                            style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 1rem;"
+                        />
+                        <div class="input-hint" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                            L'email du client sera mis à jour si vous le modifiez
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeSendEmailModal()">Annuler</button>
+                <button type="submit" form="sendEmailForm" class="btn btn-primary" id="btnSendEmail">Envoyer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Liste Factures -->
     <div class="modal-overlay" id="facturesListModalOverlay" onclick="closeFacturesListModal()">
         <div class="modal" id="facturesListModal" onclick="event.stopPropagation()">
@@ -1703,19 +1736,33 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const statutColor = statutColors[facture.statut] || '#6b7280';
                     const statutLabel = statutLabels[facture.statut] || facture.statut;
                     
-                    // Bouton PDF - Ouvrir directement dans un nouvel onglet à cause des restrictions CSP
-                    let pdfButtons = '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>';
+                    // Boutons Actions (PDF et Envoyer)
+                    let actionButtons = '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>';
                     if (facture.pdf_path) {
-                        pdfButtons = `
-                            <button onclick="window.open('${facture.pdf_path}', '_blank')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                    <polyline points="14 2 14 8 20 8"></polyline>
-                                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                                </svg>
-                                Voir PDF
-                            </button>
+                        const emailSentBadge = facture.email_envoye 
+                            ? `<span style="display: inline-block; padding: 0.2rem 0.5rem; background: #10b98120; color: #10b981; border-radius: var(--radius-md); font-size: 0.75rem; margin-left: 0.5rem;">✓ Envoyée</span>`
+                            : '';
+                        
+                        actionButtons = `
+                            <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+                                <button onclick="window.open('${facture.pdf_path}', '_blank')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    </svg>
+                                    PDF
+                                </button>
+                                <button onclick="openSendEmailModal(${facture.id}, '${facture.numero}', '${(facture.client_email || '').replace(/'/g, "\\'")}')" style="padding: 0.4rem 0.75rem; background: #10b981; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                        <polyline points="22,6 12,13 2,6"></polyline>
+                                    </svg>
+                                    Envoyer
+                                </button>
+                                ${emailSentBadge}
+                            </div>
                         `;
                     }
                     
@@ -1730,7 +1777,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         <td style="padding: 0.75rem; text-align: center;">
                             <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: var(--radius-md); background: ${statutColor}20; color: ${statutColor}; font-size: 0.85rem; font-weight: 600;">${statutLabel}</span>
                         </td>
-                                <td style="padding: 0.75rem; text-align: center;">${pdfButtons}</td>
+                                <td style="padding: 0.75rem; text-align: center;">${actionButtons}</td>
                     `;
                     tableBody.appendChild(row);
                 });
@@ -1828,6 +1875,97 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         }
 
         /**
+         * Ouvre le modal pour envoyer la facture par email
+         */
+        function openSendEmailModal(factureId, factureNumero, clientEmail) {
+            const modal = document.getElementById('sendEmailModal');
+            const overlay = document.getElementById('sendEmailModalOverlay');
+            const title = document.getElementById('sendEmailTitle');
+            const emailInput = document.getElementById('sendEmailAddress');
+            const factureIdInput = document.getElementById('sendEmailFactureId');
+            
+            if (!modal || !overlay) {
+                console.error('Modal sendEmailModal introuvable');
+                return;
+            }
+            
+            title.textContent = `Envoyer la facture ${factureNumero}`;
+            factureIdInput.value = factureId;
+            emailInput.value = clientEmail || '';
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Focus sur le champ email
+            setTimeout(() => {
+                emailInput.focus();
+                if (!clientEmail) {
+                    emailInput.select();
+                }
+            }, 100);
+        }
+
+        /**
+         * Ferme le modal d'envoi d'email
+         */
+        function closeSendEmailModal() {
+            const modal = document.getElementById('sendEmailModal');
+            const overlay = document.getElementById('sendEmailModalOverlay');
+            
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+                // Réinitialiser le formulaire
+                document.getElementById('sendEmailForm').reset();
+            }
+        }
+
+        /**
+         * Envoie la facture par email
+         */
+        async function sendFactureEmail(e) {
+            e.preventDefault();
+            
+            const form = document.getElementById('sendEmailForm');
+            const formData = new FormData(form);
+            const data = {
+                facture_id: formData.get('facture_id'),
+                email: formData.get('email')
+            };
+            
+            const btnSend = document.getElementById('btnSendEmail');
+            btnSend.disabled = true;
+            btnSend.textContent = 'Envoi en cours...';
+            
+            try {
+                const response = await fetch('/API/factures_envoyer.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    alert('Facture envoyée avec succès à ' + data.email);
+                    closeSendEmailModal();
+                    // Recharger la liste des factures pour mettre à jour le statut
+                    loadFacturesList();
+                } else {
+                    alert('Erreur : ' + (result.error || 'Erreur lors de l\'envoi de l\'email'));
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'envoi de l\'email:', error);
+                alert('Erreur lors de l\'envoi de l\'email: ' + error.message);
+            } finally {
+                btnSend.disabled = false;
+                btnSend.textContent = 'Envoyer';
+            }
+        }
+
+        /**
          * Filtre les factures selon le terme de recherche
          */
         function filterFactures() {
@@ -1896,6 +2034,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.viewFacturePDF = viewFacturePDF;
         window.closePDFViewer = closePDFViewer;
         window.openPDFInNewTab = openPDFInNewTab;
+        window.openSendEmailModal = openSendEmailModal;
+        window.closeSendEmailModal = closeSendEmailModal;
+        window.sendFactureEmail = sendFactureEmail;
         window.filterFactures = filterFactures;
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
@@ -1918,8 +2059,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const facturesListModal = document.getElementById('facturesListModal');
                     const facturesListModalOverlay = document.getElementById('facturesListModalOverlay');
                     const pdfViewerModalOverlay = document.getElementById('pdfViewerModalOverlay');
+                    const sendEmailModalOverlay = document.getElementById('sendEmailModalOverlay');
                     
-                    if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
+                    if (sendEmailModalOverlay && sendEmailModalOverlay.classList.contains('active')) {
+                        closeSendEmailModal();
+                    } else if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
                         closePDFViewer();
                     } else if (factureModalOverlay && factureModalOverlay.classList.contains('active')) {
                         closeFactureModal();
