@@ -15,17 +15,14 @@ if (empty($_SESSION['user_id'])) {
 
 $pdo = getPdo();
 
-header('Content-Type: text/html; charset=utf-8');
-echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Migration Factures</title></head><body>";
-echo "<h1>Migration : Création des tables factures et facture_lignes</h1>";
-echo "<pre>";
+// Note: Les opérations DDL (CREATE TABLE) dans MySQL auto-commitent automatiquement
+// donc on n'utilise pas de transaction pour ce script
+
+$errorOccurred = false;
+$errorMessage = '';
 
 try {
-    $pdo->beginTransaction();
-    
     // 1. Vérifier et créer la table factures
-    echo "1. Vérification de la table factures...\n";
-    
     $check = $pdo->prepare("
         SELECT COUNT(*) as cnt
         FROM INFORMATION_SCHEMA.TABLES
@@ -36,8 +33,6 @@ try {
     $result = $check->fetch(PDO::FETCH_ASSOC);
     
     if ((int)$result['cnt'] === 0) {
-        echo "   - Création de la table factures...\n";
-        
         $pdo->exec("
             CREATE TABLE `factures` (
               `id` int NOT NULL AUTO_INCREMENT,
@@ -68,15 +63,9 @@ try {
               CONSTRAINT `fk_factures_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
         ");
-        
-        echo "   ✓ Table factures créée avec succès\n";
-    } else {
-        echo "   - La table factures existe déjà\n";
     }
     
     // 2. Vérifier et créer la table facture_lignes
-    echo "\n2. Vérification de la table facture_lignes...\n";
-    
     $check = $pdo->prepare("
         SELECT COUNT(*) as cnt
         FROM INFORMATION_SCHEMA.TABLES
@@ -87,8 +76,6 @@ try {
     $result = $check->fetch(PDO::FETCH_ASSOC);
     
     if ((int)$result['cnt'] === 0) {
-        echo "   - Création de la table facture_lignes...\n";
-        
         $pdo->exec("
             CREATE TABLE `facture_lignes` (
               `id` int NOT NULL AUTO_INCREMENT,
@@ -104,32 +91,40 @@ try {
               CONSTRAINT `fk_facture_lignes_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
         ");
-        
-        echo "   ✓ Table facture_lignes créée avec succès\n";
-    } else {
-        echo "   - La table facture_lignes existe déjà\n";
     }
-    
-    $pdo->commit();
-    
-    echo "\n✅ Migration terminée avec succès !\n";
     
 } catch (PDOException $e) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-    echo "\n❌ ERREUR SQL : " . $e->getMessage() . "\n";
-    echo "Code d'erreur : " . $e->getCode() . "\n";
+    $errorOccurred = true;
+    $errorMessage = "ERREUR SQL : " . $e->getMessage() . "\nCode d'erreur : " . $e->getCode();
     if (isset($e->errorInfo)) {
-        echo "Error Info : " . print_r($e->errorInfo, true) . "\n";
+        $errorMessage .= "\nError Info : " . print_r($e->errorInfo, true);
     }
-    http_response_code(500);
 } catch (Exception $e) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-    echo "\n❌ ERREUR : " . $e->getMessage() . "\n";
-    http_response_code(500);
+    $errorOccurred = true;
+    $errorMessage = "ERREUR : " . $e->getMessage();
+}
+
+// Afficher le résultat
+header('Content-Type: text/html; charset=utf-8');
+echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Migration Factures</title></head><body>";
+echo "<h1>Migration : Création des tables factures et facture_lignes</h1>";
+echo "<pre>";
+
+if ($errorOccurred) {
+    echo "❌ " . $errorMessage . "\n";
+} else {
+    // Vérifier l'état final des tables
+    $check1 = $pdo->prepare("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'factures'");
+    $check1->execute();
+    $result1 = $check1->fetch(PDO::FETCH_ASSOC);
+    
+    $check2 = $pdo->prepare("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'facture_lignes'");
+    $check2->execute();
+    $result2 = $check2->fetch(PDO::FETCH_ASSOC);
+    
+    echo "1. Table factures : " . ((int)$result1['cnt'] > 0 ? "✓ Existe" : "✗ N'existe pas") . "\n";
+    echo "2. Table facture_lignes : " . ((int)$result2['cnt'] > 0 ? "✓ Existe" : "✗ N'existe pas") . "\n";
+    echo "\n✅ Migration terminée avec succès !\n";
 }
 
 echo "</pre>";
