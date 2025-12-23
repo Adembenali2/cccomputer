@@ -7,144 +7,148 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 
-// Vérifier que c'est une requête POST
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
-}
+// Vérifier que c'est une requête POST seulement si le fichier est appelé directement
+// Si le fichier est inclus via require_once, on ne vérifie pas la méthode et on ne s'exécute pas
+if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
+    // Le fichier est appelé directement, exécuter le code API
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
+    }
 
-try {
-    $pdo = getPdo();
-    
-    // Vérification basique des tables
     try {
-        $pdo->query("SELECT 1 FROM factures LIMIT 1");
-        $pdo->query("SELECT 1 FROM facture_lignes LIMIT 1");
-    } catch (PDOException $e) {
-        jsonResponse(['ok' => false, 'error' => 'Tables introuvables ou erreur DB'], 500);
-    }
-    
-    // Récupération des données
-    $input = file_get_contents('php://input');
-    $data = json_decode($input, true);
-    
-    if (!$data || empty($data['factureClient']) || empty($data['factureDate']) || empty($data['lignes'])) {
-        jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
-    }
-    
-    // Client
-    $stmt = $pdo->prepare("SELECT * FROM clients WHERE id = :id LIMIT 1");
-    $stmt->execute([':id' => (int)$data['factureClient']]);
-    $client = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$client) jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
-    
-    // Calculs et Sauvegarde DB
-    // Déterminer le préfixe selon le type de facture
-    $factureType = $data['factureType'] ?? 'Consommation';
-    $numeroFacture = generateFactureNumber($pdo, $factureType);
-    
-    $montantHT = 0;
-    foreach ($data['lignes'] as $ligne) $montantHT += (float)($ligne['total_ht'] ?? 0);
-    $tva = $montantHT * 0.20;
-    $montantTTC = $montantHT + $tva;
-    
-    $pdo->beginTransaction();
-    
-    try {
-        // Insertion Facture
-        $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, 'brouillon', :created_by)");
-        $stmt->execute([
-            ':id_client' => (int)$data['factureClient'],
-            ':numero' => $numeroFacture,
-            ':date_facture' => $data['factureDate'],
-            ':type' => $data['factureType'],
-            ':montant_ht' => $montantHT,
-            ':tva' => $tva,
-            ':montant_ttc' => $montantTTC,
-            ':created_by' => currentUserId()
-        ]);
-        $factureId = $pdo->lastInsertId();
+        $pdo = getPdo();
         
-        // Insertion Lignes
-        $stmtLigne = $pdo->prepare("INSERT INTO facture_lignes (id_facture, description, type, quantite, prix_unitaire_ht, total_ht, ordre) VALUES (:id_facture, :description, :type, :quantite, :prix_unitaire_ht, :total_ht, :ordre)");
-        foreach ($data['lignes'] as $i => $l) {
-            $stmtLigne->execute([
-                ':id_facture' => $factureId,
-                ':description' => $l['description'],
-                ':type' => $l['type'],
-                ':quantite' => $l['quantite'],
-                ':prix_unitaire_ht' => $l['prix_unitaire'],
-                ':total_ht' => $l['total_ht'],
-                ':ordre' => $i
+        // Vérification basique des tables
+        try {
+            $pdo->query("SELECT 1 FROM factures LIMIT 1");
+            $pdo->query("SELECT 1 FROM facture_lignes LIMIT 1");
+        } catch (PDOException $e) {
+            jsonResponse(['ok' => false, 'error' => 'Tables introuvables ou erreur DB'], 500);
+        }
+        
+        // Récupération des données
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        
+        if (!$data || empty($data['factureClient']) || empty($data['factureDate']) || empty($data['lignes'])) {
+            jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
+        }
+        
+        // Client
+        $stmt = $pdo->prepare("SELECT * FROM clients WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => (int)$data['factureClient']]);
+        $client = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$client) jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
+        
+        // Calculs et Sauvegarde DB
+        // Déterminer le préfixe selon le type de facture
+        $factureType = $data['factureType'] ?? 'Consommation';
+        $numeroFacture = generateFactureNumber($pdo, $factureType);
+        
+        $montantHT = 0;
+        foreach ($data['lignes'] as $ligne) $montantHT += (float)($ligne['total_ht'] ?? 0);
+        $tva = $montantHT * 0.20;
+        $montantTTC = $montantHT + $tva;
+        
+        $pdo->beginTransaction();
+        
+        try {
+            // Insertion Facture
+            $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, 'brouillon', :created_by)");
+            $stmt->execute([
+                ':id_client' => (int)$data['factureClient'],
+                ':numero' => $numeroFacture,
+                ':date_facture' => $data['factureDate'],
+                ':type' => $data['factureType'],
+                ':montant_ht' => $montantHT,
+                ':tva' => $tva,
+                ':montant_ttc' => $montantTTC,
+                ':created_by' => currentUserId()
             ]);
-        }
-        
-        // Génération PDF
-        $pdfWebPath = generateFacturePDF($pdo, $factureId, $client, $data);
-        
-        // Vérifier que le fichier existe vraiment avant de le stocker dans la DB
-        // Utiliser le même pattern que dans generateFacturePDF
-        $possibleBaseDirs = [];
-        
-        $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
-        if ($docRoot !== '' && is_dir($docRoot)) {
-            $possibleBaseDirs[] = $docRoot;
-        }
-        
-        $projectDir = dirname(__DIR__);
-        if (is_dir($projectDir)) {
-            $possibleBaseDirs[] = $projectDir;
-        }
-        
-        if (is_dir('/app')) {
-            $possibleBaseDirs[] = '/app';
-        }
-        if (is_dir('/var/www/html')) {
-            $possibleBaseDirs[] = '/var/www/html';
-        }
-        
-        $baseDir = null;
-        foreach ($possibleBaseDirs as $dir) {
-            if (is_dir($dir)) {
-                $baseDir = $dir;
-                break;
+            $factureId = $pdo->lastInsertId();
+            
+            // Insertion Lignes
+            $stmtLigne = $pdo->prepare("INSERT INTO facture_lignes (id_facture, description, type, quantite, prix_unitaire_ht, total_ht, ordre) VALUES (:id_facture, :description, :type, :quantite, :prix_unitaire_ht, :total_ht, :ordre)");
+            foreach ($data['lignes'] as $i => $l) {
+                $stmtLigne->execute([
+                    ':id_facture' => $factureId,
+                    ':description' => $l['description'],
+                    ':type' => $l['type'],
+                    ':quantite' => $l['quantite'],
+                    ':prix_unitaire_ht' => $l['prix_unitaire'],
+                    ':total_ht' => $l['total_ht'],
+                    ':ordre' => $i
+                ]);
             }
+            
+            // Génération PDF
+            $pdfWebPath = generateFacturePDF($pdo, $factureId, $client, $data);
+            
+            // Vérifier que le fichier existe vraiment avant de le stocker dans la DB
+            // Utiliser le même pattern que dans generateFacturePDF
+            $possibleBaseDirs = [];
+            
+            $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+            if ($docRoot !== '' && is_dir($docRoot)) {
+                $possibleBaseDirs[] = $docRoot;
+            }
+            
+            $projectDir = dirname(__DIR__);
+            if (is_dir($projectDir)) {
+                $possibleBaseDirs[] = $projectDir;
+            }
+            
+            if (is_dir('/app')) {
+                $possibleBaseDirs[] = '/app';
+            }
+            if (is_dir('/var/www/html')) {
+                $possibleBaseDirs[] = '/var/www/html';
+            }
+            
+            $baseDir = null;
+            foreach ($possibleBaseDirs as $dir) {
+                if (is_dir($dir)) {
+                    $baseDir = $dir;
+                    break;
+                }
+            }
+            
+            if (!$baseDir) {
+                $baseDir = dirname(__DIR__);
+            }
+            
+            $baseUploadDir = $baseDir . '/uploads';
+            $facturesDir = $baseUploadDir . '/factures';
+            $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
+            $actualFilePath = $facturesDir . '/' . $relativePath;
+            
+            error_log('Vérification fichier - Base dir: ' . $baseDir);
+            error_log('Vérification fichier - Chemin testé: ' . $actualFilePath);
+            
+            if (!file_exists($actualFilePath)) {
+                error_log('ERREUR CRITIQUE: Le fichier PDF n\'existe pas après génération: ' . $actualFilePath);
+                error_log('Chemin web retourné: ' . $pdfWebPath);
+                error_log('Chemin relatif: ' . $relativePath);
+                throw new RuntimeException('Le fichier PDF n\'a pas pu être créé ou n\'existe pas: ' . $actualFilePath);
+            }
+            
+            error_log('Vérification finale: Le fichier PDF existe bien: ' . $actualFilePath . ' (Taille: ' . filesize($actualFilePath) . ' bytes)');
+            
+            // Mise à jour chemin PDF (on stocke le chemin web relatif)
+            $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfWebPath, $factureId]);
+            
+            $pdo->commit();
+            jsonResponse(['ok' => true, 'facture_id' => $factureId, 'numero' => $numeroFacture, 'pdf_url' => $pdfWebPath]);
+            
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            throw $e;
         }
         
-        if (!$baseDir) {
-            $baseDir = dirname(__DIR__);
-        }
-        
-        $baseUploadDir = $baseDir . '/uploads';
-        $facturesDir = $baseUploadDir . '/factures';
-        $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
-        $actualFilePath = $facturesDir . '/' . $relativePath;
-        
-        error_log('Vérification fichier - Base dir: ' . $baseDir);
-        error_log('Vérification fichier - Chemin testé: ' . $actualFilePath);
-        
-        if (!file_exists($actualFilePath)) {
-            error_log('ERREUR CRITIQUE: Le fichier PDF n\'existe pas après génération: ' . $actualFilePath);
-            error_log('Chemin web retourné: ' . $pdfWebPath);
-            error_log('Chemin relatif: ' . $relativePath);
-            throw new RuntimeException('Le fichier PDF n\'a pas pu être créé ou n\'existe pas: ' . $actualFilePath);
-        }
-        
-        error_log('Vérification finale: Le fichier PDF existe bien: ' . $actualFilePath . ' (Taille: ' . filesize($actualFilePath) . ' bytes)');
-        
-        // Mise à jour chemin PDF (on stocke le chemin web relatif)
-        $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfWebPath, $factureId]);
-        
-        $pdo->commit();
-        jsonResponse(['ok' => true, 'facture_id' => $factureId, 'numero' => $numeroFacture, 'pdf_url' => $pdfWebPath]);
-        
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        throw $e;
+    } catch (Throwable $e) {
+        error_log($e->getMessage());
+        jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
     }
-    
-} catch (Throwable $e) {
-    error_log($e->getMessage());
-    jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
 }
 
 function generateFactureNumber($pdo, $type) {
