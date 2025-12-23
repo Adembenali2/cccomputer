@@ -14,6 +14,31 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     $pdo = getPdo();
     
+    // Vérifier que les tables existent
+    try {
+        $stmt = $pdo->query("SHOW TABLES LIKE 'factures'");
+        if ($stmt->rowCount() === 0) {
+            jsonResponse([
+                'ok' => false, 
+                'error' => 'La table "factures" n\'existe pas. Veuillez exécuter le script de migration : /sql/run_migration_factures.php'
+            ], 500);
+        }
+        
+        $stmt = $pdo->query("SHOW TABLES LIKE 'facture_lignes'");
+        if ($stmt->rowCount() === 0) {
+            jsonResponse([
+                'ok' => false, 
+                'error' => 'La table "facture_lignes" n\'existe pas. Veuillez exécuter le script de migration : /sql/run_migration_factures.php'
+            ], 500);
+        }
+    } catch (PDOException $e) {
+        error_log('factures_generer.php Erreur vérification tables: ' . $e->getMessage());
+        jsonResponse([
+            'ok' => false, 
+            'error' => 'Erreur de connexion à la base de données. Vérifiez que les tables factures et facture_lignes existent.'
+        ], 500);
+    }
+    
     // Récupérer les données JSON
     $input = file_get_contents('php://input');
     $data = json_decode($input, true);
@@ -174,6 +199,12 @@ try {
  * Génère un numéro de facture unique
  */
 function generateFactureNumber(PDO $pdo): string {
+    // Vérifier que la table existe
+    $stmt = $pdo->query("SHOW TABLES LIKE 'factures'");
+    if ($stmt->rowCount() === 0) {
+        throw new RuntimeException('La table "factures" n\'existe pas dans la base de données. Veuillez exécuter le script SQL de création des tables.');
+    }
+    
     $year = date('Y');
     $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM factures WHERE numero LIKE :pattern");
     $stmt->execute([':pattern' => "FAC-{$year}-%"]);
