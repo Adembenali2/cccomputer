@@ -425,23 +425,56 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $filepath = $uploadDir . '/' . $filename;
     
     // Log pour débogage
+    error_log('Génération PDF - Base dir sélectionné: ' . $baseDir);
+    error_log('Génération PDF - Upload dir: ' . $uploadDir);
     error_log('Génération PDF - Chemin complet: ' . $filepath);
     error_log('Génération PDF - Répertoire existe: ' . (is_dir($uploadDir) ? 'Oui' : 'Non'));
     error_log('Génération PDF - Répertoire accessible en écriture: ' . (is_writable($uploadDir) ? 'Oui' : 'Non'));
     
+    // Vérifier que le répertoire existe avant de sauvegarder
+    if (!is_dir($uploadDir)) {
+        error_log('ERREUR: Le répertoire n\'existe pas: ' . $uploadDir);
+        throw new RuntimeException('Le répertoire de stockage n\'existe pas: ' . $uploadDir);
+    }
+    
+    if (!is_writable($uploadDir)) {
+        error_log('ERREUR: Le répertoire n\'est pas accessible en écriture: ' . $uploadDir);
+        throw new RuntimeException('Le répertoire de stockage n\'est pas accessible en écriture: ' . $uploadDir);
+    }
+    
     // Sauvegarder le PDF
     try {
         $pdf->Output($filepath, 'F');
+        error_log('Génération PDF - Output() appelé avec succès');
     } catch (Exception $e) {
         error_log('Erreur lors de la sauvegarde du PDF: ' . $e->getMessage());
+        error_log('Erreur trace: ' . $e->getTraceAsString());
         throw new RuntimeException('Erreur lors de la sauvegarde du PDF: ' . $e->getMessage());
     }
     
+    // Attendre un peu pour que le fichier soit complètement écrit
+    usleep(100000); // 100ms
+    
     // Vérifier que le fichier a bien été créé
+    $maxRetries = 5;
+    $retryCount = 0;
+    while (!file_exists($filepath) && $retryCount < $maxRetries) {
+        usleep(200000); // 200ms
+        $retryCount++;
+        error_log('Tentative ' . $retryCount . ': Vérification de l\'existence du fichier: ' . $filepath);
+    }
+    
     if (!file_exists($filepath)) {
         error_log('ERREUR: Le fichier PDF n\'existe pas après sauvegarde: ' . $filepath);
         error_log('Répertoire parent: ' . dirname($filepath));
         error_log('Répertoire parent existe: ' . (is_dir(dirname($filepath)) ? 'Oui' : 'Non'));
+        error_log('Liste des fichiers dans le répertoire:');
+        if (is_dir(dirname($filepath))) {
+            $files = @scandir(dirname($filepath));
+            if ($files) {
+                error_log('  - ' . implode("\n  - ", array_slice($files, 2))); // Exclure . et ..
+            }
+        }
         throw new RuntimeException('Le fichier PDF n\'a pas pu être créé: ' . $filepath);
     }
     
@@ -454,6 +487,7 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     }
     
     error_log('PDF créé avec succès: ' . $filepath . ' (Taille: ' . $fileSize . ' bytes)');
+    error_log('Permissions du fichier: ' . substr(sprintf('%o', fileperms($filepath)), -4));
     
     // Vérifier une dernière fois que le fichier existe et est accessible
     if (!file_exists($filepath) || !is_readable($filepath)) {
