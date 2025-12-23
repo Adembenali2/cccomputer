@@ -1103,6 +1103,23 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         </div>
     </div>
 
+    <!-- Modal PDF Viewer -->
+    <div class="modal-overlay" id="pdfViewerModalOverlay" onclick="closePDFViewer()">
+        <div class="modal" id="pdfViewerModal" onclick="event.stopPropagation()" style="max-width: 95%; max-height: 95vh;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="pdfViewerTitle">Facture PDF</h2>
+                <button class="modal-close" onclick="closePDFViewer()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0; height: calc(95vh - 100px);">
+                <iframe id="pdfViewerFrame" src="" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closePDFViewer()">Fermer</button>
+                <button type="button" class="btn btn-primary" id="pdfViewerDownloadBtn" onclick="downloadPDF()">Télécharger</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Liste Factures -->
     <div class="modal-overlay" id="facturesListModalOverlay" onclick="closeFacturesListModal()">
         <div class="modal" id="facturesListModal" onclick="event.stopPropagation()">
@@ -1682,10 +1699,30 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const statutColor = statutColors[facture.statut] || '#6b7280';
                     const statutLabel = statutLabels[facture.statut] || facture.statut;
                     
-                    // Bouton PDF
-                    const pdfButton = facture.pdf_path 
-                        ? `<button onclick="window.open('${facture.pdf_path}', '_blank')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600;">Voir PDF</button>`
-                        : '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>';
+                    // Boutons PDF
+                    let pdfButtons = '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>';
+                    if (facture.pdf_path) {
+                        pdfButtons = `
+                            <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                                <button onclick="viewFacturePDF('${facture.pdf_path}', '${facture.numero}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    </svg>
+                                    Voir PDF
+                                </button>
+                                <button onclick="window.open('${facture.pdf_path}', '_blank')" style="padding: 0.4rem 0.75rem; background: var(--bg-secondary); color: var(--text-primary); border: 2px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;" title="Ouvrir dans un nouvel onglet">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        <polyline points="15 3 21 3 21 9"></polyline>
+                                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        `;
+                    }
                     
                     row.innerHTML = `
                         <td style="padding: 0.75rem; font-weight: 600; color: var(--text-primary);">${facture.numero}</td>
@@ -1698,7 +1735,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         <td style="padding: 0.75rem; text-align: center;">
                             <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: var(--radius-md); background: ${statutColor}20; color: ${statutColor}; font-size: 0.85rem; font-weight: 600;">${statutLabel}</span>
                         </td>
-                        <td style="padding: 0.75rem; text-align: center;">${pdfButton}</td>
+                                <td style="padding: 0.75rem; text-align: center;">${pdfButtons}</td>
                     `;
                     tableBody.appendChild(row);
                 });
@@ -1709,6 +1746,59 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 } else {
                     filteredCountSpan.textContent = '';
                 }
+            }
+        }
+
+        /**
+         * Ouvre le modal pour voir le PDF d'une facture
+         */
+        function viewFacturePDF(pdfPath, factureNumero) {
+            const modal = document.getElementById('pdfViewerModal');
+            const overlay = document.getElementById('pdfViewerModalOverlay');
+            const frame = document.getElementById('pdfViewerFrame');
+            const title = document.getElementById('pdfViewerTitle');
+            const downloadBtn = document.getElementById('pdfViewerDownloadBtn');
+            
+            if (!modal || !overlay || !frame) {
+                console.error('Éléments du modal PDF introuvables');
+                return;
+            }
+            
+            title.textContent = `Facture ${factureNumero}`;
+            frame.src = pdfPath;
+            downloadBtn.onclick = function() {
+                window.open(pdfPath, '_blank');
+            };
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        /**
+         * Ferme le modal PDF
+         */
+        function closePDFViewer() {
+            const modal = document.getElementById('pdfViewerModal');
+            const overlay = document.getElementById('pdfViewerModalOverlay');
+            const frame = document.getElementById('pdfViewerFrame');
+            
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+                // Vider le iframe pour libérer la mémoire
+                if (frame) {
+                    frame.src = '';
+                }
+            }
+        }
+
+        /**
+         * Télécharge le PDF
+         */
+        function downloadPDF() {
+            const frame = document.getElementById('pdfViewerFrame');
+            if (frame && frame.src) {
+                window.open(frame.src, '_blank');
             }
         }
 
@@ -1778,6 +1868,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.closeFactureModal = closeFactureModal;
         window.openFacturesListModal = openFacturesListModal;
         window.closeFacturesListModal = closeFacturesListModal;
+        window.viewFacturePDF = viewFacturePDF;
+        window.closePDFViewer = closePDFViewer;
+        window.downloadPDF = downloadPDF;
         window.filterFactures = filterFactures;
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
@@ -1799,8 +1892,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const factureModalOverlay = document.getElementById('factureModalOverlay');
                     const facturesListModal = document.getElementById('facturesListModal');
                     const facturesListModalOverlay = document.getElementById('facturesListModalOverlay');
+                    const pdfViewerModalOverlay = document.getElementById('pdfViewerModalOverlay');
                     
-                    if (factureModalOverlay && factureModalOverlay.classList.contains('active')) {
+                    if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
+                        closePDFViewer();
+                    } else if (factureModalOverlay && factureModalOverlay.classList.contains('active')) {
                         closeFactureModal();
                     } else if (facturesListModalOverlay && facturesListModalOverlay.classList.contains('active')) {
                         closeFacturesListModal();
