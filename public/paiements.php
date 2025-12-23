@@ -1750,7 +1750,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                         
                         actionButtons = `
                             <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center; flex-wrap: wrap;">
-                                <button onclick="window.open('${facture.pdf_path}', '_blank')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+                                <button onclick="viewFacturePDFById(${facture.id}, '${facture.numero}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                         <polyline points="14 2 14 8 20 8"></polyline>
@@ -2055,6 +2055,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
         window.openFacturesListModal = openFacturesListModal;
         window.closeFacturesListModal = closeFacturesListModal;
         window.viewFacturePDF = viewFacturePDF;
+        window.viewFacturePDFById = viewFacturePDFById;
         window.closePDFViewer = closePDFViewer;
         window.openPDFInNewTab = openPDFInNewTab;
         window.openSendEmailModal = openSendEmailModal;
