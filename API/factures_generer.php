@@ -19,8 +19,14 @@ try {
     $data = json_decode($input, true);
     
     if (!$data) {
-        jsonResponse(['ok' => false, 'error' => 'Données invalides'], 400);
+        $jsonError = json_last_error_msg();
+        error_log('factures_generer.php JSON decode error: ' . $jsonError);
+        error_log('factures_generer.php Raw input: ' . substr($input, 0, 500));
+        jsonResponse(['ok' => false, 'error' => 'Données JSON invalides: ' . $jsonError], 400);
     }
+    
+    // Log des données reçues pour débogage
+    error_log('factures_generer.php Données reçues: ' . print_r($data, true));
     
     // Validation des champs obligatoires
     if (empty($data['factureClient']) || empty($data['factureDate']) || empty($data['factureType'])) {
@@ -92,13 +98,18 @@ try {
         ");
         
         foreach ($data['lignes'] as $index => $ligne) {
+            // Vérifier que toutes les données nécessaires sont présentes
+            if (empty($ligne['description']) || empty($ligne['type'])) {
+                throw new InvalidArgumentException("Ligne $index incomplète : description et type sont requis");
+            }
+            
             $stmtLigne->execute([
                 ':id_facture' => $factureId,
-                ':description' => $ligne['description'],
+                ':description' => trim($ligne['description']),
                 ':type' => $ligne['type'],
-                ':quantite' => (float)$ligne['quantite'],
-                ':prix_unitaire_ht' => (float)$ligne['prix_unitaire'],
-                ':total_ht' => (float)$ligne['total_ht'],
+                ':quantite' => (float)($ligne['quantite'] ?? 0),
+                ':prix_unitaire_ht' => (float)($ligne['prix_unitaire'] ?? 0),
+                ':total_ht' => (float)($ligne['total_ht'] ?? 0),
                 ':ordre' => $index
             ]);
         }
@@ -123,16 +134,40 @@ try {
         ]);
         
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('factures_generer.php transaction error: ' . $e->getMessage());
+        error_log('factures_generer.php transaction trace: ' . $e->getTraceAsString());
         throw $e;
     }
     
 } catch (PDOException $e) {
     error_log('factures_generer.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('factures_generer.php SQL error info: ' . print_r($e->errorInfo ?? [], true));
+    error_log('factures_generer.php SQL trace: ' . $e->getTraceAsString());
+    
+    // Message d'erreur plus détaillé pour le débogage
+    $errorMsg = 'Erreur de base de données';
+    if (isset($e->errorInfo[2])) {
+        $errorMsg .= ': ' . $e->errorInfo[2];
+    } else {
+        $errorMsg .= ': ' . $e->getMessage();
+    }
+    
+    jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
 } catch (Throwable $e) {
     error_log('factures_generer.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue : ' . $e->getMessage()], 500);
+    error_log('factures_generer.php error class: ' . get_class($e));
+    error_log('factures_generer.php trace: ' . $e->getTraceAsString());
+    
+    // Message d'erreur plus informatif
+    $errorMsg = 'Erreur : ' . $e->getMessage();
+    if ($e instanceof RuntimeException) {
+        $errorMsg = $e->getMessage();
+    }
+    
+    jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
 }
 
 /**
@@ -151,7 +186,17 @@ function generateFactureNumber(PDO $pdo): string {
  * Génère le PDF de la facture
  */
 function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data): string {
-    require_once __DIR__ . '/../vendor/autoload.php';
+    // Charger TCPDF via Composer autoload
+    $vendorAutoload = __DIR__ . '/../vendor/autoload.php';
+    if (!file_exists($vendorAutoload)) {
+        throw new RuntimeException('Le fichier vendor/autoload.php est introuvable. Exécutez "composer install".');
+    }
+    require_once $vendorAutoload;
+    
+    // Vérifier que TCPDF est disponible
+    if (!class_exists('TCPDF')) {
+        throw new RuntimeException('La classe TCPDF n\'est pas disponible. Vérifiez que tecnickcom/tcpdf est installé via Composer.');
+    }
     
     // Récupérer les lignes de facture
     $stmt = $pdo->prepare("SELECT * FROM facture_lignes WHERE id_facture = :id ORDER BY ordre ASC");
@@ -163,6 +208,10 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $stmt->execute([':id' => $factureId]);
     $facture = $stmt->fetch(PDO::FETCH_ASSOC);
     
+    if (!$facture) {
+        throw new RuntimeException('Facture introuvable après insertion');
+    }
+    
     // Créer le répertoire de stockage si nécessaire
     $uploadDir = __DIR__ . '/../uploads/factures/' . date('Y');
     if (!is_dir($uploadDir)) {
@@ -171,11 +220,12 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     
     // Vérifier que le répertoire est accessible en écriture
     if (!is_writable($uploadDir)) {
-        throw new RuntimeException('Le répertoire de stockage des factures n\'est pas accessible en écriture');
+        throw new RuntimeException('Le répertoire de stockage des factures n\'est pas accessible en écriture: ' . $uploadDir);
     }
     
     // Créer le PDF avec TCPDF
-    $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
+    // TCPDF utilise 'P' pour portrait, 'mm' pour millimètres, 'A4' pour le format
+    $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
     
     // Informations du document
     $pdf->SetCreator('CC Computer');

@@ -1438,6 +1438,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             btnSubmit.textContent = 'Génération en cours...';
             
             try {
+                console.log('Envoi des données:', data);
                 const response = await fetch('/API/factures_generer.php', {
                     method: 'POST',
                     headers: {
@@ -1446,7 +1447,20 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     body: JSON.stringify(data)
                 });
                 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erreur HTTP:', response.status, errorText);
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        alert('Erreur : ' + (errorJson.error || 'Erreur HTTP ' + response.status));
+                    } catch {
+                        alert('Erreur HTTP ' + response.status + ': ' + errorText.substring(0, 200));
+                    }
+                    return;
+                }
+                
                 const result = await response.json();
+                console.log('Réponse reçue:', result);
                 
                 if (result.ok) {
                     alert('Facture générée avec succès !');
@@ -1455,11 +1469,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     }
                     closeFactureModal();
                 } else {
-                    alert('Erreur : ' + (result.error || 'Erreur inconnue'));
+                    const errorMsg = result.error || 'Erreur inconnue';
+                    console.error('Erreur API:', errorMsg);
+                    alert('Erreur : ' + errorMsg);
                 }
             } catch (error) {
-                console.error('Erreur:', error);
-                alert('Erreur lors de la génération de la facture');
+                console.error('Erreur lors de la requête:', error);
+                alert('Erreur lors de la génération de la facture: ' + error.message);
             } finally {
                 btnSubmit.disabled = false;
                 btnSubmit.textContent = 'Générer la facture';
