@@ -41,7 +41,7 @@ return [
         'smtp_username' => $_ENV['SMTP_USERNAME'] ?? '',
         'smtp_password' => $_ENV['SMTP_PASSWORD'] ?? '',
         'from_email' => $_ENV['SMTP_FROM_EMAIL'] ?? 'facture@camsongroup.fr',
-        'from_name' => $_ENV['SMTP_FROM_NAME'] ?? 'CC Computer',
+        'from_name' => $_ENV['SMTP_FROM_NAME'] ?? 'Camson Group - Facturation',
         'reply_to_email' => $_ENV['SMTP_REPLY_TO'] ?? 'facture@camsongroup.fr',
     ],
 ];

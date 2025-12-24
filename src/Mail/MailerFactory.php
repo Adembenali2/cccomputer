@@ -32,30 +32,44 @@ class MailerFactory
             $mail->SMTPAuth = true;
             $mail->Username = $config['smtp_username'];
             $mail->Password = $config['smtp_password'];
-            $mail->SMTPSecure = $config['smtp_secure']; // 'tls' ou 'ssl'
+            // Mapping tls/ssl vers les constantes PHPMailer
+            $secure = strtolower($config['smtp_secure'] ?? 'tls');
+            if ($secure === 'tls') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            } elseif ($secure === 'ssl') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+            } else {
+                throw new MailerException('SMTP_SECURE invalide: ' . $secure . ' (doit être "tls" ou "ssl")');
+            }
+            
             $mail->Port = (int)$config['smtp_port'];
             $mail->CharSet = 'UTF-8';
             
             // Expéditeur
             $mail->setFrom(
                 $config['from_email'],
-                $config['from_name'] ?? 'CC Computer'
+                $config['from_name'] ?? 'Camson Group - Facturation'
             );
             
             // Reply-To
             $mail->addReplyTo(
                 $config['reply_to_email'] ?? $config['from_email'],
-                $config['from_name'] ?? 'CC Computer'
+                $config['from_name'] ?? 'Camson Group - Facturation'
             );
             
-            // Options supplémentaires
-            $mail->SMTPOptions = [
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true
-                ]
-            ];
+            // Options SSL/TLS - En production, on doit vérifier les certificats
+            // Ne désactiver la vérification que si explicitement demandé via variable d'env
+            $disableVerify = (bool)($_ENV['SMTP_DISABLE_VERIFY'] ?? false);
+            if ($disableVerify) {
+                error_log('ATTENTION: Vérification SSL/TLS désactivée pour SMTP (SMTP_DISABLE_VERIFY=true)');
+                $mail->SMTPOptions = [
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                        'allow_self_signed' => true
+                    ]
+                ];
+            }
             
         } catch (PHPMailerException $e) {
             throw new MailerException(

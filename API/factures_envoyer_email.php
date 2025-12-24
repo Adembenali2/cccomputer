@@ -122,18 +122,13 @@ try {
     }
     
     // Trouver le chemin absolu du PDF
-    $pdfPath = MailerService::findPdfPath($facture['pdf_path']);
-    
-    if (!$pdfPath) {
-        error_log("PDF introuvable - Chemin DB: " . $facture['pdf_path']);
+    try {
+        $pdfPath = MailerService::findPdfPath($facture['pdf_path']);
+    } catch (MailerException $e) {
+        error_log("Erreur findPdfPath: " . $e->getMessage());
         jsonResponse([
             'ok' => false, 
-            'error' => 'Le fichier PDF est introuvable sur le serveur. Chemin enregistré: ' . $facture['pdf_path'] . '. Le fichier a peut-être été supprimé ou déplacé. Veuillez régénérer la facture.',
-            'debug' => [
-                'pdf_path_db' => $facture['pdf_path'],
-                'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'Non défini',
-                'project_dir' => dirname(__DIR__)
-            ]
+            'error' => $e->getMessage()
         ], 404);
     }
     
@@ -204,7 +199,13 @@ try {
 } catch (PDOException $e) {
     error_log('factures_envoyer_email.php SQL error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+} catch (MailerException $e) {
+    // Erreur déjà sanitée par MailerService
+    error_log('factures_envoyer_email.php MailerException: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
 } catch (Throwable $e) {
+    // Ne pas exposer les détails de l'exception au client
     error_log('factures_envoyer_email.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
+    error_log('factures_envoyer_email.php stack trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue lors de l\'envoi de l\'email'], 500);
 }
