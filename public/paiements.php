@@ -2120,11 +2120,32 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
                     row.onmouseleave = function() { this.style.background = ''; };
                     
-                    // Menu déroulant pour changer le statut
+                    // Couleurs et labels pour les statuts
+                    const statutColors = {
+                        'brouillon': '#6b7280',
+                        'envoyee': '#3b82f6',
+                        'payee': '#10b981',
+                        'en_retard': '#ef4444',
+                        'annulee': '#9ca3af'
+                    };
+                    const statutLabels = {
+                        'brouillon': 'En cours',
+                        'envoyee': 'En attente',
+                        'payee': 'Payé',
+                        'en_retard': 'En retard',
+                        'annulee': 'Annulée'
+                    };
+                    const currentStatutColor = statutColors[facture.statut] || '#6b7280';
+                    const currentStatutLabel = statutLabels[facture.statut] || facture.statut;
+                    
+                    // Menu déroulant pour changer le statut - amélioré pour être plus visible
                     const statutSelect = `
                         <select 
-                            onchange="updatePaiementStatut(${facture.id}, this.value, '${facture.numero}')" 
-                            style="padding: 0.4rem 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem; cursor: pointer; min-width: 120px;"
+                            id="statutSelect_${facture.id}"
+                            onchange="updatePaiementStatut(${facture.id}, this.value, '${facture.numero}', this)" 
+                            style="padding: 0.5rem 0.75rem; border: 2px solid ${currentStatutColor}; border-radius: var(--radius-md); background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem; font-weight: 600; cursor: pointer; min-width: 140px; transition: all 0.2s ease;"
+                            onmouseenter="this.style.borderColor='var(--accent-primary)'; this.style.boxShadow='0 0 0 3px rgba(59, 130, 246, 0.1)';"
+                            onmouseleave="this.style.borderColor='${currentStatutColor}'; this.style.boxShadow='none';"
                         >
                             <option value="brouillon" ${facture.statut === 'brouillon' ? 'selected' : ''}>En cours</option>
                             <option value="envoyee" ${facture.statut === 'envoyee' ? 'selected' : ''}>En attente</option>
@@ -2149,7 +2170,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         </td>
                         <td style="padding: 0.75rem; text-align: center;">
                             ${facture.pdf_path ? `
-                                <button onclick="viewFacturePDFById(${facture.id}, '${facture.numero}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                                <button onclick="viewFacturePDFById(${facture.id}, '${facture.numero}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
                                     PDF
                                 </button>
                             ` : '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>'}
@@ -2217,11 +2238,33 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         /**
          * Met à jour le statut de paiement d'une facture
          */
-        async function updatePaiementStatut(factureId, newStatut, factureNumero) {
-            if (!confirm(`Voulez-vous vraiment changer le statut de la facture ${factureNumero} ?`)) {
-                // Recharger pour annuler le changement
-                loadPaiementsList();
+        async function updatePaiementStatut(factureId, newStatut, factureNumero, selectElement) {
+            const statutLabels = {
+                'brouillon': 'En cours',
+                'envoyee': 'En attente',
+                'payee': 'Payé',
+                'en_retard': 'En retard',
+                'annulee': 'Annulée'
+            };
+            const newStatutLabel = statutLabels[newStatut] || newStatut;
+            
+            // Sauvegarder l'ancienne valeur au cas où l'utilisateur annule
+            const oldValue = selectElement ? selectElement.getAttribute('data-old-value') || selectElement.value : null;
+            
+            if (!confirm(`Voulez-vous vraiment changer le statut de la facture ${factureNumero} en "${newStatutLabel}" ?`)) {
+                // Remettre l'ancienne valeur si l'utilisateur annule
+                if (selectElement && oldValue) {
+                    selectElement.value = oldValue;
+                }
                 return;
+            }
+            
+            // Sauvegarder la valeur actuelle
+            if (selectElement) {
+                selectElement.setAttribute('data-old-value', newStatut);
+                selectElement.disabled = true;
+                selectElement.style.opacity = '0.6';
+                selectElement.style.cursor = 'wait';
             }
             
             try {
@@ -2239,19 +2282,66 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 const result = await response.json();
                 
                 if (result.ok) {
+                    // Afficher un message de succès
+                    showMessage('Statut mis à jour avec succès', 'success');
                     // Recharger la liste
                     loadPaiementsList();
                 } else {
-                    alert('Erreur : ' + (result.error || 'Impossible de mettre à jour le statut'));
-                    // Recharger pour annuler le changement
-                    loadPaiementsList();
+                    showMessage('Erreur : ' + (result.error || 'Impossible de mettre à jour le statut'), 'error');
+                    // Remettre l'ancienne valeur en cas d'erreur
+                    if (selectElement && oldValue) {
+                        selectElement.value = oldValue;
+                    }
+                    // Réactiver le select
+                    if (selectElement) {
+                        selectElement.disabled = false;
+                        selectElement.style.opacity = '1';
+                        selectElement.style.cursor = 'pointer';
+                    }
                 }
             } catch (error) {
                 console.error('Erreur lors de la mise à jour du statut:', error);
-                alert('Erreur lors de la mise à jour du statut');
-                // Recharger pour annuler le changement
-                loadPaiementsList();
+                showMessage('Erreur lors de la mise à jour du statut', 'error');
+                // Remettre l'ancienne valeur en cas d'erreur
+                if (selectElement && oldValue) {
+                    selectElement.value = oldValue;
+                }
+                // Réactiver le select
+                if (selectElement) {
+                    selectElement.disabled = false;
+                    selectElement.style.opacity = '1';
+                    selectElement.style.cursor = 'pointer';
+                }
             }
+        }
+        
+        /**
+         * Affiche un message à l'utilisateur
+         */
+        function showMessage(message, type = 'success') {
+            const messageContainer = document.getElementById('messageContainer');
+            if (!messageContainer) return;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : '⚠';
+            messageDiv.innerHTML = `
+                <span class="message-icon">${icon}</span>
+                <span>${message}</span>
+            `;
+            
+            messageContainer.innerHTML = '';
+            messageContainer.appendChild(messageDiv);
+            
+            // Masquer le message après 5 secondes
+            setTimeout(() => {
+                messageDiv.style.opacity = '0';
+                messageDiv.style.transform = 'translateY(-10px)';
+                setTimeout(() => {
+                    messageContainer.innerHTML = '';
+                }, 300);
+            }, 5000);
         }
 
         // Exposer les fonctions globalement pour les onclick
