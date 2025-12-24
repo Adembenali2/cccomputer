@@ -8,10 +8,14 @@ if ($path !== '/' && is_file($full)) {
     return false;
 }
 
-// Si c'est une requête vers /API/, laisser passer (ne pas rediriger)
+// Si c'est une requête vers /API/, vérifier si le fichier existe dans API/
 if (strpos($path, '/API/') === 0) {
-    // Le fichier API devrait être géré directement par le serveur web
-    // Si on arrive ici, le fichier n'existe pas
+    $apiFile = __DIR__ . $path;
+    if (is_file($apiFile)) {
+        // Le fichier existe, laisser le serveur le servir
+        return false;
+    }
+    // Le fichier n'existe pas
     http_response_code(404);
     header('Content-Type: application/json');
     echo json_encode(['ok' => false, 'error' => 'Endpoint API introuvable']);
