@@ -2,6 +2,15 @@
 // index.php (racine)
 
 /**
+ * IMPORTANT: Lire php://input UNE SEULE FOIS au tout début
+ * php://input ne peut être lu qu'une seule fois, donc on le stocke dans $GLOBALS
+ * pour que les endpoints inclus puissent y accéder
+ */
+if (!isset($GLOBALS['RAW_BODY'])) {
+    $GLOBALS['RAW_BODY'] = file_get_contents('php://input') ?: '';
+}
+
+/**
  * Bypass pour servir les fichiers statiques et endpoints API
  * Doit être exécuté AVANT toute autre logique
  */

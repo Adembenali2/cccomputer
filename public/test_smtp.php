@@ -47,16 +47,53 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 try {
     // Récupération des données
-    $input = file_get_contents('php://input');
-    $data = json_decode($input, true);
+    // Utiliser $GLOBALS['RAW_BODY'] si disponible (lu par le router), sinon lire php://input
+    $raw = $GLOBALS['RAW_BODY'] ?? file_get_contents('php://input') ?: '';
+    
+    // Mode debug sécurisé (si token valide + debug=true)
+    $data = json_decode($raw, true);
+    $isDebug = !empty($data['debug']) && $data['debug'] === true;
+    $providedToken = (string)($data['token'] ?? '');
+    $expectedToken = (string)($_ENV['SMTP_TEST_TOKEN'] ?? getenv('SMTP_TEST_TOKEN') ?: '');
+    
+    if ($isDebug && !empty($expectedToken) && hash_equals($expectedToken, $providedToken)) {
+        // Mode debug : renvoyer des infos sur le body sans secrets
+        jsonResponse([
+            'ok' => true,
+            'debug' => true,
+            'body_length' => strlen($raw),
+            'content_type' => $_SERVER['CONTENT_TYPE'] ?? 'non défini',
+            'has_raw_body' => isset($GLOBALS['RAW_BODY']),
+            'raw_body_length' => isset($GLOBALS['RAW_BODY']) ? strlen($GLOBALS['RAW_BODY']) : 0,
+            'php_input_length' => strlen(file_get_contents('php://input') ?: ''),
+            'note' => 'Mode debug activé - token valide'
+        ]);
+        exit;
+    }
+    
+    // Vérifier que le body n'est pas vide
+    if (empty($raw)) {
+        jsonResponse([
+            'ok' => false, 
+            'error' => 'Body vide (php://input) - vérifier router',
+            'debug_info' => [
+                'has_raw_body' => isset($GLOBALS['RAW_BODY']),
+                'raw_body_length' => isset($GLOBALS['RAW_BODY']) ? strlen($GLOBALS['RAW_BODY']) : 0,
+                'content_type' => $_SERVER['CONTENT_TYPE'] ?? 'non défini'
+            ]
+        ], 400);
+    }
     
     if (!$data || !is_array($data)) {
-        jsonResponse(['ok' => false, 'error' => 'Données JSON invalides'], 400);
+        jsonResponse([
+            'ok' => false, 
+            'error' => 'Données JSON invalides',
+            'body_length' => strlen($raw),
+            'body_preview' => substr($raw, 0, 100) // Premiers 100 caractères pour debug
+        ], 400);
     }
     
     // Vérification du token - OBLIGATOIRE
-    $providedToken = (string)($data['token'] ?? '');
-    $expectedToken = (string)($_ENV['SMTP_TEST_TOKEN'] ?? getenv('SMTP_TEST_TOKEN') ?: '');
     
     // Token obligatoire en toutes circonstances
     if (empty($expectedToken)) {
