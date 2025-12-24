@@ -35,8 +35,9 @@ try {
     // Récupérer la facture avec les infos client
     $stmt = $pdo->prepare("
         SELECT 
-            f.id, f.numero, f.date_facture, f.montant_ttc, f.pdf_path,
-            c.raison_sociale as client_nom, c.email as client_email
+            f.id, f.numero, f.date_facture, f.montant_ttc, f.pdf_path, f.pdf_genere,
+            f.id_client, f.type, f.date_debut_periode, f.date_fin_periode,
+            c.raison_sociale as client_nom, c.email as client_email, c.*
         FROM factures f
         LEFT JOIN clients c ON f.id_client = c.id
         WHERE f.id = :id
@@ -49,15 +50,131 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Facture introuvable'], 404);
     }
     
-    if (empty($facture['pdf_path'])) {
-        jsonResponse(['ok' => false, 'error' => 'Le PDF de la facture n\'existe pas'], 400);
+    // Si le PDF n'existe pas ou n'est pas généré, essayer de le régénérer
+    if (empty($facture['pdf_path']) || !$facture['pdf_genere']) {
+        // Essayer de régénérer le PDF
+        try {
+            // Inclure seulement les fonctions nécessaires sans exécuter le code principal
+            if (!function_exists('generateFacturePDF')) {
+                require_once __DIR__ . '/factures_generer.php';
+            }
+            
+            // Récupérer les lignes de facture
+            $stmtLignes = $pdo->prepare("SELECT * FROM facture_lignes WHERE id_facture = :id ORDER BY ordre");
+            $stmtLignes->execute([':id' => $factureId]);
+            $lignes = $stmtLignes->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Préparer les données pour la génération
+            $dataForPDF = [
+                'factureClient' => $facture['id_client'],
+                'factureDate' => $facture['date_facture'],
+                'factureType' => $facture['type'],
+                'factureDateDebut' => $facture['date_debut_periode'],
+                'factureDateFin' => $facture['date_fin_periode'],
+                'lignes' => []
+            ];
+            
+            foreach ($lignes as $ligne) {
+                $dataForPDF['lignes'][] = [
+                    'description' => $ligne['description'],
+                    'type' => $ligne['type'],
+                    'quantite' => $ligne['quantite'],
+                    'prix_unitaire' => $ligne['prix_unitaire_ht'],
+                    'total_ht' => $ligne['total_ht']
+                ];
+            }
+            
+            // Générer le PDF
+            $pdfWebPath = generateFacturePDF($pdo, $factureId, $facture, $dataForPDF);
+            
+            // Mettre à jour la facture
+            $stmt = $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ? WHERE id = ?");
+            $stmt->execute([$pdfWebPath, $factureId]);
+            
+            $facture['pdf_path'] = $pdfWebPath;
+            $facture['pdf_genere'] = 1;
+            
+        } catch (Exception $e) {
+            error_log("Erreur lors de la régénération du PDF: " . $e->getMessage());
+            jsonResponse(['ok' => false, 'error' => 'Impossible de générer le PDF de la facture. ' . $e->getMessage()], 500);
+        }
     }
     
-    // Chemin complet du fichier PDF
-    $pdfPath = __DIR__ . '/..' . $facture['pdf_path'];
-    if (!file_exists($pdfPath)) {
-        jsonResponse(['ok' => false, 'error' => 'Le fichier PDF est introuvable'], 404);
+    if (empty($facture['pdf_path'])) {
+        jsonResponse(['ok' => false, 'error' => 'Le PDF de la facture n\'existe pas et n\'a pas pu être généré'], 400);
     }
+    
+    // Chercher le fichier PDF dans plusieurs emplacements possibles
+    $possibleBaseDirs = [];
+    
+    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+    if ($docRoot !== '' && is_dir($docRoot)) {
+        $possibleBaseDirs[] = $docRoot;
+    }
+    
+    $projectDir = dirname(__DIR__);
+    if (is_dir($projectDir)) {
+        $possibleBaseDirs[] = $projectDir;
+    }
+    
+    if (is_dir('/app')) {
+        $possibleBaseDirs[] = '/app';
+    }
+    if (is_dir('/var/www/html')) {
+        $possibleBaseDirs[] = '/var/www/html';
+    }
+    
+    // Nettoyer le chemin PDF (enlever le slash initial si présent)
+    $pdfPathRelative = ltrim($facture['pdf_path'], '/');
+    
+    $pdfPath = null;
+    foreach ($possibleBaseDirs as $baseDir) {
+        $testPath = $baseDir . '/' . $pdfPathRelative;
+        if (file_exists($testPath)) {
+            $pdfPath = $testPath;
+            break;
+        }
+        // Essayer aussi avec le chemin tel quel
+        $testPath2 = $baseDir . $facture['pdf_path'];
+        if (file_exists($testPath2)) {
+            $pdfPath = $testPath2;
+            break;
+        }
+    }
+    
+    // Si toujours pas trouvé, essayer le chemin relatif depuis le répertoire API
+    if (!$pdfPath) {
+        $testPath = __DIR__ . '/..' . $facture['pdf_path'];
+        if (file_exists($testPath)) {
+            $pdfPath = $testPath;
+        }
+    }
+    
+    if (!$pdfPath || !file_exists($pdfPath)) {
+        // Logs pour déboguer
+        error_log("PDF introuvable - Chemin DB: " . $facture['pdf_path']);
+        error_log("Base dirs testés: " . implode(', ', $possibleBaseDirs));
+        error_log("Chemin relatif nettoyé: " . $pdfPathRelative);
+        
+        // Essayer une dernière fois avec le chemin tel quel depuis le répertoire du projet
+        $lastTry = dirname(__DIR__) . $facture['pdf_path'];
+        if (file_exists($lastTry)) {
+            $pdfPath = $lastTry;
+        } else {
+            error_log("Dernier essai échoué: " . $lastTry);
+            jsonResponse([
+                'ok' => false, 
+                'error' => 'Le fichier PDF est introuvable sur le serveur. Chemin enregistré: ' . $facture['pdf_path'],
+                'debug' => [
+                    'pdf_path_db' => $facture['pdf_path'],
+                    'base_dirs' => $possibleBaseDirs,
+                    'last_try' => $lastTry
+                ]
+            ], 404);
+        }
+    }
+    
+    error_log("PDF trouvé: " . $pdfPath);
     
     // Préparer le sujet et le message
     if (empty($sujet)) {

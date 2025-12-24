@@ -236,7 +236,26 @@ async function loadAllClients() {
     
     try {
         const response = await fetch('/API/maps_get_all_clients.php');
-        const data = await response.json();
+        
+        // Vérifier si la réponse est OK
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // Vérifier que la réponse n'est pas vide
+        const text = await response.text();
+        if (!text || text.trim() === '') {
+            throw new Error('Réponse vide du serveur');
+        }
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            console.error('Erreur de parsing JSON:', parseError);
+            console.error('Réponse reçue:', text.substring(0, 200));
+            throw new Error('Réponse JSON invalide du serveur');
+        }
         
         if (data.ok && data.clients) {
             const totalClients = data.clients.length;

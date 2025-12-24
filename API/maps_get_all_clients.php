@@ -39,52 +39,114 @@ $pdo = getPdoOrFail();
 
 $limit = min((int)($_GET['limit'] ?? 1000), 5000); // Par défaut 1000, max 5000
 
+// Vérifier si la table client_geocode existe
+$tableExists = false;
+try {
+    $checkTable = $pdo->prepare("
+        SELECT COUNT(*) as cnt 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'client_geocode'
+    ");
+    $checkTable->execute();
+    $tableExists = ((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt']) > 0;
+} catch (PDOException $e) {
+    error_log('maps_get_all_clients.php: Error checking table existence: ' . $e->getMessage());
+    // Continuer sans la table, on utilisera NULL pour les coordonnées
+}
+
 try {
     // Récupérer tous les clients avec leurs coordonnées géocodées et infos SAV/livraisons
     // Utiliser des sous-requêtes pour éviter les problèmes de GROUP BY et améliorer les performances
-    $sql = "
-        SELECT 
-            c.id,
-            c.numero_client,
-            c.raison_sociale,
-            c.adresse,
-            c.code_postal,
-            c.ville,
-            c.adresse_livraison,
-            c.livraison_identique,
-            c.nom_dirigeant,
-            c.prenom_dirigeant,
-            c.telephone1,
-            c.email,
-            cg.lat,
-            cg.lng,
-            cg.display_name as geocode_display_name,
-            cg.address_hash,
-            -- Compter les livraisons actives (non livrées, non annulées)
-            COALESCE((
-                SELECT COUNT(*)
-                FROM livraisons l
-                WHERE l.id_client = c.id
-                  AND l.statut NOT IN ('livree', 'annulee')
-            ), 0) as has_livraison,
-            -- Compter les SAV actifs (non résolus, non annulés)
-            COALESCE((
-                SELECT COUNT(*)
-                FROM sav s
-                WHERE s.id_client = c.id
-                  AND s.statut NOT IN ('resolu', 'annule')
-            ), 0) as has_sav
-        FROM clients c
-        LEFT JOIN client_geocode cg ON c.id = cg.id_client
-        WHERE c.adresse IS NOT NULL 
-          AND c.adresse != ''
-          AND c.code_postal IS NOT NULL 
-          AND c.code_postal != ''
-          AND c.ville IS NOT NULL 
-          AND c.ville != ''
-        ORDER BY c.raison_sociale ASC
-        LIMIT :limit
-    ";
+    if ($tableExists) {
+        $sql = "
+            SELECT 
+                c.id,
+                c.numero_client,
+                c.raison_sociale,
+                c.adresse,
+                c.code_postal,
+                c.ville,
+                c.adresse_livraison,
+                c.livraison_identique,
+                c.nom_dirigeant,
+                c.prenom_dirigeant,
+                c.telephone1,
+                c.email,
+                cg.lat,
+                cg.lng,
+                cg.display_name as geocode_display_name,
+                cg.address_hash,
+                -- Compter les livraisons actives (non livrées, non annulées)
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM livraisons l
+                    WHERE l.id_client = c.id
+                      AND l.statut NOT IN ('livree', 'annulee')
+                ), 0) as has_livraison,
+                -- Compter les SAV actifs (non résolus, non annulés)
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM sav s
+                    WHERE s.id_client = c.id
+                      AND s.statut NOT IN ('resolu', 'annule')
+                ), 0) as has_sav
+            FROM clients c
+            LEFT JOIN client_geocode cg ON c.id = cg.id_client
+            WHERE c.adresse IS NOT NULL 
+              AND c.adresse != ''
+              AND c.code_postal IS NOT NULL 
+              AND c.code_postal != ''
+              AND c.ville IS NOT NULL 
+              AND c.ville != ''
+            ORDER BY c.raison_sociale ASC
+            LIMIT :limit
+        ";
+    } else {
+        // Si la table n'existe pas, on fait la requête sans le LEFT JOIN
+        $sql = "
+            SELECT 
+                c.id,
+                c.numero_client,
+                c.raison_sociale,
+                c.adresse,
+                c.code_postal,
+                c.ville,
+                c.adresse_livraison,
+                c.livraison_identique,
+                c.nom_dirigeant,
+                c.prenom_dirigeant,
+                c.telephone1,
+                c.email,
+                NULL as lat,
+                NULL as lng,
+                NULL as geocode_display_name,
+                NULL as address_hash,
+                -- Compter les livraisons actives (non livrées, non annulées)
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM livraisons l
+                    WHERE l.id_client = c.id
+                      AND l.statut NOT IN ('livree', 'annulee')
+                ), 0) as has_livraison,
+                -- Compter les SAV actifs (non résolus, non annulés)
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM sav s
+                    WHERE s.id_client = c.id
+                      AND s.statut NOT IN ('resolu', 'annule')
+                ), 0) as has_sav
+            FROM clients c
+            WHERE c.adresse IS NOT NULL 
+              AND c.adresse != ''
+              AND c.code_postal IS NOT NULL 
+              AND c.code_postal != ''
+              AND c.ville IS NOT NULL 
+              AND c.ville != ''
+            ORDER BY c.raison_sociale ASC
+            LIMIT :limit
+        ";
+    }
     
     $stmt = $pdo->prepare($sql);
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);

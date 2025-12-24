@@ -135,6 +135,41 @@ if (!$cachedCoords) {
     @file_put_contents($cacheFile, json_encode($cachedCoords));
 }
 
+// Vérifier si la table client_geocode existe, sinon la créer
+try {
+    $checkTable = $pdo->prepare("
+        SELECT COUNT(*) as cnt 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'client_geocode'
+    ");
+    $checkTable->execute();
+    $tableExists = ((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt']) > 0;
+    
+    if (!$tableExists) {
+        // Créer la table si elle n'existe pas
+        $createTableSql = "
+            CREATE TABLE IF NOT EXISTS `client_geocode` (
+              `id_client` int NOT NULL,
+              `address_hash` varchar(32) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Hash MD5 de l''adresse géocodée',
+              `lat` decimal(10,8) DEFAULT NULL COMMENT 'Latitude',
+              `lng` decimal(11,8) DEFAULT NULL COMMENT 'Longitude',
+              `display_name` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Nom d''affichage retourné par le géocodage',
+              `geocoded_at` datetime DEFAULT NULL COMMENT 'Date du premier géocodage',
+              `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Date de dernière mise à jour',
+              PRIMARY KEY (`id_client`),
+              KEY `idx_address_hash` (`address_hash'),
+              CONSTRAINT `fk_client_geocode_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        ";
+        $pdo->exec($createTableSql);
+        error_log('maps_geocode_client.php: Table client_geocode créée automatiquement');
+    }
+} catch (PDOException $e) {
+    error_log('maps_geocode_client.php: Error checking/creating table: ' . $e->getMessage());
+    // Continuer quand même, on essaiera d'insérer
+}
+
 // Stocker les coordonnées en base de données
 $addressHash = md5($address);
 try {
@@ -169,6 +204,21 @@ try {
     
 } catch (PDOException $e) {
     error_log('maps_geocode_client.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    // Si l'erreur est due à la table qui n'existe pas, on retourne quand même les coordonnées
+    // mais sans les sauvegarder
+    if (strpos($e->getMessage(), "doesn't exist") !== false || strpos($e->getMessage(), "Table") !== false) {
+        error_log('maps_geocode_client.php: Table client_geocode n\'existe pas, retour des coordonnées sans sauvegarde');
+        jsonResponse([
+            'success' => true,
+            'ok' => true,
+            'lat' => $cachedCoords['lat'],
+            'lng' => $cachedCoords['lng'],
+            'client_id' => $clientId,
+            'display_name' => $cachedCoords['display_name'],
+            'warning' => 'Coordonnées retournées mais non sauvegardées (table manquante)'
+        ]);
+    } else {
+        jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    }
 }
 
