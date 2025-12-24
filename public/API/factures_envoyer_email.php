@@ -43,7 +43,6 @@ try {
         SELECT 
             f.id, f.numero, f.date_facture, f.montant_ttc, f.pdf_path, f.pdf_genere,
             f.id_client, f.type, f.date_debut_periode, f.date_fin_periode,
-            f.montant_ht, f.tva,
             c.raison_sociale as client_nom, c.email as client_email, c.*
         FROM factures f
         LEFT JOIN clients c ON f.id_client = c.id
@@ -56,15 +55,6 @@ try {
     if (!$facture) {
         jsonResponse(['ok' => false, 'error' => 'Facture introuvable'], 404);
     }
-    
-    // Préparer les données client pour la génération PDF
-    $client = [
-        'raison_sociale' => $facture['raison_sociale'] ?? $facture['client_nom'] ?? '',
-        'adresse' => $facture['adresse'] ?? '',
-        'code_postal' => $facture['code_postal'] ?? '',
-        'ville' => $facture['ville'] ?? '',
-        'siret' => $facture['siret'] ?? ''
-    ];
     
     // Si le PDF n'existe pas ou n'est pas généré, essayer de le régénérer
     $shouldRegenerate = empty($facture['pdf_path']) || !$facture['pdf_genere'];
@@ -133,51 +123,76 @@ try {
     
     // Trouver le chemin absolu du PDF
     $pdfPath = null;
-    $isTemporaryPdf = false;
-    
     try {
         $pdfPath = MailerService::findPdfPath($facture['pdf_path']);
-        error_log("[MAIL] PDF trouvé avec succès: " . $pdfPath . " (Taille: " . filesize($pdfPath) . " bytes)");
+        error_log("PDF trouvé avec succès: " . $pdfPath . " (Taille: " . filesize($pdfPath) . " bytes)");
     } catch (MailerException $e) {
-        error_log("[MAIL] PDF introuvable via findPdfPath: " . $e->getMessage());
-        error_log("[MAIL] Chemin enregistré dans DB: " . $facture['pdf_path']);
+        error_log("PDF introuvable via findPdfPath: " . $e->getMessage());
+        error_log("Chemin enregistré dans DB: " . $facture['pdf_path']);
         
-        // Fallback: Si le PDF n'existe pas (Railway stockage éphémère), régénérer à la demande dans /tmp
-        error_log("[MAIL] fallback regen start - Facture ID: {$factureId}");
+        // Fallback: Si le PDF n'existe pas (Railway stockage éphémère), régénérer à la demande
+        error_log("Tentative de régénération du PDF à la demande (fallback Railway)");
         
         try {
-            // Inclure la fonction de génération PDF
-            require_once __DIR__ . '/factures_generate_pdf_content.php';
+            // Inclure la fonction de génération si nécessaire
+            if (!function_exists('generateFacturePDF')) {
+                require_once __DIR__ . '/factures_generer.php';
+            }
             
-            // Récupérer les données client complètes si nécessaire
-            if (empty($client['raison_sociale'])) {
-                $stmtClient = $pdo->prepare("SELECT * FROM clients WHERE id = :id LIMIT 1");
-                $stmtClient->execute([':id' => $facture['id_client']]);
-                $clientData = $stmtClient->fetch(PDO::FETCH_ASSOC);
-                if (!$clientData) {
-                    throw new RuntimeException('Client introuvable pour la facture #' . $factureId);
-                }
-                $client = [
-                    'raison_sociale' => $clientData['raison_sociale'] ?? '',
-                    'adresse' => $clientData['adresse'] ?? '',
-                    'code_postal' => $clientData['code_postal'] ?? '',
-                    'ville' => $clientData['ville'] ?? '',
-                    'siret' => $clientData['siret'] ?? ''
+            // Récupérer les lignes de facture
+            $stmtLignes = $pdo->prepare("SELECT * FROM facture_lignes WHERE id_facture = :id ORDER BY ordre");
+            $stmtLignes->execute([':id' => $factureId]);
+            $lignes = $stmtLignes->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Préparer les données pour la génération
+            $dataForPDF = [
+                'factureClient' => $facture['id_client'],
+                'factureDate' => $facture['date_facture'],
+                'factureType' => $facture['type'],
+                'factureDateDebut' => $facture['date_debut_periode'],
+                'factureDateFin' => $facture['date_fin_periode'],
+                'lignes' => []
+            ];
+            
+            foreach ($lignes as $ligne) {
+                $dataForPDF['lignes'][] = [
+                    'description' => $ligne['description'],
+                    'type' => $ligne['type'],
+                    'quantite' => $ligne['quantite'],
+                    'prix_unitaire' => $ligne['prix_unitaire_ht'],
+                    'total_ht' => $ligne['total_ht']
                 ];
             }
             
-            // Générer le PDF directement dans /tmp
-            $tmpDir = sys_get_temp_dir();
-            error_log("[MAIL] Génération PDF dans répertoire temporaire: " . $tmpDir);
+            // Générer le PDF (cela va créer le fichier)
+            $pdfWebPath = generateFacturePDF($pdo, $factureId, $facture, $dataForPDF);
             
-            $pdfPath = generateInvoicePdf($pdo, $factureId, $facture, $client, $tmpDir);
-            $isTemporaryPdf = true;
+            // Mettre à jour la facture avec le nouveau chemin
+            $stmt = $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ? WHERE id = ?");
+            $stmt->execute([$pdfWebPath, $factureId]);
             
-            error_log("[MAIL] regen ok path=" . $pdfPath . " (Taille: " . filesize($pdfPath) . " bytes)");
+            // Essayer de trouver le PDF fraîchement généré
+            try {
+                $pdfPath = MailerService::findPdfPath($pdfWebPath);
+                error_log("PDF régénéré et trouvé: " . $pdfPath);
+            } catch (MailerException $e2) {
+                error_log("Erreur: PDF régénéré mais toujours introuvable: " . $e2->getMessage());
+                // Dernier recours: générer dans /tmp et utiliser directement
+                $tmpPath = sys_get_temp_dir() . '/' . basename($pdfWebPath);
+                error_log("Tentative de génération dans /tmp: " . $tmpPath);
+                
+                // Régénérer directement dans /tmp
+                // Note: On ne peut pas facilement régénérer sans refaire toute la logique
+                // Donc on retourne une erreur claire
+                jsonResponse([
+                    'ok' => false, 
+                    'error' => 'Le PDF a été régénéré mais n\'est toujours pas accessible. ' .
+                               'Cela peut indiquer un problème de permissions ou de stockage sur le serveur.'
+                ], 500);
+            }
             
         } catch (Exception $e) {
-            error_log("[MAIL] regen failed - Erreur: " . $e->getMessage());
-            error_log("[MAIL] regen failed - Stack trace: " . $e->getTraceAsString());
+            error_log("Erreur lors de la régénération du PDF (fallback): " . $e->getMessage());
             jsonResponse([
                 'ok' => false, 
                 'error' => 'Impossible de régénérer le PDF: ' . $e->getMessage()
@@ -186,7 +201,7 @@ try {
     }
     
     if (!$pdfPath || !file_exists($pdfPath)) {
-        error_log("[MAIL] ERREUR CRITIQUE: PDF introuvable après toutes les tentatives");
+        error_log("ERREUR CRITIQUE: PDF introuvable après toutes les tentatives");
         jsonResponse([
             'ok' => false, 
             'error' => 'Le fichier PDF est introuvable et n\'a pas pu être régénéré. Veuillez contacter l\'administrateur.'
@@ -238,13 +253,7 @@ try {
             WHERE id = :id
         ");
         $stmt->execute([':id' => $factureId]);
-        error_log("[MAIL] Facture #{$factureId} marquée comme envoyée par email");
-        
-        // Nettoyer le fichier temporaire si généré dans /tmp
-        if ($isTemporaryPdf && file_exists($pdfPath)) {
-            @unlink($pdfPath);
-            error_log("[MAIL] Fichier temporaire supprimé: " . $pdfPath);
-        }
+        error_log("Facture #{$factureId} marquée comme envoyée par email");
         
         jsonResponse([
             'ok' => true,
@@ -254,14 +263,7 @@ try {
         ]);
         
     } catch (MailerException $e) {
-        error_log("[MAIL] Erreur MailerService lors de l'envoi: " . $e->getMessage());
-        
-        // Nettoyer le fichier temporaire en cas d'erreur
-        if ($isTemporaryPdf && file_exists($pdfPath)) {
-            @unlink($pdfPath);
-            error_log("[MAIL] Fichier temporaire supprimé après erreur: " . $pdfPath);
-        }
-        
+        error_log("Erreur MailerService lors de l'envoi: " . $e->getMessage());
         jsonResponse([
             'ok' => false, 
             'error' => $e->getMessage()
