@@ -12,3 +12,4 @@ class MailerException extends Exception
 {
 }
 
+

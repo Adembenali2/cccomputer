@@ -32,3 +32,4 @@ DEALLOCATE PREPARE stmt;
 -- COMMENT 'Chemin relatif vers l''image uploadée (ex: /uploads/chatroom/filename.jpg)' 
 -- AFTER `mentions`;
 
+

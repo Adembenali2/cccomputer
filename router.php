@@ -8,18 +8,22 @@ if ($path !== '/' && is_file($full)) {
     return false;
 }
 
-// Si c'est une requête vers /API/, vérifier si le fichier existe dans API/
-if (strpos($path, '/API/') === 0) {
-    $apiFile = __DIR__ . $path;
+// Si c'est une requête vers /API/, essayer de servir le fichier directement
+// Sur Railway avec Caddy, on peut soit laisser Caddy gérer, soit inclure directement
+if (strpos($path, '/API/') === 0 || strpos($path, '/api/') === 0) {
+    // Normaliser le chemin vers /API/ (majuscules)
+    $normalizedPath = str_replace(['/API/', '/api/'], '/API/', $path);
+    $apiFile = __DIR__ . $normalizedPath;
+    
+    // Si le fichier existe, l'inclure directement
     if (is_file($apiFile)) {
-        // Le fichier existe, laisser le serveur le servir
-        return false;
+        require $apiFile;
+        exit;
     }
-    // Le fichier n'existe pas
-    http_response_code(404);
-    header('Content-Type: application/json');
-    echo json_encode(['ok' => false, 'error' => 'Endpoint API introuvable']);
-    exit;
+    
+    // Si le fichier n'existe pas, laisser Caddy gérer (retourner false)
+    // Caddy retournera une 404 standard
+    return false;
 }
 
 // Page d'accueil -> index.php
