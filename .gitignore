@@ -43,3 +43,9 @@ Thumbs.db
 # Sentry
 config/sentry.local.php
 
+# Exceptions pour fichiers test SMTP et ping (nécessaires pour Railway)
+!public/test_smtp.php
+!public/API/
+!public/API/test_smtp.php
+!public/ping.txt
+
