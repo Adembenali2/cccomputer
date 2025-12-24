@@ -2138,21 +2138,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const currentStatutColor = statutColors[facture.statut] || '#6b7280';
                     const currentStatutLabel = statutLabels[facture.statut] || facture.statut;
                     
-                    // Menu déroulant pour changer le statut - amélioré pour être plus visible
-                    const statutSelect = `
-                        <select 
-                            id="statutSelect_${facture.id}"
-                            onchange="updatePaiementStatut(${facture.id}, this.value, '${facture.numero}', this)" 
-                            style="padding: 0.5rem 0.75rem; border: 2px solid ${currentStatutColor}; border-radius: var(--radius-md); background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem; font-weight: 600; cursor: pointer; min-width: 140px; transition: all 0.2s ease;"
-                            onmouseenter="this.style.borderColor='var(--accent-primary)'; this.style.boxShadow='0 0 0 3px rgba(59, 130, 246, 0.1)';"
-                            onmouseleave="this.style.borderColor='${currentStatutColor}'; this.style.boxShadow='none';"
-                        >
-                            <option value="brouillon" ${facture.statut === 'brouillon' ? 'selected' : ''}>En cours</option>
-                            <option value="envoyee" ${facture.statut === 'envoyee' ? 'selected' : ''}>En attente</option>
-                            <option value="payee" ${facture.statut === 'payee' ? 'selected' : ''}>Payé</option>
-                            <option value="en_retard" ${facture.statut === 'en_retard' ? 'selected' : ''}>En retard</option>
-                            <option value="annulee" ${facture.statut === 'annulee' ? 'selected' : ''}>Annulée</option>
-                        </select>
+                    // Badge de statut en lecture seule (pas de modification possible)
+                    const statutBadge = `
+                        <span style="display: inline-block; padding: 0.5rem 1rem; border-radius: var(--radius-md); background: ${currentStatutColor}20; color: ${currentStatutColor}; font-size: 0.9rem; font-weight: 600; border: 1px solid ${currentStatutColor}40;">
+                            ${currentStatutLabel}
+                        </span>
                     `;
                     
                     row.innerHTML = `
@@ -2166,7 +2156,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                             ${facture.montant_ttc.toFixed(2).replace('.', ',')} €
                         </td>
                         <td style="padding: 0.75rem; text-align: center;">
-                            ${statutSelect}
+                            ${statutBadge}
                         </td>
                         <td style="padding: 0.75rem; text-align: center;">
                             ${facture.pdf_path ? `
