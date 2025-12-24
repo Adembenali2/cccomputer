@@ -547,14 +547,14 @@ async function loadMessages(append = false) {
 // ============================================
 async function sendMessage() {
     const messageText = messageInput.value.trim();
-    const hasImage = selectedImage !== null;
+    const hasImage = selectedImage !== null && selectedImage instanceof File;
     
     // Le message ou l'image doit être présent
     if (!messageText && !hasImage) {
         return;
     }
     
-    if (messageText.length > CONFIG.maxMessageLength) {
+    if (messageText && messageText.length > CONFIG.maxMessageLength) {
         showErrorNotification(`Le message est trop long (max ${CONFIG.maxMessageLength} caractères)`);
         return;
     }
@@ -564,7 +564,7 @@ async function sendMessage() {
     isSending = true;
     sendButton.disabled = true;
     const originalMessage = messageText;
-    const originalImage = selectedImage;
+    const originalImage = hasImage ? selectedImage : null;
     
     // Afficher un message temporaire "Envoi en cours..."
     const tempMessage = {
@@ -591,22 +591,45 @@ async function sendMessage() {
     try {
         let imagePath = null;
         
-        // Upload de l'image si présente
-        if (hasImage) {
-            const formData = new FormData();
-            formData.append('image', originalImage);
-            
-            const uploadResponse = await fetch('/API/chatroom_upload_image.php', {
-                method: 'POST',
-                body: formData,
-                credentials: 'same-origin'
-            });
-            
-            const uploadData = await uploadResponse.json();
-            if (uploadData.ok && uploadData.image_path) {
-                imagePath = uploadData.image_path;
-            } else {
-                throw new Error(uploadData.error || 'Erreur lors de l\'upload de l\'image');
+        // Upload de l'image si présente (vérification stricte)
+        if (hasImage && originalImage instanceof File) {
+            try {
+                const formData = new FormData();
+                formData.append('image', originalImage);
+                
+                const uploadResponse = await fetch('/API/chatroom_upload_image.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+                
+                // Vérifier si la réponse est OK avant de parser le JSON
+                if (!uploadResponse.ok) {
+                    let errorMsg = 'Erreur lors de l\'upload de l\'image';
+                    try {
+                        const errorData = await uploadResponse.json();
+                        errorMsg = errorData.error || errorMsg;
+                    } catch (e) {
+                        // Si ce n'est pas du JSON, utiliser le texte de la réponse
+                        try {
+                            const errorText = await uploadResponse.text();
+                            errorMsg = errorText || errorMsg;
+                        } catch (textError) {
+                            errorMsg = `Erreur HTTP ${uploadResponse.status}`;
+                        }
+                    }
+                    throw new Error(errorMsg);
+                }
+                
+                const uploadData = await uploadResponse.json();
+                if (uploadData.ok && uploadData.image_path) {
+                    imagePath = uploadData.image_path;
+                } else {
+                    throw new Error(uploadData.error || 'Erreur lors de l\'upload de l\'image');
+                }
+            } catch (uploadError) {
+                // Si l'upload échoue, on ne peut pas continuer
+                throw uploadError;
             }
         }
         
@@ -783,22 +806,35 @@ imageUploadButton.addEventListener('click', () => {
 
 imageInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    if (file) {
+    if (file && file instanceof File) {
         // Vérifier le type
         if (!file.type.startsWith('image/')) {
             showErrorNotification('Veuillez sélectionner une image');
+            imageInput.value = ''; // Réinitialiser l'input
             return;
         }
         
         // Vérifier la taille (5MB max)
         if (file.size > 5 * 1024 * 1024) {
             showErrorNotification('L\'image est trop volumineuse (max 5MB)');
+            imageInput.value = ''; // Réinitialiser l'input
+            return;
+        }
+        
+        // Vérifier que le fichier n'est pas vide
+        if (file.size === 0) {
+            showErrorNotification('Le fichier sélectionné est vide');
+            imageInput.value = ''; // Réinitialiser l'input
             return;
         }
         
         selectedImage = file;
         imagePreview.src = URL.createObjectURL(file);
         imagePreviewContainer.style.display = 'flex';
+    } else {
+        // Si aucun fichier n'est sélectionné, réinitialiser
+        selectedImage = null;
+        imagePreviewContainer.style.display = 'none';
     }
 });
 

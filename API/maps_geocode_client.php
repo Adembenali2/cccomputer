@@ -1,10 +1,34 @@
 <?php
 // API pour géocoder un client et stocker les coordonnées en base
+// Démarrer le output buffering en premier
 ob_start();
 
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('html_errors', 0);
+
+// Définir un gestionnaire d'erreur pour capturer les erreurs fatales
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        http_response_code(500);
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode([
+            'ok' => false,
+            'success' => false,
+            'error' => 'Erreur fatale du serveur',
+            'message' => $error['message'],
+            'file' => basename($error['file']),
+            'line' => $error['line']
+        ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+});
 
 if (!headers_sent()) {
     header('Content-Type: application/json; charset=utf-8');
@@ -24,21 +48,40 @@ function jsonResponse(array $data, int $statusCode = 200) {
 
 try {
     require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/helpers.php';
+    // S'assurer que getPdoOrFail est disponible
+    if (!function_exists('getPdoOrFail')) {
+        require_once __DIR__ . '/../includes/api_helpers.php';
+    }
 } catch (Throwable $e) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     error_log('maps_geocode_client.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
+    error_log('maps_geocode_client.php require trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'success' => false, 'error' => 'Erreur d\'initialisation: ' . $e->getMessage()], 500);
 }
 
 if (empty($_SESSION['user_id'])) {
-    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
+    jsonResponse(['ok' => false, 'success' => false, 'error' => 'Non authentifié'], 401);
+}
+
+// Récupérer PDO
+try {
+    $pdo = getPdoOrFail();
+} catch (Throwable $e) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log('maps_geocode_client.php getPdoOrFail error: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'success' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
 }
 
 $clientId = (int)($_GET['client_id'] ?? 0);
 $address = trim($_GET['address'] ?? '');
 
 if (!$clientId || empty($address)) {
-    jsonResponse(['ok' => false, 'error' => 'Paramètres manquants'], 400);
+    jsonResponse(['ok' => false, 'success' => false, 'error' => 'Paramètres manquants'], 400);
 }
 
 // Nettoyer l'adresse : supprimer les emails, tabulations et autres caractères indésirables
@@ -53,7 +96,7 @@ $address = preg_replace('/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/',
 $address = trim($address);
 
 if (empty($address)) {
-    jsonResponse(['ok' => false, 'error' => 'Adresse invalide après nettoyage'], 400);
+    jsonResponse(['ok' => false, 'success' => false, 'error' => 'Adresse invalide après nettoyage'], 400);
 }
 
 // Vérifier le cache (24h de validité)
@@ -94,12 +137,12 @@ if (!$cachedCoords) {
 
     if ($curlError) {
         error_log('maps_geocode_client.php curl error: ' . $curlError);
-        jsonResponse(['ok' => false, 'error' => 'Erreur de géocodage'], 500);
+        jsonResponse(['ok' => false, 'success' => false, 'error' => 'Erreur de géocodage: ' . $curlError], 500);
     }
 
     if ($httpCode !== 200) {
         error_log('maps_geocode_client.php HTTP error: ' . $httpCode);
-        jsonResponse(['ok' => false, 'error' => 'Service de géocodage indisponible'], 503);
+        jsonResponse(['ok' => false, 'success' => false, 'error' => 'Service de géocodage indisponible (HTTP ' . $httpCode . ')'], 503);
     }
 
     $data = json_decode($response, true);
@@ -170,6 +213,17 @@ try {
     // Continuer quand même, on essaiera d'insérer
 }
 
+// Vérifier que cachedCoords existe et est valide
+if (!$cachedCoords || !isset($cachedCoords['lat']) || !isset($cachedCoords['lng'])) {
+    error_log('maps_geocode_client.php: cachedCoords invalide pour client ' . $clientId);
+    jsonResponse([
+        'success' => false,
+        'ok' => false,
+        'reason' => 'ADDRESS_NOT_FOUND',
+        'client_id' => $clientId
+    ], 200);
+}
+
 // Stocker les coordonnées en base de données
 $addressHash = md5($address);
 try {
@@ -185,6 +239,21 @@ try {
     ";
     
     $stmt = $pdo->prepare($sql);
+    if (!$stmt) {
+        $errorInfo = $pdo->errorInfo();
+        error_log('maps_geocode_client.php prepare error: ' . json_encode($errorInfo));
+        // Retourner les coordonnées même si on ne peut pas les sauvegarder
+        jsonResponse([
+            'success' => true,
+            'ok' => true,
+            'lat' => $cachedCoords['lat'],
+            'lng' => $cachedCoords['lng'],
+            'client_id' => $clientId,
+            'display_name' => $cachedCoords['display_name'],
+            'warning' => 'Coordonnées retournées mais non sauvegardées'
+        ]);
+    }
+    
     $stmt->execute([
         ':id_client' => $clientId,
         ':address_hash' => $addressHash,
@@ -203,10 +272,18 @@ try {
     ]);
     
 } catch (PDOException $e) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     error_log('maps_geocode_client.php SQL error: ' . $e->getMessage());
+    error_log('maps_geocode_client.php SQL error info: ' . json_encode($e->errorInfo ?? []));
+    error_log('maps_geocode_client.php SQL trace: ' . $e->getTraceAsString());
+    
     // Si l'erreur est due à la table qui n'existe pas, on retourne quand même les coordonnées
     // mais sans les sauvegarder
-    if (strpos($e->getMessage(), "doesn't exist") !== false || strpos($e->getMessage(), "Table") !== false) {
+    if (strpos($e->getMessage(), "doesn't exist") !== false || 
+        strpos($e->getMessage(), "Table") !== false ||
+        strpos($e->getMessage(), "Unknown table") !== false) {
         error_log('maps_geocode_client.php: Table client_geocode n\'existe pas, retour des coordonnées sans sauvegarde');
         jsonResponse([
             'success' => true,
@@ -218,7 +295,41 @@ try {
             'warning' => 'Coordonnées retournées mais non sauvegardées (table manquante)'
         ]);
     } else {
-        jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+        // Pour les autres erreurs SQL, retourner quand même les coordonnées si disponibles
+        if (isset($cachedCoords['lat']) && isset($cachedCoords['lng'])) {
+            jsonResponse([
+                'success' => true,
+                'ok' => true,
+                'lat' => $cachedCoords['lat'],
+                'lng' => $cachedCoords['lng'],
+                'client_id' => $clientId,
+                'display_name' => $cachedCoords['display_name'],
+                'warning' => 'Coordonnées retournées mais erreur lors de la sauvegarde'
+            ]);
+        } else {
+            jsonResponse(['ok' => false, 'success' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
+        }
+    }
+} catch (Throwable $e) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log('maps_geocode_client.php unexpected error: ' . $e->getMessage());
+    error_log('maps_geocode_client.php unexpected error trace: ' . $e->getTraceAsString());
+    
+    // Si on a des coordonnées en cache, les retourner quand même
+    if (isset($cachedCoords) && isset($cachedCoords['lat']) && isset($cachedCoords['lng'])) {
+        jsonResponse([
+            'success' => true,
+            'ok' => true,
+            'lat' => $cachedCoords['lat'],
+            'lng' => $cachedCoords['lng'],
+            'client_id' => $clientId,
+            'display_name' => $cachedCoords['display_name'],
+            'warning' => 'Coordonnées retournées mais erreur inattendue'
+        ]);
+    } else {
+        jsonResponse(['ok' => false, 'success' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
     }
 }
 

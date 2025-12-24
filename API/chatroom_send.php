@@ -133,15 +133,15 @@ try {
 try {
 
     // Valider le message
-    $message = trim($data['message'] ?? '');
-    $imagePath = trim($data['image_path'] ?? '');
+    $message = isset($data['message']) ? trim($data['message']) : '';
+    $imagePath = isset($data['image_path']) && $data['image_path'] !== null ? trim($data['image_path']) : '';
 
     // Le message ou l'image doit être présent
     if (empty($message) && empty($imagePath)) {
         jsonResponse(['ok' => false, 'error' => 'Le message ou une image doit être présent'], 400);
     }
 
-    // Limiter la longueur du message (5000 caractères max)
+    // Limiter la longueur du message (5000 caractères max) - seulement si le message n'est pas vide
     if (!empty($message) && strlen($message) > 5000) {
         jsonResponse(['ok' => false, 'error' => 'Le message est trop long (max 5000 caractères)'], 400);
     }
