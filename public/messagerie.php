@@ -168,13 +168,15 @@ if ($tableExists) {
                     <img id="imagePreview" class="image-preview" alt="Aperçu">
                     <button type="button" id="removeImagePreview" class="image-preview-remove">✕</button>
                 </div>
-                <textarea 
-                    id="messageInput" 
-                    class="chatroom-input" 
-                    placeholder="Tapez votre message..."
-                    rows="1"
-                    maxlength="5000"
-                    aria-label="Zone de saisie de message"></textarea>
+            <textarea 
+                id="messageInput" 
+                class="chatroom-input" 
+                placeholder="Tapez votre message... (Appuyez sur Entrée pour envoyer, Shift+Entrée pour une nouvelle ligne)"
+                rows="1"
+                maxlength="5000"
+                aria-label="Zone de saisie de message"
+                aria-describedby="messageInputHelp"></textarea>
+            <div id="messageInputHelp" class="sr-only">Appuyez sur Entrée pour envoyer, Shift+Entrée pour une nouvelle ligne</div>
                 <div id="mentionSuggestions" class="chatroom-mention-suggestions" role="listbox" aria-label="Suggestions de mentions"></div>
             </div>
             <button 
@@ -283,17 +285,23 @@ function scrollToBottom(smooth = true) {
 // ============================================
 // Gestion des mentions
 // ============================================
-async function searchUsers(query) {
+async function searchUsers(query, signal = null) {
     // Permettre la recherche même avec query vide (pour afficher tous les utilisateurs)
     // query peut être une chaîne vide ou undefined
     const searchQuery = query || '';
     
     try {
         // Utiliser fetch directement si apiClient n'est pas disponible
-        const response = await fetch(`/API/chatroom_search_users.php?q=${encodeURIComponent(searchQuery)}&limit=10`, {
+        const fetchOptions = {
             method: 'GET',
             credentials: 'same-origin'
-        });
+        };
+        
+        if (signal) {
+            fetchOptions.signal = signal;
+        }
+        
+        const response = await fetch(`/API/chatroom_search_users.php?q=${encodeURIComponent(searchQuery)}&limit=10`, fetchOptions);
         
         const data = await response.json();
         
@@ -435,7 +443,7 @@ function renderMessage(message) {
     let imageContent = '';
     if (message.image_path) {
         imageContent = `<div class="message-image-wrapper">
-            <img src="${escapeHtml(message.image_path)}" alt="Image du message" class="message-image" loading="lazy" onclick="openImageLightbox('${escapeHtml(message.image_path)}')">
+            <img src="${escapeHtml(message.image_path)}" alt="Image du message" class="message-image" loading="lazy" onclick="openImageLightbox('${escapeHtml(message.image_path)}')" onerror="this.onerror=null; this.src='/assets/images/image-error.png'; this.style.opacity='0.5';">
         </div>`;
     }
     
@@ -910,7 +918,15 @@ imageInput.addEventListener('change', (e) => {
         }
         
         selectedImage = file;
-        imagePreview.src = URL.createObjectURL(file);
+        const objectUrl = URL.createObjectURL(file);
+        imagePreview.src = objectUrl;
+        imagePreview.onerror = () => {
+            showErrorNotification('Erreur lors du chargement de l\'aperçu de l\'image');
+            selectedImage = null;
+            imagePreviewContainer.style.display = 'none';
+            imageInput.value = '';
+            URL.revokeObjectURL(objectUrl);
+        };
         imagePreviewContainer.style.display = 'flex';
     } else {
         // Si aucun fichier n'est sélectionné, réinitialiser
@@ -920,6 +936,9 @@ imageInput.addEventListener('change', (e) => {
 });
 
 removeImagePreview.addEventListener('click', () => {
+    if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview.src);
+    }
     selectedImage = null;
     imagePreviewContainer.style.display = 'none';
     imageInput.value = '';
@@ -1102,4 +1121,21 @@ function closeImageLightbox() {
     if (lightbox) {
         lightbox.style.animation = 'fadeOut 0.2s ease-out';
         setTimeout(() => {
-    
+            lightbox.remove();
+            document.body.style.overflow = '';
+        }, 200);
+    }
+}
+
+// Exposer les fonctions globalement
+window.openImageLightbox = openImageLightbox;
+window.closeImageLightbox = closeImageLightbox;
+
+init();
+
+window.addEventListener('beforeunload', () => {
+    if (refreshIntervalId) clearInterval(refreshIntervalId);
+});
+</script>
+</body>
+</html>

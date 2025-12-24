@@ -258,7 +258,7 @@
 /* Mentions dans le message */
 .message-content .mention {
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
-    color: #3b82f6;
+    color: #2563eb;
     padding: 0.2rem 0.5rem;
     border-radius: var(--radius-sm);
     font-weight: 700;
@@ -277,9 +277,14 @@
     transform: translateY(-1px);
 }
 
+.message-content .mention:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
 .message-me .message-content .mention {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.25) 100%);
-    color: white;
+    color: rgba(255, 255, 255, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.4);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
@@ -700,6 +705,47 @@
         height: 44px;
         z-index: 30; /* Encore plus élevé sur mobile */
     }
+    
+    .lightbox-content {
+        max-width: 95vw;
+        max-height: 95vh;
+    }
+    
+    .lightbox-close {
+        top: -35px;
+        width: 36px;
+        height: 36px;
+        font-size: 1.25rem;
+    }
+}
+
+/* Amélioration pour très petits écrans */
+@media (max-width: 480px) {
+    .chatroom-message {
+        max-width: 90%;
+        gap: 0.5rem;
+    }
+    
+    .message-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+    }
+    
+    .message-bubble {
+        padding: 0.75rem 1rem;
+    }
+    
+    .chatroom-input-container {
+        padding: 0.75rem 1rem;
+        gap: 0.5rem;
+    }
+    
+    .image-upload-btn,
+    .chatroom-send-btn {
+        width: 40px;
+        height: 40px;
+    }
 }
 
 /* ====== Desktop large screens ====== */
@@ -725,6 +771,41 @@
 
 .chatroom-input:focus-visible {
     outline: none;
+}
+
+.image-upload-btn:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+/* Screen reader only */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Amélioration du focus pour tous les éléments interactifs */
+button:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* Amélioration du contraste pour les mentions */
+.message-content .mention {
+    color: var(--accent-primary);
+}
+
+.message-me .message-content .mention {
+    color: rgba(255, 255, 255, 0.95);
 }
 
 /* ====== Animation pour nouveaux messages ====== */
