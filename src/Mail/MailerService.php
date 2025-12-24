@@ -197,11 +197,12 @@ class MailerService
     }
     
     /**
-     * Trouve le chemin absolu d'un fichier PDF à partir de son chemin relatif
+     * Trouve le chemin absolu d'un fichier PDF à partir de son chemin relatif ou nom de fichier
      * Utilise la même logique que generateFacturePDF pour la compatibilité
      * Protection contre path traversal (../../etc/passwd)
+     * Gère les cas : chemin complet (/uploads/factures/2025/facture_xxx.pdf) ou juste le nom (facture_xxx.pdf)
      * 
-     * @param string $relativePath Chemin relatif du PDF (ex: /uploads/factures/2025/facture_xxx.pdf)
+     * @param string $relativePath Chemin relatif du PDF ou nom de fichier
      * @return string Chemin absolu trouvé
      * @throws MailerException Si le fichier est introuvable ou si path traversal détecté
      */
@@ -211,28 +212,59 @@ class MailerService
             throw new MailerException('Le chemin du PDF est vide');
         }
         
+        $originalPath = $relativePath;
+        error_log("findPdfPath() - Recherche PDF: " . $originalPath);
+        
         // Protection contre path traversal
-        // Normaliser le chemin et vérifier qu'il ne contient pas de ../
         $normalized = str_replace('\\', '/', $relativePath);
-        $normalized = preg_replace('#/+#', '/', $normalized); // Supprimer les doubles slashes
+        $normalized = preg_replace('#/+#', '/', $normalized);
         $normalized = ltrim($normalized, '/');
         
         // Vérifier qu'il n'y a pas de path traversal
         if (strpos($normalized, '../') !== false || strpos($normalized, '..\\') !== false) {
-            error_log("Tentative de path traversal détectée: " . $relativePath);
+            error_log("findPdfPath() - Tentative de path traversal détectée: " . $originalPath);
             throw new MailerException('Chemin PDF invalide: tentative de path traversal détectée');
-        }
-        
-        // Vérifier que le chemin commence par uploads/factures (sécurité supplémentaire)
-        if (!preg_match('#^uploads/factures/#', $normalized)) {
-            error_log("Chemin PDF hors du répertoire autorisé: " . $relativePath);
-            throw new MailerException('Le fichier PDF doit être dans le répertoire uploads/factures/');
         }
         
         // Vérifier l'extension
         $extension = strtolower(pathinfo($normalized, PATHINFO_EXTENSION));
         if ($extension !== 'pdf') {
             throw new MailerException('Le fichier doit être un PDF, extension reçue: ' . $extension);
+        }
+        
+        // Extraire le nom du fichier
+        $fileName = basename($normalized);
+        
+        // Vérifier que le nom du fichier est valide (pas de path traversal)
+        if (strpos($fileName, '/') !== false || strpos($fileName, '\\') !== false) {
+            error_log("findPdfPath() - Nom de fichier invalide (contient des slashes): " . $fileName);
+            throw new MailerException('Nom de fichier PDF invalide');
+        }
+        
+        // Si le chemin ne commence pas par uploads/factures/, c'est probablement juste un nom de fichier
+        // On va chercher dans toutes les années possibles
+        $searchPaths = [];
+        
+        if (preg_match('#^uploads/factures/(\d{4})/#', $normalized, $matches)) {
+            // Chemin complet avec année
+            $year = $matches[1];
+            $searchPaths[] = "uploads/factures/{$year}/{$fileName}";
+        } elseif (preg_match('#^uploads/factures/#', $normalized)) {
+            // Chemin qui commence par uploads/factures/ mais sans année explicite
+            // Essayer avec l'année actuelle et les années proches
+            $currentYear = date('Y');
+            for ($y = $currentYear - 2; $y <= $currentYear + 1; $y++) {
+                $searchPaths[] = "uploads/factures/{$y}/{$fileName}";
+            }
+            // Aussi essayer le chemin tel quel
+            $searchPaths[] = $normalized;
+        } else {
+            // Juste le nom du fichier - chercher dans toutes les années possibles
+            $currentYear = date('Y');
+            // Chercher dans les 5 dernières années et l'année suivante
+            for ($y = $currentYear - 5; $y <= $currentYear + 1; $y++) {
+                $searchPaths[] = "uploads/factures/{$y}/{$fileName}";
+            }
         }
         
         $possibleBaseDirs = [];
@@ -257,42 +289,44 @@ class MailerService
             $possibleBaseDirs[] = '/var/www/html';
         }
         
-        // Essayer chaque répertoire de base
+        // Log des chemins de recherche
+        error_log("findPdfPath() - Nom fichier: " . $fileName);
+        error_log("findPdfPath() - Chemins à tester: " . implode(', ', $searchPaths));
+        error_log("findPdfPath() - Répertoires de base: " . implode(', ', $possibleBaseDirs));
+        
+        $testedPaths = [];
+        
+        // Essayer chaque combinaison répertoire de base + chemin de recherche
         foreach ($possibleBaseDirs as $baseDir) {
-            $testPath = $baseDir . '/' . $normalized;
-            
-            // Vérifier que le chemin résolu est bien dans le répertoire de base (protection finale)
-            $realPath = realpath($testPath);
             $realBase = realpath($baseDir);
+            if (!$realBase) {
+                continue;
+            }
             
-            if ($realPath && $realBase && strpos($realPath, $realBase) === 0) {
-                if (file_exists($realPath) && is_readable($realPath)) {
-                    return $realPath;
+            foreach ($searchPaths as $searchPath) {
+                $testPath = $realBase . '/' . $searchPath;
+                $testedPaths[] = $testPath;
+                
+                // Vérifier que le chemin résolu est bien dans le répertoire de base (protection finale)
+                $realPath = realpath($testPath);
+                
+                if ($realPath && strpos($realPath, $realBase) === 0) {
+                    if (file_exists($realPath) && is_readable($realPath)) {
+                        error_log("findPdfPath() - PDF trouvé: " . $realPath);
+                        return $realPath;
+                    }
                 }
             }
         }
         
-        // Si toujours pas trouvé, essayer depuis le répertoire API
-        $apiDir = dirname(__DIR__, 2) . '/API';
-        if (is_dir($apiDir)) {
-            $testPath = dirname($apiDir) . '/' . $normalized;
-            $realPath = realpath($testPath);
-            if ($realPath && file_exists($realPath) && is_readable($realPath)) {
-                return $realPath;
-            }
-        }
+        // Log détaillé des chemins testés
+        error_log("findPdfPath() - PDF introuvable après " . count($testedPaths) . " tentatives");
+        error_log("findPdfPath() - Chemins testés: " . implode("\n  - ", array_slice($testedPaths, 0, 20))); // Limiter à 20 pour éviter les logs trop longs
         
         // Erreur claire si introuvable
-        $debugInfo = [
-            'chemin_demande' => $relativePath,
-            'chemin_normalise' => $normalized,
-            'repertoires_testes' => $possibleBaseDirs
-        ];
-        error_log("PDF introuvable: " . json_encode($debugInfo));
-        
         throw new MailerException(
             'Le fichier PDF est introuvable sur le serveur. ' .
-            'Chemin enregistré: ' . basename($relativePath) . '. ' .
+            'Nom du fichier: ' . $fileName . '. ' .
             'Le fichier a peut-être été supprimé ou déplacé. Veuillez régénérer la facture.'
         );
     }
