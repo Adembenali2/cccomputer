@@ -138,6 +138,9 @@ if ($tableExists) {
                     <span id="statusText">En ligne</span>
                 </div>
             </div>
+            <div id="notificationsInfo" class="chatroom-notifications-info" style="display: none;">
+                <span id="notificationsCount">0</span> notification(s) non lue(s)
+            </div>
         </div>
 
         <!-- Zone de messages (scrollable) -->
@@ -222,6 +225,8 @@ const removeImagePreview = document.getElementById('removeImagePreview');
 const connectionStatusEl = document.getElementById('connectionStatus');
 const statusText = document.getElementById('statusText');
 const onlineIndicator = document.getElementById('onlineIndicator');
+const notificationsInfo = document.getElementById('notificationsInfo');
+const notificationsCount = document.getElementById('notificationsCount');
 
 // ============================================
 // Variables d'état
@@ -907,9 +912,69 @@ function showErrorNotification(message) {
 }
 
 // ============================================
+// Gestion des notifications
+// ============================================
+async function loadNotificationsCount() {
+    try {
+        const response = await fetch('/API/chatroom_get_notifications.php', {
+            credentials: 'same-origin',
+            cache: 'no-cache'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.ok && data.count > 0) {
+                notificationsCount.textContent = data.count;
+                notificationsInfo.style.display = 'flex';
+                notificationsInfo.classList.add('has-notifications');
+            } else {
+                notificationsInfo.style.display = 'none';
+                notificationsInfo.classList.remove('has-notifications');
+            }
+        }
+    } catch (error) {
+        // Erreur silencieuse
+        notificationsInfo.style.display = 'none';
+    }
+}
+
+async function markNotificationsAsRead() {
+    try {
+        const response = await fetch('/API/chatroom_mark_notifications_read.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ mark_all: true }),
+            credentials: 'same-origin'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.ok) {
+                // Mettre à jour le badge dans le header si disponible
+                if (typeof window.updateMessagerieBadge === 'function') {
+                    window.updateMessagerieBadge();
+                }
+                // Masquer l'info de notifications dans la page
+                notificationsInfo.style.display = 'none';
+                notificationsInfo.classList.remove('has-notifications');
+            }
+        }
+    } catch (error) {
+        // Erreur silencieuse pour ne pas perturber l'utilisateur
+        console.error('Erreur marquage notifications:', error);
+    }
+}
+
+// ============================================
 // Initialisation
 // ============================================
 async function init() {
+    // Charger le nombre de notifications avant de les marquer comme lues
+    await loadNotificationsCount();
+    
+    // Marquer les notifications comme lues quand on ouvre la messagerie
+    await markNotificationsAsRead();
+    
     await loadMessages(false);
     
     // Utiliser l'intervalle dynamique pour le polling
@@ -925,6 +990,9 @@ async function init() {
     scheduleNextRefresh();
     messageInput.focus();
     updateConnectionStatus('online');
+    
+    // Mettre à jour le compteur de notifications périodiquement
+    setInterval(loadNotificationsCount, 30000); // Toutes les 30 secondes
 }
 
 init();

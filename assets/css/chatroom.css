@@ -53,6 +53,32 @@
     align-items: center;
     justify-content: space-between;
     z-index: 10;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.chatroom-notifications-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chatroom-notifications-info::before {
+    content: '🔔';
+    font-size: 1rem;
+}
+
+.chatroom-notifications-info.has-notifications {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    font-weight: 600;
 }
 
 .chatroom-header h2 {

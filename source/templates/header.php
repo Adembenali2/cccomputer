@@ -298,6 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMessagerieBadge();
       }
     });
+    
+    // Exposer la fonction globalement pour qu'elle puisse être appelée depuis d'autres pages
+    window.updateMessagerieBadge = updateMessagerieBadge;
   }
 });
 </script>
