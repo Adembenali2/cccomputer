@@ -370,6 +370,9 @@
     flex-shrink: 0 !important;
     min-width: 44px !important;
     min-height: 44px !important;
+    position: relative;
+    z-index: 10 !important; /* Toujours au-dessus de tout */
+    pointer-events: auto !important; /* Assure que les boutons sont cliquables */
 }
 
 /* Zone de sélection de liens (clients/SAVs/livraisons) */
@@ -490,12 +493,20 @@
     overflow: visible; /* Permet aux éléments enfants de rester visibles */
     /* S'assurer que le wrapper ne dépasse pas et laisse de l'espace aux boutons */
     flex-basis: auto;
+    z-index: 0; /* En dessous des boutons */
 }
 
 .chatroom-input-wrapper:focus-within {
     border-color: var(--accent-primary);
     background: var(--bg-primary);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* S'assurer que le textarea reste toujours accessible */
+.chatroom-input-wrapper .chatroom-input {
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
 }
 
 .chatroom-input {
@@ -514,6 +525,10 @@
     width: 100%;
     box-sizing: border-box;
     flex-shrink: 0; /* Empêche le textarea de rétrécir */
+    position: relative;
+    z-index: 2; /* Au-dessus de l'aperçu d'image */
+    pointer-events: auto !important; /* Assure que le textarea est cliquable */
+    order: 0; /* Ordre normal dans le flex */
 }
 
 .chatroom-input::placeholder {
@@ -944,8 +959,10 @@ a:focus-visible {
     max-width: 100%; /* Limite la largeur maximale */
     box-sizing: border-box;
     position: relative;
-    z-index: 1; /* En dessous des boutons */
+    z-index: 0; /* En dessous du textarea */
     overflow: hidden; /* Empêche le débordement */
+    pointer-events: auto; /* Permet les interactions sur le bouton de suppression */
+    order: -1; /* Placer l'aperçu avant le textarea dans l'ordre visuel */
 }
 
 .image-preview {
@@ -957,6 +974,7 @@ a:focus-visible {
     object-fit: cover;
     border: 1px solid var(--border-color);
     flex-shrink: 0;
+    pointer-events: none; /* L'image ne doit pas bloquer les clics */
 }
 
 .image-preview-remove {
@@ -968,6 +986,10 @@ a:focus-visible {
     font-size: 0.85rem;
     color: var(--text-primary);
     transition: all 0.2s ease;
+    position: relative;
+    z-index: 2; /* Au-dessus de l'aperçu */
+    pointer-events: auto; /* Assure que le bouton est cliquable */
+    flex-shrink: 0;
 }
 
 .image-preview-remove:hover {
@@ -991,8 +1013,8 @@ a:focus-visible {
     flex-shrink: 0; /* Empêche le bouton de rétrécir */
     margin: 0; /* Retirer margin-right car on utilise gap dans le container */
     position: relative; /* Pour le z-index */
-    z-index: 20; /* Au-dessus de l'aperçu */
-    pointer-events: auto; /* Assure que le bouton est cliquable */
+    z-index: 10 !important; /* Au-dessus de l'aperçu */
+    pointer-events: auto !important; /* Assure que le bouton est cliquable */
 }
 
 .image-upload-btn:hover {

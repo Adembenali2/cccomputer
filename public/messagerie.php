@@ -889,12 +889,23 @@ sendButton.addEventListener('click', sendMessage);
 // ============================================
 // Gestion de l'upload d'images
 // ============================================
-imageUploadButton.addEventListener('click', () => {
+imageUploadButton.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Réinitialiser l'input pour permettre de sélectionner une nouvelle image
+    // même si une image est déjà sélectionnée
+    imageInput.value = '';
     imageInput.click();
 });
 
 imageInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
+    
+    // Nettoyer l'ancienne URL blob si elle existe
+    if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview.src);
+    }
+    
     if (file && file instanceof File) {
         // Vérifier le type
         if (!file.type.startsWith('image/')) {
@@ -928,6 +939,13 @@ imageInput.addEventListener('change', (e) => {
             URL.revokeObjectURL(objectUrl);
         };
         imagePreviewContainer.style.display = 'flex';
+        
+        // Réinitialiser l'input pour permettre de sélectionner la même image à nouveau
+        // On le fait après un court délai pour que le changement soit détecté
+        setTimeout(() => {
+            // Ne pas réinitialiser ici, on veut garder le fichier sélectionné
+            // Mais on peut permettre de changer d'image en cliquant à nouveau
+        }, 100);
     } else {
         // Si aucun fichier n'est sélectionné, réinitialiser
         selectedImage = null;

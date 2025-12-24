@@ -17,7 +17,9 @@ function generateInvoicePdf(PDO $pdo, int $factureId, array $facture, array $cli
     require_once __DIR__ . '/../vendor/autoload.php';
     
     // Récupérer les lignes de facture
-    $lignes = $pdo->query("SELECT * FROM facture_lignes WHERE id_facture = $factureId ORDER BY ordre ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare("SELECT * FROM facture_lignes WHERE id_facture = :id ORDER BY ordre ASC");
+    $stmt->execute([':id' => $factureId]);
+    $lignes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Déterminer le répertoire de sortie
     if ($outputDir === null) {
