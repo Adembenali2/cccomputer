@@ -134,15 +134,21 @@ try {
 
     // Valider le message
     $message = trim($data['message'] ?? '');
+    $imagePath = trim($data['image_path'] ?? '');
 
-    // Le message doit être présent
-    if (empty($message)) {
-        jsonResponse(['ok' => false, 'error' => 'Le message ne peut pas être vide'], 400);
+    // Le message ou l'image doit être présent
+    if (empty($message) && empty($imagePath)) {
+        jsonResponse(['ok' => false, 'error' => 'Le message ou une image doit être présent'], 400);
     }
 
     // Limiter la longueur du message (5000 caractères max)
-    if (strlen($message) > 5000) {
+    if (!empty($message) && strlen($message) > 5000) {
         jsonResponse(['ok' => false, 'error' => 'Le message est trop long (max 5000 caractères)'], 400);
+    }
+    
+    // Valider le chemin de l'image si présent
+    if (!empty($imagePath) && !preg_match('/^\/uploads\/chatroom\/[a-zA-Z0-9_\-\.]+$/', $imagePath)) {
+        jsonResponse(['ok' => false, 'error' => 'Chemin d\'image invalide'], 400);
     }
 
     // Récupérer les mentions (@username)
@@ -169,17 +175,47 @@ try {
     // Préparer les mentions en JSON
     $mentionsJson = !empty($mentions) ? json_encode($mentions) : null;
 
+    // Vérifier si la colonne image_path existe
+    $hasImagePath = false;
+    try {
+        $checkColumn = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'chatroom_messages' 
+            AND COLUMN_NAME = 'image_path'
+        ");
+        $checkColumn->execute();
+        $hasImagePath = (int)$checkColumn->fetchColumn() > 0;
+    } catch (PDOException $e) {
+        // Si la vérification échoue, on continue sans image_path
+        error_log('chatroom_send.php - Erreur vérification colonne image_path: ' . $e->getMessage());
+    }
+
     // Insérer le message
     try {
-        $stmt = $pdo->prepare("
-            INSERT INTO chatroom_messages (id_user, message, date_envoi, mentions)
-            VALUES (:id_user, :message, NOW(), :mentions)
-        ");
-        $stmt->execute([
-            ':id_user' => $userId,
-            ':message' => $message,
-            ':mentions' => $mentionsJson
-        ]);
+        if ($hasImagePath) {
+            $stmt = $pdo->prepare("
+                INSERT INTO chatroom_messages (id_user, message, date_envoi, mentions, image_path)
+                VALUES (:id_user, :message, NOW(), :mentions, :image_path)
+            ");
+            $stmt->execute([
+                ':id_user' => $userId,
+                ':message' => $message ?: null,
+                ':mentions' => $mentionsJson,
+                ':image_path' => $imagePath ?: null
+            ]);
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO chatroom_messages (id_user, message, date_envoi, mentions)
+                VALUES (:id_user, :message, NOW(), :mentions)
+            ");
+            $stmt->execute([
+                ':id_user' => $userId,
+                ':message' => $message ?: null,
+                ':mentions' => $mentionsJson
+            ]);
+        }
 
         $messageId = (int)$pdo->lastInsertId();
         
@@ -259,16 +295,13 @@ try {
 
     // Récupérer les informations complètes du message pour la réponse
     try {
+        $selectColumns = $hasImagePath 
+            ? 'm.id, m.id_user, m.message, m.date_envoi, m.mentions, m.image_path, u.nom, u.prenom, u.Emploi'
+            : 'm.id, m.id_user, m.message, m.date_envoi, m.mentions, u.nom, u.prenom, u.Emploi';
+        
         $stmt = $pdo->prepare("
             SELECT 
-                m.id,
-                m.id_user,
-                m.message,
-                m.date_envoi,
-                m.mentions,
-                u.nom,
-                u.prenom,
-                u.Emploi
+                {$selectColumns}
             FROM chatroom_messages m
             INNER JOIN utilisateurs u ON u.id = m.id_user
             WHERE m.id = :id
@@ -293,19 +326,25 @@ try {
     }
     
     // Formater la réponse
+    $responseMessage = [
+        'id' => (int)$messageData['id'],
+        'id_user' => (int)$messageData['id_user'],
+        'message' => $messageData['message'],
+        'date_envoi' => $messageData['date_envoi'],
+        'user_nom' => $messageData['nom'],
+        'user_prenom' => $messageData['prenom'],
+        'user_emploi' => $messageData['Emploi'],
+        'is_me' => (int)$messageData['id_user'] === $userId,
+        'mentions' => $mentionsArray
+    ];
+    
+    if ($hasImagePath && isset($messageData['image_path'])) {
+        $responseMessage['image_path'] = $messageData['image_path'];
+    }
+    
     jsonResponse([
         'ok' => true,
-        'message' => [
-            'id' => (int)$messageData['id'],
-            'id_user' => (int)$messageData['id_user'],
-            'message' => $messageData['message'],
-            'date_envoi' => $messageData['date_envoi'],
-            'user_nom' => $messageData['nom'],
-            'user_prenom' => $messageData['prenom'],
-            'user_emploi' => $messageData['Emploi'],
-            'is_me' => (int)$messageData['id_user'] === $userId,
-            'mentions' => $mentionsArray
-        ]
+        'message' => $responseMessage
     ]);
 
 } catch (PDOException $e) {

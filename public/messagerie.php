@@ -110,6 +110,7 @@ if ($tableExists) {
     
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/chatroom.css">
+    <script src="/assets/js/api.js" defer></script>
 </head>
 <body class="page-maps page-chatroom">
 
@@ -133,14 +134,14 @@ if ($tableExists) {
             <div>
                 <h2>Messagerie</h2>
                 <div class="chatroom-status">
-                    <span class="chatroom-status-indicator"></span>
-                    <span>En ligne</span>
+                    <span class="chatroom-status-indicator" id="onlineIndicator"></span>
+                    <span id="statusText">En ligne</span>
                 </div>
             </div>
         </div>
 
         <!-- Zone de messages (scrollable) -->
-        <div class="chatroom-messages" id="chatroomMessages">
+        <div class="chatroom-messages" id="chatroomMessages" role="log" aria-live="polite" aria-label="Messages de la messagerie">
             <div class="chatroom-loading" id="loadingIndicator">
                 Chargement des messages...
             </div>
@@ -148,14 +149,30 @@ if ($tableExists) {
         
         <!-- Barre de saisie (fixe en bas) -->
         <div class="chatroom-input-container">
+            <button 
+                type="button" 
+                id="imageUploadButton" 
+                class="image-upload-btn" 
+                title="Ajouter une image"
+                aria-label="Ajouter une image">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+            </button>
+            <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
             <div class="chatroom-input-wrapper">
+                <div id="imagePreviewContainer" class="image-preview-container" style="display: none;">
+                    <img id="imagePreview" class="image-preview" alt="Aperçu">
+                    <button type="button" id="removeImagePreview" class="image-preview-remove">✕</button>
+                </div>
                 <textarea 
                     id="messageInput" 
                     class="chatroom-input" 
                     placeholder="Tapez votre message..."
                     rows="1"
-                    maxlength="5000"></textarea>
-                <div id="mentionSuggestions" class="chatroom-mention-suggestions"></div>
+                    maxlength="5000"
+                    aria-label="Zone de saisie de message"></textarea>
+                <div id="mentionSuggestions" class="chatroom-mention-suggestions" role="listbox" aria-label="Suggestions de mentions"></div>
             </div>
             <button 
                 type="button" 
@@ -167,6 +184,12 @@ if ($tableExists) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
                 </svg>
             </button>
+        </div>
+        
+        <!-- Indicateur de statut de connexion -->
+        <div id="connectionStatus" class="connection-status" role="status" aria-live="polite" style="display: none;">
+            <span class="connection-status-indicator"></span>
+            <span class="connection-status-text"></span>
         </div>
     </div>
 </main>
@@ -191,6 +214,14 @@ const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const mentionSuggestions = document.getElementById('mentionSuggestions');
+const imageUploadButton = document.getElementById('imageUploadButton');
+const imageInput = document.getElementById('imageInput');
+const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+const imagePreview = document.getElementById('imagePreview');
+const removeImagePreview = document.getElementById('removeImagePreview');
+const connectionStatusEl = document.getElementById('connectionStatus');
+const statusText = document.getElementById('statusText');
+const onlineIndicator = document.getElementById('onlineIndicator');
 
 // ============================================
 // Variables d'état
@@ -204,6 +235,11 @@ let mentionSearchTimeout = null;
 let mentionSearchIndex = -1;
 let mentionSuggestionsList = [];
 let allUsers = []; // Cache des utilisateurs pour les mentions
+let selectedImage = null; // Image sélectionnée pour upload
+let refreshInterval = 2000; // Intervalle de rafraîchissement dynamique
+let consecutiveEmptyResponses = 0; // Compteur pour backoff exponentiel
+let connectionStatus = 'online'; // Statut de connexion
+let pendingMessageId = null; // ID du message en cours d'envoi (pour feedback visuel)
 
 // ============================================
 // Fonctions utilitaires
@@ -248,13 +284,13 @@ async function searchUsers(query) {
     const searchQuery = query || '';
     
     try {
-        const data = await apiClient.json(`/API/chatroom_search_users.php?q=${encodeURIComponent(searchQuery)}&limit=10`, {
+        // Utiliser fetch directement si apiClient n'est pas disponible
+        const response = await fetch(`/API/chatroom_search_users.php?q=${encodeURIComponent(searchQuery)}&limit=10`, {
             method: 'GET',
             credentials: 'same-origin'
-        }, {
-            abortKey: 'search_users',
-            retries: 2
         });
+        
+        const data = await response.json();
         
         if (data.ok && data.users) {
             mentionSuggestionsList = data.users;
@@ -372,10 +408,21 @@ function renderMessage(message) {
         messageContent = `<p class="message-content">${formatMessageContent(message.message, message.mentions || [])}</p>`;
     }
     
+    // Afficher l'image si présente
+    let imageContent = '';
+    if (message.image_path) {
+        imageContent = `<img src="${escapeHtml(message.image_path)}" alt="Image du message" class="message-image" loading="lazy">`;
+    }
+    
+    // Indicateur d'envoi en cours
+    const sendingIndicator = message.sending ? '<span class="message-sending">Envoi en cours...</span>' : '';
+    
     const messageHtml = `
-        <div class="chatroom-message ${messageClass}" data-message-id="${message.id}">
+        <div class="chatroom-message ${messageClass}" data-message-id="${message.id}" role="article" aria-label="Message de ${authorName}">
             <div class="message-bubble">
                 ${messageContent}
+                ${imageContent}
+                ${sendingIndicator}
             </div>
             <div class="message-info">
                 ${userInfo}
@@ -465,15 +512,31 @@ async function loadMessages(append = false) {
         
         if (data.ok && data.messages) {
             renderMessages(data.messages, append);
+            
+            // Optimisation du polling : backoff exponentiel si pas de nouveaux messages
+            if (data.messages.length === 0) {
+                consecutiveEmptyResponses++;
+                // Augmenter progressivement l'intervalle (max 30 secondes)
+                refreshInterval = Math.min(2000 * Math.pow(1.5, consecutiveEmptyResponses), 30000);
+            } else {
+                consecutiveEmptyResponses = 0;
+                refreshInterval = 2000; // Reset à 2 secondes
+            }
+            
+            updateConnectionStatus('online');
         } else if (!data.ok) {
             throw new Error(data.error || 'Erreur inconnue');
         }
     } catch (error) {
         console.error('Erreur chargement messages:', error);
+        updateConnectionStatus('error');
         
         if (loadingIndicator) {
             loadingIndicator.innerHTML = '<div class="chatroom-loading">Erreur de chargement</div>';
         }
+        
+        // Afficher une notification d'erreur
+        showErrorNotification('Erreur lors du chargement des messages. Nouvelle tentative...');
     } finally {
         isLoading = false;
     }
@@ -484,14 +547,15 @@ async function loadMessages(append = false) {
 // ============================================
 async function sendMessage() {
     const messageText = messageInput.value.trim();
+    const hasImage = selectedImage !== null;
     
-    // Le message doit être présent
-    if (!messageText) {
+    // Le message ou l'image doit être présent
+    if (!messageText && !hasImage) {
         return;
     }
     
     if (messageText.length > CONFIG.maxMessageLength) {
-        alert(`Le message est trop long (max ${CONFIG.maxMessageLength} caractères)`);
+        showErrorNotification(`Le message est trop long (max ${CONFIG.maxMessageLength} caractères)`);
         return;
     }
     
@@ -500,6 +564,19 @@ async function sendMessage() {
     isSending = true;
     sendButton.disabled = true;
     const originalMessage = messageText;
+    const originalImage = selectedImage;
+    
+    // Afficher un message temporaire "Envoi en cours..."
+    const tempMessage = {
+        id: 'temp_' + Date.now(),
+        message: messageText || '(image)',
+        date_envoi: new Date().toISOString(),
+        is_me: true,
+        sending: true,
+        image_path: hasImage ? URL.createObjectURL(originalImage) : null
+    };
+    pendingMessageId = tempMessage.id;
+    renderMessages([tempMessage], true);
     
     // Extraire les mentions
     const mentionNames = detectMentions(messageText);
@@ -507,17 +584,41 @@ async function sendMessage() {
     
     // Réinitialiser l'interface
     messageInput.value = '';
+    selectedImage = null;
+    imagePreviewContainer.style.display = 'none';
     adjustTextareaHeight();
     
     try {
-        // Envoyer le message
+        let imagePath = null;
+        
+        // Upload de l'image si présente
+        if (hasImage) {
+            const formData = new FormData();
+            formData.append('image', originalImage);
+            
+            const uploadResponse = await fetch('/API/chatroom_upload_image.php', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+            
+            const uploadData = await uploadResponse.json();
+            if (uploadData.ok && uploadData.image_path) {
+                imagePath = uploadData.image_path;
+            } else {
+                throw new Error(uploadData.error || 'Erreur lors de l\'upload de l\'image');
+            }
+        }
+        
+            // Envoyer le message
         const response = await fetch('/API/chatroom_send.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
                 csrf_token: CONFIG.csrfToken,
-                message: originalMessage,
-                mentions: mentionIds
+                message: originalMessage || null,
+                mentions: mentionIds,
+                image_path: imagePath || null
             }),
             credentials: 'same-origin'
         });
@@ -542,17 +643,43 @@ async function sendMessage() {
             throw new Error(errorMsg);
         }
         
+        // Supprimer le message temporaire
+        const tempMsgEl = messagesContainer.querySelector(`[data-message-id="${pendingMessageId}"]`);
+        if (tempMsgEl) {
+            tempMsgEl.remove();
+        }
+        pendingMessageId = null;
+        
         if (data.ok && data.message) {
+            // Ajouter l'image_path au message si présent
+            if (imagePath) {
+                data.message.image_path = imagePath;
+            }
             renderMessages([data.message], true);
             setTimeout(() => loadMessages(true), 500);
+            updateConnectionStatus('online');
         } else {
             throw new Error(data.error || 'Erreur lors de l\'envoi');
         }
     } catch (error) {
         console.error('Erreur envoi message:', error);
-        alert('Erreur lors de l\'envoi du message');
+        
+        // Supprimer le message temporaire en cas d'erreur
+        const tempMsgEl = messagesContainer.querySelector(`[data-message-id="${pendingMessageId}"]`);
+        if (tempMsgEl) {
+            tempMsgEl.remove();
+        }
+        pendingMessageId = null;
+        
+        showErrorNotification('Erreur lors de l\'envoi du message: ' + error.message);
         messageInput.value = originalMessage;
+        if (originalImage) {
+            selectedImage = originalImage;
+            imagePreview.src = URL.createObjectURL(originalImage);
+            imagePreviewContainer.style.display = 'flex';
+        }
         adjustTextareaHeight();
+        updateConnectionStatus('error');
     } finally {
         isSending = false;
         sendButton.disabled = false;
@@ -648,12 +775,120 @@ messagesContainer.addEventListener('scroll', () => {
 sendButton.addEventListener('click', sendMessage);
 
 // ============================================
+// Gestion de l'upload d'images
+// ============================================
+imageUploadButton.addEventListener('click', () => {
+    imageInput.click();
+});
+
+imageInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        // Vérifier le type
+        if (!file.type.startsWith('image/')) {
+            showErrorNotification('Veuillez sélectionner une image');
+            return;
+        }
+        
+        // Vérifier la taille (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            showErrorNotification('L\'image est trop volumineuse (max 5MB)');
+            return;
+        }
+        
+        selectedImage = file;
+        imagePreview.src = URL.createObjectURL(file);
+        imagePreviewContainer.style.display = 'flex';
+    }
+});
+
+removeImagePreview.addEventListener('click', () => {
+    selectedImage = null;
+    imagePreviewContainer.style.display = 'none';
+    imageInput.value = '';
+});
+
+// ============================================
+// Gestion du statut de connexion
+// ============================================
+function updateConnectionStatus(status) {
+    connectionStatus = status;
+    
+    if (status === 'online') {
+        onlineIndicator.style.background = '#4ade80';
+        statusText.textContent = 'En ligne';
+        connectionStatusEl.style.display = 'none';
+    } else if (status === 'offline' || status === 'error') {
+        onlineIndicator.style.background = '#ef4444';
+        statusText.textContent = 'Hors ligne';
+        connectionStatusEl.style.display = 'flex';
+        connectionStatusEl.querySelector('.connection-status-indicator').style.background = '#ef4444';
+        connectionStatusEl.querySelector('.connection-status-text').textContent = 'Connexion perdue. Reconnexion en cours...';
+    }
+}
+
+// Détecter les changements de connexion réseau
+window.addEventListener('online', () => {
+    updateConnectionStatus('online');
+    loadMessages(true);
+});
+
+window.addEventListener('offline', () => {
+    updateConnectionStatus('offline');
+});
+
+// ============================================
+// Système de notifications
+// ============================================
+function showErrorNotification(message) {
+    // Utiliser showNotification si disponible (depuis api.js), sinon alert
+    if (typeof window.showNotification === 'function') {
+        window.showNotification(message, 'error');
+    } else {
+        // Fallback : créer une notification visuelle simple
+        const notification = document.createElement('div');
+        notification.className = 'chatroom-notification error';
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ef4444;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 10000;
+            animation: slideIn 0.3s ease-out;
+        `;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+}
+
+// ============================================
 // Initialisation
 // ============================================
 async function init() {
     await loadMessages(false);
-    refreshIntervalId = setInterval(() => loadMessages(true), CONFIG.refreshInterval);
+    
+    // Utiliser l'intervalle dynamique pour le polling
+    function scheduleNextRefresh() {
+        if (refreshIntervalId) clearInterval(refreshIntervalId);
+        refreshIntervalId = setTimeout(() => {
+            loadMessages(true).then(() => {
+                scheduleNextRefresh();
+            });
+        }, refreshInterval);
+    }
+    
+    scheduleNextRefresh();
     messageInput.focus();
+    updateConnectionStatus('online');
 }
 
 init();

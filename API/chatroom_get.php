@@ -137,19 +137,33 @@ try {
         ]);
     }
 
+    // Vérifier si la colonne image_path existe
+    $hasImagePath = false;
+    try {
+        $checkColumn = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'chatroom_messages' 
+            AND COLUMN_NAME = 'image_path'
+        ");
+        $checkColumn->execute();
+        $hasImagePath = (int)$checkColumn->fetchColumn() > 0;
+    } catch (PDOException $e) {
+        // Si la vérification échoue, on continue sans image_path
+        error_log('chatroom_get.php - Erreur vérification colonne image_path: ' . $e->getMessage());
+    }
+
     // Construire la requête selon les paramètres
+    $selectColumns = $hasImagePath
+        ? 'm.id, m.id_user, m.message, m.date_envoi, m.mentions, m.image_path, u.nom, u.prenom, u.Emploi'
+        : 'm.id, m.id_user, m.message, m.date_envoi, m.mentions, u.nom, u.prenom, u.Emploi';
+    
     if ($sinceId > 0) {
         // Récupérer uniquement les nouveaux messages (depuis le dernier ID)
         $stmt = $pdo->prepare("
             SELECT 
-                m.id,
-                m.id_user,
-                m.message,
-                m.date_envoi,
-                m.mentions,
-                u.nom,
-                u.prenom,
-                u.Emploi
+                {$selectColumns}
             FROM chatroom_messages m
             INNER JOIN utilisateurs u ON u.id = m.id_user
             WHERE m.id > :since_id
@@ -162,14 +176,7 @@ try {
         // Récupérer les messages les plus récents
         $stmt = $pdo->prepare("
             SELECT 
-                m.id,
-                m.id_user,
-                m.message,
-                m.date_envoi,
-                m.mentions,
-                u.nom,
-                u.prenom,
-                u.Emploi
+                {$selectColumns}
             FROM chatroom_messages m
             INNER JOIN utilisateurs u ON u.id = m.id_user
             ORDER BY m.date_envoi DESC
@@ -201,7 +208,7 @@ try {
             $mentionsArray = json_decode($msg['mentions'], true) ?: [];
         }
 
-        $formattedMessages[] = [
+        $formattedMessage = [
             'id' => (int)$msg['id'],
             'id_user' => (int)$msg['id_user'],
             'message' => $msg['message'],
@@ -212,6 +219,12 @@ try {
             'is_me' => (int)$msg['id_user'] === $currentUserId,
             'mentions' => $mentionsArray
         ];
+        
+        if ($hasImagePath && isset($msg['image_path']) && !empty($msg['image_path'])) {
+            $formattedMessage['image_path'] = $msg['image_path'];
+        }
+        
+        $formattedMessages[] = $formattedMessage;
     }
 
     // Vérifier s'il y a plus de messages

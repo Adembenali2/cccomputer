@@ -1,10 +1,33 @@
 <?php
 // API pour récupérer tous les clients pour la page maps.php (affichage initial sur la carte)
+// Démarrer le output buffering en premier
 ob_start();
 
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('html_errors', 0);
+
+// Définir un gestionnaire d'erreur pour capturer les erreurs fatales
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        http_response_code(500);
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode([
+            'ok' => false,
+            'error' => 'Erreur fatale du serveur',
+            'message' => $error['message'],
+            'file' => basename($error['file']),
+            'line' => $error['line']
+        ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+});
 
 if (!headers_sent()) {
     header('Content-Type: application/json; charset=utf-8');
@@ -25,6 +48,10 @@ function jsonResponse(array $data, int $statusCode = 200) {
 try {
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/helpers.php';
+    // S'assurer que getPdoOrFail est disponible
+    if (!function_exists('getPdoOrFail')) {
+        require_once __DIR__ . '/../includes/api_helpers.php';
+    }
 } catch (Throwable $e) {
     error_log('maps_get_all_clients.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation: ' . $e->getMessage()], 500);
@@ -35,7 +62,12 @@ if (empty($_SESSION['user_id'])) {
 }
 
 // Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
-$pdo = getPdoOrFail();
+try {
+    $pdo = getPdoOrFail();
+} catch (Throwable $e) {
+    error_log('maps_get_all_clients.php getPdoOrFail error: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Erreur de connexion à la base de données'], 500);
+}
 
 $limit = min((int)($_GET['limit'] ?? 1000), 5000); // Par défaut 1000, max 5000
 
@@ -149,13 +181,19 @@ try {
     }
     
     $stmt = $pdo->prepare($sql);
+    if (!$stmt) {
+        $errorInfo = $pdo->errorInfo();
+        error_log('maps_get_all_clients.php prepare error: ' . json_encode($errorInfo));
+        jsonResponse(['ok' => false, 'error' => 'Erreur de préparation SQL: ' . ($errorInfo[2] ?? 'Erreur inconnue')], 500);
+    }
+    
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     
     $execResult = $stmt->execute();
     if (!$execResult) {
         $errorInfo = $stmt->errorInfo();
         error_log('maps_get_all_clients.php execute error: ' . json_encode($errorInfo));
-        jsonResponse(['ok' => false, 'error' => 'Erreur d\'exécution SQL'], 500);
+        jsonResponse(['ok' => false, 'error' => 'Erreur d\'exécution SQL: ' . ($errorInfo[2] ?? 'Erreur inconnue')], 500);
     }
     
     $allClients = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -229,12 +267,20 @@ try {
     jsonResponse(['ok' => true, 'clients' => $formatted, 'total' => count($formatted)]);
     
 } catch (PDOException $e) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     error_log('maps_get_all_clients.php SQL error: ' . $e->getMessage());
     error_log('maps_get_all_clients.php SQL error code: ' . ($e->getCode() ?? 'N/A'));
     error_log('maps_get_all_clients.php SQL error info: ' . json_encode($e->errorInfo ?? []));
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+    error_log('maps_get_all_clients.php SQL error trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);
 } catch (Throwable $e) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     error_log('maps_get_all_clients.php error: ' . $e->getMessage());
     error_log('maps_get_all_clients.php error file: ' . $e->getFile() . ':' . $e->getLine());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
+    error_log('maps_get_all_clients.php error trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
 }

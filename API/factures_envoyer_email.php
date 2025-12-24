@@ -191,35 +191,99 @@ try {
         $messageBody .= "Veuillez trouver ci-joint la facture {$facture['numero']} d'un montant de " . number_format($facture['montant_ttc'], 2, ',', ' ') . " € TTC.";
     }
     
+    // Vérifier que la fonction mail() est disponible
+    if (!function_exists('mail')) {
+        error_log('La fonction mail() n\'est pas disponible sur ce serveur');
+        jsonResponse(['ok' => false, 'error' => 'La fonction d\'envoi d\'email n\'est pas disponible sur ce serveur'], 500);
+    }
+    
+    // Vérifier la taille du fichier PDF (limite recommandée: 10MB pour les emails)
+    $pdfSize = filesize($pdfPath);
+    if ($pdfSize > 10 * 1024 * 1024) {
+        error_log("PDF trop volumineux: {$pdfSize} bytes");
+        jsonResponse(['ok' => false, 'error' => 'Le fichier PDF est trop volumineux pour être envoyé par email (max 10MB)'], 400);
+    }
+    
+    // Lire le contenu du PDF
+    $fileContent = @file_get_contents($pdfPath);
+    if ($fileContent === false) {
+        error_log("Impossible de lire le fichier PDF: {$pdfPath}");
+        jsonResponse(['ok' => false, 'error' => 'Impossible de lire le fichier PDF'], 500);
+    }
+    
     // Envoyer l'email avec pièce jointe
-    $boundary = md5(time());
+    $boundary = md5(time() . uniqid());
     $headers = "From: CC Computer <noreply@cccomputer.fr>\r\n";
     $headers .= "Reply-To: noreply@cccomputer.fr\r\n";
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";
+    $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
     
+    // Corps du message
     $emailBody = "--{$boundary}\r\n";
     $emailBody .= "Content-Type: text/plain; charset=UTF-8\r\n";
     $emailBody .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
     $emailBody .= $messageBody . "\r\n\r\n";
     
     // Ajouter la pièce jointe PDF
-    $fileContent = file_get_contents($pdfPath);
     $fileContentEncoded = chunk_split(base64_encode($fileContent));
     $fileName = basename($facture['pdf_path']);
+    // Nettoyer le nom du fichier pour éviter les problèmes
+    $fileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName);
     
     $emailBody .= "--{$boundary}\r\n";
     $emailBody .= "Content-Type: application/pdf; name=\"{$fileName}\"\r\n";
     $emailBody .= "Content-Transfer-Encoding: base64\r\n";
     $emailBody .= "Content-Disposition: attachment; filename=\"{$fileName}\"\r\n\r\n";
     $emailBody .= $fileContentEncoded . "\r\n";
-    $emailBody .= "--{$boundary}--";
+    $emailBody .= "--{$boundary}--\r\n";
+    
+    // Capturer les erreurs PHP
+    $lastError = null;
+    set_error_handler(function($errno, $errstr) use (&$lastError) {
+        $lastError = $errstr;
+        return true;
+    });
     
     // Envoyer l'email
-    $mailSent = @mail($email, $sujet, $emailBody, $headers);
-    
-    if (!$mailSent) {
-        jsonResponse(['ok' => false, 'error' => 'Erreur lors de l\'envoi de l\'email'], 500);
+    try {
+        $mailSent = @mail($email, $sujet, $emailBody, $headers);
+        
+        restore_error_handler();
+        
+        if (!$mailSent) {
+            $errorMsg = $lastError ?: 'Erreur inconnue lors de l\'envoi';
+            error_log("Erreur envoi email - Destinataire: {$email}, Erreur: {$errorMsg}");
+            error_log("Taille email: " . strlen($emailBody) . " bytes, Taille PDF: {$pdfSize} bytes");
+            
+            // Vérifier si c'est un problème de configuration
+            $iniSendmail = ini_get('sendmail_path');
+            error_log("Configuration sendmail_path: " . ($iniSendmail ?: 'non configuré'));
+            
+            // Message d'erreur plus explicite
+            $userMessage = 'Erreur lors de l\'envoi de l\'email. ';
+            if (empty($iniSendmail)) {
+                $userMessage .= 'Le serveur n\'a pas de configuration d\'envoi d\'email. ';
+                $userMessage .= 'Sur Railway ou certains hébergeurs, il faut configurer un service SMTP externe (SendGrid, Mailgun, etc.).';
+            } else {
+                $userMessage .= $errorMsg;
+            }
+            
+            jsonResponse([
+                'ok' => false, 
+                'error' => $userMessage,
+                'debug' => [
+                    'sendmail_path' => $iniSendmail,
+                    'pdf_size' => $pdfSize,
+                    'email_size' => strlen($emailBody),
+                    'php_error' => $errorMsg
+                ]
+            ], 500);
+        }
+    } catch (Exception $e) {
+        restore_error_handler();
+        error_log("Exception lors de l'envoi email: " . $e->getMessage());
+        jsonResponse(['ok' => false, 'error' => 'Exception lors de l\'envoi: ' . $e->getMessage()], 500);
     }
     
     // Mettre à jour la facture pour indiquer qu'elle a été envoyée
