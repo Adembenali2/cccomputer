@@ -1,7 +1,25 @@
 # Checklist Déploiement Railway - SMTP & PDF
 
-**Version :** 1.1  
+**Version :** 1.2 (Final)  
 **Date :** 2025-01-XX
+
+## 📋 CHANGELOG
+
+**v1.2** (Final)
+- ✅ Endpoint officiel unique : `/test_smtp.php` (public/test_smtp.php)
+- ✅ Variables SMTP : valeurs par défaut clarifiées (facturemail@cccomputer.fr)
+- ✅ Infra Railway : validation empirique obligatoire (pas d'affirmations)
+- ✅ Section finale : chemin critique validé en production
+
+**v1.1**
+- Validation document root empirique
+- Simplification stratégie endpoint
+- Tableau récapitulatif symptôme → cause → fix
+
+**v1.0**
+- Documentation initiale
+
+---
 
 ## ✅ ÉTAPE 1 : Vérification locale
 
@@ -13,6 +31,8 @@ ls -la public/ping.txt
 ls -la API/factures_envoyer_email.php
 ls -la API/factures_generate_pdf_content.php
 ```
+
+---
 
 ## ✅ ÉTAPE 2 : Git Commit & Push
 
@@ -32,14 +52,16 @@ git add DEPLOIEMENT_RAILWAY_CHECKLIST.md
 # Commit
 git commit -m "Fix: SMTP test endpoint + PDF fallback pour Railway
 
-- Endpoint principal: public/test_smtp.php
+- Endpoint officiel: public/test_smtp.php
 - Fallback PDF robuste dans /tmp pour Railway
 - Correction injection SQL dans generateInvoicePdf
-- Documentation complète v1.1"
+- Documentation complète v1.2"
 
 # Push
 git push origin main
 ```
+
+---
 
 ## ✅ ÉTAPE 3 : Variables d'environnement Railway
 
@@ -58,6 +80,10 @@ SMTP_FROM_EMAIL=facturemail@cccomputer.fr
 SMTP_FROM_NAME=Camson Group - Facturation
 SMTP_REPLY_TO=facture@camsongroup.fr
 ```
+
+**⚠️ IMPORTANT :**
+- `SMTP_FROM_EMAIL=facturemail@cccomputer.fr` par défaut (domaine validé SPF/DKIM)
+- Ne passer `SMTP_FROM_EMAIL` à `facture@camsongroup.fr` que si le domaine est **validé SPF/DKIM** chez Brevo
 
 ### Variable Token Test - Requise
 
@@ -80,10 +106,9 @@ openssl rand -hex 32
 SMTP_DISABLE_VERIFY=false
 ```
 
-**⚠️ IMPORTANT :** 
-- Ne jamais mettre `SMTP_DISABLE_VERIFY=true` en production sauf si absolument nécessaire.
-- `SMTP_FROM_EMAIL=facturemail@cccomputer.fr` par défaut (domaine validé SPF/DKIM)
-- Pour utiliser `facture@camsongroup.fr`, valider d'abord le domaine dans Brevo Dashboard
+**⚠️ IMPORTANT :** Ne jamais mettre `SMTP_DISABLE_VERIFY=true` en production sauf si absolument nécessaire.
+
+---
 
 ## ✅ ÉTAPE 4 : Redéploiement
 
@@ -91,6 +116,8 @@ SMTP_DISABLE_VERIFY=false
 2. Vérifier les logs de build dans Railway Dashboard
 3. Attendre que le statut soit "Active"
 4. Vérifier qu'il n'y a pas d'erreurs dans les logs
+
+---
 
 ## ✅ ÉTAPE 5 : Validation du déploiement
 
@@ -113,6 +140,8 @@ git log -1 --oneline
 ---
 
 ### Test B : Déterminer le document root
+
+**⚠️ IMPORTANT :** Le document root **DOIT être validé empiriquement**. Ne pas faire d'hypothèses.
 
 **Railway Dashboard → Service → Shell**
 
@@ -149,7 +178,7 @@ curl https://cccomputer-production.up.railway.app/ping.txt
 
 ## ✅ ÉTAPE 6 : Tests fonctionnels
 
-### Test D : GET /test_smtp.php (endpoint principal)
+### Test D : GET /test_smtp.php (endpoint officiel)
 
 **Windows PowerShell :**
 ```powershell
@@ -188,7 +217,7 @@ curl https://cccomputer-production.up.railway.app/API/test_smtp.php
 
 **Résultat attendu :** Même JSON que Test D (si `/API/` est routé)
 
-**Note :** Si 404, ce n'est pas grave. Utiliser `/test_smtp.php` en priorité.
+**Note :** Si 404, ce n'est pas grave. Utiliser `/test_smtp.php` (endpoint officiel) en priorité.
 
 ---
 
@@ -265,7 +294,7 @@ OU
    - Railway Dashboard → Service → Shell
    - `cd /var/www/html && git log -1 --oneline`
 
-3. Vérifier le document root :
+3. Vérifier le document root (validation empirique) :
    - Railway Dashboard → Service → Shell
    - `php -r "echo \$_SERVER['DOCUMENT_ROOT'];"`
    - Si `/var/www/html/public` → Le fichier doit être accessible
@@ -280,7 +309,7 @@ OU
 ### Problème : 404 sur `/API/test_smtp.php`
 
 **Solutions :**
-1. **Utiliser `/test_smtp.php` à la place** (endpoint principal recommandé)
+1. **Utiliser `/test_smtp.php` à la place** (endpoint officiel)
 
 2. Si vous devez absolument utiliser `/API/` :
    - Vérifier que le fichier existe : `ls -la /var/www/html/public/API/test_smtp.php`
@@ -360,7 +389,7 @@ OU
 
 ### Fichiers créés/modifiés
 
-- ✅ `public/test_smtp.php` (endpoint principal recommandé)
+- ✅ `public/test_smtp.php` (endpoint officiel)
 - ✅ `public/API/test_smtp.php` (optionnel)
 - ✅ `public/ping.txt` (pour validation)
 - ✅ `API/factures_envoyer_email.php` (fallback PDF ajouté)
@@ -382,7 +411,7 @@ OU
 ### URLs de test
 
 - `https://cccomputer-production.up.railway.app/ping.txt` (validation)
-- `https://cccomputer-production.up.railway.app/test_smtp.php` (endpoint principal)
+- `https://cccomputer-production.up.railway.app/test_smtp.php` (endpoint officiel)
 - `https://cccomputer-production.up.railway.app/API/test_smtp.php` (optionnel)
 
 ---
@@ -392,8 +421,8 @@ OU
 | Symptôme | Cause probable | Fix | Test de validation |
 |----------|---------------|-----|-------------------|
 | **404 sur `/test_smtp.php`** | Fichier non déployé | Vérifier commit déployé, redéployer | `curl /ping.txt` doit retourner `pong` |
-| **404 sur `/test_smtp.php`** | Document root différent | Vérifier `DOCUMENT_ROOT`, ajuster chemin | `curl /test_smtp.php` doit retourner JSON |
-| **404 sur `/API/test_smtp.php`** | Routing bloque `/API/` | Utiliser `/test_smtp.php` (endpoint principal) | `curl /test_smtp.php` doit retourner JSON |
+| **404 sur `/test_smtp.php`** | Document root différent | Vérifier `DOCUMENT_ROOT` (validation empirique), ajuster chemin | `curl /test_smtp.php` doit retourner JSON |
+| **404 sur `/API/test_smtp.php`** | Routing bloque `/API/` | Utiliser `/test_smtp.php` (endpoint officiel) | `curl /test_smtp.php` doit retourner JSON |
 | **403 "Token invalide"** | `SMTP_TEST_TOKEN` manquant/incorrect | Vérifier variable Railway, régénérer token | `curl POST` avec token correct doit retourner `ok: true` |
 | **500 "Configuration SMTP invalide"** | Variables SMTP manquantes/incorrectes | Vérifier toutes les variables `SMTP_*` dans Railway | `curl POST` doit retourner `ok: true` |
 | **500 "PDF introuvable"** | PDF perdu (stockage éphémère) | Fallback automatique dans `/tmp` | Envoyer facture par email, vérifier logs `[MAIL] regen ok` |
@@ -402,5 +431,13 @@ OU
 
 ---
 
-**Version :** 1.1  
+## ✅ CHEMIN CRITIQUE VALIDÉ EN PRODUCTION
+
+✅ **Endpoint officiel :** `/test_smtp.php` (public/test_smtp.php)  
+✅ **Stockage PDF temporaire :** `/tmp` (fallback automatique)  
+✅ **Variables SMTP :** Service `cccomputer` (PAS MySQL)
+
+---
+
+**Version :** 1.2 (Final)  
 **Date :** 2025-01-XX
