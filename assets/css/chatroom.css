@@ -316,6 +316,16 @@
     min-width: 0; /* Permet au flex de rétrécir correctement */
     position: relative; /* Pour le positionnement des enfants */
     overflow: visible; /* Permet aux boutons de rester visibles */
+    /* S'assurer que les boutons ne sont jamais cachés */
+    justify-content: space-between;
+}
+
+/* S'assurer que les boutons restent toujours visibles même avec l'aperçu */
+.chatroom-input-container > .image-upload-btn,
+.chatroom-input-container > .chatroom-send-btn {
+    flex-shrink: 0 !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
 }
 
 /* Zone de sélection de liens (clients/SAVs/livraisons) */
@@ -434,6 +444,8 @@
     min-width: 0; /* Permet au flex de rétrécir correctement */
     max-width: 100%; /* Limite la largeur maximale */
     overflow: visible; /* Permet aux éléments enfants de rester visibles */
+    /* S'assurer que le wrapper ne dépasse pas et laisse de l'espace aux boutons */
+    flex-basis: auto;
 }
 
 .chatroom-input-wrapper:focus-within {
