@@ -780,7 +780,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
         .modal-form-group input,
         .modal-form-group select,
-        .modal-form-group textarea {
+        .modal-form-group textarea,
+        .modal-form-group input[type="file"] {
             width: 100%;
             padding: 0.5rem 0.75rem;
             border: 2px solid var(--border-color);
@@ -789,6 +790,15 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             color: var(--text-primary);
             background-color: var(--bg-secondary);
             transition: all 0.2s;
+        }
+        
+        .modal-form-group input[type="file"] {
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+        
+        .modal-form-group input[type="file"]:hover {
+            border-color: var(--accent-primary);
         }
 
         .modal-form-group input:focus,
@@ -1376,6 +1386,72 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         </div>
     </div>
 
+    <!-- Modal Payer -->
+    <div class="modal-overlay" id="payerModalOverlay" onclick="closePayerModal()">
+        <div class="modal" id="payerModal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title">Enregistrer un paiement</h2>
+                <button class="modal-close" onclick="closePayerModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="payerForm" onsubmit="submitPayerForm(event)">
+                    <div class="modal-form-group">
+                        <label for="payerFacture">Facture <span style="color: #ef4444;">*</span></label>
+                        <select id="payerFacture" name="facture_id" required>
+                            <option value="">Chargement des factures...</option>
+                        </select>
+                        <div class="input-hint">Sélectionnez la facture à payer</div>
+                    </div>
+
+                    <div class="modal-form-row">
+                        <div class="modal-form-group">
+                            <label for="payerMontant">Montant (€) <span style="color: #ef4444;">*</span></label>
+                            <input type="number" id="payerMontant" name="montant" step="0.01" min="0" required placeholder="0.00">
+                        </div>
+                        <div class="modal-form-group">
+                            <label for="payerDate">Date de paiement <span style="color: #ef4444;">*</span></label>
+                            <input type="date" id="payerDate" name="date_paiement" required value="<?= date('Y-m-d') ?>">
+                        </div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label for="payerMode">Mode de paiement <span style="color: #ef4444;">*</span></label>
+                        <select id="payerMode" name="mode_paiement" required>
+                            <option value="">Sélectionner un mode de paiement</option>
+                            <option value="cb">Carte bancaire</option>
+                            <option value="cheque">Chèque</option>
+                            <option value="virement">Virement</option>
+                            <option value="especes">Espèce</option>
+                            <option value="autre">Autre paiement</option>
+                        </select>
+                        <div class="input-hint">Espèce et Carte bancaire : statut "Payé" automatique. Autres modes : statut "En cours"</div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label for="payerReference">Référence du paiement</label>
+                        <input type="text" id="payerReference" name="reference" placeholder="Ex: VIR-2025-001, CHQ-001, etc.">
+                        <div class="input-hint">Numéro de chèque, référence de virement, etc.</div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label for="payerJustificatif">Justificatif</label>
+                        <input type="file" id="payerJustificatif" name="justificatif" accept=".pdf,.jpg,.jpeg,.png,.gif">
+                        <div class="input-hint">Fichier PDF ou image (max 5MB)</div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label for="payerCommentaire">Commentaire</label>
+                        <textarea id="payerCommentaire" name="commentaire" rows="3" placeholder="Notes supplémentaires sur ce paiement..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closePayerModal()">Annuler</button>
+                <button type="submit" form="payerForm" class="btn btn-primary" id="btnEnregistrerPaiement">Enregistrer le paiement</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Variables globales pour le graphique
         let statsChart = null;
@@ -1396,6 +1472,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 openFacturesListModal();
             } else if (section === 'paiements') {
                 openPaiementsModal();
+            } else if (section === 'payer') {
+                openPayerModal();
             } else {
                 console.log('Ouverture de la section:', section);
                 alert(`Section "${section}" - À implémenter`);
@@ -2334,6 +2412,170 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }, 5000);
         }
 
+        // ============================================
+        // GESTION DU MODAL PAYER
+        // ============================================
+        
+        /**
+         * Ouvre le modal de paiement
+         */
+        function openPayerModal() {
+            const modal = document.getElementById('payerModal');
+            const overlay = document.getElementById('payerModalOverlay');
+            
+            if (!modal || !overlay) {
+                console.error('Modal payer introuvable');
+                return;
+            }
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Réinitialiser le formulaire
+            const form = document.getElementById('payerForm');
+            if (form) {
+                form.reset();
+                // Réinitialiser la date à aujourd'hui
+                const dateInput = document.getElementById('payerDate');
+                if (dateInput) {
+                    dateInput.value = new Date().toISOString().split('T')[0];
+                }
+            }
+            
+            // Charger les factures non payées
+            loadFacturesForPaiement();
+        }
+
+        /**
+         * Ferme le modal de paiement
+         */
+        function closePayerModal() {
+            const modal = document.getElementById('payerModal');
+            const overlay = document.getElementById('payerModalOverlay');
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+                // Réinitialiser le formulaire
+                const form = document.getElementById('payerForm');
+                if (form) {
+                    form.reset();
+                }
+            }
+        }
+
+        /**
+         * Charge les factures pour le select de paiement
+         */
+        async function loadFacturesForPaiement() {
+            try {
+                const response = await fetch('/API/factures_liste.php');
+                const data = await response.json();
+                
+                if (data.ok && data.factures) {
+                    const factureSelect = document.getElementById('payerFacture');
+                    factureSelect.innerHTML = '<option value="">Sélectionner une facture</option>';
+                    
+                    // Filtrer les factures non payées et non annulées
+                    const facturesDisponibles = data.factures.filter(f => 
+                        f.statut !== 'payee' && f.statut !== 'annulee'
+                    );
+                    
+                    facturesDisponibles.forEach(facture => {
+                        const option = document.createElement('option');
+                        option.value = facture.id;
+                        option.textContent = `${facture.numero} - ${facture.client_nom} - ${facture.montant_ttc.toFixed(2)} € TTC`;
+                        option.setAttribute('data-montant', facture.montant_ttc);
+                        option.setAttribute('data-client-id', facture.client_id);
+                        factureSelect.appendChild(option);
+                    });
+                    
+                    // Écouter le changement pour pré-remplir le montant
+                    factureSelect.addEventListener('change', function() {
+                        const selectedOption = this.options[this.selectedIndex];
+                        if (selectedOption && selectedOption.value) {
+                            const montant = parseFloat(selectedOption.getAttribute('data-montant')) || 0;
+                            const montantInput = document.getElementById('payerMontant');
+                            if (montantInput) {
+                                montantInput.value = montant.toFixed(2);
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des factures:', error);
+            }
+        }
+
+        /**
+         * Soumet le formulaire de paiement
+         */
+        async function submitPayerForm(e) {
+            e.preventDefault();
+            
+            const form = document.getElementById('payerForm');
+            const formData = new FormData(form);
+            
+            // Validation
+            const factureId = formData.get('facture_id');
+            const montant = parseFloat(formData.get('montant')) || 0;
+            const modePaiement = formData.get('mode_paiement');
+            
+            if (!factureId) {
+                alert('Veuillez sélectionner une facture');
+                return;
+            }
+            
+            if (montant <= 0) {
+                alert('Le montant doit être supérieur à 0');
+                return;
+            }
+            
+            const btnSubmit = document.getElementById('btnEnregistrerPaiement');
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = 'Enregistrement en cours...';
+            
+            try {
+                const response = await fetch('/API/paiements_enregistrer.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erreur HTTP:', response.status, errorText);
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        showMessage('Erreur : ' + (errorJson.error || 'Erreur HTTP ' + response.status), 'error');
+                    } catch {
+                        showMessage('Erreur HTTP ' + response.status + ': ' + errorText.substring(0, 200), 'error');
+                    }
+                    return;
+                }
+                
+                const result = await response.json();
+                console.log('Réponse reçue:', result);
+                
+                if (result.ok) {
+                    showMessage('Paiement enregistré avec succès !', 'success');
+                    closePayerModal();
+                    // Recharger la liste des paiements si le modal est ouvert
+                    if (document.getElementById('paiementsModalOverlay')?.classList.contains('active')) {
+                        loadPaiementsList();
+                    }
+                } else {
+                    const errorMsg = result.error || 'Erreur inconnue';
+                    console.error('Erreur API:', errorMsg);
+                    showMessage('Erreur : ' + errorMsg, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur lors de la requête:', error);
+                showMessage('Erreur lors de l\'enregistrement du paiement: ' + error.message, 'error');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Enregistrer le paiement';
+            }
+        }
+
         // Exposer les fonctions globalement pour les onclick
         window.openSection = openSection;
         window.openFactureModal = openFactureModal;
@@ -2353,6 +2595,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.filterPaiements = filterPaiements;
         window.filterPaiementsByStatus = filterPaiementsByStatus;
         window.updatePaiementStatut = updatePaiementStatut;
+        window.openPayerModal = openPayerModal;
+        window.closePayerModal = closePayerModal;
+        window.submitPayerForm = submitPayerForm;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
@@ -2372,9 +2617,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const facturesListModalOverlay = document.getElementById('facturesListModalOverlay');
                     const paiementsModalOverlay = document.getElementById('paiementsModalOverlay');
                     const pdfViewerModalOverlay = document.getElementById('pdfViewerModalOverlay');
+                    const payerModalOverlay = document.getElementById('payerModalOverlay');
                     
                     if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
                         closePDFViewer();
+                    } else if (payerModalOverlay && payerModalOverlay.classList.contains('active')) {
+                        closePayerModal();
                     } else if (paiementsModalOverlay && paiementsModalOverlay.classList.contains('active')) {
                         closePaiementsModal();
                     } else if (factureModalOverlay && factureModalOverlay.classList.contains('active')) {
