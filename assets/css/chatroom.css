@@ -156,9 +156,12 @@
 /* ====== Message individuel ====== */
 .chatroom-message {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 0.75rem;
     max-width: 75%;
     animation: messageSlideIn 0.3s ease-out;
+    margin-bottom: 0.5rem;
 }
 
 @keyframes messageSlideIn {
@@ -175,13 +178,47 @@
 /* Message de l'utilisateur (aligné à droite) */
 .chatroom-message.message-me {
     align-self: flex-end;
-    align-items: flex-end;
+    flex-direction: row-reverse;
 }
 
 /* Message des autres (aligné à gauche) */
 .chatroom-message.message-other {
     align-self: flex-start;
+}
+
+/* Wrapper du contenu du message */
+.message-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+}
+
+.message-me .message-content-wrapper {
+    align-items: flex-end;
+}
+
+.message-other .message-content-wrapper {
     align-items: flex-start;
+}
+
+/* Avatar */
+.message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-sm);
+}
+
+.message-me .message-avatar {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
 
 /* ====== Bulle de message ====== */
@@ -256,19 +293,21 @@
 /* Liens dans le message */
 .message-content .message-link {
     color: var(--accent-primary);
-    text-decoration: none;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
+    text-decoration: underline;
+    font-weight: 500;
+    display: inline;
+    word-break: break-all;
+    transition: opacity 0.2s ease;
 }
 
 .message-content .message-link:hover {
+    opacity: 0.8;
     text-decoration: underline;
 }
 
 .message-me .message-content .message-link {
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.95);
+    text-decoration: underline;
 }
 
 /* ====== Informations du message ====== */
@@ -603,6 +642,16 @@
     .chatroom-message {
         max-width: 85%;
     }
+    
+    .message-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 0.75rem;
+    }
+    
+    .message-date-separator {
+        margin: 1rem 0;
+    }
 
     .chatroom-header {
         padding: 0.75rem 1rem;
@@ -693,19 +742,26 @@
 }
 
 /* ====== Images dans les messages ====== */
+.message-image-wrapper {
+    margin-top: 0.5rem;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
 .message-image {
     max-width: 100%;
     max-height: 400px;
     border-radius: var(--radius-md);
-    margin-top: 0.5rem;
     cursor: pointer;
     object-fit: contain;
     box-shadow: var(--shadow-sm);
-    transition: transform 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: block;
 }
 
 .message-image:hover {
     transform: scale(1.02);
+    box-shadow: var(--shadow-md);
 }
 
 .message-me .message-image {
@@ -714,6 +770,82 @@
 
 .message-other .message-image {
     border: 2px solid var(--border-color);
+}
+
+/* Lightbox pour images */
+.image-lightbox {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.lightbox-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(4px);
+}
+
+.lightbox-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lightbox-close {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 10002;
+}
+
+.lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.lightbox-image {
+    max-width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 /* Aperçu d'image avant envoi */
@@ -836,6 +968,54 @@
     opacity: 0.7;
     font-style: italic;
     margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.message-other .spinner {
+    border-color: rgba(0, 0, 0, 0.1);
+    border-top-color: var(--accent-primary);
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Séparateur de date */
+.message-date-separator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1.5rem 0;
+    position: relative;
+}
+
+.message-date-separator::before,
+.message-date-separator::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.message-date-separator span {
+    padding: 0 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 /* ====== Notifications ====== */

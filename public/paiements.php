@@ -1328,7 +1328,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                     <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                         <span><span id="paiementsCount">0</span> facture(s) trouv√©e(s)</span>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <span id="paiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
+                        <span id="paiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
                             <button onclick="openHistoriquePaiementsModal()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
@@ -1700,7 +1700,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closePayerModal()">Annuler</button>
                 <button type="submit" form="payerForm" class="btn btn-primary" id="btnEnregistrerPaiement">Enregistrer le paiement</button>
-            </div>
+        </div>
         </div>
     </div>
 
@@ -3392,7 +3392,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                     closePayerModal();
                     // Recharger la liste des paiements si le modal est ouvert
                     if (document.getElementById('paiementsModalOverlay')?.classList.contains('active')) {
-                        loadPaiementsList();
+                loadPaiementsList();
                     }
                 } else {
                     const errorMsg = result.error || 'Erreur inconnue';

@@ -387,6 +387,12 @@ async function extractMentionIds(mentions) {
 function formatMessageContent(message, mentions = []) {
     let content = escapeHtml(message);
     
+    // Détecter et rendre cliquables les URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    content = content.replace(urlRegex, (url) => {
+        return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="message-link">${escapeHtml(url)}</a>`;
+    });
+    
     // Détecter automatiquement toutes les mentions dans le texte (format @nom)
     // Cette regex détecte @ suivi d'un ou plusieurs caractères (pas d'espaces ni @)
     const mentionRegex = /@([^\s@]+)/g;
@@ -402,41 +408,82 @@ function formatMessageContent(message, mentions = []) {
 // ============================================
 // Affichage des messages
 // ============================================
+function getInitials(prenom, nom) {
+    const first = (prenom || '').charAt(0).toUpperCase();
+    const last = (nom || '').charAt(0).toUpperCase();
+    return (first + last) || '?';
+}
+
 function renderMessage(message) {
     const isMe = message.is_me;
     const messageClass = isMe ? 'message-me' : 'message-other';
     const authorName = isMe ? 'Moi' : escapeHtml((message.user_prenom || '') + ' ' + (message.user_nom || ''));
     const userInfo = isMe ? '' : `<span class="message-author">${authorName}</span>`;
     
+    // Avatar avec initiales
+    const avatarInitials = isMe 
+        ? getInitials(CONFIG.currentUserName.split(' ')[0] || '', CONFIG.currentUserName.split(' ')[1] || '')
+        : getInitials(message.user_prenom || '', message.user_nom || '');
+    const avatarHtml = `<div class="message-avatar" aria-hidden="true">${avatarInitials}</div>`;
+    
     let messageContent = '';
     if (message.message) {
         messageContent = `<p class="message-content">${formatMessageContent(message.message, message.mentions || [])}</p>`;
     }
     
-    // Afficher l'image si présente
+    // Afficher l'image si présente avec lightbox
     let imageContent = '';
     if (message.image_path) {
-        imageContent = `<img src="${escapeHtml(message.image_path)}" alt="Image du message" class="message-image" loading="lazy">`;
+        imageContent = `<div class="message-image-wrapper">
+            <img src="${escapeHtml(message.image_path)}" alt="Image du message" class="message-image" loading="lazy" onclick="openImageLightbox('${escapeHtml(message.image_path)}')">
+        </div>`;
     }
     
     // Indicateur d'envoi en cours
-    const sendingIndicator = message.sending ? '<span class="message-sending">Envoi en cours...</span>' : '';
+    const sendingIndicator = message.sending ? '<span class="message-sending"><span class="spinner"></span> Envoi en cours...</span>' : '';
     
     const messageHtml = `
         <div class="chatroom-message ${messageClass}" data-message-id="${message.id}" role="article" aria-label="Message de ${authorName}">
-            <div class="message-bubble">
-                ${messageContent}
-                ${imageContent}
-                ${sendingIndicator}
+            ${!isMe ? avatarHtml : ''}
+            <div class="message-content-wrapper">
+                <div class="message-bubble">
+                    ${messageContent}
+                    ${imageContent}
+                    ${sendingIndicator}
+                </div>
+                <div class="message-info">
+                    ${userInfo}
+                    <span class="message-time">${formatTime(message.date_envoi)}</span>
+                </div>
             </div>
-            <div class="message-info">
-                ${userInfo}
-                <span class="message-time">${formatTime(message.date_envoi)}</span>
-            </div>
+            ${isMe ? avatarHtml : ''}
         </div>
     `;
     
     return messageHtml;
+}
+
+function addDateSeparator(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    let dateLabel = '';
+    if (messageDate.getTime() === today.getTime()) {
+        dateLabel = 'Aujourd\'hui';
+    } else if (messageDate.getTime() === yesterday.getTime()) {
+        dateLabel = 'Hier';
+    } else {
+        dateLabel = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    
+    const separator = document.createElement('div');
+    separator.className = 'message-date-separator';
+    separator.innerHTML = `<span>${dateLabel}</span>`;
+    return separator;
 }
 
 function renderMessages(messages, append = false) {
@@ -452,7 +499,17 @@ function renderMessages(messages, append = false) {
     const wasAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 100;
     
     if (append) {
+        let lastDate = null;
         messages.forEach(msg => {
+            // Ajouter un séparateur de date si nécessaire
+            const msgDate = new Date(msg.date_envoi);
+            const msgDateStr = msgDate.toDateString();
+            if (lastDate !== msgDateStr) {
+                const separator = addDateSeparator(msg.date_envoi);
+                messagesContainer.appendChild(separator);
+                lastDate = msgDateStr;
+            }
+            
             const messageElement = document.createElement('div');
             messageElement.innerHTML = renderMessage(msg);
             const messageDiv = messageElement.firstElementChild;
@@ -465,7 +522,17 @@ function renderMessages(messages, append = false) {
         if (wasAtBottom || autoScrollEnabled) scrollToBottom(true);
     } else {
         messagesContainer.innerHTML = '';
+        let lastDate = null;
         messages.forEach(msg => {
+            // Ajouter un séparateur de date si nécessaire
+            const msgDate = new Date(msg.date_envoi);
+            const msgDateStr = msgDate.toDateString();
+            if (lastDate !== msgDateStr) {
+                const separator = addDateSeparator(msg.date_envoi);
+                messagesContainer.appendChild(separator);
+                lastDate = msgDateStr;
+            }
+            
             const messageElement = document.createElement('div');
             messageElement.innerHTML = renderMessage(msg);
             messagesContainer.appendChild(messageElement.firstElementChild);
@@ -638,7 +705,7 @@ async function sendMessage() {
             }
         }
         
-            // Envoyer le message
+        // Envoyer le message
         const response = await fetch('/API/chatroom_send.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -723,6 +790,9 @@ function adjustTextareaHeight() {
     messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
 }
 
+// Debouncing amélioré pour les mentions
+let mentionSearchAbortController = null;
+
 messageInput.addEventListener('input', (e) => {
     adjustTextareaHeight();
     
@@ -738,11 +808,17 @@ messageInput.addEventListener('input', (e) => {
         // Vérifier qu'il n'y a pas d'espace entre @ et le curseur (sinon ce n'est pas une mention)
         const textAfterAt = textBefore.substring(atIndex + 1);
         if (!textAfterAt.includes(' ')) {
+            // Annuler la recherche précédente si elle existe
+            if (mentionSearchAbortController) {
+                mentionSearchAbortController.abort();
+            }
+            
             // Lancer la recherche même si query est vide (pour afficher tous les utilisateurs)
             clearTimeout(mentionSearchTimeout);
             mentionSearchTimeout = setTimeout(() => {
-                searchUsers(query);
-            }, 200); // Réduire le délai pour une meilleure réactivité
+                mentionSearchAbortController = new AbortController();
+                searchUsers(query, mentionSearchAbortController.signal);
+            }, 300); // Debounce de 300ms pour réduire les requêtes
             return;
         }
     }
@@ -995,11 +1071,35 @@ async function init() {
     setInterval(loadNotificationsCount, 30000); // Toutes les 30 secondes
 }
 
-init();
+// ============================================
+// Lightbox pour les images
+// ============================================
+function openImageLightbox(imageSrc) {
+    const lightbox = document.createElement('div');
+    lightbox.className = 'image-lightbox';
+    lightbox.innerHTML = `
+        <div class="lightbox-backdrop" onclick="closeImageLightbox()"></div>
+        <div class="lightbox-content">
+            <button class="lightbox-close" onclick="closeImageLightbox()" aria-label="Fermer">✕</button>
+            <img src="${escapeHtml(imageSrc)}" alt="Image agrandie" class="lightbox-image">
+        </div>
+    `;
+    document.body.appendChild(lightbox);
+    document.body.style.overflow = 'hidden';
+    
+    // Fermer avec Escape
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeImageLightbox();
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+}
 
-window.addEventListener('beforeunload', () => {
-    if (refreshIntervalId) clearInterval(refreshIntervalId);
-});
-</script>
-</body>
-</html>
+function closeImageLightbox() {
+    const lightbox = document.querySelector('.image-lightbox');
+    if (lightbox) {
+        lightbox.style.animation = 'fadeOut 0.2s ease-out';
+        setTimeout(() => {
+    
