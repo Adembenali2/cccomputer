@@ -286,6 +286,8 @@
     align-items: flex-end;
     gap: 1rem;
     z-index: 10;
+    flex-wrap: nowrap; /* Empêche les éléments de passer à la ligne */
+    min-width: 0; /* Permet au flex de rétrécir correctement */
 }
 
 /* Zone de sélection de liens (clients/SAVs/livraisons) */
@@ -395,12 +397,13 @@
     flex: 1;
     position: relative;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
     padding: 0.75rem 1.25rem;
     border: 1px solid var(--border-color);
     transition: all 0.2s ease;
+    min-width: 0; /* Permet au flex de rétrécir correctement */
 }
 
 .chatroom-input-wrapper:focus-within {
@@ -422,6 +425,9 @@
     line-height: 1.6;
     font-family: inherit;
     padding: 0.5rem 0;
+    width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0; /* Empêche le textarea de rétrécir */
 }
 
 .chatroom-input::placeholder {
@@ -569,6 +575,27 @@
 
     .chatroom-input-container {
         padding: 1rem 1.25rem;
+        gap: 0.75rem; /* Réduire l'espace entre les éléments sur mobile */
+    }
+    
+    .image-preview-container {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .image-preview {
+        max-width: 80px;
+        max-height: 80px;
+    }
+    
+    .image-upload-btn {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .chatroom-send-btn {
+        width: 44px;
+        height: 44px;
     }
 }
 
@@ -645,14 +672,20 @@
     border-radius: var(--radius-md);
     margin-bottom: 0.5rem;
     border: 1px solid var(--border-color);
+    flex-shrink: 0; /* Empêche l'aperçu de rétrécir */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .image-preview {
-    max-width: 100px;
-    max-height: 100px;
+    max-width: 120px;
+    max-height: 120px;
+    width: auto;
+    height: auto;
     border-radius: var(--radius-sm);
     object-fit: cover;
     border: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .image-preview-remove {
@@ -684,8 +717,8 @@
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s ease;
-    margin-right: 0.5rem;
-    flex-shrink: 0;
+    flex-shrink: 0; /* Empêche le bouton de rétrécir */
+    margin: 0; /* Retirer margin-right car on utilise gap dans le container */
 }
 
 .image-upload-btn:hover {
