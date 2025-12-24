@@ -1,13 +1,15 @@
 # Checklist Déploiement Railway - SMTP & PDF
 
+**Version :** 1.1  
+**Date :** 2025-01-XX
+
 ## ✅ ÉTAPE 1 : Vérification locale
 
 ```bash
 # Vérifier que tous les fichiers sont présents
-ls -la public/API/test_smtp.php
 ls -la public/test_smtp.php
+ls -la public/API/test_smtp.php
 ls -la public/ping.txt
-ls -la API/test_smtp.php
 ls -la API/factures_envoyer_email.php
 ls -la API/factures_generate_pdf_content.php
 ```
@@ -19,10 +21,9 @@ ls -la API/factures_generate_pdf_content.php
 git status
 
 # Ajouter les fichiers
-git add public/API/test_smtp.php
 git add public/test_smtp.php
+git add public/API/test_smtp.php
 git add public/ping.txt
-git add API/test_smtp.php
 git add API/factures_envoyer_email.php
 git add API/factures_generate_pdf_content.php
 git add RAPPORT_SMTP_RAILWAY.md
@@ -31,10 +32,10 @@ git add DEPLOIEMENT_RAILWAY_CHECKLIST.md
 # Commit
 git commit -m "Fix: SMTP test endpoint + PDF fallback pour Railway
 
-- Ajout endpoints test_smtp.php (public/API/ et public/)
+- Endpoint principal: public/test_smtp.php
 - Fallback PDF robuste dans /tmp pour Railway
 - Correction injection SQL dans generateInvoicePdf
-- Documentation complète"
+- Documentation complète v1.1"
 
 # Push
 git push origin main
@@ -44,7 +45,7 @@ git push origin main
 
 **Railway Dashboard → Service `cccomputer` → Variables**
 
-### Variables SMTP (Brevo)
+### Variables SMTP (Brevo) - Requises
 
 ```
 SMTP_ENABLED=true
@@ -53,12 +54,12 @@ SMTP_PORT=587
 SMTP_SECURE=tls
 SMTP_USERNAME=votre-email@brevo.com
 SMTP_PASSWORD=votre-password-brevo
-SMTP_FROM_EMAIL=facture@camsongroup.fr
+SMTP_FROM_EMAIL=facturemail@cccomputer.fr
 SMTP_FROM_NAME=Camson Group - Facturation
 SMTP_REPLY_TO=facture@camsongroup.fr
 ```
 
-### Variable Token Test
+### Variable Token Test - Requise
 
 ```
 SMTP_TEST_TOKEN=<générer-un-token-aléatoire>
@@ -79,7 +80,10 @@ openssl rand -hex 32
 SMTP_DISABLE_VERIFY=false
 ```
 
-**⚠️ IMPORTANT :** Ne jamais mettre `SMTP_DISABLE_VERIFY=true` en production sauf si absolument nécessaire.
+**⚠️ IMPORTANT :** 
+- Ne jamais mettre `SMTP_DISABLE_VERIFY=true` en production sauf si absolument nécessaire.
+- `SMTP_FROM_EMAIL=facturemail@cccomputer.fr` par défaut (domaine validé SPF/DKIM)
+- Pour utiliser `facture@camsongroup.fr`, valider d'abord le domaine dans Brevo Dashboard
 
 ## ✅ ÉTAPE 4 : Redéploiement
 
@@ -88,9 +92,42 @@ SMTP_DISABLE_VERIFY=false
 3. Attendre que le statut soit "Active"
 4. Vérifier qu'il n'y a pas d'erreurs dans les logs
 
-## ✅ ÉTAPE 5 : Tests
+## ✅ ÉTAPE 5 : Validation du déploiement
 
-### Test A : Ping (vérifier que public/ est servi)
+### Test A : Vérifier que le commit est déployé
+
+**Railway Dashboard → Service → Shell**
+
+```bash
+# Vérifier les fichiers
+ls -la /var/www/html/public/test_smtp.php
+ls -la /var/www/html/public/ping.txt
+
+# Vérifier le commit
+cd /var/www/html
+git log -1 --oneline
+```
+
+**Résultat attendu :** Les fichiers existent et le commit correspond
+
+---
+
+### Test B : Déterminer le document root
+
+**Railway Dashboard → Service → Shell**
+
+```bash
+# Vérifier DOCUMENT_ROOT
+php -r "echo \$_SERVER['DOCUMENT_ROOT'] ?? 'non défini';"
+```
+
+**Interprétation :**
+- Si `/var/www/html/public` → `public/` est la racine web
+- Si `/var/www/html` → Racine du projet est la racine web
+
+---
+
+### Test C : Ping (vérifier que public/ est servi)
 
 **Windows PowerShell :**
 ```powershell
@@ -104,9 +141,15 @@ curl https://cccomputer-production.up.railway.app/ping.txt
 
 **Résultat attendu :** `pong`
 
+**Interprétation :**
+- ✅ Si `pong` → `public/` est la racine web servie
+- ❌ Si 404 → `public/` n'est PAS la racine, ou le fichier n'est pas déployé
+
 ---
 
-### Test B : GET /test_smtp.php
+## ✅ ÉTAPE 6 : Tests fonctionnels
+
+### Test D : GET /test_smtp.php (endpoint principal)
 
 **Windows PowerShell :**
 ```powershell
@@ -131,7 +174,7 @@ curl https://cccomputer-production.up.railway.app/test_smtp.php
 
 ---
 
-### Test C : GET /API/test_smtp.php
+### Test E : GET /API/test_smtp.php (optionnel)
 
 **Windows PowerShell :**
 ```powershell
@@ -143,11 +186,13 @@ curl https://cccomputer-production.up.railway.app/API/test_smtp.php
 curl https://cccomputer-production.up.railway.app/API/test_smtp.php
 ```
 
-**Résultat attendu :** Même JSON que Test B
+**Résultat attendu :** Même JSON que Test D (si `/API/` est routé)
+
+**Note :** Si 404, ce n'est pas grave. Utiliser `/test_smtp.php` en priorité.
 
 ---
 
-### Test D : POST /test_smtp.php (avec token)
+### Test F : POST /test_smtp.php (avec token)
 
 **Windows PowerShell :**
 ```powershell
@@ -182,7 +227,7 @@ curl -X POST https://cccomputer-production.up.railway.app/test_smtp.php \
 
 ---
 
-### Test E : Test réel "Facture Mail"
+### Test G : Test réel "Facture Mail"
 
 1. Se connecter à l'application
 2. Aller sur `/public/view_facture.php?id=XXX` (remplacer XXX par un ID de facture)
@@ -209,26 +254,37 @@ OU
 
 ## ❌ DÉPANNAGE
 
-### Problème : 404 sur `/API/test_smtp.php`
+### Problème : 404 sur `/test_smtp.php`
 
 **Solutions :**
 1. Vérifier que le fichier existe dans Railway :
    - Railway Dashboard → Service → Shell
-   - `ls -la /var/www/html/API/test_smtp.php`
-   - `ls -la /var/www/html/public/API/test_smtp.php`
+   - `ls -la /var/www/html/public/test_smtp.php`
 
-2. Tester `/test_smtp.php` (fallback) :
-   ```bash
-   curl https://cccomputer-production.up.railway.app/test_smtp.php
-   ```
+2. Vérifier que le commit est déployé :
+   - Railway Dashboard → Service → Shell
+   - `cd /var/www/html && git log -1 --oneline`
 
-3. Vérifier les logs Apache :
-   - Railway Dashboard → Service → Logs
-   - Chercher les erreurs 404
+3. Vérifier le document root :
+   - Railway Dashboard → Service → Shell
+   - `php -r "echo \$_SERVER['DOCUMENT_ROOT'];"`
+   - Si `/var/www/html/public` → Le fichier doit être accessible
+   - Si `/var/www/html` → Tester `/public/test_smtp.php`
 
 4. Vérifier que le déploiement est terminé :
    - Railway Dashboard → Deployments
    - Statut doit être "Active"
+
+---
+
+### Problème : 404 sur `/API/test_smtp.php`
+
+**Solutions :**
+1. **Utiliser `/test_smtp.php` à la place** (endpoint principal recommandé)
+
+2. Si vous devez absolument utiliser `/API/` :
+   - Vérifier que le fichier existe : `ls -la /var/www/html/public/API/test_smtp.php`
+   - Vérifier que `/API/` est routé : `curl /API/chatroom_get.php` (doit fonctionner)
 
 ---
 
@@ -238,6 +294,7 @@ OU
 1. Vérifier que `SMTP_TEST_TOKEN` est défini dans Railway
 2. Vérifier que le token dans le curl correspond exactement
 3. Vérifier qu'il n'y a pas d'espaces avant/après le token
+4. Régénérer le token si nécessaire
 
 ---
 
@@ -262,7 +319,7 @@ OU
 **Solutions :**
 1. Vérifier les logs Railway :
    - Chercher `[MAIL]` ou `findPdfPath`
-   - Vérifier si le fallback se déclenche
+   - Vérifier si le fallback se déclenche (`[MAIL] regen ok`)
 
 2. Vérifier que `/tmp` est accessible :
    - Railway Dashboard → Service → Shell
@@ -293,16 +350,19 @@ OU
    - Vérifier que le compte SMTP est actif
    - Vérifier que le password est correct
 
+4. Vérifier le domaine FROM :
+   - Si `facturemail@cccomputer.fr` → Doit être validé dans Brevo
+   - Si `facture@camsongroup.fr` → Doit être validé SPF/DKIM
+
 ---
 
 ## 📋 RÉCAPITULATIF FINAL
 
 ### Fichiers créés/modifiés
 
-- ✅ `public/API/test_smtp.php` (nouveau)
-- ✅ `public/test_smtp.php` (nouveau)
-- ✅ `public/ping.txt` (nouveau)
-- ✅ `API/test_smtp.php` (existant, vérifié)
+- ✅ `public/test_smtp.php` (endpoint principal recommandé)
+- ✅ `public/API/test_smtp.php` (optionnel)
+- ✅ `public/ping.txt` (pour validation)
 - ✅ `API/factures_envoyer_email.php` (fallback PDF ajouté)
 - ✅ `API/factures_generate_pdf_content.php` (injection SQL corrigée)
 
@@ -314,19 +374,33 @@ OU
 - ✅ `SMTP_SECURE=tls`
 - ✅ `SMTP_USERNAME=...`
 - ✅ `SMTP_PASSWORD=...`
-- ✅ `SMTP_FROM_EMAIL=...`
-- ✅ `SMTP_FROM_NAME=...`
-- ✅ `SMTP_REPLY_TO=...`
+- ✅ `SMTP_FROM_EMAIL=facturemail@cccomputer.fr` (par défaut)
+- ✅ `SMTP_FROM_NAME=Camson Group - Facturation`
+- ✅ `SMTP_REPLY_TO=facture@camsongroup.fr`
 - ✅ `SMTP_TEST_TOKEN=...` (générer aléatoirement)
 
 ### URLs de test
 
-- `https://cccomputer-production.up.railway.app/ping.txt`
-- `https://cccomputer-production.up.railway.app/test_smtp.php`
-- `https://cccomputer-production.up.railway.app/API/test_smtp.php`
+- `https://cccomputer-production.up.railway.app/ping.txt` (validation)
+- `https://cccomputer-production.up.railway.app/test_smtp.php` (endpoint principal)
+- `https://cccomputer-production.up.railway.app/API/test_smtp.php` (optionnel)
 
 ---
 
-**Date :** 2025-01-XX  
-**Version :** 1.0
+## 📊 TABLEAU RÉCAPITULATIF : SYMPTÔME → CAUSE → FIX → TEST
 
+| Symptôme | Cause probable | Fix | Test de validation |
+|----------|---------------|-----|-------------------|
+| **404 sur `/test_smtp.php`** | Fichier non déployé | Vérifier commit déployé, redéployer | `curl /ping.txt` doit retourner `pong` |
+| **404 sur `/test_smtp.php`** | Document root différent | Vérifier `DOCUMENT_ROOT`, ajuster chemin | `curl /test_smtp.php` doit retourner JSON |
+| **404 sur `/API/test_smtp.php`** | Routing bloque `/API/` | Utiliser `/test_smtp.php` (endpoint principal) | `curl /test_smtp.php` doit retourner JSON |
+| **403 "Token invalide"** | `SMTP_TEST_TOKEN` manquant/incorrect | Vérifier variable Railway, régénérer token | `curl POST` avec token correct doit retourner `ok: true` |
+| **500 "Configuration SMTP invalide"** | Variables SMTP manquantes/incorrectes | Vérifier toutes les variables `SMTP_*` dans Railway | `curl POST` doit retourner `ok: true` |
+| **500 "PDF introuvable"** | PDF perdu (stockage éphémère) | Fallback automatique dans `/tmp` | Envoyer facture par email, vérifier logs `[MAIL] regen ok` |
+| **Email non reçu** | Credentials SMTP incorrects | Vérifier `SMTP_USERNAME` et `SMTP_PASSWORD` dans Brevo | `curl POST` doit retourner `ok: true`, email reçu |
+| **Email rejeté (spam)** | Domaine FROM non validé | Utiliser `facturemail@cccomputer.fr` (validé) | Email reçu dans boîte principale (pas spam) |
+
+---
+
+**Version :** 1.1  
+**Date :** 2025-01-XX
