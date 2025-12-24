@@ -8,5 +8,15 @@ if ($path !== '/' && is_file($full)) {
     return false;
 }
 
-// Page d’accueil -> index.php
+// Si c'est une requête vers /API/, laisser passer (ne pas rediriger)
+if (strpos($path, '/API/') === 0) {
+    // Le fichier API devrait être géré directement par le serveur web
+    // Si on arrive ici, le fichier n'existe pas
+    http_response_code(404);
+    header('Content-Type: application/json');
+    echo json_encode(['ok' => false, 'error' => 'Endpoint API introuvable']);
+    exit;
+}
+
+// Page d'accueil -> index.php
 require __DIR__ . '/index.php';
