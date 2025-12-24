@@ -1,6 +1,87 @@
 <?php
 // index.php (racine)
 
+/**
+ * Bypass pour servir les fichiers statiques et endpoints API
+ * Doit être exécuté AVANT toute autre logique
+ */
+
+/**
+ * Envoie un fichier avec le bon Content-Type
+ */
+function sendFile(string $filePath): void
+{
+    if (!file_exists($filePath) || !is_readable($filePath)) {
+        return;
+    }
+    
+    $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    $mimeTypes = [
+        'txt' => 'text/plain',
+        'json' => 'application/json',
+        'pdf' => 'application/pdf',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'css' => 'text/css',
+        'js' => 'application/javascript',
+        'html' => 'text/html',
+        'xml' => 'application/xml',
+    ];
+    
+    $contentType = $mimeTypes[$extension] ?? 'application/octet-stream';
+    
+    header('Content-Type: ' . $contentType . '; charset=utf-8');
+    header('Content-Length: ' . filesize($filePath));
+    readfile($filePath);
+    exit;
+}
+
+// Récupérer REQUEST_URI sans query string
+$requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+
+// Bypass explicite pour l'endpoint test_smtp.php
+if ($requestUri === '/test_smtp.php') {
+    $testSmtpFile = __DIR__ . '/public/test_smtp.php';
+    if (file_exists($testSmtpFile)) {
+        require $testSmtpFile;
+        exit;
+    }
+}
+
+// Bypass optionnel pour /API/test_smtp.php
+if ($requestUri === '/API/test_smtp.php' || $requestUri === '/api/test_smtp.php') {
+    $testSmtpApiFile = __DIR__ . '/public/API/test_smtp.php';
+    if (file_exists($testSmtpApiFile)) {
+        require $testSmtpApiFile;
+        exit;
+    }
+}
+
+// Bypass pour servir les fichiers statiques dans public/
+if ($requestUri !== '/') {
+    // Essayer d'abord dans public/
+    $publicFile = __DIR__ . '/public' . $requestUri;
+    if (file_exists($publicFile) && is_file($publicFile)) {
+        $extension = strtolower(pathinfo($publicFile, PATHINFO_EXTENSION));
+        // Servir les fichiers non-PHP (les fichiers PHP sont gérés par les bypass explicites ci-dessus)
+        if ($extension !== 'php') {
+            sendFile($publicFile);
+        }
+    }
+    
+    // Essayer aussi à la racine (si le document root est la racine du projet)
+    $rootFile = __DIR__ . $requestUri;
+    if (file_exists($rootFile) && is_file($rootFile)) {
+        $extension = strtolower(pathinfo($rootFile, PATHINFO_EXTENSION));
+        // Servir les fichiers non-PHP (les fichiers PHP sont gérés par les bypass explicites ci-dessus)
+        if ($extension !== 'php') {
+            sendFile($rootFile);
+        }
+    }
+}
+
 // 1) Démarrer la session avec les bons paramètres (cookie path="/", secure, etc.)
 require_once __DIR__ . '/includes/session_config.php';
 
