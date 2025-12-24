@@ -1124,6 +1124,54 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     </button>
                 </div>
             </div>
+
+            <!-- Section Facture Mail -->
+            <div class="section-card" id="sectionFactureMail">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #ec4899, #db2777);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                    </div>
+                    <h3 class="section-card-title">Facture Mail</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Envoyez une facture par email à un client</p>
+                    <button class="section-card-btn" onclick="openSection('facture-mail')">
+                        Envoyer par email
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Section Génération Facture Clients -->
+            <div class="section-card" id="sectionGenerationFactureClients">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </div>
+                    <h3 class="section-card-title">Génération Facture Clients</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Générez des factures pour plusieurs clients</p>
+                    <button class="section-card-btn" onclick="openSection('generation-facture-clients')">
+                        Générer des factures
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1484,6 +1532,112 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         </div>
     </div>
 
+    <!-- Modal Facture Mail -->
+    <div class="modal-overlay" id="factureMailModalOverlay" onclick="closeFactureMailModal()">
+        <div class="modal" id="factureMailModal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title">Envoyer une facture par email</h2>
+                <button class="modal-close" onclick="closeFactureMailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="factureMailForm" onsubmit="submitFactureMailForm(event)">
+                    <div class="modal-form-group">
+                        <label for="factureMailFacture">Facture <span style="color: #ef4444;">*</span></label>
+                        <select id="factureMailFacture" name="facture_id" required>
+                            <option value="">Chargement des factures...</option>
+                        </select>
+                        <div class="input-hint">Sélectionnez la facture à envoyer</div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label for="factureMailEmail">Email du destinataire <span style="color: #ef4444;">*</span></label>
+                        <input type="email" id="factureMailEmail" name="email" required placeholder="client@example.com">
+                        <div class="input-hint">L'email sera pré-rempli avec l'email du client si disponible</div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label for="factureMailSujet">Sujet de l'email</label>
+                        <input type="text" id="factureMailSujet" name="sujet" placeholder="Facture - [Numéro de facture]">
+                        <div class="input-hint">Le sujet sera pré-rempli avec un texte par défaut</div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label for="factureMailMessage">Message (optionnel)</label>
+                        <textarea id="factureMailMessage" name="message" rows="5" placeholder="Message personnalisé à inclure dans l'email..."></textarea>
+                        <div class="input-hint">Le message sera ajouté avant la pièce jointe de la facture</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeFactureMailModal()">Annuler</button>
+                <button type="submit" form="factureMailForm" class="btn btn-primary" id="btnEnvoyerFactureMail">Envoyer l'email</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Génération Facture Clients -->
+    <div class="modal-overlay" id="generationFactureClientsModalOverlay" onclick="closeGenerationFactureClientsModal()">
+        <div class="modal" id="generationFactureClientsModal" onclick="event.stopPropagation()" style="max-width: 1200px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Génération de factures pour clients</h2>
+                <button class="modal-close" onclick="closeGenerationFactureClientsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="generationFactureClientsForm" onsubmit="submitGenerationFactureClientsForm(event)">
+                    <div class="modal-form-row">
+                        <div class="modal-form-group">
+                            <label for="genFactureDate">Date de facture <span style="color: #ef4444;">*</span></label>
+                            <input type="date" id="genFactureDate" name="date_facture" required value="<?= date('Y-m-d') ?>">
+                        </div>
+                        <div class="modal-form-group">
+                            <label for="genFactureType">Type <span style="color: #ef4444;">*</span></label>
+                            <select id="genFactureType" name="type" required>
+                                <option value="Consommation">Consommation</option>
+                                <option value="Achat">Achat</option>
+                                <option value="Service">Service</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-form-row">
+                        <div class="modal-form-group">
+                            <label for="genFactureDateDebut">Date début période</label>
+                            <input type="date" id="genFactureDateDebut" name="date_debut">
+                        </div>
+                        <div class="modal-form-group">
+                            <label for="genFactureDateFin">Date fin période</label>
+                            <input type="date" id="genFactureDateFin" name="date_fin">
+                        </div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label for="genFactureClients">Sélectionner les clients <span style="color: #ef4444;">*</span></label>
+                        <div style="border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; max-height: 300px; overflow-y: auto; background: var(--bg-secondary);">
+                            <div id="genFactureClientsList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">
+                                    Chargement des clients...
+                                </div>
+                            </div>
+                        </div>
+                        <div class="input-hint">Cochez les clients pour lesquels vous souhaitez générer une facture</div>
+                    </div>
+
+                    <div class="modal-form-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="genFactureEnvoyerEmail" name="envoyer_email" style="width: auto; cursor: pointer;">
+                            <span>Envoyer les factures par email automatiquement</span>
+                        </label>
+                        <div class="input-hint">Si coché, les factures seront envoyées par email aux clients après génération</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeGenerationFactureClientsModal()">Annuler</button>
+                <button type="submit" form="generationFactureClientsForm" class="btn btn-primary" id="btnGenererFacturesClients">Générer les factures</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Payer -->
     <div class="modal-overlay" id="payerModalOverlay" onclick="closePayerModal()">
         <div class="modal" id="payerModal" onclick="event.stopPropagation()">
@@ -1572,6 +1726,10 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 openPaiementsModal();
             } else if (section === 'payer') {
                 openPayerModal();
+            } else if (section === 'facture-mail') {
+                openFactureMailModal();
+            } else if (section === 'generation-facture-clients') {
+                openGenerationFactureClientsModal();
             } else {
                 console.log('Ouverture de la section:', section);
                 alert(`Section "${section}" - À implémenter`);
@@ -2752,6 +2910,341 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         }
 
         // ============================================
+        // GESTION DU MODAL FACTURE MAIL
+        // ============================================
+        
+        /**
+         * Ouvre le modal d'envoi de facture par email
+         */
+        function openFactureMailModal() {
+            const modal = document.getElementById('factureMailModal');
+            const overlay = document.getElementById('factureMailModalOverlay');
+            
+            if (!modal || !overlay) {
+                console.error('Modal facture mail introuvable');
+                return;
+            }
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Réinitialiser le formulaire
+            const form = document.getElementById('factureMailForm');
+            if (form) {
+                form.reset();
+            }
+            
+            // Charger les factures
+            loadFacturesForMail();
+        }
+
+        /**
+         * Ferme le modal d'envoi de facture par email
+         */
+        function closeFactureMailModal() {
+            const modal = document.getElementById('factureMailModal');
+            const overlay = document.getElementById('factureMailModalOverlay');
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+                const form = document.getElementById('factureMailForm');
+                if (form) {
+                    form.reset();
+                }
+            }
+        }
+
+        /**
+         * Charge les factures pour l'envoi par email
+         */
+        async function loadFacturesForMail() {
+            try {
+                const response = await fetch('/API/factures_liste.php');
+                const data = await response.json();
+                
+                if (data.ok && data.factures) {
+                    const factureSelect = document.getElementById('factureMailFacture');
+                    factureSelect.innerHTML = '<option value="">Sélectionner une facture</option>';
+                    
+                    // Filtrer les factures qui ont un PDF
+                    const facturesAvecPDF = data.factures.filter(f => f.pdf_path);
+                    
+                    facturesAvecPDF.forEach(facture => {
+                        const option = document.createElement('option');
+                        option.value = facture.id;
+                        option.textContent = `${facture.numero} - ${facture.client_nom} - ${facture.montant_ttc.toFixed(2)} € TTC`;
+                        option.setAttribute('data-email', facture.client_email || '');
+                        option.setAttribute('data-numero', facture.numero);
+                        factureSelect.appendChild(option);
+                    });
+                    
+                    // Écouter le changement pour pré-remplir l'email et le sujet
+                    factureSelect.addEventListener('change', function() {
+                        const selectedOption = this.options[this.selectedIndex];
+                        if (selectedOption && selectedOption.value) {
+                            const email = selectedOption.getAttribute('data-email') || '';
+                            const numero = selectedOption.getAttribute('data-numero') || '';
+                            
+                            const emailInput = document.getElementById('factureMailEmail');
+                            if (emailInput) {
+                                emailInput.value = email;
+                            }
+                            
+                            const sujetInput = document.getElementById('factureMailSujet');
+                            if (sujetInput) {
+                                sujetInput.value = `Facture ${numero} - CC Computer`;
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des factures:', error);
+            }
+        }
+
+        /**
+         * Soumet le formulaire d'envoi de facture par email
+         */
+        async function submitFactureMailForm(e) {
+            e.preventDefault();
+            
+            const form = document.getElementById('factureMailForm');
+            const formData = new FormData(form);
+            
+            // Validation
+            const factureId = formData.get('facture_id');
+            const email = formData.get('email');
+            
+            if (!factureId) {
+                alert('Veuillez sélectionner une facture');
+                return;
+            }
+            
+            if (!email || !email.includes('@')) {
+                alert('Veuillez saisir une adresse email valide');
+                return;
+            }
+            
+            const btnSubmit = document.getElementById('btnEnvoyerFactureMail');
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = 'Envoi en cours...';
+            
+            try {
+                const data = {
+                    facture_id: parseInt(factureId),
+                    email: email.trim(),
+                    sujet: formData.get('sujet') || '',
+                    message: formData.get('message') || ''
+                };
+                
+                const response = await fetch('/API/factures_envoyer_email.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erreur HTTP:', response.status, errorText);
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        showMessage('Erreur : ' + (errorJson.error || 'Erreur HTTP ' + response.status), 'error');
+                    } catch {
+                        showMessage('Erreur HTTP ' + response.status + ': ' + errorText.substring(0, 200), 'error');
+                    }
+                    return;
+                }
+                
+                const result = await response.json();
+                console.log('Réponse reçue:', result);
+                
+                if (result.ok) {
+                    showMessage('Facture envoyée par email avec succès !', 'success');
+                    closeFactureMailModal();
+                } else {
+                    const errorMsg = result.error || 'Erreur inconnue';
+                    console.error('Erreur API:', errorMsg);
+                    showMessage('Erreur : ' + errorMsg, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'envoi:', error);
+                showMessage('Erreur lors de l\'envoi de l\'email: ' + error.message, 'error');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Envoyer l\'email';
+            }
+        }
+
+        // ============================================
+        // GESTION DU MODAL GÉNÉRATION FACTURE CLIENTS
+        // ============================================
+        
+        /**
+         * Ouvre le modal de génération de factures pour clients
+         */
+        function openGenerationFactureClientsModal() {
+            const modal = document.getElementById('generationFactureClientsModal');
+            const overlay = document.getElementById('generationFactureClientsModalOverlay');
+            
+            if (!modal || !overlay) {
+                console.error('Modal génération facture clients introuvable');
+                return;
+            }
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Réinitialiser le formulaire
+            const form = document.getElementById('generationFactureClientsForm');
+            if (form) {
+                form.reset();
+                // Réinitialiser la date à aujourd'hui
+                const dateInput = document.getElementById('genFactureDate');
+                if (dateInput) {
+                    dateInput.value = new Date().toISOString().split('T')[0];
+                }
+            }
+            
+            // Charger la liste des clients
+            loadClientsForGenerationFacture();
+        }
+
+        /**
+         * Ferme le modal de génération de factures pour clients
+         */
+        function closeGenerationFactureClientsModal() {
+            const modal = document.getElementById('generationFactureClientsModal');
+            const overlay = document.getElementById('generationFactureClientsModalOverlay');
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+                const form = document.getElementById('generationFactureClientsForm');
+                if (form) {
+                    form.reset();
+                }
+            }
+        }
+
+        /**
+         * Charge la liste des clients pour la génération de factures
+         */
+        async function loadClientsForGenerationFacture() {
+            try {
+                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000');
+                const data = await response.json();
+                
+                if (data.ok && data.clients) {
+                    const clientsList = document.getElementById('genFactureClientsList');
+                    clientsList.innerHTML = '';
+                    
+                    if (data.clients.length === 0) {
+                        clientsList.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-secondary);">Aucun client disponible</div>';
+                        return;
+                    }
+                    
+                    data.clients.forEach(client => {
+                        const clientDiv = document.createElement('div');
+                        clientDiv.style.display = 'flex';
+                        clientDiv.style.alignItems = 'center';
+                        clientDiv.style.gap = '0.75rem';
+                        clientDiv.style.padding = '0.5rem';
+                        clientDiv.style.borderRadius = 'var(--radius-md)';
+                        clientDiv.style.transition = 'background 0.2s';
+                        clientDiv.onmouseenter = function() { this.style.background = 'var(--bg-primary)'; };
+                        clientDiv.onmouseleave = function() { this.style.background = ''; };
+                        
+                        clientDiv.innerHTML = `
+                            <input type="checkbox" id="client_${client.id}" name="clients[]" value="${client.id}" style="width: auto; cursor: pointer;">
+                            <label for="client_${client.id}" style="flex: 1; cursor: pointer; margin: 0; font-weight: normal;">
+                                <strong>${client.name}</strong>
+                                ${client.code ? ` <span style="color: var(--text-secondary);">(${client.code})</span>` : ''}
+                            </label>
+                        `;
+                        
+                        clientsList.appendChild(clientDiv);
+                    });
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des clients:', error);
+                const clientsList = document.getElementById('genFactureClientsList');
+                clientsList.innerHTML = '<div style="text-align: center; padding: 1rem; color: #ef4444;">Erreur lors du chargement des clients</div>';
+            }
+        }
+
+        /**
+         * Soumet le formulaire de génération de factures pour clients
+         */
+        async function submitGenerationFactureClientsForm(e) {
+            e.preventDefault();
+            
+            const form = document.getElementById('generationFactureClientsForm');
+            const formData = new FormData(form);
+            
+            // Récupérer les clients sélectionnés
+            const clientsSelected = formData.getAll('clients[]');
+            
+            if (clientsSelected.length === 0) {
+                alert('Veuillez sélectionner au moins un client');
+                return;
+            }
+            
+            const btnSubmit = document.getElementById('btnGenererFacturesClients');
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = 'Génération en cours...';
+            
+            try {
+                const data = {
+                    date_facture: formData.get('date_facture'),
+                    type: formData.get('type'),
+                    date_debut: formData.get('date_debut') || null,
+                    date_fin: formData.get('date_fin') || null,
+                    clients: clientsSelected.map(id => parseInt(id)),
+                    envoyer_email: formData.get('envoyer_email') === 'on'
+                };
+                
+                const response = await fetch('/API/factures_generer_clients.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erreur HTTP:', response.status, errorText);
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        showMessage('Erreur : ' + (errorJson.error || 'Erreur HTTP ' + response.status), 'error');
+                    } catch {
+                        showMessage('Erreur HTTP ' + response.status + ': ' + errorText.substring(0, 200), 'error');
+                    }
+                    return;
+                }
+                
+                const result = await response.json();
+                console.log('Réponse reçue:', result);
+                
+                if (result.ok) {
+                    showMessage(`${result.factures_generees || clientsSelected.length} facture(s) générée(s) avec succès !`, 'success');
+                    closeGenerationFactureClientsModal();
+                } else {
+                    const errorMsg = result.error || 'Erreur inconnue';
+                    console.error('Erreur API:', errorMsg);
+                    showMessage('Erreur : ' + errorMsg, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur lors de la génération:', error);
+                showMessage('Erreur lors de la génération des factures: ' + error.message, 'error');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Générer les factures';
+            }
+        }
+
+        // ============================================
         // GESTION DU MODAL PAYER
         // ============================================
         
@@ -2942,6 +3435,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.filterHistoriquePaiements = filterHistoriquePaiements;
         window.filterHistoriquePaiementsByStatus = filterHistoriquePaiementsByStatus;
         window.viewJustificatif = viewJustificatif;
+        window.openFactureMailModal = openFactureMailModal;
+        window.closeFactureMailModal = closeFactureMailModal;
+        window.submitFactureMailForm = submitFactureMailForm;
+        window.openGenerationFactureClientsModal = openGenerationFactureClientsModal;
+        window.closeGenerationFactureClientsModal = closeGenerationFactureClientsModal;
+        window.submitGenerationFactureClientsForm = submitGenerationFactureClientsForm;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
@@ -2963,9 +3462,15 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const pdfViewerModalOverlay = document.getElementById('pdfViewerModalOverlay');
                     const payerModalOverlay = document.getElementById('payerModalOverlay');
                     const historiquePaiementsModalOverlay = document.getElementById('historiquePaiementsModalOverlay');
+                    const factureMailModalOverlay = document.getElementById('factureMailModalOverlay');
+                    const generationFactureClientsModalOverlay = document.getElementById('generationFactureClientsModalOverlay');
                     
                     if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
                         closePDFViewer();
+                    } else if (generationFactureClientsModalOverlay && generationFactureClientsModalOverlay.classList.contains('active')) {
+                        closeGenerationFactureClientsModal();
+                    } else if (factureMailModalOverlay && factureMailModalOverlay.classList.contains('active')) {
+                        closeFactureMailModal();
                     } else if (historiquePaiementsModalOverlay && historiquePaiementsModalOverlay.classList.contains('active')) {
                         closeHistoriquePaiementsModal();
                     } else if (payerModalOverlay && payerModalOverlay.classList.contains('active')) {

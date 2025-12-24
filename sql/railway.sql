@@ -64,6 +64,20 @@ CREATE TABLE `client_stock` (
   CONSTRAINT `fk_client_stock_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+DROP TABLE IF EXISTS `client_geocode`;
+CREATE TABLE `client_geocode` (
+  `id_client` int NOT NULL,
+  `address_hash` varchar(32) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Hash MD5 de l''adresse géocodée',
+  `lat` decimal(10,8) DEFAULT NULL COMMENT 'Latitude',
+  `lng` decimal(11,8) DEFAULT NULL COMMENT 'Longitude',
+  `display_name` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Nom d''affichage retourné par le géocodage',
+  `geocoded_at` datetime DEFAULT NULL COMMENT 'Date du premier géocodage',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Date de dernière mise à jour',
+  PRIMARY KEY (`id_client`),
+  KEY `idx_address_hash` (`address_hash`),
+  CONSTRAINT `fk_client_geocode_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 DROP TABLE IF EXISTS `clients`;
 CREATE TABLE `clients` (
   `id` int NOT NULL,

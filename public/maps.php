@@ -347,8 +347,9 @@ async function geocodeClientsInBackground(clientsToGeocode) {
                 
                 const data = await response.json();
                 
-                // Vérifier le nouveau format de réponse
-                if (data.success === true && data.lat && data.lng) {
+                // Vérifier le format de réponse (support success et ok pour compatibilité)
+                const isSuccess = (data.success === true || data.ok === true) && data.lat && data.lng;
+                if (isSuccess) {
                     // Mettre à jour le cache
                     const updatedClient = {
                         ...client,
@@ -362,7 +363,7 @@ async function geocodeClientsInBackground(clientsToGeocode) {
                     addClientToMap(updatedClient, false);
                     found++;
                     return true;
-                } else if (data.success === false) {
+                } else if (data.success === false || (data.ok === false && !data.lat)) {
                     // Adresse non trouvée, ajouter à la liste des clients non trouvés
                     addClientToNotFoundList(client);
                     notFound++;
@@ -483,8 +484,9 @@ async function loadClientWithGeocode(client) {
         
         const data = await response.json();
         
-        // Vérifier le nouveau format de réponse
-        if (data.success === true && data.lat && data.lng) {
+        // Vérifier le format de réponse (support success et ok pour compatibilité)
+        const isSuccess = (data.success === true || data.ok === true) && data.lat && data.lng;
+        if (isSuccess) {
             const clientWithCoords = {
                 ...client,
                 lat: data.lat,
@@ -496,7 +498,7 @@ async function loadClientWithGeocode(client) {
             
             clientsCache.set(client.id, clientWithCoords);
             return clientWithCoords;
-        } else if (data.success === false) {
+        } else if (data.success === false || (data.ok === false && !data.lat)) {
             // Adresse non trouvée, ajouter à la liste des clients non trouvés
             addClientToNotFoundList(client);
             return null;
@@ -516,8 +518,9 @@ async function loadClientWithGeocode(client) {
 // Fonction pour ajouter un client sur la carte
 // autoFit: si true, ajuste la vue pour inclure tous les clients, sinon ne fait rien
 function addClientToMap(client, autoFit = true) {
-    if (!client.lat || !client.lng) {
-        console.warn('Client sans coordonnées:', client);
+    // Vérifier que les coordonnées existent et sont valides (null, undefined, ou NaN sont invalides)
+    if (client.lat == null || client.lng == null || isNaN(client.lat) || isNaN(client.lng)) {
+        console.warn('Client sans coordonnées valides:', client);
         return false; // Retourner false si pas de coordonnées
     }
     

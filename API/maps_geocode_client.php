@@ -160,6 +160,7 @@ try {
     
     jsonResponse([
         'success' => true,
+        'ok' => true, // Compatibilité avec l'ancien format
         'lat' => $cachedCoords['lat'],
         'lng' => $cachedCoords['lng'],
         'client_id' => $clientId,

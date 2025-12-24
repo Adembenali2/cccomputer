@@ -117,7 +117,10 @@ try {
         
         // Calculer le hash de l'adresse pour vérifier si le géocodage est à jour
         $addressHash = md5($addressForGeocode);
-        $needsGeocode = empty($c['lat']) || empty($c['lng']) || ($c['address_hash'] !== $addressHash);
+        // Utiliser des vérifications explicites de null (pas empty() car 0 est une coordonnée valide)
+        $needsGeocode = !isset($c['lat']) || $c['lat'] === null || 
+                        !isset($c['lng']) || $c['lng'] === null || 
+                        ($c['address_hash'] !== $addressHash);
         
         $nomDirigeant = trim(($c['prenom_dirigeant'] ?? '') . ' ' . ($c['nom_dirigeant'] ?? ''));
         $nomDirigeant = $nomDirigeant ?: null;
