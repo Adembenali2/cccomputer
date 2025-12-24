@@ -1277,9 +1277,17 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         </button>
                     </div>
                     
-                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                         <span><span id="paiementsCount">0</span> facture(s) trouvée(s)</span>
-                        <span id="paiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <span id="paiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
+                            <button onclick="openHistoriquePaiementsModal()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                </svg>
+                                Historique des paiements
+                            </button>
+                        </div>
                     </div>
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse;">
@@ -1383,6 +1391,96 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             <button type="button" class="btn btn-secondary" onclick="closeFactureModal()">Annuler</button>
             <button type="submit" form="factureForm" class="btn btn-primary" id="btnGenererFacture">Générer la facture</button>
         </div>
+        </div>
+    </div>
+
+    <!-- Modal Historique Paiements -->
+    <div class="modal-overlay" id="historiquePaiementsModalOverlay" onclick="closeHistoriquePaiementsModal()">
+        <div class="modal" id="historiquePaiementsModal" onclick="event.stopPropagation()" style="max-width: 1400px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Historique des paiements</h2>
+                <button class="modal-close" onclick="closeHistoriquePaiementsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="historiquePaiementsLoading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Chargement de l'historique...
+                </div>
+                <div id="historiquePaiementsContainer" style="display: none;">
+                    <!-- Barre de recherche -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="position: relative;">
+                            <input 
+                                type="text" 
+                                id="historiquePaiementsSearchInput" 
+                                placeholder="Rechercher par facture, client, référence, mode de paiement..." 
+                                style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
+                                oninput="filterHistoriquePaiements()"
+                            />
+                            <svg 
+                                width="18" 
+                                height="18" 
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                stroke-width="2"
+                                style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none;"
+                            >
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <!-- Filtres -->
+                    <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="filter-btn active" data-filter="all" onclick="filterHistoriquePaiementsByStatus('all')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--accent-primary); color: white; cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            Tous
+                        </button>
+                        <button class="filter-btn" data-filter="recu" onclick="filterHistoriquePaiementsByStatus('recu')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            Reçu
+                        </button>
+                        <button class="filter-btn" data-filter="en_cours" onclick="filterHistoriquePaiementsByStatus('en_cours')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            En cours
+                        </button>
+                        <button class="filter-btn" data-filter="refuse" onclick="filterHistoriquePaiementsByStatus('refuse')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            Refusé
+                        </button>
+                        <button class="filter-btn" data-filter="annule" onclick="filterHistoriquePaiementsByStatus('annule')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            Annulé
+                        </button>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                        <span><span id="historiquePaiementsCount">0</span> paiement(s) trouvé(s)</span>
+                        <span id="historiquePaiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Facture</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
+                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Mode</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Référence</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Statut</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historiquePaiementsTableBody">
+                                <!-- Les paiements seront ajoutés ici dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="historiquePaiementsError" style="display: none; text-align: center; padding: 2rem; color: #ef4444;">
+                    Erreur lors du chargement de l'historique
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeHistoriquePaiementsModal()">Fermer</button>
+            </div>
         </div>
     </div>
 
@@ -2413,6 +2511,247 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         }
 
         // ============================================
+        // GESTION DE L'HISTORIQUE DES PAIEMENTS
+        // ============================================
+        
+        let allHistoriquePaiements = [];
+        let filteredHistoriquePaiements = [];
+        let currentHistoriqueStatusFilter = 'all';
+        
+        /**
+         * Ouvre le modal d'historique des paiements
+         */
+        function openHistoriquePaiementsModal() {
+            const modal = document.getElementById('historiquePaiementsModal');
+            const overlay = document.getElementById('historiquePaiementsModalOverlay');
+            
+            if (!modal || !overlay) {
+                console.error('Modal historique paiements introuvable');
+                return;
+            }
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Réinitialiser la recherche
+            const searchInput = document.getElementById('historiquePaiementsSearchInput');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            
+            // Charger l'historique
+            loadHistoriquePaiements();
+        }
+
+        /**
+         * Ferme le modal d'historique des paiements
+         */
+        function closeHistoriquePaiementsModal() {
+            const modal = document.getElementById('historiquePaiementsModal');
+            const overlay = document.getElementById('historiquePaiementsModalOverlay');
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+
+        /**
+         * Charge l'historique des paiements
+         */
+        async function loadHistoriquePaiements() {
+            const loadingDiv = document.getElementById('historiquePaiementsLoading');
+            const container = document.getElementById('historiquePaiementsContainer');
+            const errorDiv = document.getElementById('historiquePaiementsError');
+            
+            loadingDiv.style.display = 'block';
+            container.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/API/paiements_historique.php');
+                const result = await response.json();
+                
+                if (result.ok && result.paiements) {
+                    allHistoriquePaiements = result.paiements;
+                    filteredHistoriquePaiements = [...allHistoriquePaiements];
+                    displayHistoriquePaiements(allHistoriquePaiements);
+                    
+                    // Mettre à jour le compteur
+                    document.getElementById('historiquePaiementsCount').textContent = allHistoriquePaiements.length;
+                    
+                    loadingDiv.style.display = 'none';
+                    container.style.display = 'block';
+                } else {
+                    loadingDiv.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = result.error || 'Erreur lors du chargement de l\'historique';
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement de l\'historique:', error);
+                loadingDiv.style.display = 'none';
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Erreur lors du chargement de l\'historique';
+            }
+        }
+
+        /**
+         * Affiche les paiements dans le tableau
+         */
+        function displayHistoriquePaiements(paiements) {
+            const tableBody = document.getElementById('historiquePaiementsTableBody');
+            const filteredCountSpan = document.getElementById('historiquePaiementsFilteredCount');
+            
+            tableBody.innerHTML = '';
+            
+            if (paiements.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            Aucun paiement trouvé
+                        </td>
+                    </tr>
+                `;
+                filteredCountSpan.textContent = '';
+            } else {
+                filteredCountSpan.textContent = `${paiements.length} affiché(s)`;
+                
+                paiements.forEach(paiement => {
+                    const row = document.createElement('tr');
+                    row.style.borderBottom = '1px solid var(--border-color)';
+                    row.style.transition = 'background 0.2s';
+                    row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
+                    row.onmouseleave = function() { this.style.background = ''; };
+                    
+                    // Badge de statut
+                    const statutBadge = `
+                        <span style="display: inline-block; padding: 0.4rem 0.75rem; border-radius: var(--radius-md); background: ${paiement.statut_color}20; color: ${paiement.statut_color}; font-size: 0.85rem; font-weight: 600; border: 1px solid ${paiement.statut_color}40;">
+                            ${paiement.statut_label}
+                        </span>
+                    `;
+                    
+                    // Actions (justificatif si disponible)
+                    let actions = '<span style="color: var(--text-muted); font-size: 0.85rem;">-</span>';
+                    if (paiement.recu_path) {
+                        actions = `
+                            <button onclick="viewJustificatif('${paiement.recu_path}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 0.25rem;">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                                Justificatif
+                            </button>
+                        `;
+                    }
+                    
+                    // Facture info
+                    const factureInfo = paiement.facture_numero 
+                        ? `${paiement.facture_numero}${paiement.facture_date_formatted ? ' (' + paiement.facture_date_formatted + ')' : ''}`
+                        : '<span style="color: var(--text-muted); font-size: 0.85rem;">Sans facture</span>';
+                    
+                    row.innerHTML = `
+                        <td style="padding: 0.75rem; color: var(--text-primary);">${paiement.date_paiement_formatted}</td>
+                        <td style="padding: 0.75rem; color: var(--text-primary);">${factureInfo}</td>
+                        <td style="padding: 0.75rem; color: var(--text-primary);">
+                            ${paiement.client_nom || 'Client inconnu'}
+                            ${paiement.client_code ? ` (${paiement.client_code})` : ''}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary); font-weight: 600;">
+                            ${paiement.montant.toFixed(2).replace('.', ',')} €
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center; color: var(--text-primary);">
+                            ${paiement.mode_paiement_label}
+                        </td>
+                        <td style="padding: 0.75rem; color: var(--text-secondary); font-size: 0.9rem;">
+                            ${paiement.reference || '-'}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center;">
+                            ${statutBadge}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center;">
+                            ${actions}
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+                
+                // Afficher le nombre de résultats filtrés si différent du total
+                if (paiements.length !== allHistoriquePaiements.length) {
+                    filteredCountSpan.textContent = `(${paiements.length} sur ${allHistoriquePaiements.length})`;
+                } else {
+                    filteredCountSpan.textContent = '';
+                }
+            }
+        }
+
+        /**
+         * Filtre l'historique selon le terme de recherche
+         */
+        function filterHistoriquePaiements() {
+            const searchInput = document.getElementById('historiquePaiementsSearchInput');
+            const searchTerm = (searchInput.value || '').toLowerCase().trim();
+            
+            let filtered = allHistoriquePaiements;
+            
+            // Filtrer par statut
+            if (currentHistoriqueStatusFilter !== 'all') {
+                filtered = filtered.filter(p => p.statut === currentHistoriqueStatusFilter);
+            }
+            
+            // Filtrer par recherche textuelle
+            if (searchTerm) {
+                filtered = filtered.filter(paiement => {
+                    if (paiement.facture_numero && paiement.facture_numero.toLowerCase().includes(searchTerm)) return true;
+                    if (paiement.date_paiement_formatted && paiement.date_paiement_formatted.includes(searchTerm)) return true;
+                    if (paiement.client_nom && paiement.client_nom.toLowerCase().includes(searchTerm)) return true;
+                    if (paiement.client_code && paiement.client_code.toLowerCase().includes(searchTerm)) return true;
+                    if (paiement.reference && paiement.reference.toLowerCase().includes(searchTerm)) return true;
+                    if (paiement.mode_paiement_label && paiement.mode_paiement_label.toLowerCase().includes(searchTerm)) return true;
+                    if (paiement.commentaire && paiement.commentaire.toLowerCase().includes(searchTerm)) return true;
+                    return false;
+                });
+            }
+            
+            filteredHistoriquePaiements = filtered;
+            displayHistoriquePaiements(filtered);
+        }
+
+        /**
+         * Filtre l'historique par statut
+         */
+        function filterHistoriquePaiementsByStatus(status) {
+            currentHistoriqueStatusFilter = status;
+            
+            // Mettre à jour les boutons de filtre
+            document.querySelectorAll('#historiquePaiementsModal .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.filter === status) {
+                    btn.classList.add('active');
+                    btn.style.background = 'var(--accent-primary)';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = 'var(--accent-primary)';
+                } else {
+                    btn.style.background = 'var(--bg-secondary)';
+                    btn.style.color = 'var(--text-primary)';
+                    btn.style.borderColor = 'var(--border-color)';
+                }
+            });
+            
+            filterHistoriquePaiements();
+        }
+
+        /**
+         * Ouvre le justificatif dans un nouvel onglet
+         */
+        function viewJustificatif(recuPath) {
+            if (recuPath) {
+                window.open(recuPath, '_blank');
+            }
+        }
+
+        // ============================================
         // GESTION DU MODAL PAYER
         // ============================================
         
@@ -2598,6 +2937,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.openPayerModal = openPayerModal;
         window.closePayerModal = closePayerModal;
         window.submitPayerForm = submitPayerForm;
+        window.openHistoriquePaiementsModal = openHistoriquePaiementsModal;
+        window.closeHistoriquePaiementsModal = closeHistoriquePaiementsModal;
+        window.filterHistoriquePaiements = filterHistoriquePaiements;
+        window.filterHistoriquePaiementsByStatus = filterHistoriquePaiementsByStatus;
+        window.viewJustificatif = viewJustificatif;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
@@ -2618,9 +2962,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const paiementsModalOverlay = document.getElementById('paiementsModalOverlay');
                     const pdfViewerModalOverlay = document.getElementById('pdfViewerModalOverlay');
                     const payerModalOverlay = document.getElementById('payerModalOverlay');
+                    const historiquePaiementsModalOverlay = document.getElementById('historiquePaiementsModalOverlay');
                     
                     if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
                         closePDFViewer();
+                    } else if (historiquePaiementsModalOverlay && historiquePaiementsModalOverlay.classList.contains('active')) {
+                        closeHistoriquePaiementsModal();
                     } else if (payerModalOverlay && payerModalOverlay.classList.contains('active')) {
                         closePayerModal();
                     } else if (paiementsModalOverlay && paiementsModalOverlay.classList.contains('active')) {
