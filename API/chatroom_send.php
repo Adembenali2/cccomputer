@@ -192,6 +192,10 @@ try {
         error_log('chatroom_send.php - Erreur vérification colonne image_path: ' . $e->getMessage());
     }
 
+    // S'assurer que le message n'est jamais null (la colonne est NOT NULL)
+    // Si le message est vide mais qu'il y a une image, on met une chaîne vide
+    $messageToInsert = !empty($message) ? $message : '';
+    
     // Insérer le message
     try {
         if ($hasImagePath) {
@@ -201,9 +205,9 @@ try {
             ");
             $stmt->execute([
                 ':id_user' => $userId,
-                ':message' => $message ?: null,
+                ':message' => $messageToInsert,
                 ':mentions' => $mentionsJson,
-                ':image_path' => $imagePath ?: null
+                ':image_path' => !empty($imagePath) ? $imagePath : null
             ]);
         } else {
             $stmt = $pdo->prepare("
@@ -212,7 +216,7 @@ try {
             ");
             $stmt->execute([
                 ':id_user' => $userId,
-                ':message' => $message ?: null,
+                ':message' => $messageToInsert,
                 ':mentions' => $mentionsJson
             ]);
         }
@@ -224,7 +228,17 @@ try {
         }
     } catch (PDOException $e) {
         $errorInfo = $e->errorInfo ?? [];
-        error_log('chatroom_send.php - Erreur insertion message: ' . $e->getMessage() . ' | Code: ' . $e->getCode() . ' | SQL State: ' . ($errorInfo[0] ?? 'N/A'));
+        $errorDetails = [
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'sql_state' => $errorInfo[0] ?? 'N/A',
+            'driver_code' => $errorInfo[1] ?? 'N/A',
+            'driver_message' => $errorInfo[2] ?? 'N/A',
+            'has_image_path' => $hasImagePath,
+            'message_to_insert' => $messageToInsert,
+            'image_path' => $imagePath ?? 'null'
+        ];
+        error_log('chatroom_send.php - Erreur insertion message: ' . json_encode($errorDetails));
         throw $e; // Re-lancer pour être capturé par le catch global
     }
 

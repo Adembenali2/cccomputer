@@ -193,8 +193,29 @@ try {
 // Configuration
 // ==================
 
+// Constantes configurables
+const CONFIG = {
+    SEARCH_DEBOUNCE_MS: 400,
+    GEOCODE_BATCH_SIZE: 3,
+    GEOCODE_BATCH_DELAY_MS: 1500,
+    FETCH_TIMEOUT_MS: 15000,
+    MAX_RETRIES: 3,
+    RETRY_DELAY_MS: 1000,
+    MAX_CLIENTS_PER_ROUTE: 20,
+    COORDINATE_BOUNDS: {
+        LAT_MIN: -90,
+        LAT_MAX: 90,
+        LNG_MIN: -180,
+        LNG_MAX: 180
+    }
+};
+
 // Cache des clients chargés (avec coordonnées géocodées)
 const clientsCache = new Map(); // id -> {id, name, code, address, lat, lng, basePriority}
+
+// Cache des résultats de recherche (évite les requêtes répétées)
+const searchCache = new Map(); // query -> {results, timestamp}
+const SEARCH_CACHE_TTL = 60000; // 1 minute
 
 // ==================
 // Variables globales
@@ -235,7 +256,7 @@ async function loadAllClients() {
     if (clientsLoaded) return;
     
     try {
-        const response = await fetch('/API/maps_get_all_clients.php');
+        const response = await fetchWithTimeout('/API/maps_get_all_clients.php', {}, CONFIG.FETCH_TIMEOUT_MS);
         
         // Vérifier si la réponse est OK
         if (!response.ok) {
@@ -280,9 +301,9 @@ async function loadAllClients() {
                 }
             }
             
-            // Ajuster la vue pour inclure tous les clients avec coordonnées
+            // Ajuster la vue pour inclure tous les clients avec coordonnées valides
             const allCoords = Array.from(clientsCache.values())
-                .filter(c => c.lat && c.lng)
+                .filter(c => isValidCoordinate(c.lat, c.lng))
                 .map(c => [c.lat, c.lng]);
             
             if (allCoords.length > 0) {
@@ -342,33 +363,60 @@ function addClientToNotFoundList(client) {
     notFoundClientsContainer.appendChild(item);
 }
 
-// Géocoder les clients en arrière-plan (par lots)
+// Géocoder les clients en arrière-plan (par lots) avec retry
 async function geocodeClientsInBackground(clientsToGeocode) {
-    const batchSize = 3; // Géocoder 3 clients à la fois
+    const batchSize = CONFIG.GEOCODE_BATCH_SIZE;
     let processed = 0;
     let found = 0;
     let notFound = 0;
     
+    // Mettre à jour le message pour indiquer la progression
+    const updateProgress = () => {
+        if (processed < clientsToGeocode.length) {
+            routeMessageEl.textContent = `Géocodage en cours : ${processed}/${clientsToGeocode.length} client(s) traités (${found} trouvé(s))…`;
+        }
+    };
+    
     for (let i = 0; i < clientsToGeocode.length; i += batchSize) {
         const batch = clientsToGeocode.slice(i, i + batchSize);
         
-        // Géocoder chaque client du lot en parallèle
-        const geocodePromises = batch.map(async (client) => {
+        // Fonction récursive pour géocoder un client avec retry
+        const geocodeClient = async (client, retryCount = 0) => {
             try {
-                const response = await fetch(`/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(client.address_geocode)}`);
+                const response = await fetchWithTimeout(
+                    `/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(client.address_geocode)}`
+                );
                 
-                // Si response.ok est false, c'est une erreur réseau/serveur, on ignore silencieusement
+                // Si response.ok est false, c'est une erreur réseau/serveur
                 if (!response.ok) {
+                    if (retryCount < CONFIG.MAX_RETRIES && response.status >= 500) {
+                        // Retry pour les erreurs serveur
+                        await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * (retryCount + 1)));
+                        return geocodeClient(client, retryCount + 1); // Retry
+                    }
                     console.warn('Erreur HTTP lors du géocodage du client', client.id, ':', response.status);
                     addClientToNotFoundList(client);
                     return false;
                 }
                 
-                const data = await response.json();
+                // Vérifier que la réponse n'est pas vide
+                const text = await response.text();
+                if (!text || text.trim() === '') {
+                    throw new Error('Réponse vide');
+                }
+                
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseError) {
+                    throw new Error('Réponse JSON invalide');
+                }
                 
                 // Vérifier le format de réponse (support success et ok pour compatibilité)
                 const isSuccess = (data.success === true || data.ok === true) && data.lat && data.lng;
-                if (isSuccess) {
+                
+                // Valider les coordonnées
+                if (isSuccess && isValidCoordinate(data.lat, data.lng)) {
                     // Mettre à jour le cache
                     const updatedClient = {
                         ...client,
@@ -388,29 +436,41 @@ async function geocodeClientsInBackground(clientsToGeocode) {
                     notFound++;
                     return false;
                 } else {
-                    // Format de réponse inattendu, traiter comme non trouvé
+                    // Format de réponse inattendu ou coordonnées invalides
                     addClientToNotFoundList(client);
                     notFound++;
                     return false;
                 }
             } catch (err) {
+                // Retry pour les erreurs réseau/timeout
+                if (retryCount < CONFIG.MAX_RETRIES && (err.message.includes('timeout') || err.name === 'TypeError')) {
+                    await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * (retryCount + 1)));
+                    return geocodeClient(client, retryCount + 1); // Retry
+                }
+                
                 // Erreur réseau ou autre, ne pas bloquer mais ajouter à la liste non trouvés
                 console.warn('Erreur géocodage client', client.id, ':', err.message);
                 addClientToNotFoundList(client);
                 notFound++;
                 return false;
             }
-        });
+        };
+        
+        // Géocoder chaque client du lot en parallèle
+        const geocodePromises = batch.map(client => geocodeClient(client));
         
         await Promise.all(geocodePromises);
         processed += batch.length;
+        updateProgress();
         
         // Attendre entre les lots pour respecter la limite de Nominatim (1 req/sec)
         if (i + batchSize < clientsToGeocode.length) {
-            await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 secondes entre les lots
+            await new Promise(resolve => setTimeout(resolve, CONFIG.GEOCODE_BATCH_DELAY_MS));
         }
     }
     
+    routeMessageEl.textContent = `Géocodage terminé : ${found} trouvé(s), ${notFound} non trouvé(s) sur ${processed} client(s) traités.`;
+    routeMessageEl.className = 'maps-message success';
     console.log(`Géocodage terminé : ${found} trouvé(s), ${notFound} non trouvé(s) sur ${processed} client(s) traités`);
 }
 
@@ -457,20 +517,46 @@ function createPriorityIcon(priority) {
 map.setView([46.5, 2.0], 6);
 
 // Fonction pour géocoder une adresse
-async function geocodeAddress(address) {
+async function geocodeAddress(address, retryCount = 0) {
     if (!address || address.trim() === '') {
         return null;
     }
     
     try {
-        const response = await fetch(`/API/maps_geocode.php?address=${encodeURIComponent(address)}`);
-        const data = await response.json();
+        const response = await fetchWithTimeout(
+            `/API/maps_geocode.php?address=${encodeURIComponent(address)}`
+        );
         
-        if (data.ok && data.lat && data.lng) {
+        if (!response.ok) {
+            if (retryCount < CONFIG.MAX_RETRIES && response.status >= 500) {
+                await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * (retryCount + 1)));
+                return geocodeAddress(address, retryCount + 1);
+            }
+            return null;
+        }
+        
+        const text = await response.text();
+        if (!text || text.trim() === '') {
+            return null;
+        }
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            return null;
+        }
+        
+        if (data.ok && data.lat && data.lng && isValidCoordinate(data.lat, data.lng)) {
             return { lat: data.lat, lng: data.lng, display_name: data.display_name || address };
         }
         return null;
     } catch (err) {
+        // Retry pour les erreurs réseau/timeout
+        if (retryCount < CONFIG.MAX_RETRIES && (err.message.includes('timeout') || err.name === 'TypeError')) {
+            await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * (retryCount + 1)));
+            return geocodeAddress(address, retryCount + 1);
+        }
         console.error('Erreur géocodage:', err);
         return null;
     }
@@ -478,11 +564,11 @@ async function geocodeAddress(address) {
 
 // Fonction pour charger un client avec géocodage (utilisée uniquement pour la recherche)
 // Utilise l'adresse exacte de la base de données (ou adresse de livraison si différente)
-async function loadClientWithGeocode(client) {
+async function loadClientWithGeocode(client, retryCount = 0) {
     if (clientsCache.has(client.id)) {
         const cached = clientsCache.get(client.id);
-        // Si le client a déjà des coordonnées, les retourner
-        if (cached.lat && cached.lng) {
+        // Si le client a déjà des coordonnées valides, les retourner
+        if (isValidCoordinate(cached.lat, cached.lng)) {
             return cached;
         }
     }
@@ -492,20 +578,40 @@ async function loadClientWithGeocode(client) {
     
     // Appeler directement l'API client qui géocode et sauvegarde
     try {
-        const response = await fetch(`/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(addressToGeocode)}`);
+        const response = await fetchWithTimeout(
+            `/API/maps_geocode_client.php?client_id=${client.id}&address=${encodeURIComponent(addressToGeocode)}`
+        );
         
         // Si response.ok est false, c'est une erreur réseau/serveur
         if (!response.ok) {
+            // Retry pour les erreurs serveur
+            if (retryCount < CONFIG.MAX_RETRIES && response.status >= 500) {
+                await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * (retryCount + 1)));
+                return loadClientWithGeocode(client, retryCount + 1);
+            }
             console.warn('Erreur HTTP lors du géocodage du client', client.id, ':', response.status);
             addClientToNotFoundList(client);
             return null;
         }
         
-        const data = await response.json();
+        // Vérifier que la réponse n'est pas vide
+        const text = await response.text();
+        if (!text || text.trim() === '') {
+            throw new Error('Réponse vide');
+        }
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            throw new Error('Réponse JSON invalide');
+        }
         
         // Vérifier le format de réponse (support success et ok pour compatibilité)
         const isSuccess = (data.success === true || data.ok === true) && data.lat && data.lng;
-        if (isSuccess) {
+        
+        // Valider les coordonnées
+        if (isSuccess && isValidCoordinate(data.lat, data.lng)) {
             const clientWithCoords = {
                 ...client,
                 lat: data.lat,
@@ -522,11 +628,17 @@ async function loadClientWithGeocode(client) {
             addClientToNotFoundList(client);
             return null;
         } else {
-            // Format de réponse inattendu, traiter comme non trouvé
+            // Format de réponse inattendu ou coordonnées invalides, traiter comme non trouvé
             addClientToNotFoundList(client);
             return null;
         }
     } catch (err) {
+        // Retry pour les erreurs réseau/timeout
+        if (retryCount < CONFIG.MAX_RETRIES && (err.message.includes('timeout') || err.name === 'TypeError')) {
+            await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * (retryCount + 1)));
+            return loadClientWithGeocode(client, retryCount + 1);
+        }
+        
         // Erreur réseau ou autre, ne pas bloquer mais ajouter à la liste non trouvés
         console.warn('Erreur géocodage client', client.id, ':', err.message);
         addClientToNotFoundList(client);
@@ -537,8 +649,8 @@ async function loadClientWithGeocode(client) {
 // Fonction pour ajouter un client sur la carte
 // autoFit: si true, ajuste la vue pour inclure tous les clients, sinon ne fait rien
 function addClientToMap(client, autoFit = true) {
-    // Vérifier que les coordonnées existent et sont valides (null, undefined, ou NaN sont invalides)
-    if (client.lat == null || client.lng == null || isNaN(client.lat) || isNaN(client.lng)) {
+    // Vérifier que les coordonnées existent et sont valides
+    if (!isValidCoordinate(client.lat, client.lng)) {
         console.warn('Client sans coordonnées valides:', client);
         return false; // Retourner false si pas de coordonnées
     }
@@ -600,7 +712,7 @@ function addClientToMap(client, autoFit = true) {
     // Ajuster la vue pour inclure tous les clients seulement si autoFit est true
     if (autoFit) {
         const allCoords = Array.from(clientsCache.values())
-            .filter(c => c.lat && c.lng)
+            .filter(c => isValidCoordinate(c.lat, c.lng))
             .map(c => [c.lat, c.lng]);
         if (allCoords.length > 1) {
             const bounds = L.latLngBounds(allCoords);
@@ -755,13 +867,13 @@ async function addClientToRoute(client) {
         return;
     }
 
-    // Si pas de coordonnées, géocoder l'adresse
-    if (!client.lat || !client.lng) {
+    // Si pas de coordonnées valides, géocoder l'adresse
+    if (!isValidCoordinate(client.lat, client.lng)) {
         routeMessageEl.textContent = "Géocodage de l'adresse en cours…";
         routeMessageEl.className = 'maps-message hint';
         
         const clientWithCoords = await loadClientWithGeocode(client);
-        if (!clientWithCoords || !clientWithCoords.lat || !clientWithCoords.lng) {
+        if (!clientWithCoords || !isValidCoordinate(clientWithCoords.lat, clientWithCoords.lng)) {
             routeMessageEl.textContent = "Impossible de géocoder l'adresse de ce client. Veuillez vérifier l'adresse.";
             routeMessageEl.className = 'maps-message alert';
             return;
@@ -782,7 +894,7 @@ async function addClientToRoute(client) {
     const added = addClientToMap(client, false); // false = ne pas ajuster la vue automatiquement
     
     // Centrer la carte sur le client sélectionné et ouvrir le popup
-    if (client.lat && client.lng) {
+    if (isValidCoordinate(client.lat, client.lng)) {
         map.setView([client.lat, client.lng], 15); // Zoom plus proche pour voir le client
         // Attendre un peu pour que le marqueur soit créé
         setTimeout(() => {
@@ -802,22 +914,94 @@ async function addClientToRoute(client) {
     }
 }
 
-// Recherche de clients depuis la base de données
+// Fonction utilitaire pour fetch avec timeout
+async function fetchWithTimeout(url, options = {}, timeout = CONFIG.FETCH_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('Requête timeout après ' + (timeout / 1000) + ' secondes');
+        }
+        throw err;
+    }
+}
+
+// Fonction utilitaire pour valider les coordonnées
+function isValidCoordinate(lat, lng) {
+    if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
+        return false;
+    }
+    return lat >= CONFIG.COORDINATE_BOUNDS.LAT_MIN && 
+           lat <= CONFIG.COORDINATE_BOUNDS.LAT_MAX &&
+           lng >= CONFIG.COORDINATE_BOUNDS.LNG_MIN && 
+           lng <= CONFIG.COORDINATE_BOUNDS.LNG_MAX;
+}
+
+// Recherche de clients depuis la base de données avec cache
 let searchTimeout = null;
-async function searchClients(query) {
+let currentSearchAbortController = null;
+
+async function searchClients(query, retryCount = 0) {
     query = query.trim();
     if (!query || query.length < 2) return [];
     
+    // Vérifier le cache
+    const cacheKey = query.toLowerCase();
+    const cached = searchCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < SEARCH_CACHE_TTL) {
+        return cached.results;
+    }
+    
     try {
-        const response = await fetch(`/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=20`);
-        const data = await response.json();
+        const response = await fetchWithTimeout(
+            `/API/maps_search_clients.php?q=${encodeURIComponent(query)}&limit=20`
+        );
+        
+        // Vérifier que la réponse est OK
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // Vérifier que la réponse n'est pas vide
+        const text = await response.text();
+        if (!text || text.trim() === '') {
+            throw new Error('Réponse vide du serveur');
+        }
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            throw new Error('Réponse JSON invalide');
+        }
         
         if (data.ok && data.clients) {
+            // Mettre en cache
+            searchCache.set(cacheKey, {
+                results: data.clients,
+                timestamp: Date.now()
+            });
             return data.clients;
         }
         return [];
     } catch (err) {
         console.error('Erreur recherche clients:', err);
+        
+        // Retry logic
+        if (retryCount < CONFIG.MAX_RETRIES && err.message.includes('timeout')) {
+            await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * (retryCount + 1)));
+            return searchClients(query, retryCount + 1);
+        }
+        
         return [];
     }
 }
@@ -825,6 +1009,12 @@ async function searchClients(query) {
 clientSearchInput.addEventListener('input', () => {
     const q = clientSearchInput.value;
     clientResultsEl.innerHTML = '';
+    
+    // Annuler la recherche précédente si elle est en cours
+    if (currentSearchAbortController) {
+        currentSearchAbortController.abort();
+        currentSearchAbortController = null;
+    }
     
     clearTimeout(searchTimeout);
     
@@ -840,46 +1030,80 @@ clientSearchInput.addEventListener('input', () => {
     clientResultsEl.appendChild(loadingItem);
     clientResultsEl.style.display = 'block';
     
-    // Debounce de 300ms
+    // Debounce avec délai configurable
     searchTimeout = setTimeout(async () => {
-        const results = await searchClients(q);
-        clientResultsEl.innerHTML = '';
+        // Créer un nouveau AbortController pour cette recherche
+        currentSearchAbortController = new AbortController();
         
-        if (!results.length) {
-            const item = document.createElement('div');
-            item.className = 'client-result-item empty';
-            item.textContent = 'Aucun client trouvé.';
-            clientResultsEl.appendChild(item);
-            return;
-        }
-        
-        results.forEach(client => {
-            // Afficher l'adresse exacte
-            const displayAddress = client.address || 
-                `${client.adresse || ''} ${client.code_postal || ''} ${client.ville || ''}`.trim();
+        try {
+            const results = await searchClients(q);
             
-            // Construire les informations supplémentaires
-            let extraInfo = [];
-            if (client.dirigeant_complet) {
-                extraInfo.push(`Dirigeant: ${escapeHtml(client.dirigeant_complet)}`);
-            }
-            if (client.telephone) {
-                extraInfo.push(`Tel: ${escapeHtml(client.telephone)}`);
+            // Vérifier que la recherche n'a pas été annulée
+            if (currentSearchAbortController.signal.aborted) {
+                return;
             }
             
-            const item = document.createElement('div');
-            item.className = 'client-result-item';
-            item.innerHTML =
-                `<strong>${escapeHtml(client.name)}</strong>` +
-                `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>` +
-                (extraInfo.length > 0 ? `<small>${extraInfo.join(' • ')}</small>` : '');
-            item.addEventListener('click', () => {
-                // Ajouter le client à la route (géocodage si nécessaire)
-                addClientToRoute(client);
+            clientResultsEl.innerHTML = '';
+            
+            if (!results.length) {
+                const item = document.createElement('div');
+                item.className = 'client-result-item empty';
+                item.textContent = 'Aucun client trouvé.';
+                clientResultsEl.appendChild(item);
+                return;
+            }
+            
+            results.forEach(client => {
+                // Afficher l'adresse exacte
+                const displayAddress = client.address || 
+                    `${client.adresse || ''} ${client.code_postal || ''} ${client.ville || ''}`.trim();
+                
+                // Construire les informations supplémentaires
+                let extraInfo = [];
+                if (client.dirigeant_complet) {
+                    extraInfo.push(`Dirigeant: ${escapeHtml(client.dirigeant_complet)}`);
+                }
+                if (client.telephone) {
+                    extraInfo.push(`Tel: ${escapeHtml(client.telephone)}`);
+                }
+                
+                const item = document.createElement('div');
+                item.className = 'client-result-item';
+                item.setAttribute('role', 'button');
+                item.setAttribute('tabindex', '0');
+                item.setAttribute('aria-label', `Ajouter ${escapeHtml(client.name)} à la tournée`);
+                item.innerHTML =
+                    `<strong>${escapeHtml(client.name)}</strong>` +
+                    `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>` +
+                    (extraInfo.length > 0 ? `<small>${extraInfo.join(' • ')}</small>` : '');
+                
+                // Support clavier
+                const handleClick = () => {
+                    addClientToRoute(client);
+                };
+                item.addEventListener('click', handleClick);
+                item.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleClick();
+                    }
+                });
+                
+                clientResultsEl.appendChild(item);
             });
-            clientResultsEl.appendChild(item);
-        });
-    }, 300);
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('Erreur lors de la recherche:', err);
+                clientResultsEl.innerHTML = '';
+                const errorItem = document.createElement('div');
+                errorItem.className = 'client-result-item empty';
+                errorItem.textContent = 'Erreur lors de la recherche. Veuillez réessayer.';
+                clientResultsEl.appendChild(errorItem);
+            }
+        } finally {
+            currentSearchAbortController = null;
+        }
+    }, CONFIG.SEARCH_DEBOUNCE_MS);
 });
 
 document.addEventListener('click', (e) => {
@@ -1009,7 +1233,7 @@ function getSelectedClientsForRouting() {
     return selectedClients
         .map(sel => {
             const client = clientsCache.get(sel.id);
-            if (!client || !client.lat || !client.lng) return null;
+            if (!client || !isValidCoordinate(client.lat, client.lng)) return null;
             return {
                 ...client,
                 priority: sel.priority || client.basePriority || 1
@@ -1246,8 +1470,8 @@ document.getElementById('btnRoute').addEventListener('click', () => {
         return;
     }
 
-    if (clientsForRouting.length > 20) {
-        routeMessageEl.textContent = "Pour la démo, limitez-vous à 20 clients maximum par tournée.";
+    if (clientsForRouting.length > CONFIG.MAX_CLIENTS_PER_ROUTE) {
+        routeMessageEl.textContent = `Limitez-vous à ${CONFIG.MAX_CLIENTS_PER_ROUTE} clients maximum par tournée.`;
         routeMessageEl.className = 'maps-message alert';
         return;
     }
@@ -1280,11 +1504,26 @@ document.getElementById('btnRoute').addEventListener('click', () => {
 
     const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson&steps=true`;
 
-    routeMessageEl.textContent = "Calcul de l’itinéraire en cours…";
+    routeMessageEl.textContent = "Calcul de l'itinéraire en cours…";
     routeMessageEl.className = 'maps-message hint';
 
-    fetch(url)
-        .then(r => r.json())
+    fetchWithTimeout(url, {}, CONFIG.FETCH_TIMEOUT_MS)
+        .then(async (r) => {
+            if (!r.ok) {
+                throw new Error(`Erreur HTTP ${r.status}: ${r.statusText}`);
+            }
+            
+            const text = await r.text();
+            if (!text || text.trim() === '') {
+                throw new Error('Réponse vide du serveur OSRM');
+            }
+            
+            try {
+                return JSON.parse(text);
+            } catch (parseError) {
+                throw new Error('Réponse JSON invalide du serveur OSRM');
+            }
+        })
         .then(data => {
             if (!data.routes || !data.routes.length) {
                 throw new Error('Aucun itinéraire trouvé.');

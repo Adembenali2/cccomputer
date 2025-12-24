@@ -33,5 +33,16 @@ return [
         'max_length' => 120,
         'user_search_max_chars' => 80,
     ],
+    'email' => [
+        'smtp_enabled' => (bool)($_ENV['SMTP_ENABLED'] ?? false),
+        'smtp_host' => $_ENV['SMTP_HOST'] ?? 'smtp.gmail.com',
+        'smtp_port' => (int)($_ENV['SMTP_PORT'] ?? 587),
+        'smtp_secure' => $_ENV['SMTP_SECURE'] ?? 'tls', // 'tls' ou 'ssl'
+        'smtp_username' => $_ENV['SMTP_USERNAME'] ?? '',
+        'smtp_password' => $_ENV['SMTP_PASSWORD'] ?? '',
+        'from_email' => $_ENV['SMTP_FROM_EMAIL'] ?? 'noreply@cccomputer.fr',
+        'from_name' => $_ENV['SMTP_FROM_NAME'] ?? 'CC Computer',
+        'reply_to_email' => $_ENV['SMTP_REPLY_TO'] ?? 'noreply@cccomputer.fr',
+    ],
 ];
 
