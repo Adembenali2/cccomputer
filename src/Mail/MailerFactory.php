@@ -71,10 +71,10 @@ class MailerFactory
                 ];
             }
             
-            // Timeout SMTP (défaut 15 secondes)
-            $smtpTimeout = (int)($_ENV['SMTP_TIMEOUT'] ?? 15);
+            // Timeout SMTP (défaut 30 secondes pour éviter les timeouts Railway)
+            $smtpTimeout = (int)($_ENV['SMTP_TIMEOUT'] ?? 30);
             if ($smtpTimeout < 1 || $smtpTimeout > 300) {
-                $smtpTimeout = 15; // Valeur par défaut si invalide
+                $smtpTimeout = 30; // Valeur par défaut si invalide
             }
             $mail->Timeout = $smtpTimeout;
             

@@ -138,9 +138,9 @@ function generateInvoicePdf(PDO $pdo, int $factureId, array $facture, array $cli
         $desc = mb_substr($ligne['description'], 0, 80);
         $pdf->Cell($wDesc, 7, $desc, 1, 0, 'L');
         $pdf->Cell($wType, 7, $ligne['type'], 1, 0, 'C');
-        $pdf->Cell($wQty, 7, number_format($ligne['quantite'], 2, ',', ' '), 1, 0, 'C');
-        $pdf->Cell($wPrix, 7, number_format($ligne['prix_unitaire_ht'], 2, ',', ' ') . ' €', 1, 0, 'R');
-        $pdf->Cell($wTotal, 7, number_format($ligne['total_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
+        $pdf->Cell($wQty, 7, number_format((float)($ligne['quantite'] ?? 0), 2, ',', ' '), 1, 0, 'C');
+        $pdf->Cell($wPrix, 7, number_format((float)($ligne['prix_unitaire_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 0, 'R');
+        $pdf->Cell($wTotal, 7, number_format((float)($ligne['total_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     }
     
     // Totaux
@@ -151,18 +151,18 @@ function generateInvoicePdf(PDO $pdo, int $factureId, array $facture, array $cli
     // Total HT
     $pdf->SetX(15);
     $pdf->Cell($wMerged, 6, 'Total HT', 1, 0, 'R');
-    $pdf->Cell($wTotal, 6, number_format($facture['montant_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wTotal, 6, number_format((float)($facture['montant_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     
     // TVA
     $pdf->SetX(15);
     $pdf->Cell($wMerged, 6, 'TVA (20%)', 1, 0, 'R');
-    $pdf->Cell($wTotal, 6, number_format($facture['tva'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wTotal, 6, number_format((float)($facture['tva'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     
     // Total TTC
     $pdf->SetFont('helvetica', 'B', 11);
     $pdf->SetX(15);
     $pdf->Cell($wMerged, 8, 'Total TTC', 1, 0, 'R');
-    $pdf->Cell($wTotal, 8, number_format($facture['montant_ttc'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wTotal, 8, number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
 
     // IBAN & Footer
     $pdf->Ln(5);
