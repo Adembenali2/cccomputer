@@ -38,6 +38,8 @@ if (!in_array($offre, [1000, 2000], true)) {
 
 try {
     $pdo = getPdo();
+    // Activer le mode d'erreur pour voir les erreurs SQL
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Vérifier le nombre de photocopieurs
     $stmt = $pdo->prepare("SELECT COUNT(*) as nb FROM photocopieurs_clients WHERE id_client = :client_id");
@@ -74,26 +76,43 @@ try {
         $macNorm = $pc['mac_norm'];
         
         // Récupérer les infos les plus récentes du photocopieur (recherche dans les deux tables)
-        $stmtInfo = $pdo->prepare("
+        // Chercher d'abord dans compteur_relevee
+        $stmtInfo1 = $pdo->prepare("
             SELECT Nom, Model, Timestamp
-            FROM (
-                SELECT Nom, Model, Timestamp
-                FROM compteur_relevee
-                WHERE mac_norm = :mac_norm
-                  AND mac_norm IS NOT NULL
-                  AND mac_norm != ''
-                UNION ALL
-                SELECT Nom, Model, Timestamp
-                FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac_norm
-                  AND mac_norm IS NOT NULL
-                  AND mac_norm != ''
-            ) AS combined
+            FROM compteur_relevee
+            WHERE mac_norm = :mac_norm
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
             ORDER BY Timestamp DESC
             LIMIT 1
         ");
-        $stmtInfo->execute([':mac_norm' => $macNorm]);
-        $info = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+        $stmtInfo1->execute([':mac_norm' => $macNorm]);
+        $info1 = $stmtInfo1->fetch(PDO::FETCH_ASSOC);
+        
+        // Chercher ensuite dans compteur_relevee_ancien
+        $stmtInfo2 = $pdo->prepare("
+            SELECT Nom, Model, Timestamp
+            FROM compteur_relevee_ancien
+            WHERE mac_norm = :mac_norm
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            ORDER BY Timestamp DESC
+            LIMIT 1
+        ");
+        $stmtInfo2->execute([':mac_norm' => $macNorm]);
+        $info2 = $stmtInfo2->fetch(PDO::FETCH_ASSOC);
+        
+        // Prendre la plus récente des deux
+        $info = null;
+        if ($info1 && $info2) {
+            $ts1 = strtotime($info1['Timestamp']);
+            $ts2 = strtotime($info2['Timestamp']);
+            $info = ($ts1 >= $ts2) ? $info1 : $info2;
+        } elseif ($info1) {
+            $info = $info1;
+        } elseif ($info2) {
+            $info = $info2;
+        }
         
         $photocopieurs[] = [
             'id' => $pc['id'],
@@ -117,70 +136,112 @@ try {
         $macNorm = trim($macNorm);
         
         // Récupérer le PREMIER relevé du jour de début (recherche dans les deux tables)
-        $stmtStart = $pdo->prepare("
-            SELECT TotalBW, TotalColor, Timestamp
-            FROM (
-                SELECT 
-                    COALESCE(TotalBW, 0) as TotalBW,
-                    COALESCE(TotalColor, 0) as TotalColor,
-                    Timestamp
-                FROM compteur_relevee
-                WHERE mac_norm = :mac_norm
-                  AND DATE(Timestamp) = :date_debut
-                  AND mac_norm IS NOT NULL
-                  AND mac_norm != ''
-                UNION ALL
-                SELECT 
-                    COALESCE(TotalBW, 0) as TotalBW,
-                    COALESCE(TotalColor, 0) as TotalColor,
-                    Timestamp
-                FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac_norm
-                  AND DATE(Timestamp) = :date_debut
-                  AND mac_norm IS NOT NULL
-                  AND mac_norm != ''
-            ) AS combined
+        // Chercher d'abord dans compteur_relevee
+        $stmtStart1 = $pdo->prepare("
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor,
+                Timestamp
+            FROM compteur_relevee
+            WHERE mac_norm = :mac_norm
+              AND DATE(Timestamp) = :date_debut
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
             ORDER BY Timestamp ASC
             LIMIT 1
         ");
-        $stmtStart->execute([
+        $stmtStart1->execute([
             ':mac_norm' => $macNorm,
             ':date_debut' => $dateDebut
         ]);
-        $startReleve = $stmtStart->fetch(PDO::FETCH_ASSOC);
+        $startReleve1 = $stmtStart1->fetch(PDO::FETCH_ASSOC);
+        
+        // Chercher ensuite dans compteur_relevee_ancien
+        $stmtStart2 = $pdo->prepare("
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor,
+                Timestamp
+            FROM compteur_relevee_ancien
+            WHERE mac_norm = :mac_norm
+              AND DATE(Timestamp) = :date_debut
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            ORDER BY Timestamp ASC
+            LIMIT 1
+        ");
+        $stmtStart2->execute([
+            ':mac_norm' => $macNorm,
+            ':date_debut' => $dateDebut
+        ]);
+        $startReleve2 = $stmtStart2->fetch(PDO::FETCH_ASSOC);
+        
+        // Prendre le plus ancien des deux (premier du jour)
+        $startReleve = null;
+        if ($startReleve1 && $startReleve2) {
+            // Comparer les timestamps
+            $ts1 = strtotime($startReleve1['Timestamp']);
+            $ts2 = strtotime($startReleve2['Timestamp']);
+            $startReleve = ($ts1 <= $ts2) ? $startReleve1 : $startReleve2;
+        } elseif ($startReleve1) {
+            $startReleve = $startReleve1;
+        } elseif ($startReleve2) {
+            $startReleve = $startReleve2;
+        }
         
         // Récupérer le DERNIER relevé du jour de fin (recherche dans les deux tables)
-        $stmtEnd = $pdo->prepare("
-            SELECT TotalBW, TotalColor, Timestamp
-            FROM (
-                SELECT 
-                    COALESCE(TotalBW, 0) as TotalBW,
-                    COALESCE(TotalColor, 0) as TotalColor,
-                    Timestamp
-                FROM compteur_relevee
-                WHERE mac_norm = :mac_norm
-                  AND DATE(Timestamp) = :date_fin
-                  AND mac_norm IS NOT NULL
-                  AND mac_norm != ''
-                UNION ALL
-                SELECT 
-                    COALESCE(TotalBW, 0) as TotalBW,
-                    COALESCE(TotalColor, 0) as TotalColor,
-                    Timestamp
-                FROM compteur_relevee_ancien
-                WHERE mac_norm = :mac_norm
-                  AND DATE(Timestamp) = :date_fin
-                  AND mac_norm IS NOT NULL
-                  AND mac_norm != ''
-            ) AS combined
+        // Chercher d'abord dans compteur_relevee
+        $stmtEnd1 = $pdo->prepare("
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor,
+                Timestamp
+            FROM compteur_relevee
+            WHERE mac_norm = :mac_norm
+              AND DATE(Timestamp) = :date_fin
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
             ORDER BY Timestamp DESC
             LIMIT 1
         ");
-        $stmtEnd->execute([
+        $stmtEnd1->execute([
             ':mac_norm' => $macNorm,
             ':date_fin' => $dateFin
         ]);
-        $endReleve = $stmtEnd->fetch(PDO::FETCH_ASSOC);
+        $endReleve1 = $stmtEnd1->fetch(PDO::FETCH_ASSOC);
+        
+        // Chercher ensuite dans compteur_relevee_ancien
+        $stmtEnd2 = $pdo->prepare("
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor,
+                Timestamp
+            FROM compteur_relevee_ancien
+            WHERE mac_norm = :mac_norm
+              AND DATE(Timestamp) = :date_fin
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            ORDER BY Timestamp DESC
+            LIMIT 1
+        ");
+        $stmtEnd2->execute([
+            ':mac_norm' => $macNorm,
+            ':date_fin' => $dateFin
+        ]);
+        $endReleve2 = $stmtEnd2->fetch(PDO::FETCH_ASSOC);
+        
+        // Prendre le plus récent des deux (dernier du jour)
+        $endReleve = null;
+        if ($endReleve1 && $endReleve2) {
+            // Comparer les timestamps
+            $ts1 = strtotime($endReleve1['Timestamp']);
+            $ts2 = strtotime($endReleve2['Timestamp']);
+            $endReleve = ($ts1 >= $ts2) ? $endReleve1 : $endReleve2;
+        } elseif ($endReleve1) {
+            $endReleve = $endReleve1;
+        } elseif ($endReleve2) {
+            $endReleve = $endReleve2;
+        }
         
         // Calculer les consommations
         $compteurDebutNB = 0;
@@ -238,12 +299,20 @@ try {
     error_log('Trace: ' . $e->getTraceAsString());
     
     // En mode développement, retourner plus de détails
-    $isDev = (getenv('APP_ENV') ?: 'production') === 'development';
+    $isDev = true; // Toujours activer pour le debug
+    $driverMessage = $errorInfo[2] ?? $e->getMessage();
     $errorMsg = $isDev 
-        ? 'Erreur base de données: ' . $e->getMessage() . ' (SQL State: ' . ($errorInfo[0] ?? 'N/A') . ')'
+        ? 'Erreur base de données: ' . $driverMessage . ' (SQL State: ' . ($errorInfo[0] ?? 'N/A') . ', Code: ' . ($errorInfo[1] ?? 'N/A') . ')'
         : 'Erreur base de données lors du calcul des consommations';
     
-    jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
+    jsonResponse(['ok' => false, 'error' => $errorMsg, 'debug' => $isDev ? [
+        'sql_state' => $errorInfo[0] ?? null,
+        'driver_code' => $errorInfo[1] ?? null,
+        'driver_message' => $errorInfo[2] ?? null,
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ] : null], 500);
 } catch (Exception $e) {
     error_log('Erreur factures_get_consommation: ' . $e->getMessage());
     error_log('File: ' . $e->getFile() . ' Line: ' . $e->getLine());
