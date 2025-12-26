@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 // Vérifier que c'est une requête POST seulement si le fichier est appelé directement
 // Si le fichier est inclus via require_once, on ne vérifie pas la méthode et on ne s'exécute pas
@@ -30,7 +31,7 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
         
-        if (!$data || empty($data['factureClient']) || empty($data['factureDate']) || empty($data['lignes'])) {
+        if (!$data || empty($data['factureClient']) || empty($data['factureDate'])) {
             jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
         }
         
@@ -40,15 +41,56 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
         $client = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$client) jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
         
+        // Détection du format : nouveau format (imprimantes) ou ancien format (lignes)
+        $useMachineCalculation = !empty($data['offre']) && !empty($data['nb_imprimantes']) && !empty($data['machines']);
+        
+        if ($useMachineCalculation) {
+            // NOUVEAU FORMAT : Calcul automatique basé sur les imprimantes
+            try {
+                $calculationService = new \App\Services\InvoiceCalculationService();
+                
+                $offre = (int)$data['offre'];
+                $nbImprimantes = (int)$data['nb_imprimantes'];
+                $machines = $data['machines'];
+                
+                // Générer les lignes automatiquement
+                $data['lignes'] = $calculationService::generateAllInvoiceLines(
+                    $offre,
+                    $nbImprimantes,
+                    $machines
+                );
+                
+                // Calculer les totaux
+                $totals = $calculationService::calculateInvoiceTotals($data['lignes']);
+                $montantHT = $totals['montant_ht'];
+                $tva = $totals['tva'];
+                $montantTTC = $totals['montant_ttc'];
+                
+            } catch (\InvalidArgumentException $e) {
+                jsonResponse(['ok' => false, 'error' => 'Erreur de calcul: ' . $e->getMessage()], 400);
+            } catch (\Throwable $e) {
+                error_log('Erreur calcul facture imprimantes: ' . $e->getMessage());
+                jsonResponse(['ok' => false, 'error' => 'Erreur lors du calcul de la facture'], 500);
+            }
+        } else {
+            // ANCIEN FORMAT : Lignes fournies manuellement
+            if (empty($data['lignes'])) {
+                jsonResponse(['ok' => false, 'error' => 'Données incomplètes: lignes ou données imprimantes requises'], 400);
+            }
+            
+            // Calculs classiques
+            $montantHT = 0;
+            foreach ($data['lignes'] as $ligne) {
+                $montantHT += (float)($ligne['total_ht'] ?? 0);
+            }
+            $tva = $montantHT * 0.20;
+            $montantTTC = $montantHT + $tva;
+        }
+        
         // Calculs et Sauvegarde DB
         // Déterminer le préfixe selon le type de facture
         $factureType = $data['factureType'] ?? 'Consommation';
         $numeroFacture = generateFactureNumber($pdo, $factureType);
-        
-        $montantHT = 0;
-        foreach ($data['lignes'] as $ligne) $montantHT += (float)($ligne['total_ht'] ?? 0);
-        $tva = $montantHT * 0.20;
-        $montantTTC = $montantHT + $tva;
         
         $pdo->beginTransaction();
         
@@ -412,9 +454,9 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
         
         $pdf->Cell($wDesc, 7, $desc, 1, 0, 'L');
         $pdf->Cell($wType, 7, $ligne['type'], 1, 0, 'C');
-        $pdf->Cell($wQty, 7, number_format($ligne['quantite'], 2, ',', ' '), 1, 0, 'C');
-        $pdf->Cell($wPrix, 7, number_format($ligne['prix_unitaire_ht'], 2, ',', ' ') . ' €', 1, 0, 'R');
-        $pdf->Cell($wTotal, 7, number_format($ligne['total_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
+        $pdf->Cell($wQty, 7, number_format((float)($ligne['quantite'] ?? 0), 2, ',', ' '), 1, 0, 'C');
+        $pdf->Cell($wPrix, 7, number_format((float)($ligne['prix_unitaire_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 0, 'R');
+        $pdf->Cell($wTotal, 7, number_format((float)($ligne['total_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     }
     
     // ==========================================
@@ -430,18 +472,18 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     // Total HT
     $pdf->SetX(15);
     $pdf->Cell($wMerged, 6, 'Total HT', 1, 0, 'R'); // Bordure '1' pour fermer la grille
-    $pdf->Cell($wTotal, 6, number_format($facture['montant_ht'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wTotal, 6, number_format((float)($facture['montant_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     
     // TVA
     $pdf->SetX(15);
     $pdf->Cell($wMerged, 6, 'TVA (20%)', 1, 0, 'R');
-    $pdf->Cell($wTotal, 6, number_format($facture['tva'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wTotal, 6, number_format((float)($facture['tva'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     
     // Total TTC (en Gras)
     $pdf->SetFont('helvetica', 'B', 11);
     $pdf->SetX(15);
     $pdf->Cell($wMerged, 8, 'Total TTC', 1, 0, 'R');
-    $pdf->Cell($wTotal, 8, number_format($facture['montant_ttc'], 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wTotal, 8, number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
 
     // ==========================================
     // 7. IBAN & FOOTER

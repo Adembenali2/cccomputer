@@ -565,14 +565,22 @@ class InvoiceEmailService
         $montantTTC = number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €';
         $dateFacture = date('d/m/Y', strtotime($facture['date_facture'] ?? 'now'));
         
+        // Récupérer les informations de configuration
+        $companyConfig = $this->config['company'] ?? [];
+        $companyAddress = $companyConfig['address'] ?? '7 Rue Fraizier, 93210 Saint-Denis';
+        $billingContactEmail = $companyConfig['billing_contact_email'] ?? 'facturemail@cccomputer.fr';
+        
         $body = "Bonjour {$clientNom},\n\n";
         $body .= "Veuillez trouver ci-joint la facture {$numero} d'un montant de {$montantTTC} TTC.\n\n";
         $body .= "Date de facturation : {$dateFacture}\n\n";
         $body .= "Cordialement,\n";
-        $body .= "CC Computer\n";
-        $body .= "Camson Group\n\n";
+        $body .= "CC Computer\n\n";
         $body .= "---\n";
-        $body .= "Cet email est envoyé automatiquement. Merci de ne pas y répondre.\n";
+        $body .= "CC Computer\n";
+        $body .= "{$companyAddress}\n";
+        $body .= "Contact : {$billingContactEmail}\n\n";
+        $body .= "Cet email est envoyé automatiquement. Merci de ne pas y répondre directement.\n";
+        $body .= "Pour toute question, contactez-nous par email.\n";
         
         return $body;
     }
@@ -608,30 +616,33 @@ class InvoiceEmailService
             'UTF-8'
         );
         
-        // Variables d'environnement pour le template
-        $appUrl = $_ENV['APP_URL'] ?? 'https://cccomputer-production.up.railway.app';
-        $brandName = htmlspecialchars('CC Computer', ENT_QUOTES, 'UTF-8');
-        $brandTagline = htmlspecialchars('Facturation', ENT_QUOTES, 'UTF-8'); // Tagline par défaut
-        $legalName = htmlspecialchars('Camson Group', ENT_QUOTES, 'UTF-8');
-        $legalAddress = htmlspecialchars('97, Boulevard Maurice Berteaux - SANNOIS SASU', ENT_QUOTES, 'UTF-8');
-        $legalDetails = htmlspecialchars(
-            'Siret 947 820 585 00018 RCS Versailles TVA FR81947820585 - www.camsongroup.fr - 01 55 99 00 69',
+        // Variables de configuration pour le template
+        $companyConfig = $this->config['company'] ?? [];
+        $directorFullName = htmlspecialchars(
+            $companyConfig['director_full_name'] ?? 'NOM PRENOM DIRIGEANT',
+            ENT_QUOTES,
+            'UTF-8'
+        );
+        $companyAddress = htmlspecialchars(
+            $companyConfig['address'] ?? '7 Rue Fraizier, 93210 Saint-Denis',
+            ENT_QUOTES,
+            'UTF-8'
+        );
+        $billingContactEmail = htmlspecialchars(
+            $companyConfig['billing_contact_email'] ?? 'facturemail@cccomputer.fr',
             ENT_QUOTES,
             'UTF-8'
         );
         
         // Remplacement des placeholders
         $replacements = [
-            '{{brand_name}}' => $brandName,
-            '{{brand_tagline}}' => $brandTagline, // Support pour brand_tagline
+            '{{director_full_name}}' => $directorFullName,
             '{{client_name}}' => $clientNom,
             '{{invoice_number}}' => $numero,
             '{{invoice_date}}' => $dateFacture,
             '{{invoice_total_ttc}}' => $montantTTC,
-            '{{site_url}}' => htmlspecialchars($appUrl, ENT_QUOTES, 'UTF-8'),
-            '{{legal_name}}' => $legalName,
-            '{{legal_address}}' => $legalAddress,
-            '{{legal_details}}' => $legalDetails,
+            '{{company_address}}' => $companyAddress,
+            '{{billing_contact_email}}' => $billingContactEmail,
         ];
         
         return str_replace(array_keys($replacements), array_values($replacements), $template);
