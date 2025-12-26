@@ -477,19 +477,20 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     foreach ($lignes as $ligne) {
         $xStart = 15;
         $yStart = $pdf->GetY();
-        $pdf->SetXY($xStart, $yStart);
         
         // Description avec MultiCell pour supporter les retours à la ligne
         $desc = $ligne['description'];
         $lineHeight = 3.5; // Hauteur d'une ligne de texte
         
-        // MultiCell pour la description (permet les retours à la ligne)
-        $pdf->MultiCell($wDesc, $lineHeight, $desc, 1, 'L', false, 0, $xStart, $yStart);
+        // Calculer le nombre de lignes dans la description
+        $nbLines = substr_count($desc, "\n") + 1;
+        // Hauteur de cellule : au moins 7mm, ou hauteur calculée selon le nombre de lignes
+        $cellHeight = max(7, ($lineHeight * $nbLines) + 1); // +1 pour un peu d'espace
         
-        // Calculer la hauteur réelle de la description
-        $yAfterDesc = $pdf->GetY();
-        $descHeight = $yAfterDesc - $yStart;
-        $cellHeight = max(7, $descHeight); // Hauteur minimale 7
+        // MultiCell pour la description (permet les retours à la ligne)
+        // Paramètres: width, height, text, border, align, fill, ln, x, y, reset, stretch
+        // $ln=0 pour ne pas avancer la position après
+        $pdf->MultiCell($wDesc, $lineHeight, $desc, 1, 'L', false, 0, $xStart, $yStart);
         
         // Positionner les autres colonnes à la même hauteur de départ
         $xAfterDesc = $xStart + $wDesc;
@@ -500,6 +501,9 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
         $pdf->Cell($wQty, $cellHeight, number_format((float)($ligne['quantite'] ?? 0), 2, ',', ' '), 1, 0, 'C');
         $pdf->Cell($wPrix, $cellHeight, number_format((float)($ligne['prix_unitaire_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 0, 'R');
         $pdf->Cell($wTotal, $cellHeight, number_format((float)($ligne['total_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+        
+        // Ajuster la position Y pour la prochaine ligne (utiliser la hauteur calculée)
+        $pdf->SetY($yStart + $cellHeight);
     }
     
     // ==========================================
