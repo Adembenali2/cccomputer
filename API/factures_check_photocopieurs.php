@@ -3,9 +3,15 @@
  * API pour vérifier le nombre de photocopieurs d'un client
  */
 
+// Désactiver l'affichage des erreurs PHP (on veut du JSON propre)
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 
+// S'assurer que le header JSON est bien défini (au cas où auth.php aurait fait un output)
 header('Content-Type: application/json; charset=utf-8');
 
 $clientId = filter_input(INPUT_GET, 'client_id', FILTER_VALIDATE_INT);
@@ -30,24 +36,41 @@ try {
             pc.id,
             pc.SerialNumber,
             pc.MacAddress,
-            pc.mac_norm,
-            COALESCE(latest.Nom, 'Inconnu') as nom,
-            COALESCE(latest.Model, 'Inconnu') as modele
+            pc.mac_norm
         FROM photocopieurs_clients pc
-        LEFT JOIN (
-            SELECT 
-                mac_norm,
-                Nom,
-                Model,
-                ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) as rn
-            FROM compteur_relevee
-            WHERE mac_norm IS NOT NULL AND mac_norm != ''
-        ) latest ON latest.mac_norm = pc.mac_norm AND latest.rn = 1
         WHERE pc.id_client = :client_id
         ORDER BY pc.id
     ");
     $stmt->execute([':client_id' => $clientId]);
-    $photocopieurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $photocopieursRaw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Récupérer les infos les plus récentes pour chaque photocopieur
+    $photocopieurs = [];
+    foreach ($photocopieursRaw as $pc) {
+        $macNorm = $pc['mac_norm'];
+        
+        // Récupérer les infos les plus récentes du photocopieur
+        $stmtInfo = $pdo->prepare("
+            SELECT Nom, Model
+            FROM compteur_relevee
+            WHERE mac_norm = :mac_norm
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            ORDER BY Timestamp DESC
+            LIMIT 1
+        ");
+        $stmtInfo->execute([':mac_norm' => $macNorm]);
+        $info = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+        
+        $photocopieurs[] = [
+            'id' => $pc['id'],
+            'SerialNumber' => $pc['SerialNumber'],
+            'MacAddress' => $pc['MacAddress'],
+            'mac_norm' => $macNorm,
+            'nom' => !empty($info['Nom']) ? $info['Nom'] : 'Inconnu',
+            'modele' => !empty($info['Model']) ? $info['Model'] : 'Inconnu'
+        ];
+    }
     
     jsonResponse([
         'ok' => true,
@@ -55,8 +78,17 @@ try {
         'photocopieurs' => $photocopieurs
     ]);
     
+} catch (PDOException $e) {
+    error_log('Erreur PDO factures_check_photocopieurs: ' . $e->getMessage());
+    error_log('Trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur base de données lors de la vérification'], 500);
 } catch (Exception $e) {
     error_log('Erreur factures_check_photocopieurs: ' . $e->getMessage());
+    error_log('Trace: ' . $e->getTraceAsString());
     jsonResponse(['ok' => false, 'error' => 'Erreur lors de la vérification des photocopieurs'], 500);
+} catch (Throwable $e) {
+    error_log('Erreur fatale factures_check_photocopieurs: ' . $e->getMessage());
+    error_log('Trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur fatale lors de la vérification'], 500);
 }
 ?>

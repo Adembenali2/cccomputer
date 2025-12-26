@@ -3,18 +3,33 @@
  * API pour récupérer les consommations d'un client pour une période donnée
  */
 
+// Désactiver l'affichage des erreurs PHP (on veut du JSON propre)
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 
+// S'assurer que le header JSON est bien défini (au cas où auth.php aurait fait un output)
 header('Content-Type: application/json; charset=utf-8');
 
 $clientId = filter_input(INPUT_GET, 'client_id', FILTER_VALIDATE_INT);
 $offre = filter_input(INPUT_GET, 'offre', FILTER_VALIDATE_INT);
-$dateDebut = filter_input(INPUT_GET, 'date_debut', FILTER_SANITIZE_STRING);
-$dateFin = filter_input(INPUT_GET, 'date_fin', FILTER_SANITIZE_STRING);
+$dateDebut = filter_input(INPUT_GET, 'date_debut', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: filter_input(INPUT_GET, 'date_debut', FILTER_UNSAFE_RAW);
+$dateFin = filter_input(INPUT_GET, 'date_fin', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: filter_input(INPUT_GET, 'date_fin', FILTER_UNSAFE_RAW);
+
+// Nettoyer et valider les dates
+$dateDebut = trim($dateDebut ?? '');
+$dateFin = trim($dateFin ?? '');
 
 if (!$clientId || !$offre || !$dateDebut || !$dateFin) {
-    jsonResponse(['ok' => false, 'error' => 'Paramètres manquants'], 400);
+    jsonResponse(['ok' => false, 'error' => 'Paramètres manquants: client_id, offre, date_debut et date_fin sont requis'], 400);
+}
+
+// Valider le format des dates (YYYY-MM-DD)
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateDebut) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFin)) {
+    jsonResponse(['ok' => false, 'error' => 'Format de date invalide (attendu: YYYY-MM-DD)'], 400);
 }
 
 if (!in_array($offre, [1000, 2000], true)) {
@@ -38,31 +53,48 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Aucun photocopieur trouvé pour ce client'], 400);
     }
     
-    // Récupérer les photocopieurs du client
+    // Récupérer les photocopieurs du client avec leurs dernières infos
     $stmt = $pdo->prepare("
         SELECT 
             pc.id,
             pc.SerialNumber,
             pc.MacAddress,
-            pc.mac_norm,
-            COALESCE(latest.Nom, CONCAT('Imprimante ', pc.id)) as nom,
-            COALESCE(latest.Model, 'Inconnu') as modele
+            pc.mac_norm
         FROM photocopieurs_clients pc
-        LEFT JOIN (
-            SELECT 
-                mac_norm,
-                Nom,
-                Model,
-                ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) as rn
-            FROM compteur_relevee
-            WHERE mac_norm IS NOT NULL AND mac_norm != ''
-        ) latest ON latest.mac_norm = pc.mac_norm AND latest.rn = 1
         WHERE pc.id_client = :client_id
         ORDER BY pc.id
         LIMIT 2
     ");
     $stmt->execute([':client_id' => $clientId]);
-    $photocopieurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $photocopieursRaw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Récupérer les infos les plus récentes pour chaque photocopieur
+    $photocopieurs = [];
+    foreach ($photocopieursRaw as $pc) {
+        $macNorm = $pc['mac_norm'];
+        
+        // Récupérer les infos les plus récentes du photocopieur
+        $stmtInfo = $pdo->prepare("
+            SELECT Nom, Model
+            FROM compteur_relevee
+            WHERE mac_norm = :mac_norm
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            ORDER BY Timestamp DESC
+            LIMIT 1
+        ");
+        $stmtInfo->execute([':mac_norm' => $macNorm]);
+        $info = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+        
+        $photocopieurs[] = [
+            'id' => $pc['id'],
+            'SerialNumber' => $pc['SerialNumber'],
+            'MacAddress' => $pc['MacAddress'],
+            'mac_norm' => $macNorm,
+            'nom' => !empty($info['Nom']) ? $info['Nom'] : ('Imprimante ' . $pc['id']),
+            'modele' => !empty($info['Model']) ? $info['Model'] : 'Inconnu'
+        ];
+    }
     
     $machines = [];
     
@@ -129,8 +161,17 @@ try {
         'machines' => $machines
     ]);
     
+} catch (PDOException $e) {
+    error_log('Erreur PDO factures_get_consommation: ' . $e->getMessage());
+    error_log('Trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur base de données lors du calcul des consommations'], 500);
 } catch (Exception $e) {
     error_log('Erreur factures_get_consommation: ' . $e->getMessage());
+    error_log('Trace: ' . $e->getTraceAsString());
     jsonResponse(['ok' => false, 'error' => 'Erreur lors du calcul des consommations: ' . $e->getMessage()], 500);
+} catch (Throwable $e) {
+    error_log('Erreur fatale factures_get_consommation: ' . $e->getMessage());
+    error_log('Trace: ' . $e->getTraceAsString());
+    jsonResponse(['ok' => false, 'error' => 'Erreur fatale lors du calcul des consommations'], 500);
 }
 ?>
