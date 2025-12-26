@@ -475,17 +475,31 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     
     // Lignes
     foreach ($lignes as $ligne) {
-        $pdf->SetX(15);
+        $xStart = 15;
+        $yStart = $pdf->GetY();
+        $pdf->SetXY($xStart, $yStart);
         
-        // On retire la troncation trop stricte pour avoir le texte "complet"
-        // Si le texte est très long, on le coupe gentiment à 80 caractères
-        $desc = mb_substr($ligne['description'], 0, 80); 
+        // Description avec MultiCell pour supporter les retours à la ligne
+        $desc = $ligne['description'];
+        $lineHeight = 3.5; // Hauteur d'une ligne de texte
         
-        $pdf->Cell($wDesc, 7, $desc, 1, 0, 'L');
-        $pdf->Cell($wType, 7, $ligne['type'], 1, 0, 'C');
-        $pdf->Cell($wQty, 7, number_format((float)($ligne['quantite'] ?? 0), 2, ',', ' '), 1, 0, 'C');
-        $pdf->Cell($wPrix, 7, number_format((float)($ligne['prix_unitaire_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 0, 'R');
-        $pdf->Cell($wTotal, 7, number_format((float)($ligne['total_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+        // MultiCell pour la description (permet les retours à la ligne)
+        $pdf->MultiCell($wDesc, $lineHeight, $desc, 1, 'L', false, 0, $xStart, $yStart);
+        
+        // Calculer la hauteur réelle de la description
+        $yAfterDesc = $pdf->GetY();
+        $descHeight = $yAfterDesc - $yStart;
+        $cellHeight = max(7, $descHeight); // Hauteur minimale 7
+        
+        // Positionner les autres colonnes à la même hauteur de départ
+        $xAfterDesc = $xStart + $wDesc;
+        $pdf->SetXY($xAfterDesc, $yStart);
+        
+        // Autres colonnes avec la même hauteur que la description
+        $pdf->Cell($wType, $cellHeight, $ligne['type'], 1, 0, 'C');
+        $pdf->Cell($wQty, $cellHeight, number_format((float)($ligne['quantite'] ?? 0), 2, ',', ' '), 1, 0, 'C');
+        $pdf->Cell($wPrix, $cellHeight, number_format((float)($ligne['prix_unitaire_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 0, 'R');
+        $pdf->Cell($wTotal, $cellHeight, number_format((float)($ligne['total_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     }
     
     // ==========================================
