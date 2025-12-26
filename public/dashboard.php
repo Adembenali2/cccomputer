@@ -1183,7 +1183,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             select.innerHTML = '<option value="">Chargement...</option>';
             
             try {
-                const response = await fetch(`/API/dashboard_get_stock_products.php?type=${encodeURIComponent(type)}`);
+                const response = await fetch(`/API/dashboard_get_stock_products.php?type=${encodeURIComponent(type)}`, {
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 
                 if (!data.ok) {
@@ -1441,6 +1443,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             try {
                 const response = await fetch('/API/dashboard_create_delivery.php', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json'
                     },
@@ -1494,7 +1497,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             savList.innerHTML = '<p class="hint">Chargement...</p>';
             
             try {
-                const response = await fetch(`/API/dashboard_get_sav.php?client_id=${clientId}`);
+                const response = await fetch(`/API/dashboard_get_sav.php?client_id=${clientId}`, {
+                    credentials: 'include'
+                });
                 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -1692,6 +1697,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             try {
                 const response = await fetch('/API/dashboard_create_sav.php', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json'
                     },
@@ -1820,7 +1826,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             
             try {
                 const response = await fetch('/API/import/sftp_status.php', {
-                    credentials: 'same-origin',
+                    credentials: 'include',
                     cache: 'no-store',
                     headers: {
                         'Cache-Control': 'no-cache'
@@ -1959,6 +1965,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 try {
                     const response = await fetch('/API/import/sftp_trigger.php', {
                         method: 'POST',
+                        credentials: 'include',
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
@@ -2113,7 +2120,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             try {
                 const response = await fetch('/API/import/ionos_status.php', {
                     cache: 'no-store',
-                    credentials: 'same-origin'
+                    credentials: 'include'
                 });
                 
                 if (!response.ok) {
@@ -2227,6 +2234,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 try {
                     const response = await fetch('/API/import/ionos_trigger.php', {
                         method: 'POST',
+                        credentials: 'include',
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },

@@ -235,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const chatroomResponse = await fetch('/API/chatroom_get_notifications.php', {
             signal: controller.signal,
             cache: 'no-cache',
-            credentials: 'same-origin'
+            credentials: 'include'
           });
           if (chatroomResponse.ok) {
             const chatroomData = await chatroomResponse.json();
@@ -253,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const messagerieResponse = await fetch('/API/messagerie_get_unread_count.php', {
             signal: controller.signal,
             cache: 'no-cache',
-            credentials: 'same-origin'
+            credentials: 'include'
           });
           if (messagerieResponse.ok) {
             const messagerieData = await messagerieResponse.json();

@@ -294,7 +294,7 @@ async function searchUsers(query, signal = null) {
         // Utiliser fetch directement si apiClient n'est pas disponible
         const fetchOptions = {
             method: 'GET',
-            credentials: 'same-origin'
+            credentials: 'include'
         };
         
         if (signal) {
@@ -370,7 +370,7 @@ async function extractMentionIds(mentions) {
     
     if (allUsers.length === 0) {
         try {
-            const response = await fetch('/API/chatroom_search_users.php?q=&limit=1000', { credentials: 'same-origin' });
+            const response = await fetch('/API/chatroom_search_users.php?q=&limit=1000', { credentials: 'include' });
             const data = await response.json();
             if (data.ok && data.users) {
                 allUsers = data.users;
@@ -564,7 +564,7 @@ async function loadMessages(append = false) {
             ? `/API/chatroom_get.php?since_id=${lastMessageId}`
             : `/API/chatroom_get.php?limit=100`;
         
-        const response = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+        const response = await fetch(url, { credentials: 'include', headers: { 'Accept': 'application/json' } });
         
         // Essayer de récupérer le JSON même en cas d'erreur
         let data;
@@ -680,7 +680,7 @@ async function sendMessage() {
                 const uploadResponse = await fetch('/API/chatroom_upload_image.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'same-origin'
+                    credentials: 'include'
                 });
                 
                 // Vérifier si la réponse est OK avant de parser le JSON

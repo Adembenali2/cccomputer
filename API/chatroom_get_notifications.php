@@ -2,43 +2,45 @@
 // API/chatroom_get_notifications.php
 // Endpoint pour récupérer les notifications de chatroom (mentions et nouveaux messages)
 
-header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/../includes/api_helpers.php';
 
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/helpers.php';
+initApi();
+requireApiAuth();
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-        http_response_code(405);
-        echo json_encode(['ok' => false, 'error' => 'Méthode non autorisée']);
-        exit;
+        jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
     }
 
     $currentUserId = (int)($_SESSION['user_id'] ?? 0);
     if ($currentUserId <= 0) {
-        http_response_code(401);
-        echo json_encode(['ok' => false, 'error' => 'Non authentifié']);
-        exit;
+        jsonResponse(['ok' => false, 'error' => 'unauthorized'], 401);
     }
+    
+    // Récupérer PDO
+    $pdo = getPdoOrFail();
 
     // Vérifier que la table existe
     $tableExists = false;
     try {
-        $checkTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_notifications'");
+        $checkTable = $pdo->prepare("
+            SELECT COUNT(*) as cnt 
+            FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'chatroom_notifications'
+        ");
         $checkTable->execute();
-        $tableExists = $checkTable->rowCount() > 0;
+        $tableExists = ((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt']) > 0;
     } catch (PDOException $e) {
         error_log('chatroom_get_notifications.php - Erreur vérification table: ' . $e->getMessage());
     }
 
     if (!$tableExists) {
-        echo json_encode([
+        jsonResponse([
             'ok' => true,
             'count' => 0,
             'notifications' => []
         ]);
-        exit;
     }
 
     // Récupérer les notifications non lues
@@ -86,7 +88,7 @@ try {
         ];
     }, $notifications);
 
-    echo json_encode([
+    jsonResponse([
         'ok' => true,
         'count' => $count,
         'notifications' => $formatted
@@ -94,11 +96,9 @@ try {
 
 } catch (PDOException $e) {
     error_log('chatroom_get_notifications.php - Erreur PDO: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Erreur serveur']);
+    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
 } catch (Exception $e) {
     error_log('chatroom_get_notifications.php - Erreur: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Erreur serveur']);
+    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
 }
 

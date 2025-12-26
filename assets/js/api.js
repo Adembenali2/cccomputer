@@ -38,7 +38,7 @@ class ApiClient {
 
         // Options par défaut
         const defaultOptions = {
-            credentials: 'same-origin',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers

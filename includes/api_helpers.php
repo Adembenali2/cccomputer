@@ -74,11 +74,36 @@ function getPdoOrFail(): PDO {
 
 /**
  * Vérifie l'authentification pour les API
+ * Log minimal pour debug prod (une fois par endpoint)
  */
 function requireApiAuth(): void {
     if (empty($_SESSION['user_id'])) {
-        jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
+        // Logging minimal pour debug (une fois par endpoint, pas de spam)
+        static $logged = false;
+        if (!$logged) {
+            $endpoint = $_SERVER['REQUEST_URI'] ?? 'unknown';
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+            $origin = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? 'unknown';
+            $sessionId = session_id() ?: 'no-session';
+            error_log(sprintf(
+                '[API Auth] Session manquante - Endpoint: %s | Session ID: %s | Origin: %s | UA: %s',
+                $endpoint,
+                $sessionId,
+                $origin,
+                substr($userAgent, 0, 100)
+            ));
+            $logged = true;
+        }
+        jsonResponse(['ok' => false, 'error' => 'unauthorized'], 401);
     }
+}
+
+/**
+ * Alias pour requireApiAuth() - helper standardisé pour sécuriser les endpoints
+ * @see requireApiAuth()
+ */
+function require_login(): void {
+    requireApiAuth();
 }
 
 

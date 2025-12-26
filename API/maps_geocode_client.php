@@ -47,12 +47,9 @@ function jsonResponse(array $data, int $statusCode = 200) {
 }
 
 try {
-    require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/helpers.php';
-    // S'assurer que getPdoOrFail est disponible
-    if (!function_exists('getPdoOrFail')) {
-        require_once __DIR__ . '/../includes/api_helpers.php';
-    }
+    require_once __DIR__ . '/../includes/api_helpers.php';
+    initApi();
+    requireApiAuth();
 } catch (Throwable $e) {
     while (ob_get_level() > 0) {
         ob_end_clean();
@@ -60,10 +57,6 @@ try {
     error_log('maps_geocode_client.php require error: ' . $e->getMessage());
     error_log('maps_geocode_client.php require trace: ' . $e->getTraceAsString());
     jsonResponse(['ok' => false, 'success' => false, 'error' => 'Erreur d\'initialisation: ' . $e->getMessage()], 500);
-}
-
-if (empty($_SESSION['user_id'])) {
-    jsonResponse(['ok' => false, 'success' => false, 'error' => 'Non authentifié'], 401);
 }
 
 // Récupérer PDO

@@ -87,6 +87,7 @@ class InvoiceEmailService
             $this->pdo->beginTransaction();
             
             // SELECT avec FOR UPDATE pour verrouiller la ligne
+            // ORDER BY requis pour MySQL 8 avec FOR UPDATE + LIMIT
             $stmt = $this->pdo->prepare("
                 SELECT 
                     f.id, f.numero, f.date_facture, f.montant_ttc, f.pdf_path, 
@@ -98,8 +99,9 @@ class InvoiceEmailService
                 FROM factures f
                 LEFT JOIN clients c ON f.id_client = c.id
                 WHERE f.id = :id
-                FOR UPDATE
+                ORDER BY f.id
                 LIMIT 1
+                FOR UPDATE
             ");
             $stmt->execute([':id' => $factureId]);
             $facture = $stmt->fetch(PDO::FETCH_ASSOC);

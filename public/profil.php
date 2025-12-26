@@ -1608,7 +1608,7 @@ function decode_msg($row) {
             headers: {
                 'Accept': 'application/json'
             },
-            credentials: 'same-origin'
+            credentials: 'include'
         })
         .then(function(response) {
             if (!response.ok) {

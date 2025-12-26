@@ -1,30 +1,13 @@
 <?php
 // API pour récupérer le nombre de messages non lus (pour le badge dans le header)
-ob_start();
+require_once __DIR__ . '/../includes/api_helpers.php';
 
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('html_errors', 0);
+initApi();
 
-if (!headers_sent()) {
-    header('Content-Type: application/json; charset=utf-8');
-}
-
-// La fonction jsonResponse() est définie dans includes/api_helpers.php
-
-try {
-    // Inclure session_config.php EN PREMIER (il démarre la session si nécessaire)
-    require_once __DIR__ . '/../includes/session_config.php';
-    require_once __DIR__ . '/../includes/helpers.php';
-    require_once __DIR__ . '/../includes/api_helpers.php';
-} catch (Throwable $e) {
-    error_log('messagerie_get_unread_count.php require error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
-}
-
+// Pour ce endpoint spécifique, on retourne 0 au lieu d'une erreur si non authentifié
+// pour ne pas bloquer le header (comportement existant conservé)
 if (empty($_SESSION['user_id'])) {
-    error_log('messagerie_get_unread_count.php - Session user_id vide. Session ID: ' . session_id());
-    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
+    jsonResponse(['ok' => true, 'count' => 0]);
 }
 
 $userId = (int)$_SESSION['user_id'];

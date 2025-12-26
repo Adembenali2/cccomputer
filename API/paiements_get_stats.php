@@ -4,11 +4,13 @@
  * Filtrable par client, mois et année
  */
 
-require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 
+initApi();
+requireApiAuth();
+
 try {
-    $pdo = getPdo();
+    $pdo = getPdoOrFail();
     
     // Récupération des paramètres
     $idClient = isset($_GET['client_id']) ? (int)$_GET['client_id'] : null;

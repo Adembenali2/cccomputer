@@ -3,11 +3,13 @@
  * API pour récupérer l'historique de tous les paiements
  */
 
-require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 
+initApi();
+requireApiAuth();
+
 try {
-    $pdo = getPdo();
+    $pdo = getPdoOrFail();
     
     // Récupérer tous les paiements avec les informations de facture et client
     $sql = "

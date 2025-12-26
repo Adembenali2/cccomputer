@@ -24,19 +24,10 @@ while (ob_get_level() > 0) {
 
 try {
     // Charger les dépendances
-    require_once __DIR__ . '/../../includes/session_config.php';
     require_once __DIR__ . '/../../includes/api_helpers.php';
     
-    // Vérifier l'authentification (sans utiliser auth.php qui fait des redirections HTML)
-    if (empty($_SESSION['user_id'])) {
-        http_response_code(401);
-        echo json_encode([
-            'ok' => false,
-            'error' => 'Authentification requise',
-            'server_time' => date('Y-m-d H:i:s')
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
+    initApi();
+    requireApiAuth();
     
     // Récupérer PDO
     $pdo = getPdoOrFail();
