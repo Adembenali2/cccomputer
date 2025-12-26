@@ -49,10 +49,16 @@ try {
     foreach ($photocopieursRaw as $pc) {
         $macNorm = $pc['mac_norm'];
         
-        // Récupérer les infos les plus récentes du photocopieur
+        // Récupérer les infos les plus récentes du photocopieur (recherche dans les deux tables)
         $stmtInfo = $pdo->prepare("
-            SELECT Nom, Model
+            SELECT Nom, Model, Timestamp
             FROM compteur_relevee
+            WHERE mac_norm = :mac_norm
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            UNION ALL
+            SELECT Nom, Model, Timestamp
+            FROM compteur_relevee_ancien
             WHERE mac_norm = :mac_norm
               AND mac_norm IS NOT NULL
               AND mac_norm != ''

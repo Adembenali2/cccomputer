@@ -68,15 +68,21 @@ try {
     $stmt->execute([':client_id' => $clientId]);
     $photocopieursRaw = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Récupérer les infos les plus récentes pour chaque photocopieur
+    // Récupérer les infos les plus récentes pour chaque photocopieur (dans les deux tables)
     $photocopieurs = [];
     foreach ($photocopieursRaw as $pc) {
         $macNorm = $pc['mac_norm'];
         
-        // Récupérer les infos les plus récentes du photocopieur
+        // Récupérer les infos les plus récentes du photocopieur (recherche dans les deux tables)
         $stmtInfo = $pdo->prepare("
-            SELECT Nom, Model
+            SELECT Nom, Model, Timestamp
             FROM compteur_relevee
+            WHERE mac_norm = :mac_norm
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            UNION ALL
+            SELECT Nom, Model, Timestamp
+            FROM compteur_relevee_ancien
             WHERE mac_norm = :mac_norm
               AND mac_norm IS NOT NULL
               AND mac_norm != ''
@@ -102,15 +108,28 @@ try {
         $macNorm = $pc['mac_norm'];
         if (!$macNorm) continue;
         
-        // Récupérer le premier relevé avant ou au début de la période
+        // Récupérer le PREMIER relevé du jour de début (recherche dans les deux tables)
         $stmtStart = $pdo->prepare("
             SELECT 
                 COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor
+                COALESCE(TotalColor, 0) as TotalColor,
+                Timestamp
             FROM compteur_relevee
             WHERE mac_norm = :mac_norm
-              AND DATE(Timestamp) <= :date_debut
-            ORDER BY Timestamp DESC
+              AND DATE(Timestamp) = :date_debut
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            UNION ALL
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor,
+                Timestamp
+            FROM compteur_relevee_ancien
+            WHERE mac_norm = :mac_norm
+              AND DATE(Timestamp) = :date_debut
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            ORDER BY Timestamp ASC
             LIMIT 1
         ");
         $stmtStart->execute([
@@ -119,14 +138,27 @@ try {
         ]);
         $startReleve = $stmtStart->fetch(PDO::FETCH_ASSOC);
         
-        // Récupérer le dernier relevé avant ou à la fin de la période
+        // Récupérer le DERNIER relevé du jour de fin (recherche dans les deux tables)
         $stmtEnd = $pdo->prepare("
             SELECT 
                 COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor
+                COALESCE(TotalColor, 0) as TotalColor,
+                Timestamp
             FROM compteur_relevee
             WHERE mac_norm = :mac_norm
-              AND DATE(Timestamp) <= :date_fin
+              AND DATE(Timestamp) = :date_fin
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
+            UNION ALL
+            SELECT 
+                COALESCE(TotalBW, 0) as TotalBW,
+                COALESCE(TotalColor, 0) as TotalColor,
+                Timestamp
+            FROM compteur_relevee_ancien
+            WHERE mac_norm = :mac_norm
+              AND DATE(Timestamp) = :date_fin
+              AND mac_norm IS NOT NULL
+              AND mac_norm != ''
             ORDER BY Timestamp DESC
             LIMIT 1
         ");
@@ -136,12 +168,28 @@ try {
         ]);
         $endReleve = $stmtEnd->fetch(PDO::FETCH_ASSOC);
         
+        // Calculer les consommations
+        $compteurDebutNB = 0;
+        $compteurDebutCouleur = 0;
+        $compteurFinNB = 0;
+        $compteurFinCouleur = 0;
+        $consoNB = 0;
+        $consoColor = 0;
+        
+        if ($startReleve) {
+            $compteurDebutNB = (int)$startReleve['TotalBW'];
+            $compteurDebutCouleur = (int)$startReleve['TotalColor'];
+        }
+        
+        if ($endReleve) {
+            $compteurFinNB = (int)$endReleve['TotalBW'];
+            $compteurFinCouleur = (int)$endReleve['TotalColor'];
+        }
+        
+        // Calcul : compteur fin - compteur début
         if ($startReleve && $endReleve) {
-            $consoNB = max(0, (int)$endReleve['TotalBW'] - (int)$startReleve['TotalBW']);
-            $consoColor = max(0, (int)$endReleve['TotalColor'] - (int)$startReleve['TotalColor']);
-        } else {
-            $consoNB = 0;
-            $consoColor = 0;
+            $consoNB = max(0, $compteurFinNB - $compteurDebutNB);
+            $consoColor = max(0, $compteurFinCouleur - $compteurDebutCouleur);
         }
         
         $machines[] = [
@@ -149,8 +197,14 @@ try {
             'nom' => $pc['nom'],
             'modele' => $pc['modele'],
             'mac_norm' => $macNorm,
+            'compteur_debut_nb' => $compteurDebutNB,
+            'compteur_debut_couleur' => $compteurDebutCouleur,
+            'compteur_fin_nb' => $compteurFinNB,
+            'compteur_fin_couleur' => $compteurFinCouleur,
             'conso_nb' => $consoNB,
-            'conso_couleur' => $consoColor
+            'conso_couleur' => $consoColor,
+            'date_debut_releve' => $startReleve ? $startReleve['Timestamp'] : null,
+            'date_fin_releve' => $endReleve ? $endReleve['Timestamp'] : null
         ];
     }
     

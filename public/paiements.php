@@ -2204,13 +2204,62 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 const data = await response.json();
                 
                 if (data.ok) {
-                    // Afficher les informations de consommation
-                    let infoHtml = '<h4 style="margin: 0 0 0.5rem; font-size: 1rem;">Consommations détectées:</h4>';
+                    // Afficher les informations de consommation avec les compteurs de début et fin
+                    let infoHtml = '<h4 style="margin: 0 0 1rem; font-size: 1rem; font-weight: 600;">Relevés de compteurs:</h4>';
+                    
                     data.machines.forEach((machine, index) => {
-                        infoHtml += `<div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--bg-primary); border-radius: var(--radius-sm);">
-                            <strong>${machine.nom}:</strong> ${machine.conso_nb} copies N&B, ${machine.conso_couleur} copies couleur
-                        </div>`;
+                        const dateDebutFormatted = machine.date_debut_releve ? new Date(machine.date_debut_releve).toLocaleString('fr-FR') : 'Non trouvé';
+                        const dateFinFormatted = machine.date_fin_releve ? new Date(machine.date_fin_releve).toLocaleString('fr-FR') : 'Non trouvé';
+                        
+                        infoHtml += `
+                            <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                                <div style="margin-bottom: 0.75rem; font-weight: 600; color: var(--text-primary); font-size: 1.05rem;">
+                                    ${machine.nom} ${machine.modele ? '(' + machine.modele + ')' : ''}
+                                </div>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.75rem;">
+                                    <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-sm);">
+                                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Jour de début période</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">${dateDebutFormatted}</div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                            <span style="color: var(--text-primary);">N&B:</span>
+                                            <strong style="color: var(--text-primary);">${machine.compteur_debut_nb.toLocaleString('fr-FR')}</strong>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <span style="color: var(--text-primary);">Couleur:</span>
+                                            <strong style="color: var(--text-primary);">${machine.compteur_debut_couleur.toLocaleString('fr-FR')}</strong>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-sm);">
+                                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Jour de fin période</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">${dateFinFormatted}</div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                            <span style="color: var(--text-primary);">N&B:</span>
+                                            <strong style="color: var(--text-primary);">${machine.compteur_fin_nb.toLocaleString('fr-FR')}</strong>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <span style="color: var(--text-primary);">Couleur:</span>
+                                            <strong style="color: var(--text-primary);">${machine.compteur_fin_couleur.toLocaleString('fr-FR')}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div style="padding: 0.75rem; background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1)); border-radius: var(--radius-sm); border: 1px solid var(--accent-primary);">
+                                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Consommation calculée (Fin - Début):</div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                        <span style="color: var(--text-primary); font-weight: 600;">N&B:</span>
+                                        <strong style="color: var(--accent-primary); font-size: 1.1rem;">${machine.conso_nb.toLocaleString('fr-FR')} copies</strong>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-primary); font-weight: 600;">Couleur:</span>
+                                        <strong style="color: var(--accent-primary); font-size: 1.1rem;">${machine.conso_couleur.toLocaleString('fr-FR')} copies</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
                     });
+                    
                     document.getElementById('factureConsommationContent').innerHTML = infoHtml;
                     document.getElementById('factureConsommationInfo').style.display = 'block';
                     
