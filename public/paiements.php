@@ -1665,6 +1665,20 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     </div>
                 </div>
 
+                <!-- Champs pour Service -->
+                <div id="factureServiceFields" style="display: none;">
+                    <div class="modal-form-row">
+                        <div class="modal-form-group" style="flex: 1;">
+                            <label for="factureServiceDescription">Description du service <span style="color: #ef4444;">*</span></label>
+                            <input type="text" id="factureServiceDescription" name="serviceDescription" placeholder="Ex: Maintenance, Réparation, Installation..." onchange="calculateFactureTotalService()">
+                        </div>
+                        <div class="modal-form-group" style="flex: 0 0 200px;">
+                            <label for="factureServiceMontant">Montant HT (€) <span style="color: #ef4444;">*</span></label>
+                            <input type="number" id="factureServiceMontant" name="serviceMontant" step="0.01" min="0" placeholder="0.00" onchange="calculateFactureTotalService()">
+                        </div>
+                    </div>
+                </div>
+
                 <div id="factureConsommationInfo" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                     <div id="factureConsommationContent"></div>
                 </div>
@@ -2076,6 +2090,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     addAchatProduit(); // Ajouter une première ligne vide
                 }
                 
+                // Réinitialiser les champs Service
+                const serviceDescription = document.getElementById('factureServiceDescription');
+                const serviceMontant = document.getElementById('factureServiceMontant');
+                if (serviceDescription) serviceDescription.value = '';
+                if (serviceMontant) serviceMontant.value = '';
+                
                 // Afficher/masquer les champs selon le type
                 onFactureTypeChange();
                 
@@ -2164,22 +2184,28 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             const type = typeSelect.value;
             const consommationFields = document.getElementById('factureConsommationFields');
             const achatFields = document.getElementById('factureAchatFields');
+            const serviceFields = document.getElementById('factureServiceFields');
             const consommationInfo = document.getElementById('factureConsommationInfo');
             const lignesContainer = document.getElementById('factureLignesContainer');
             const factureOffre = document.getElementById('factureOffre');
             
             if (type === 'Achat') {
-                // Masquer les champs Consommation
+                // Masquer les autres champs
                 if (consommationFields) consommationFields.style.display = 'none';
+                if (serviceFields) serviceFields.style.display = 'none';
                 if (consommationInfo) consommationInfo.style.display = 'none';
                 if (lignesContainer) lignesContainer.style.display = 'none';
                 
-                // Retirer l'attribut required des champs Consommation
+                // Retirer l'attribut required des champs Consommation et Service
                 if (factureOffre) factureOffre.removeAttribute('required');
                 const dateDebut = document.getElementById('factureDateDebut');
                 const dateFin = document.getElementById('factureDateFin');
                 if (dateDebut) dateDebut.removeAttribute('required');
                 if (dateFin) dateFin.removeAttribute('required');
+                const serviceDescription = document.getElementById('factureServiceDescription');
+                const serviceMontant = document.getElementById('factureServiceMontant');
+                if (serviceDescription) serviceDescription.removeAttribute('required');
+                if (serviceMontant) serviceMontant.removeAttribute('required');
                 
                 // Afficher les champs Achat
                 if (achatFields) achatFields.style.display = 'block';
@@ -2204,11 +2230,19 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 
                 // Réinitialiser les totaux
                 calculateFactureTotalAchat();
-            } else {
-                // Masquer les champs Achat
+            } else if (type === 'Service') {
+                // Masquer les autres champs
+                if (consommationFields) consommationFields.style.display = 'none';
                 if (achatFields) achatFields.style.display = 'none';
+                if (consommationInfo) consommationInfo.style.display = 'none';
+                if (lignesContainer) lignesContainer.style.display = 'none';
                 
-                // Retirer l'attribut required de tous les champs Achat pour éviter l'erreur de validation
+                // Retirer l'attribut required des champs Consommation et Achat
+                if (factureOffre) factureOffre.removeAttribute('required');
+                const dateDebut = document.getElementById('factureDateDebut');
+                const dateFin = document.getElementById('factureDateFin');
+                if (dateDebut) dateDebut.removeAttribute('required');
+                if (dateFin) dateFin.removeAttribute('required');
                 const achatProduits = document.querySelectorAll('.achat-produit');
                 achatProduits.forEach(produit => {
                     const typeSelect = produit.querySelector('.achat-produit-type');
@@ -2222,21 +2256,66 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     if (prixInput) prixInput.removeAttribute('required');
                 });
                 
+                // Afficher les champs Service
+                if (serviceFields) serviceFields.style.display = 'block';
+                
+                // Rendre les champs Service requis
+                const serviceDescription = document.getElementById('factureServiceDescription');
+                const serviceMontant = document.getElementById('factureServiceMontant');
+                if (serviceDescription) serviceDescription.setAttribute('required', 'required');
+                if (serviceMontant) serviceMontant.setAttribute('required', 'required');
+                
+                // Réinitialiser les totaux
+                calculateFactureTotalService();
+            } else {
+                // Type Consommation
+                // Masquer les autres champs
+                if (achatFields) achatFields.style.display = 'none';
+                if (serviceFields) serviceFields.style.display = 'none';
+                
+                // Retirer l'attribut required de tous les champs Achat et Service pour éviter l'erreur de validation
+                const achatProduits = document.querySelectorAll('.achat-produit');
+                achatProduits.forEach(produit => {
+                    const typeSelect = produit.querySelector('.achat-produit-type');
+                    const autreInput = produit.querySelector('.achat-produit-autre');
+                    const quantiteInput = produit.querySelector('.achat-produit-quantite');
+                    const prixInput = produit.querySelector('.achat-produit-prix');
+                    
+                    if (typeSelect) typeSelect.removeAttribute('required');
+                    if (autreInput) autreInput.removeAttribute('required');
+                    if (quantiteInput) quantiteInput.removeAttribute('required');
+                    if (prixInput) prixInput.removeAttribute('required');
+                });
+                const serviceDescription = document.getElementById('factureServiceDescription');
+                const serviceMontant = document.getElementById('factureServiceMontant');
+                if (serviceDescription) serviceDescription.removeAttribute('required');
+                if (serviceMontant) serviceMontant.removeAttribute('required');
+                
                 // Afficher les champs Consommation
                 if (consommationFields) consommationFields.style.display = 'flex';
                 
-                // Rendre les champs Consommation requis/non requis
+                // Rendre les champs Consommation requis
                 if (factureOffre) {
-                    if (type === 'Consommation') {
-                        factureOffre.setAttribute('required', 'required');
-                    } else {
-                        factureOffre.removeAttribute('required');
-                    }
+                    factureOffre.setAttribute('required', 'required');
                 }
                 
                 // Réinitialiser les totaux
                 calculateFactureTotal();
             }
+        }
+
+        /**
+         * Calcule les totaux pour une facture de type Service
+         */
+        function calculateFactureTotalService() {
+            const montantHT = parseFloat(document.getElementById('factureServiceMontant').value) || 0;
+            const tauxTVA = 20; // TVA à 20%
+            const tva = montantHT * (tauxTVA / 100);
+            const totalTTC = montantHT + tva;
+            
+            document.getElementById('factureMontantHT').value = montantHT.toFixed(2);
+            document.getElementById('factureTVA').value = tva.toFixed(2);
+            document.getElementById('factureMontantTTC').value = totalTTC.toFixed(2);
         }
 
         /**
@@ -2815,8 +2894,30 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 return;
             }
             
-            // Gérer le type "Achat"
-            if (data.factureType === 'Achat') {
+            // Gérer le type "Service"
+            if (data.factureType === 'Service') {
+                const serviceDescription = data.serviceDescription || '';
+                const serviceMontant = parseFloat(data.serviceMontant) || 0;
+                
+                if (!serviceDescription.trim()) {
+                    alert('Veuillez saisir une description du service');
+                    return;
+                }
+                
+                if (serviceMontant <= 0) {
+                    alert('Veuillez saisir un montant valide');
+                    return;
+                }
+                
+                // Créer la ligne de facture pour le service
+                data.lignes = [{
+                    description: serviceDescription.trim(),
+                    type: 'Service',
+                    quantite: 1,
+                    prix_unitaire: serviceMontant,
+                    total_ht: serviceMontant
+                }];
+            } else if (data.factureType === 'Achat') {
                 // Récupérer tous les produits
                 const produits = [];
                 const produitInputs = document.querySelectorAll('.achat-produit');
