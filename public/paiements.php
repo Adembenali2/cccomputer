@@ -101,6 +101,15 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 opacity: 1;
             }
         }
+        
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
 
         .message.success {
             background-color: #d1fae5;
@@ -1928,9 +1937,54 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
                     <div id="genFactureNotifications" style="display: none; margin-bottom: 1rem;"></div>
                 </form>
+                
+                <!-- Zone de progression -->
+                <div id="genFactureProgressContainer" style="display: none; margin-top: 2rem; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: var(--radius-lg); box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                    <div style="text-align: center; color: white; margin-bottom: 1.5rem;">
+                        <div style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">
+                            <span id="genFactureProgressPercent">0</span>%
+                        </div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">Génération en cours...</div>
+                    </div>
+                    
+                    <!-- Barre de progression -->
+                    <div style="width: 100%; height: 24px; background: rgba(255,255,255,0.2); border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; position: relative;">
+                        <div id="genFactureProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981 0%, #34d399 100%); border-radius: 12px; transition: width 0.3s ease; position: relative; overflow: hidden;">
+                            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: shimmer 2s infinite;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Statistiques en temps réel -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.15); border-radius: var(--radius-md); backdrop-filter: blur(10px);">
+                            <div style="font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem;">
+                                <span id="genFactureStatsClients">0</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">Clients traités</div>
+                        </div>
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.15); border-radius: var(--radius-md); backdrop-filter: blur(10px);">
+                            <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin-bottom: 0.25rem;">
+                                <span id="genFactureStatsGenerees">0</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">Factures générées</div>
+                        </div>
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.15); border-radius: var(--radius-md); backdrop-filter: blur(10px);">
+                            <div style="font-size: 2rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.25rem;">
+                                <span id="genFactureStatsExclus">0</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">Clients exclus</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Liste des résultats en temps réel -->
+                    <div id="genFactureProgressLog" style="margin-top: 1.5rem; max-height: 200px; overflow-y: auto; background: rgba(255,255,255,0.1); border-radius: var(--radius-md); padding: 1rem; display: none;">
+                        <div style="font-weight: 600; color: white; margin-bottom: 0.75rem; font-size: 0.9rem;">Détails de la génération:</div>
+                        <div id="genFactureProgressLogContent" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeGenerationFactureClientsModal()">Annuler</button>
+                <button type="button" class="btn btn-secondary" onclick="closeGenerationFactureClientsModal()" id="btnCancelGeneration">Annuler</button>
                 <button type="submit" form="generationFactureClientsForm" class="btn btn-primary" id="btnGenererFacturesClients">Générer les factures</button>
             </div>
         </div>
@@ -4490,8 +4544,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             
             // Réinitialiser le formulaire
             const form = document.getElementById('generationFactureClientsForm');
+            const progressContainer = document.getElementById('genFactureProgressContainer');
+            const btnSubmit = document.getElementById('btnGenererFacturesClients');
+            const btnCancel = document.getElementById('btnCancelGeneration');
+            
             if (form) {
                 form.reset();
+                form.style.display = 'block';
                 // Réinitialiser la date à aujourd'hui
                 const dateInput = document.getElementById('genFactureDate');
                 if (dateInput) {
@@ -4504,6 +4563,52 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     notificationsDiv.innerHTML = '';
                 }
             }
+            
+            // Masquer la zone de progression
+            if (progressContainer) {
+                progressContainer.style.display = 'none';
+                progressContainer.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            }
+            
+            // Réinitialiser les boutons
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.style.display = 'inline-block';
+                btnSubmit.textContent = 'Générer les factures';
+            }
+            if (btnCancel) {
+                btnCancel.disabled = false;
+            }
+            
+            // Réinitialiser les compteurs
+            updateProgress(0, 0, 0, 0);
+            
+            // Vider le log
+            const logContent = document.getElementById('genFactureProgressLogContent');
+            if (logContent) {
+                logContent.innerHTML = '';
+            }
+            const logContainer = document.getElementById('genFactureProgressLog');
+            if (logContainer) {
+                logContainer.style.display = 'none';
+            }
+        }
+        
+        /**
+         * Met à jour l'affichage de la progression
+         */
+        function updateProgress(percent, clients, generees, exclus) {
+            const percentEl = document.getElementById('genFactureProgressPercent');
+            const barEl = document.getElementById('genFactureProgressBar');
+            const clientsEl = document.getElementById('genFactureStatsClients');
+            const genereesEl = document.getElementById('genFactureStatsGenerees');
+            const exclusEl = document.getElementById('genFactureStatsExclus');
+            
+            if (percentEl) percentEl.textContent = Math.round(percent);
+            if (barEl) barEl.style.width = percent + '%';
+            if (clientsEl) clientsEl.textContent = clients;
+            if (genereesEl) genereesEl.textContent = generees;
+            if (exclusEl) exclusEl.textContent = exclus;
         }
 
         /**
@@ -4543,8 +4648,21 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
             
             const btnSubmit = document.getElementById('btnGenererFacturesClients');
+            const btnCancel = document.getElementById('btnCancelGeneration');
+            const progressContainer = document.getElementById('genFactureProgressContainer');
+            const formContainer = form.parentElement;
+            
+            // Masquer le formulaire et afficher la progression
+            form.style.display = 'none';
+            if (progressContainer) {
+                progressContainer.style.display = 'block';
+            }
+            
             btnSubmit.disabled = true;
-            btnSubmit.textContent = 'Génération en cours...';
+            btnSubmit.style.display = 'none';
+            if (btnCancel) {
+                btnCancel.disabled = true;
+            }
             
             // Masquer les notifications précédentes
             const notificationsDiv = document.getElementById('genFactureNotifications');
@@ -4552,6 +4670,68 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 notificationsDiv.style.display = 'none';
                 notificationsDiv.innerHTML = '';
             }
+            
+            // Initialiser les compteurs
+            let progressPercent = 0;
+            let statsClients = 0;
+            let statsGenerees = 0;
+            let statsExclus = 0;
+            let progressInterval;
+            
+            // Fonction pour mettre à jour la progression avec animations
+            function updateProgressWithAnimation(percent, clients, generees, exclus) {
+                progressPercent = Math.min(100, Math.max(0, percent));
+                statsClients = clients;
+                statsGenerees = generees;
+                statsExclus = exclus;
+                
+                const percentEl = document.getElementById('genFactureProgressPercent');
+                const barEl = document.getElementById('genFactureProgressBar');
+                const clientsEl = document.getElementById('genFactureStatsClients');
+                const genereesEl = document.getElementById('genFactureStatsGenerees');
+                const exclusEl = document.getElementById('genFactureStatsExclus');
+                
+                if (percentEl) {
+                    percentEl.textContent = Math.round(progressPercent);
+                }
+                if (barEl) {
+                    barEl.style.width = progressPercent + '%';
+                }
+                if (clientsEl) {
+                    clientsEl.textContent = statsClients;
+                    // Animation de compteur
+                    clientsEl.style.transition = 'transform 0.2s ease';
+                    clientsEl.style.transform = 'scale(1.1)';
+                    setTimeout(() => {
+                        clientsEl.style.transform = 'scale(1)';
+                    }, 200);
+                }
+                if (genereesEl) {
+                    genereesEl.textContent = statsGenerees;
+                    genereesEl.style.transition = 'transform 0.2s ease';
+                    genereesEl.style.transform = 'scale(1.1)';
+                    setTimeout(() => {
+                        genereesEl.style.transform = 'scale(1)';
+                    }, 200);
+                }
+                if (exclusEl) {
+                    exclusEl.textContent = statsExclus;
+                    exclusEl.style.transition = 'transform 0.2s ease';
+                    exclusEl.style.transform = 'scale(1.1)';
+                    setTimeout(() => {
+                        exclusEl.style.transform = 'scale(1)';
+                    }, 200);
+                }
+            }
+            
+            // Simuler une progression pendant le chargement
+            let simulatedProgress = 0;
+            progressInterval = setInterval(() => {
+                simulatedProgress += Math.random() * 3;
+                if (simulatedProgress < 90) {
+                    updateProgressWithAnimation(simulatedProgress, statsClients, statsGenerees, statsExclus);
+                }
+            }, 200);
             
             try {
                 const data = {
@@ -4561,6 +4741,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     offre: parseInt(offre)
                 };
                 
+                const startTime = Date.now();
                 const response = await fetch('/API/factures_generer_clients.php', {
                     method: 'POST',
                     headers: {
@@ -4570,30 +4751,84 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     credentials: 'include'
                 });
                 
+                    clearInterval(progressInterval);
+                
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error('Erreur HTTP:', response.status, errorText);
+                    updateProgressWithAnimation(100, statsClients, statsGenerees, statsExclus);
+                    
+                    // Afficher l'erreur
+                    if (progressContainer) {
+                        progressContainer.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                    }
+                    
                     try {
                         const errorJson = JSON.parse(errorText);
                         showMessage('Erreur : ' + (errorJson.error || 'Erreur HTTP ' + response.status), 'error');
                     } catch {
                         showMessage('Erreur HTTP ' + response.status + ': ' + errorText.substring(0, 200), 'error');
                     }
+                    
+                    btnSubmit.disabled = false;
+                    btnSubmit.style.display = 'inline-block';
+                    if (btnCancel) btnCancel.disabled = false;
+                    form.style.display = 'block';
+                    if (progressContainer) progressContainer.style.display = 'none';
                     return;
                 }
                 
                 const result = await response.json();
                 console.log('Réponse reçue:', result);
                 
+                // Mettre à jour avec les vraies valeurs
+                const totalClients = (result.total_clients || 0) + (result.total_exclus || 0);
+                updateProgressWithAnimation(100, totalClients, result.total_generees || 0, result.total_exclus || 0);
+                
                 if (result.ok) {
-                    // Afficher les résultats
+                    // Changer le style pour le succès
+                    if (progressContainer) {
+                        progressContainer.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+                    }
+                    
+                    // Afficher les résultats dans le log
+                    const logContainer = document.getElementById('genFactureProgressLog');
+                    const logContent = document.getElementById('genFactureProgressLogContent');
+                    
+                    if (logContainer && logContent) {
+                        logContent.innerHTML = '';
+                        
+                        // Afficher les factures générées
+                        if (result.factures_generees && result.factures_generees.length > 0) {
+                            result.factures_generees.forEach(facture => {
+                                const logItem = document.createElement('div');
+                                logItem.style.cssText = 'padding: 0.5rem; background: rgba(16,185,129,0.2); border-radius: var(--radius-sm); color: white; font-size: 0.85rem; border-left: 3px solid #10b981;';
+                                logItem.innerHTML = `✅ <strong>${facture.client_nom}</strong> - Facture ${facture.numero} (${parseFloat(facture.montant_ttc).toFixed(2)}€)`;
+                                logContent.appendChild(logItem);
+                            });
+                        }
+                        
+                        // Afficher les clients exclus
+                        if (result.clients_exclus && result.clients_exclus.length > 0) {
+                            result.clients_exclus.forEach(client => {
+                                const logItem = document.createElement('div');
+                                logItem.style.cssText = 'padding: 0.5rem; background: rgba(245,158,11,0.2); border-radius: var(--radius-sm); color: white; font-size: 0.85rem; border-left: 3px solid #f59e0b;';
+                                logItem.innerHTML = `⚠️ <strong>${client.client_nom}</strong> - ${client.raison}`;
+                                logContent.appendChild(logItem);
+                            });
+                        }
+                        
+                        logContainer.style.display = 'block';
+                    }
+                    
+                    // Afficher le message de succès
                     let message = `${result.total_generees} facture(s) générée(s) avec succès`;
                     if (result.total_exclus > 0) {
                         message += `. ${result.total_exclus} client(s) exclu(s)`;
                     }
                     showMessage(message, 'success');
                     
-                    // Afficher les notifications pour les clients exclus
+                    // Afficher les notifications pour les clients exclus dans le formulaire
                     if (result.clients_exclus && result.clients_exclus.length > 0 && notificationsDiv) {
                         let notificationsHtml = '<div style="padding: 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-top: 1rem;">';
                         notificationsHtml += '<div style="font-weight: 600; color: #92400E; margin-bottom: 0.75rem;">⚠️ Clients exclus de la génération:</div>';
@@ -4613,30 +4848,59 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         notificationsDiv.style.display = 'block';
                     }
                     
-                    // Si toutes les factures ont été générées, fermer le modal après 3 secondes
+                    // Si toutes les factures ont été générées, fermer le modal après 5 secondes
                     if (result.total_exclus === 0) {
                         setTimeout(() => {
                             closeGenerationFactureClientsModal();
-                            // Recharger la page pour voir les nouvelles factures
                             window.location.reload();
-                        }, 3000);
+                        }, 5000);
                     } else {
-                        // Ne pas fermer automatiquement s'il y a des exclusions
-                        btnSubmit.disabled = false;
-                        btnSubmit.textContent = 'Générer les factures';
+                        // Afficher un bouton pour fermer
+                        setTimeout(() => {
+                            const closeBtn = document.createElement('button');
+                            closeBtn.className = 'btn btn-primary';
+                            closeBtn.textContent = 'Fermer';
+                            closeBtn.style.marginTop = '1rem';
+                            closeBtn.onclick = () => {
+                                closeGenerationFactureClientsModal();
+                                window.location.reload();
+                            };
+                            if (progressContainer) {
+                                progressContainer.appendChild(closeBtn);
+                            }
+                        }, 2000);
                     }
                 } else {
                     const errorMsg = result.error || 'Erreur inconnue';
                     console.error('Erreur API:', errorMsg);
+                    
+                    if (progressContainer) {
+                        progressContainer.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                    }
+                    
                     showMessage('Erreur : ' + errorMsg, 'error');
                     btnSubmit.disabled = false;
-                    btnSubmit.textContent = 'Générer les factures';
+                    btnSubmit.style.display = 'inline-block';
+                    if (btnCancel) btnCancel.disabled = false;
+                    form.style.display = 'block';
+                    if (progressContainer) progressContainer.style.display = 'none';
                 }
             } catch (error) {
+                clearInterval(progressInterval);
                 console.error('Erreur lors de la génération:', error);
+                
+                updateProgressWithAnimation(100, statsClients, statsGenerees, statsExclus);
+                
+                if (progressContainer) {
+                    progressContainer.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                }
+                
                 showMessage('Erreur lors de la génération des factures: ' + error.message, 'error');
                 btnSubmit.disabled = false;
-                btnSubmit.textContent = 'Générer les factures';
+                btnSubmit.style.display = 'inline-block';
+                if (btnCancel) btnCancel.disabled = false;
+                form.style.display = 'block';
+                if (progressContainer) progressContainer.style.display = 'none';
             }
         }
 
