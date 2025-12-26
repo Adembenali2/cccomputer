@@ -1679,6 +1679,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     </div>
                 </div>
 
+                <!-- Zone de notifications client -->
+                <div id="factureClientNotifications" style="display: none; margin-bottom: 1rem;">
+                    <!-- Les notifications seront ajoutées ici dynamiquement -->
+                </div>
+
                 <div id="factureConsommationInfo" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                     <div id="factureConsommationContent"></div>
                 </div>
@@ -2075,6 +2080,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 }
                 document.getElementById('factureLignesContainer').style.display = 'none';
                 document.getElementById('factureConsommationInfo').style.display = 'none';
+                document.getElementById('factureClientNotifications').style.display = 'none';
+                document.getElementById('factureClientNotifications').innerHTML = '';
                 window.factureMachineData = null;
                 
                 // Réinitialiser les totaux
@@ -2168,9 +2175,87 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             const clientId = document.getElementById('factureClient').value;
             const offre = document.getElementById('factureOffre').value;
             
+            // Vérifier les imprimantes et afficher les notifications
+            await checkClientNotifications(clientId);
+            
             if (clientId && offre) {
                 await checkClientPhotocopieurs(clientId, offre);
                 await loadConsommationData();
+            }
+        }
+
+        /**
+         * Vérifie les notifications pour un client (imprimantes et relevés)
+         */
+        async function checkClientNotifications(clientId) {
+            const notificationsContainer = document.getElementById('factureClientNotifications');
+            if (!notificationsContainer || !clientId) {
+                if (notificationsContainer) notificationsContainer.style.display = 'none';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/API/factures_check_photocopieurs.php?client_id=${encodeURIComponent(clientId)}`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    notificationsContainer.style.display = 'none';
+                    return;
+                }
+                
+                const nbPhotocopieurs = data.nb_photocopieurs || 0;
+                const dernierReleveJours = data.dernier_releve_jours;
+                const notifications = [];
+                
+                // Notification 1: Pas d'imprimante attribuée
+                if (nbPhotocopieurs === 0) {
+                    notifications.push({
+                        type: 'warning',
+                        message: '⚠️ Ce client n\'a pas d\'imprimante attribuée.'
+                    });
+                }
+                
+                // Notification 2: Pas de relevé depuis plus de 2 jours
+                if (nbPhotocopieurs > 0 && dernierReleveJours !== null && dernierReleveJours > 2) {
+                    const joursText = dernierReleveJours === 1 ? 'jour' : 'jours';
+                    notifications.push({
+                        type: 'info',
+                        message: `ℹ️ Aucun relevé de compteur reçu depuis ${dernierReleveJours} ${joursText}.`
+                    });
+                }
+                
+                // Afficher les notifications
+                if (notifications.length > 0) {
+                    notificationsContainer.innerHTML = '';
+                    notifications.forEach(notif => {
+                        const notifDiv = document.createElement('div');
+                        notifDiv.style.padding = '0.75rem 1rem';
+                        notifDiv.style.borderRadius = 'var(--radius-md)';
+                        notifDiv.style.marginBottom = '0.5rem';
+                        notifDiv.style.fontSize = '0.875rem';
+                        
+                        if (notif.type === 'warning') {
+                            notifDiv.style.backgroundColor = '#FEF3C7';
+                            notifDiv.style.border = '1px solid #FCD34D';
+                            notifDiv.style.color = '#92400E';
+                        } else {
+                            notifDiv.style.backgroundColor = '#DBEAFE';
+                            notifDiv.style.border = '1px solid #93C5FD';
+                            notifDiv.style.color = '#1E40AF';
+                        }
+                        
+                        notifDiv.textContent = notif.message;
+                        notificationsContainer.appendChild(notifDiv);
+                    });
+                    notificationsContainer.style.display = 'block';
+                } else {
+                    notificationsContainer.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Erreur lors de la vérification des notifications:', error);
+                notificationsContainer.style.display = 'none';
             }
         }
 

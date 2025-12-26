@@ -46,12 +46,16 @@ try {
     
     // Récupérer les infos les plus récentes pour chaque photocopieur
     $photocopieurs = [];
+    $dernierReleveDate = null;
+    $dernierReleveJours = null;
+    
     foreach ($photocopieursRaw as $pc) {
         $macNorm = $pc['mac_norm'];
         
         // Récupérer les infos les plus récentes du photocopieur (recherche dans les deux tables)
         $stmtInfo = $pdo->prepare("
-            SELECT Nom, Model, Timestamp
+            SELECT Nom, Model, Timestamp,
+                   TIMESTAMPDIFF(DAY, Timestamp, NOW()) AS jours_ecoules
             FROM (
                 SELECT Nom, Model, Timestamp
                 FROM compteur_relevee
@@ -71,20 +75,43 @@ try {
         $stmtInfo->execute([':mac_norm' => $macNorm]);
         $info = $stmtInfo->fetch(PDO::FETCH_ASSOC);
         
+        $timestamp = $info['Timestamp'] ?? null;
+        $joursEcoules = null;
+        
+        if ($timestamp) {
+            // Calculer le nombre de jours depuis le dernier relevé
+            $stmtJours = $pdo->prepare("
+                SELECT TIMESTAMPDIFF(DAY, :timestamp, NOW()) AS jours
+            ");
+            $stmtJours->execute([':timestamp' => $timestamp]);
+            $resultJours = $stmtJours->fetch(PDO::FETCH_ASSOC);
+            $joursEcoules = (int)($resultJours['jours'] ?? 0);
+            
+            // Garder la date la plus récente parmi tous les photocopieurs
+            if ($dernierReleveDate === null || strtotime($timestamp) > strtotime($dernierReleveDate)) {
+                $dernierReleveDate = $timestamp;
+                $dernierReleveJours = $joursEcoules;
+            }
+        }
+        
         $photocopieurs[] = [
             'id' => $pc['id'],
             'SerialNumber' => $pc['SerialNumber'],
             'MacAddress' => $pc['MacAddress'],
             'mac_norm' => $macNorm,
             'nom' => !empty($info['Nom']) ? $info['Nom'] : 'Inconnu',
-            'modele' => !empty($info['Model']) ? $info['Model'] : 'Inconnu'
+            'modele' => !empty($info['Model']) ? $info['Model'] : 'Inconnu',
+            'dernier_releve' => $timestamp,
+            'jours_ecoules' => $joursEcoules
         ];
     }
     
     jsonResponse([
         'ok' => true,
         'nb_photocopieurs' => $nbPhotocopieurs,
-        'photocopieurs' => $photocopieurs
+        'photocopieurs' => $photocopieurs,
+        'dernier_releve_date' => $dernierReleveDate,
+        'dernier_releve_jours' => $dernierReleveJours
     ]);
     
 } catch (PDOException $e) {
