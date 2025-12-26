@@ -85,16 +85,23 @@ function requireApiAuth(): void {
             $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
             $origin = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? 'unknown';
             $sessionId = session_id() ?: 'no-session';
+            $cookieName = session_name();
+            $cookies = json_encode($_COOKIE);
+            $sessionData = json_encode($_SESSION);
             error_log(sprintf(
-                '[API Auth] Session manquante - Endpoint: %s | Session ID: %s | Origin: %s | UA: %s',
+                '[API Auth] Session manquante - Endpoint: %s | Session ID: %s | Cookie Name: %s | Cookies: %s | Session: %s | Origin: %s | UA: %s',
                 $endpoint,
                 $sessionId,
+                $cookieName,
+                $cookies,
+                $sessionData,
                 $origin,
                 substr($userAgent, 0, 100)
             ));
             $logged = true;
         }
-        jsonResponse(['ok' => false, 'error' => 'unauthorized'], 401);
+        http_response_code(401);
+        jsonResponse(['ok' => false, 'error' => 'NO_SESSION'], 401);
     }
 }
 
@@ -151,9 +158,39 @@ function requirePdoConnection(?PDO $pdo = null): PDO {
 
 /**
  * Initialise l'environnement API (session, DB, headers)
+ * IMPORTANT: Le bootstrap de session doit être inclus AVANT tout output
  */
 function initApi(): void {
-    // Activer le rate limiting en premier (60 requêtes par minute par défaut)
+    // BOOTSTRAP SESSION EN PREMIER - AVANT tout output (même ob_start)
+    try {
+        // Utiliser le bootstrap API pour la configuration de session Railway
+        require_once __DIR__ . '/../API/_bootstrap.php';
+    } catch (Throwable $e) {
+        error_log('API init error (bootstrap): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+        // On ne peut pas utiliser jsonResponse ici car headers peuvent être déjà envoyés
+        // On fait un exit direct avec JSON brut
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        http_response_code(500);
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode([
+            'ok' => false, 
+            'error' => 'Erreur d\'initialisation de la session',
+            'debug' => [
+                'message' => $e->getMessage(),
+                'type' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => explode("\n", $e->getTraceAsString())
+            ]
+        ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    // Activer le rate limiting (60 requêtes par minute par défaut)
     if (!function_exists('requireRateLimit')) {
         require_once __DIR__ . '/rate_limiter.php';
     }
@@ -170,23 +207,6 @@ function initApi(): void {
     // Définir les headers JSON en premier
     if (!headers_sent()) {
         header('Content-Type: application/json; charset=utf-8');
-    }
-    
-    try {
-        require_once __DIR__ . '/session_config.php';
-    } catch (Throwable $e) {
-        error_log('API init error (session_config): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        jsonResponse([
-            'ok' => false, 
-            'error' => 'Erreur d\'initialisation de la session',
-            'debug' => [
-                'message' => $e->getMessage(),
-                'type' => get_class($e),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => explode("\n", $e->getTraceAsString())
-            ]
-        ], 500);
     }
     
     try {

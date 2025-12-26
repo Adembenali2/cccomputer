@@ -2083,7 +2083,9 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
          */
         async function loadClientsForFacture() {
             try {
-                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000');
+                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000', {
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 
                 if (data.ok && data.clients) {
@@ -2242,7 +2244,8 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(data),
+                    credentials: 'include'
                 });
                 
                 if (!response.ok) {
@@ -2335,7 +2338,9 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
             }
             
             try {
-                const response = await fetch('/API/factures_liste.php');
+                const response = await fetch('/API/factures_liste.php', {
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 
                 if (data.ok && data.factures) {
@@ -2864,7 +2869,8 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                     body: JSON.stringify({
                         facture_id: factureId,
                         statut: newStatut
-                    })
+                    }),
+                    credentials: 'include'
                 });
                 
                 const result = await response.json();
@@ -2990,7 +2996,9 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
             errorDiv.style.display = 'none';
             
             try {
-                const response = await fetch('/API/paiements_historique.php');
+                const response = await fetch('/API/paiements_historique.php', {
+                    credentials: 'include'
+                });
                 const result = await response.json();
                 
                 if (result.ok && result.paiements) {
@@ -3240,7 +3248,9 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
          */
         async function loadFacturesForMail() {
             try {
-                const response = await fetch('/API/factures_liste.php');
+                const response = await fetch('/API/factures_liste.php', {
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 
                 if (data.ok && data.factures) {
@@ -3403,7 +3413,8 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(data),
+                    credentials: 'include'
                 });
                 
                 const result = await response.json();
@@ -3649,7 +3660,9 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
          */
         async function loadClientsForGenerationFacture() {
             try {
-                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000');
+                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000', {
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 
                 if (data.ok && data.clients) {
@@ -3726,7 +3739,8 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(data),
+                    credentials: 'include'
                 });
                 
                 if (!response.ok) {
@@ -3817,7 +3831,9 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
          */
         async function loadFacturesForPaiement() {
             try {
-                const response = await fetch('/API/factures_liste.php');
+                const response = await fetch('/API/factures_liste.php', {
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 
                 if (data.ok && data.factures) {
@@ -3886,7 +3902,8 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
             try {
                 const response = await fetch('/API/paiements_enregistrer.php', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    credentials: 'include'
                 });
                 
                 if (!response.ok) {
@@ -4041,7 +4058,9 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
          */
         async function loadClients() {
             try {
-                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000');
+                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000', {
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 
                 if (data.ok && data.clients) {
@@ -4078,7 +4097,9 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
             if (annee) params.append('annee', annee);
             
             try {
-                const response = await fetch(`/API/paiements_get_stats.php?${params.toString()}`);
+                const response = await fetch(`/API/paiements_get_stats.php?${params.toString()}`, {
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 
                 if (data.ok && data.data) {

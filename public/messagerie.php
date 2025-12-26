@@ -723,7 +723,7 @@ async function sendMessage() {
                 mentions: mentionIds,
                 image_path: imagePath || null
             }),
-            credentials: 'same-origin'
+            credentials: 'include'
         });
         
         // Essayer de récupérer le JSON même en cas d'erreur
@@ -1030,7 +1030,7 @@ function showErrorNotification(message) {
 async function loadNotificationsCount() {
     try {
         const response = await fetch('/API/chatroom_get_notifications.php', {
-            credentials: 'same-origin',
+            credentials: 'include',
             cache: 'no-cache'
         });
         
@@ -1057,7 +1057,7 @@ async function markNotificationsAsRead() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ mark_all: true }),
-            credentials: 'same-origin'
+            credentials: 'include'
         });
         
         if (response.ok) {

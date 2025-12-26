@@ -1969,7 +1969,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        credentials: 'same-origin',
+                        credentials: 'include',
                         body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
                     });
                     
@@ -2238,7 +2238,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        credentials: 'same-origin',
+                        credentials: 'include',
                         body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
                     });
                     

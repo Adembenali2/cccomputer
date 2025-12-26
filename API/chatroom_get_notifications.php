@@ -7,6 +7,9 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 initApi();
 requireApiAuth();
 
+// Debug temporaire pour Railway
+error_log("chatroom_get_notifications - SID=" . session_id() . " COOKIE=" . json_encode($_COOKIE) . " SESSION=" . json_encode($_SESSION));
+
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
