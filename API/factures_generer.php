@@ -94,6 +94,11 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
         // Calculs et Sauvegarde DB
         // Déterminer le préfixe selon le type de facture
         $factureType = $data['factureType'] ?? 'Consommation';
+        // Validation du type de facture (ENUM: 'Consommation','Achat','Service')
+        $validTypes = ['Consommation', 'Achat', 'Service'];
+        if (!in_array($factureType, $validTypes, true)) {
+            $factureType = 'Consommation'; // Valeur par défaut
+        }
         $numeroFacture = generateFactureNumber($pdo, $factureType);
         
         $pdo->beginTransaction();
@@ -105,7 +110,7 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
                 ':id_client' => (int)$data['factureClient'],
                 ':numero' => $numeroFacture,
                 ':date_facture' => $data['factureDate'],
-                ':type' => $data['factureType'],
+                ':type' => $factureType,
                 ':montant_ht' => $montantHT,
                 ':tva' => $tva,
                 ':montant_ttc' => $montantTTC,
@@ -114,15 +119,35 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
             $factureId = $pdo->lastInsertId();
             
             // Insertion Lignes
+            // Validation des types de ligne (ENUM: 'N&B','Couleur','Service','Produit')
+            $validLigneTypes = ['N&B', 'Couleur', 'Service', 'Produit'];
             $stmtLigne = $pdo->prepare("INSERT INTO facture_lignes (id_facture, description, type, quantite, prix_unitaire_ht, total_ht, ordre) VALUES (:id_facture, :description, :type, :quantite, :prix_unitaire_ht, :total_ht, :ordre)");
             foreach ($data['lignes'] as $i => $l) {
+                // Valider et corriger le type si nécessaire
+                $ligneType = $l['type'] ?? 'Service';
+                if (!in_array($ligneType, $validLigneTypes, true)) {
+                    // Tenter de corriger automatiquement
+                    if (stripos($ligneType, 'couleur') !== false || stripos($ligneType, 'color') !== false) {
+                        $ligneType = 'Couleur';
+                    } elseif (stripos($ligneType, 'nb') !== false || stripos($ligneType, 'noir') !== false) {
+                        $ligneType = 'N&B';
+                    } elseif (stripos($ligneType, 'consommation') !== false) {
+                        // Si c'est un dépassement NB ou couleur, on doit le déterminer par la description
+                        // Pour l'instant, on met 'Service' par défaut
+                        $ligneType = 'Service';
+                    } else {
+                        $ligneType = 'Service'; // Par défaut
+                    }
+                    error_log("Type de ligne corrigé de '{$l['type']}' à '{$ligneType}' pour la ligne: " . ($l['description'] ?? 'N/A'));
+                }
+                
                 $stmtLigne->execute([
                     ':id_facture' => $factureId,
-                    ':description' => $l['description'],
-                    ':type' => $l['type'],
-                    ':quantite' => $l['quantite'],
-                    ':prix_unitaire_ht' => $l['prix_unitaire'],
-                    ':total_ht' => $l['total_ht'],
+                    ':description' => $l['description'] ?? '',
+                    ':type' => $ligneType,
+                    ':quantite' => (float)($l['quantite'] ?? 1.0),
+                    ':prix_unitaire_ht' => (float)($l['prix_unitaire'] ?? 0.0),
+                    ':total_ht' => (float)($l['total_ht'] ?? 0.0),
                     ':ordre' => $i
                 ]);
             }

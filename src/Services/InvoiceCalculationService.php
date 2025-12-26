@@ -149,7 +149,7 @@ class InvoiceCalculationService
                     self::PRIX_EXCESS_NB_HT,
                     $machineName
                 ),
-                'type' => 'Consommation',
+                'type' => 'N&B',
                 'quantite' => $calculation['excess_nb'],
                 'prix_unitaire' => self::PRIX_EXCESS_NB_HT,
                 'total_ht' => $calculation['excess_nb_ht'],
@@ -166,7 +166,7 @@ class InvoiceCalculationService
                     self::PRIX_COULEUR_HT,
                     $machineName
                 ),
-                'type' => 'Consommation',
+                'type' => 'Couleur',
                 'quantite' => $calculation['conso_couleur'],
                 'prix_unitaire' => self::PRIX_COULEUR_HT,
                 'total_ht' => $calculation['couleur_ht'],
