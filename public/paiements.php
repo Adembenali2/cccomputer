@@ -1611,7 +1611,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 <div class="modal-form-row">
                     <div class="modal-form-group">
                         <label for="factureClient">Client <span style="color: #ef4444;">*</span></label>
-                        <select id="factureClient" name="factureClient" required>
+                        <select id="factureClient" name="factureClient" required onchange="onFactureClientChange()">
                             <option value="">Chargement...</option>
                         </select>
                     </div>
@@ -1631,24 +1631,31 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
                 <div class="modal-form-row">
                     <div class="modal-form-group">
+                        <label for="factureOffre">Offre <span style="color: #ef4444;">*</span></label>
+                        <select id="factureOffre" name="factureOffre" required onchange="onFactureOffreChange()">
+                            <option value="">Sélectionner une offre</option>
+                            <option value="1000">Offre 1000 copies</option>
+                            <option value="2000">Offre 2000 copies</option>
+                        </select>
+                        <div class="input-hint">Offre 2000: nécessite 2 photocopieurs</div>
+                    </div>
+                    <div class="modal-form-group">
                         <label for="factureDateDebut">Date début période</label>
-                        <input type="date" id="factureDateDebut" name="factureDateDebut">
+                        <input type="date" id="factureDateDebut" name="factureDateDebut" onchange="loadConsommationData()">
                     </div>
                     <div class="modal-form-group">
                         <label for="factureDateFin">Date fin période</label>
-                        <input type="date" id="factureDateFin" name="factureDateFin">
+                        <input type="date" id="factureDateFin" name="factureDateFin" onchange="loadConsommationData()">
                     </div>
                 </div>
 
-                <div class="facture-lignes-container">
+                <div id="factureConsommationInfo" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                    <div id="factureConsommationContent"></div>
+                </div>
+
+                <div class="facture-lignes-container" id="factureLignesContainer" style="display: none;">
                     <div class="facture-lignes-header">
-                        <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Lignes de facture</h3>
-                        <button type="button" class="btn-add-ligne" onclick="addFactureLigne()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 5v14M5 12h14"></path>
-                            </svg>
-                            Ajouter une ligne
-                        </button>
+                        <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Lignes de facture (calcul automatique)</h3>
                     </div>
                     <div id="factureLignes"></div>
                 </div>
@@ -2035,11 +2042,16 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 const lignesContainer = document.getElementById('factureLignes');
                 if (lignesContainer) {
                     lignesContainer.innerHTML = '';
-                    addFactureLigne();
                 }
+                document.getElementById('factureLignesContainer').style.display = 'none';
+                document.getElementById('factureConsommationInfo').style.display = 'none';
+                window.factureMachineData = null;
                 
                 // Réinitialiser les totaux
                 calculateFactureTotal();
+                
+                // Réinitialiser le champ offre
+                document.getElementById('factureOffre').value = '';
                 
                 // Afficher le modal (seulement l'overlay a besoin de la classe active)
                 overlay.classList.add('active');
@@ -2101,6 +2113,164 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             } catch (error) {
                 console.error('Erreur lors du chargement des clients:', error);
             }
+        }
+
+        /**
+         * Gère le changement de client
+         */
+        async function onFactureClientChange() {
+            const clientId = document.getElementById('factureClient').value;
+            const offre = document.getElementById('factureOffre').value;
+            
+            if (clientId && offre) {
+                await checkClientPhotocopieurs(clientId, offre);
+                await loadConsommationData();
+            }
+        }
+
+        /**
+         * Gère le changement d'offre
+         */
+        async function onFactureOffreChange() {
+            const clientId = document.getElementById('factureClient').value;
+            const offre = document.getElementById('factureOffre').value;
+            
+            if (clientId && offre) {
+                await checkClientPhotocopieurs(clientId, offre);
+                await loadConsommationData();
+            }
+        }
+
+        /**
+         * Vérifie le nombre de photocopieurs pour l'offre 2000
+         */
+        async function checkClientPhotocopieurs(clientId, offre) {
+            if (offre !== '2000') {
+                return; // Pas de vérification nécessaire pour l'offre 1000
+            }
+            
+            try {
+                const response = await fetch(`/API/factures_check_photocopieurs.php?client_id=${clientId}`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    if (data.nb_photocopieurs !== 2) {
+                        alert(`L'offre 2000 nécessite exactement 2 photocopieurs. Ce client a ${data.nb_photocopieurs} photocopieur(s).`);
+                        document.getElementById('factureOffre').value = '';
+                        return false;
+                    }
+                } else {
+                    alert('Erreur lors de la vérification des photocopieurs: ' + (data.error || 'Erreur inconnue'));
+                    return false;
+                }
+            } catch (error) {
+                console.error('Erreur lors de la vérification:', error);
+                alert('Erreur lors de la vérification des photocopieurs');
+                return false;
+            }
+            
+            return true;
+        }
+
+        /**
+         * Charge les données de consommation et calcule automatiquement les lignes
+         */
+        async function loadConsommationData() {
+            const clientId = document.getElementById('factureClient').value;
+            const offre = document.getElementById('factureOffre').value;
+            const dateDebut = document.getElementById('factureDateDebut').value;
+            const dateFin = document.getElementById('factureDateFin').value;
+            
+            if (!clientId || !offre) {
+                document.getElementById('factureConsommationInfo').style.display = 'none';
+                document.getElementById('factureLignesContainer').style.display = 'none';
+                return;
+            }
+            
+            if (!dateDebut || !dateFin) {
+                document.getElementById('factureConsommationInfo').style.display = 'block';
+                document.getElementById('factureConsommationContent').innerHTML = 
+                    '<p style="color: var(--text-secondary);">Veuillez sélectionner les dates de début et fin de période</p>';
+                document.getElementById('factureLignesContainer').style.display = 'none';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/API/factures_get_consommation.php?client_id=${clientId}&offre=${offre}&date_debut=${dateDebut}&date_fin=${dateFin}`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    // Afficher les informations de consommation
+                    let infoHtml = '<h4 style="margin: 0 0 0.5rem; font-size: 1rem;">Consommations détectées:</h4>';
+                    data.machines.forEach((machine, index) => {
+                        infoHtml += `<div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--bg-primary); border-radius: var(--radius-sm);">
+                            <strong>${machine.nom}:</strong> ${machine.conso_nb} copies N&B, ${machine.conso_couleur} copies couleur
+                        </div>`;
+                    });
+                    document.getElementById('factureConsommationContent').innerHTML = infoHtml;
+                    document.getElementById('factureConsommationInfo').style.display = 'block';
+                    
+                    // Générer les lignes de facture automatiquement
+                    generateFactureLinesFromConsommation(data);
+                } else {
+                    document.getElementById('factureConsommationInfo').style.display = 'block';
+                    document.getElementById('factureConsommationContent').innerHTML = 
+                        '<p style="color: #ef4444;">Erreur: ' + (data.error || 'Impossible de charger les consommations') + '</p>';
+                    document.getElementById('factureLignesContainer').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des consommations:', error);
+                document.getElementById('factureConsommationInfo').style.display = 'block';
+                document.getElementById('factureConsommationContent').innerHTML = 
+                    '<p style="color: #ef4444;">Erreur lors du chargement des consommations</p>';
+                document.getElementById('factureLignesContainer').style.display = 'none';
+            }
+        }
+
+        /**
+         * Génère les lignes de facture depuis les données de consommation
+         */
+        function generateFactureLinesFromConsommation(data) {
+            const container = document.getElementById('factureLignes');
+            container.innerHTML = '';
+            
+            // Préparer les données pour l'API
+            const machines = {};
+            data.machines.forEach((machine, index) => {
+                machines[`machine${index + 1}`] = {
+                    conso_nb: machine.conso_nb,
+                    conso_couleur: machine.conso_couleur,
+                    nom: machine.nom
+                };
+            });
+            
+            // Stocker les données pour la soumission
+            window.factureMachineData = {
+                offre: parseInt(data.offre),
+                nb_imprimantes: data.machines.length,
+                machines: machines
+            };
+            
+            // Afficher un message indiquant que le calcul sera fait côté serveur
+            const infoDiv = document.createElement('div');
+            infoDiv.style.padding = '1rem';
+            infoDiv.style.background = 'var(--bg-secondary)';
+            infoDiv.style.borderRadius = 'var(--radius-md)';
+            infoDiv.style.marginBottom = '1rem';
+            infoDiv.innerHTML = `
+                <p style="margin: 0; color: var(--text-primary);">
+                    <strong>${data.machines.length} imprimante(s)</strong> détectée(s). 
+                    Les lignes de facture seront calculées automatiquement selon l'offre ${data.offre}.
+                </p>
+            `;
+            container.appendChild(infoDiv);
+            
+            document.getElementById('factureLignesContainer').style.display = 'block';
+            calculateFactureTotal();
         }
 
         /**
@@ -2228,9 +2398,17 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 return;
             }
             
-            if (!data.lignes || data.lignes.length === 0) {
-                alert('Veuillez ajouter au moins une ligne de facture');
-                return;
+            // Si on a des données de machine (nouveau format), utiliser celui-ci
+            if (window.factureMachineData) {
+                data.offre = window.factureMachineData.offre;
+                data.nb_imprimantes = window.factureMachineData.nb_imprimantes;
+                data.machines = window.factureMachineData.machines;
+            } else {
+                // Ancien format: validation des lignes manuelles
+                if (!data.lignes || data.lignes.length === 0) {
+                    alert('Veuillez ajouter au moins une ligne de facture ou sélectionner une offre');
+                    return;
+                }
             }
             
             const btnSubmit = document.getElementById('btnGenererFacture');
@@ -4211,3 +4389,4 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
     </script>
 </body>
 </html>
+

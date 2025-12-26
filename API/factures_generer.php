@@ -47,6 +47,10 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
         if ($useMachineCalculation) {
             // NOUVEAU FORMAT : Calcul automatique basé sur les imprimantes
             try {
+                // Charger le service de calcul (vérifier si autoload ou require direct)
+                if (!class_exists('App\Services\InvoiceCalculationService')) {
+                    require_once __DIR__ . '/../src/Services/InvoiceCalculationService.php';
+                }
                 $calculationService = new \App\Services\InvoiceCalculationService();
                 
                 $offre = (int)$data['offre'];

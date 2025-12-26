@@ -18,11 +18,17 @@ class InvoiceCalculationService
     /**
      * Calcule le coût d'une imprimante selon l'offre et la consommation
      * 
+     * NOUVELLES RÈGLES:
+     * - Offre 1000: Forfait 100€ HT + dépassement NB au-delà de 1000 (×0.05) + couleur (×0.09)
+     * - Offre 2000: Pour chaque imprimante, dépassement NB au-delà de 2000 (×0.05) + couleur (×0.09)
+     *   Le forfait 100€ HT est appliqué UNE SEULE FOIS pour toute l'offre (pas par imprimante)
+     * 
      * @param int $offre Seuil inclus dans le forfait (1000 ou 2000)
      * @param float $consoNB Consommation noir & blanc
      * @param float $consoCouleur Consommation couleur
+     * @param bool $isFirstMachine Pour l'offre 2000, indique si c'est la première machine (pour appliquer le forfait)
      * @return array Détails du calcul :
-     *   - forfait_ht: float
+     *   - forfait_ht: float (100€ pour offre 1000 ou première machine offre 2000, 0 sinon)
      *   - seuil_nb: int
      *   - excess_nb: float (copies en excès)
      *   - excess_nb_ht: float (coût HT de l'excès)
@@ -33,7 +39,8 @@ class InvoiceCalculationService
     public static function calculateMachineInvoice(
         int $offre,
         float $consoNB,
-        float $consoCouleur
+        float $consoCouleur,
+        bool $isFirstMachine = true
     ): array {
         // Validation
         if (!in_array($offre, [1000, 2000], true)) {
@@ -53,14 +60,29 @@ class InvoiceCalculationService
         $consoCouleur = (float)$consoCouleur;
         $seuilNB = (int)$offre;
         
-        // Forfait fixe
-        $forfaitHT = self::FORFAIT_HT;
+        // Calcul du forfait selon l'offre
+        $forfaitHT = 0.0;
+        if ($offre === 1000) {
+            // Offre 1000: forfait de 100€ HT
+            $forfaitHT = self::FORFAIT_HT;
+        } elseif ($offre === 2000 && $isFirstMachine) {
+            // Offre 2000: forfait de 100€ HT UNIQUEMENT pour la première machine
+            $forfaitHT = self::FORFAIT_HT;
+        }
         
-        // Calcul de l'excès NB
-        $excessNB = max(0.0, $consoNB - $seuilNB);
+        // Calcul de l'excès NB selon l'offre
+        $excessNB = 0.0;
+        if ($offre === 1000) {
+            // Offre 1000: dépassement au-delà de 1000
+            $excessNB = max(0.0, $consoNB - 1000);
+        } elseif ($offre === 2000) {
+            // Offre 2000: dépassement au-delà de 2000 par imprimante
+            $excessNB = max(0.0, $consoNB - 2000);
+        }
+        
         $excessNBHT = $excessNB * self::PRIX_EXCESS_NB_HT;
         
-        // Calcul couleur
+        // Calcul couleur: toujours consommation × 0.09 HT
         $couleurHT = $consoCouleur * self::PRIX_COULEUR_HT;
         
         // Total HT pour cette machine
@@ -94,15 +116,29 @@ class InvoiceCalculationService
         $lines = [];
         $ordre = 0;
         
-        // Ligne 1: Forfait mensuel
-        $lines[] = [
-            'description' => "Forfait mensuel (Offre {$offre} copies) - {$machineName}",
-            'type' => 'Service',
-            'quantite' => 1.0,
-            'prix_unitaire' => $calculation['forfait_ht'],
-            'total_ht' => $calculation['forfait_ht'],
-            'ordre' => $ordre++
-        ];
+        // Ligne 1: Forfait mensuel (seulement si > 0)
+        if ($calculation['forfait_ht'] > 0) {
+            if ($offre === 1000) {
+                $lines[] = [
+                    'description' => "Forfait mensuel (Offre {$offre} copies) - {$machineName}",
+                    'type' => 'Service',
+                    'quantite' => 1.0,
+                    'prix_unitaire' => $calculation['forfait_ht'],
+                    'total_ht' => $calculation['forfait_ht'],
+                    'ordre' => $ordre++
+                ];
+            } else {
+                // Pour l'offre 2000, le forfait est appliqué une seule fois
+                $lines[] = [
+                    'description' => "Forfait mensuel (Offre {$offre} copies)",
+                    'type' => 'Service',
+                    'quantite' => 1.0,
+                    'prix_unitaire' => $calculation['forfait_ht'],
+                    'total_ht' => $calculation['forfait_ht'],
+                    'ordre' => $ordre++
+                ];
+            }
+        }
         
         // Ligne 2: Dépassement NB (si > 0)
         if ($calculation['excess_nb'] > 0) {
@@ -202,7 +238,8 @@ class InvoiceCalculationService
         $calc1 = self::calculateMachineInvoice(
             $offre,
             (float)($machine1['conso_nb'] ?? 0),
-            (float)($machine1['conso_couleur'] ?? 0)
+            (float)($machine1['conso_couleur'] ?? 0),
+            true // Première machine
         );
         $machine1Name = $machine1['nom'] ?? 'Imprimante A';
         $lines1 = self::generateInvoiceLinesForMachine($calc1, $machine1Name, $offre);
@@ -218,7 +255,8 @@ class InvoiceCalculationService
             $calc2 = self::calculateMachineInvoice(
                 $offre,
                 (float)($machine2['conso_nb'] ?? 0),
-                (float)($machine2['conso_couleur'] ?? 0)
+                (float)($machine2['conso_couleur'] ?? 0),
+                false // Deuxième machine (forfait déjà appliqué)
             );
             $machine2Name = $machine2['nom'] ?? 'Imprimante B';
             $lines2 = self::generateInvoiceLinesForMachine($calc2, $machine2Name, $offre);
