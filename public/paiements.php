@@ -2174,11 +2174,27 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 if (consommationInfo) consommationInfo.style.display = 'none';
                 if (lignesContainer) lignesContainer.style.display = 'none';
                 
+                // Retirer l'attribut required des champs Consommation
+                if (factureOffre) factureOffre.removeAttribute('required');
+                const dateDebut = document.getElementById('factureDateDebut');
+                const dateFin = document.getElementById('factureDateFin');
+                if (dateDebut) dateDebut.removeAttribute('required');
+                if (dateFin) dateFin.removeAttribute('required');
+                
                 // Afficher les champs Achat
                 if (achatFields) achatFields.style.display = 'block';
                 
-                // Rendre les champs Achat requis/non requis
-                if (factureOffre) factureOffre.removeAttribute('required');
+                // Rendre les champs Achat requis
+                const achatProduits = document.querySelectorAll('.achat-produit');
+                achatProduits.forEach(produit => {
+                    const typeSelect = produit.querySelector('.achat-produit-type');
+                    const quantiteInput = produit.querySelector('.achat-produit-quantite');
+                    const prixInput = produit.querySelector('.achat-produit-prix');
+                    
+                    if (typeSelect) typeSelect.setAttribute('required', 'required');
+                    if (quantiteInput) quantiteInput.setAttribute('required', 'required');
+                    if (prixInput) prixInput.setAttribute('required', 'required');
+                });
                 
                 // Ajouter une première ligne de produit si le conteneur est vide
                 const achatProduitsContainer = document.getElementById('factureAchatProduits');
@@ -2191,6 +2207,20 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             } else {
                 // Masquer les champs Achat
                 if (achatFields) achatFields.style.display = 'none';
+                
+                // Retirer l'attribut required de tous les champs Achat pour éviter l'erreur de validation
+                const achatProduits = document.querySelectorAll('.achat-produit');
+                achatProduits.forEach(produit => {
+                    const typeSelect = produit.querySelector('.achat-produit-type');
+                    const autreInput = produit.querySelector('.achat-produit-autre');
+                    const quantiteInput = produit.querySelector('.achat-produit-quantite');
+                    const prixInput = produit.querySelector('.achat-produit-prix');
+                    
+                    if (typeSelect) typeSelect.removeAttribute('required');
+                    if (autreInput) autreInput.removeAttribute('required');
+                    if (quantiteInput) quantiteInput.removeAttribute('required');
+                    if (prixInput) prixInput.removeAttribute('required');
+                });
                 
                 // Afficher les champs Consommation
                 if (consommationFields) consommationFields.style.display = 'flex';
