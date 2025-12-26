@@ -945,6 +945,240 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 border-radius: 0;
             }
         }
+        /* ====== Facture Mail Modal Styles ====== */
+        .facture-mail-modal {
+            max-width: 600px;
+        }
+
+        .modal-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin: 0.5rem 0 0;
+            font-weight: 400;
+        }
+
+        .facture-mail-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 1rem;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-top: 0.5rem;
+        }
+
+        .status-badge.status-none {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .status-badge.status-none .status-badge-icon::before {
+            content: "○";
+            color: #9ca3af;
+        }
+
+        .status-badge.status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-badge.status-pending .status-badge-icon::before {
+            content: "⏳";
+        }
+
+        .status-badge.status-sent {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-badge.status-sent .status-badge-icon::before {
+            content: "✓";
+            color: #10b981;
+        }
+
+        .status-badge.status-failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-badge.status-failed .status-badge-icon::before {
+            content: "✗";
+            color: #ef4444;
+        }
+
+        .status-badge-icon {
+            font-size: 1rem;
+        }
+
+        .facture-mail-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .facture-mail-result.success {
+            background: #d1fae5;
+            border: 1px solid #6ee7b7;
+            color: #065f46;
+        }
+
+        .facture-mail-result.error {
+            background: #fee2e2;
+            border: 1px solid #fca5a5;
+            color: #991b1b;
+        }
+
+        .result-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .result-icon {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .result-message {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .result-details {
+            font-size: 0.875rem;
+            opacity: 0.8;
+            font-family: monospace;
+            word-break: break-all;
+            cursor: pointer;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: var(--radius-sm);
+        }
+
+        .result-details:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-loader {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .required {
+            color: #ef4444;
+            font-weight: 700;
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-width: 400px;
+        }
+
+        .toast {
+            padding: 1rem 1.25rem;
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            animation: slideInRight 0.3s ease-out;
+            font-weight: 500;
+        }
+
+        .toast.success {
+            background: #10b981;
+            color: white;
+        }
+
+        .toast.error {
+            background: #ef4444;
+            color: white;
+        }
+
+        .toast-icon {
+            font-size: 1.25rem;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        .toast.fade-out {
+            animation: slideOutRight 0.3s ease-out forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .facture-mail-modal {
+                max-width: 95%;
+                margin: 1rem;
+            }
+
+            .facture-mail-card {
+                padding: 1rem;
+            }
+
+            .toast-container {
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1534,43 +1768,73 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
     <!-- Modal Facture Mail -->
     <div class="modal-overlay" id="factureMailModalOverlay" onclick="closeFactureMailModal()">
-        <div class="modal" id="factureMailModal" onclick="event.stopPropagation()">
+        <div class="modal facture-mail-modal" id="factureMailModal" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h2 class="modal-title">Envoyer une facture par email</h2>
+                <div>
+                    <h2 class="modal-title">Envoyer la facture par email</h2>
+                    <p class="modal-subtitle">Un PDF sera joint automatiquement</p>
+                </div>
                 <button class="modal-close" onclick="closeFactureMailModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="factureMailForm" onsubmit="submitFactureMailForm(event)">
-                    <div class="modal-form-group">
-                        <label for="factureMailFacture">Facture <span style="color: #ef4444;">*</span></label>
-                        <select id="factureMailFacture" name="facture_id" required>
-                            <option value="">Chargement des factures...</option>
-                        </select>
-                        <div class="input-hint">Sélectionnez la facture à envoyer</div>
-                    </div>
+                <!-- Card principale -->
+                <div class="facture-mail-card">
+                    <form id="factureMailForm" onsubmit="submitFactureMailForm(event)">
+                        <div class="modal-form-group">
+                            <label for="factureMailFacture">Facture <span class="required">*</span></label>
+                            <select id="factureMailFacture" name="facture_id" required>
+                                <option value="">Chargement des factures...</option>
+                            </select>
+                            <div class="input-hint">Sélectionnez la facture à envoyer</div>
+                            <!-- Badge de statut -->
+                            <div id="factureMailStatusBadge" class="status-badge" style="display: none;">
+                                <span class="status-badge-icon"></span>
+                                <span class="status-badge-text"></span>
+                            </div>
+                        </div>
 
-                    <div class="modal-form-group">
-                        <label for="factureMailEmail">Email du destinataire <span style="color: #ef4444;">*</span></label>
-                        <input type="email" id="factureMailEmail" name="email" required placeholder="client@example.com">
-                        <div class="input-hint">L'email sera pré-rempli avec l'email du client si disponible</div>
-                    </div>
+                        <div class="modal-form-group">
+                            <label for="factureMailEmail">Email du destinataire <span class="required">*</span></label>
+                            <input type="email" id="factureMailEmail" name="email" required placeholder="client@example.com">
+                            <div class="input-hint">L'email sera pré-rempli avec l'email du client si disponible</div>
+                        </div>
 
-                    <div class="modal-form-group">
-                        <label for="factureMailSujet">Sujet de l'email</label>
-                        <input type="text" id="factureMailSujet" name="sujet" placeholder="Facture - [Numéro de facture]">
-                        <div class="input-hint">Le sujet sera pré-rempli avec un texte par défaut</div>
-                    </div>
+                        <div class="modal-form-group">
+                            <label for="factureMailSujet">Sujet de l'email</label>
+                            <input type="text" id="factureMailSujet" name="sujet" placeholder="Facture - [Numéro de facture]">
+                            <div class="input-hint">Le sujet sera pré-rempli avec un texte par défaut</div>
+                        </div>
 
-                    <div class="modal-form-group">
-                        <label for="factureMailMessage">Message (optionnel)</label>
-                        <textarea id="factureMailMessage" name="message" rows="5" placeholder="Message personnalisé à inclure dans l'email..."></textarea>
-                        <div class="input-hint">Le message sera ajouté avant la pièce jointe de la facture</div>
+                        <div class="modal-form-group">
+                            <label for="factureMailMessage">Message (optionnel)</label>
+                            <textarea id="factureMailMessage" name="message" rows="5" placeholder="Message personnalisé à inclure dans l'email..."></textarea>
+                            <div class="input-hint">Le message sera ajouté avant la pièce jointe de la facture</div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Zone de résultat (succès/erreur) -->
+                <div id="factureMailResult" class="facture-mail-result" style="display: none;">
+                    <div class="result-content">
+                        <div class="result-icon"></div>
+                        <div class="result-message"></div>
+                        <div class="result-details"></div>
                     </div>
-                </form>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeFactureMailModal()">Annuler</button>
-                <button type="submit" form="factureMailForm" class="btn btn-primary" id="btnEnvoyerFactureMail">Envoyer l'email</button>
+                <button type="button" class="btn btn-secondary" id="btnRenvoyerFactureMail" onclick="renvoyerFactureMail()" style="display: none;" disabled>Renvoyer</button>
+                <button type="submit" form="factureMailForm" class="btn btn-primary" id="btnEnvoyerFactureMail">
+                    <span class="btn-text">Envoyer la facture</span>
+                    <span class="btn-loader" style="display: none;">
+                        <svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"></circle>
+                            <path d="M12 2C6.477 2 2 6.477 2 12" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
+                        </svg>
+                        Envoi en cours...
+                    </span>
+                </button>
             </div>
         </div>
     </div>
@@ -2928,10 +3192,21 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             
-            // Réinitialiser le formulaire
+            // Réinitialiser le formulaire et l'état
             const form = document.getElementById('factureMailForm');
             if (form) {
                 form.reset();
+            }
+            
+            factureMailState.isSubmitting = false;
+            factureMailState.selectedFacture = null;
+            hideFactureMailStatus();
+            hideFactureMailResult();
+            setFactureMailLoadingState(false);
+            
+            const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
+            if (btnRenvoyer) {
+                btnRenvoyer.style.display = 'none';
             }
             
             // Charger les factures
@@ -2954,6 +3229,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
+        // État global pour l'envoi d'email
+        let factureMailState = {
+            isSubmitting: false,
+            selectedFacture: null
+        };
+
         /**
          * Charge les factures pour l'envoi par email
          */
@@ -2975,15 +3256,26 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         option.textContent = `${facture.numero} - ${facture.client_nom} - ${facture.montant_ttc.toFixed(2)} € TTC`;
                         option.setAttribute('data-email', facture.client_email || '');
                         option.setAttribute('data-numero', facture.numero);
+                        option.setAttribute('data-email-envoye', facture.email_envoye || '0');
+                        option.setAttribute('data-date-envoi', facture.date_envoi_email || '');
                         factureSelect.appendChild(option);
                     });
                     
-                    // Écouter le changement pour pré-remplir l'email et le sujet
+                    // Écouter le changement pour pré-remplir l'email, le sujet et afficher le statut
                     factureSelect.addEventListener('change', function() {
                         const selectedOption = this.options[this.selectedIndex];
                         if (selectedOption && selectedOption.value) {
                             const email = selectedOption.getAttribute('data-email') || '';
                             const numero = selectedOption.getAttribute('data-numero') || '';
+                            const emailEnvoye = selectedOption.getAttribute('data-email-envoye') || '0';
+                            const dateEnvoi = selectedOption.getAttribute('data-date-envoi') || '';
+                            
+                            factureMailState.selectedFacture = {
+                                id: selectedOption.value,
+                                numero: numero,
+                                emailEnvoye: parseInt(emailEnvoye),
+                                dateEnvoi: dateEnvoi
+                            };
                             
                             const emailInput = document.getElementById('factureMailEmail');
                             if (emailInput) {
@@ -2994,11 +3286,78 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                             if (sujetInput) {
                                 sujetInput.value = `Facture ${numero} - CC Computer`;
                             }
+                            
+                            // Afficher le badge de statut
+                            updateFactureMailStatus(emailEnvoye, dateEnvoi);
+                            
+                            // Gérer le bouton Renvoyer
+                            const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
+                            if (btnRenvoyer) {
+                                if (emailEnvoye === '1') {
+                                    btnRenvoyer.style.display = 'inline-block';
+                                    btnRenvoyer.disabled = false;
+                                } else {
+                                    btnRenvoyer.style.display = 'none';
+                                    btnRenvoyer.disabled = true;
+                                }
+                            }
+                        } else {
+                            factureMailState.selectedFacture = null;
+                            hideFactureMailStatus();
+                            const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
+                            if (btnRenvoyer) {
+                                btnRenvoyer.style.display = 'none';
+                            }
                         }
                     });
                 }
             } catch (error) {
                 console.error('Erreur lors du chargement des factures:', error);
+                showToast('Erreur lors du chargement des factures', 'error');
+            }
+        }
+
+        /**
+         * Met à jour le badge de statut de la facture
+         */
+        function updateFactureMailStatus(emailEnvoye, dateEnvoi) {
+            const badge = document.getElementById('factureMailStatusBadge');
+            if (!badge) return;
+            
+            badge.style.display = 'inline-flex';
+            const badgeText = badge.querySelector('.status-badge-text');
+            const badgeIcon = badge.querySelector('.status-badge-icon');
+            
+            // Retirer toutes les classes de statut
+            badge.classList.remove('status-none', 'status-pending', 'status-sent', 'status-failed');
+            
+            if (emailEnvoye === '0') {
+                badge.classList.add('status-none');
+                badgeText.textContent = 'Non envoyée';
+            } else if (emailEnvoye === '2') {
+                badge.classList.add('status-pending');
+                badgeText.textContent = 'En cours d\'envoi';
+            } else if (emailEnvoye === '1') {
+                badge.classList.add('status-sent');
+                if (dateEnvoi) {
+                    const date = new Date(dateEnvoi);
+                    badgeText.textContent = `Envoyée le ${date.toLocaleDateString('fr-FR')} à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+                } else {
+                    badgeText.textContent = 'Envoyée';
+                }
+            } else {
+                badge.classList.add('status-failed');
+                badgeText.textContent = 'Échec';
+            }
+        }
+
+        /**
+         * Cache le badge de statut
+         */
+        function hideFactureMailStatus() {
+            const badge = document.getElementById('factureMailStatusBadge');
+            if (badge) {
+                badge.style.display = 'none';
             }
         }
 
@@ -3008,6 +3367,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         async function submitFactureMailForm(e) {
             e.preventDefault();
             
+            // Protection contre double clic
+            if (factureMailState.isSubmitting) {
+                return;
+            }
+            
             const form = document.getElementById('factureMailForm');
             const formData = new FormData(form);
             
@@ -3016,25 +3380,22 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             const email = formData.get('email');
             
             if (!factureId) {
-                alert('Veuillez sélectionner une facture');
+                showToast('Veuillez sélectionner une facture', 'error');
                 return;
             }
             
             if (!email || !email.includes('@')) {
-                alert('Veuillez saisir une adresse email valide');
+                showToast('Veuillez saisir une adresse email valide', 'error');
                 return;
             }
             
-            const btnSubmit = document.getElementById('btnEnvoyerFactureMail');
-            btnSubmit.disabled = true;
-            btnSubmit.textContent = 'Envoi en cours...';
+            // Mettre à jour l'état
+            factureMailState.isSubmitting = true;
+            setFactureMailLoadingState(true);
             
             try {
                 const data = {
-                    facture_id: parseInt(factureId),
-                    email: email.trim(),
-                    sujet: formData.get('sujet') || '',
-                    message: formData.get('message') || ''
+                    facture_id: parseInt(factureId)
                 };
                 
                 const response = await fetch('/API/factures_envoyer_email.php', {
@@ -3045,36 +3406,192 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     body: JSON.stringify(data)
                 });
                 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Erreur HTTP:', response.status, errorText);
-                    try {
-                        const errorJson = JSON.parse(errorText);
-                        showMessage('Erreur : ' + (errorJson.error || 'Erreur HTTP ' + response.status), 'error');
-                    } catch {
-                        showMessage('Erreur HTTP ' + response.status + ': ' + errorText.substring(0, 200), 'error');
-                    }
-                    return;
-                }
-                
                 const result = await response.json();
                 console.log('Réponse reçue:', result);
                 
                 if (result.ok) {
-                    showMessage('Facture envoyée par email avec succès !', 'success');
-                    closeFactureMailModal();
+                    // Succès
+                    showFactureMailSuccess(result);
+                    showToast('Email envoyé avec succès !', 'success');
+                    
+                    // Recharger les factures pour mettre à jour le statut
+                    setTimeout(() => {
+                        loadFacturesForMail();
+                    }, 1000);
                 } else {
+                    // Erreur
                     const errorMsg = result.error || 'Erreur inconnue';
-                    console.error('Erreur API:', errorMsg);
-                    showMessage('Erreur : ' + errorMsg, 'error');
+                    showFactureMailError(errorMsg);
+                    showToast('Erreur : ' + errorMsg, 'error');
                 }
             } catch (error) {
                 console.error('Erreur lors de l\'envoi:', error);
-                showMessage('Erreur lors de l\'envoi de l\'email: ' + error.message, 'error');
+                showFactureMailError('Erreur de connexion : ' + error.message);
+                showToast('Erreur lors de l\'envoi de l\'email', 'error');
             } finally {
-                btnSubmit.disabled = false;
-                btnSubmit.textContent = 'Envoyer l\'email';
+                factureMailState.isSubmitting = false;
+                setFactureMailLoadingState(false);
             }
+        }
+
+        /**
+         * Renvoie une facture déjà envoyée
+         */
+        async function renvoyerFactureMail() {
+            if (factureMailState.isSubmitting || !factureMailState.selectedFacture) {
+                return;
+            }
+            
+            // Utiliser la même fonction mais avec force=true (géré côté backend)
+            await submitFactureMailForm(new Event('submit'));
+        }
+
+        /**
+         * Met à jour l'état de chargement de l'UI
+         */
+        function setFactureMailLoadingState(loading) {
+            const btnSubmit = document.getElementById('btnEnvoyerFactureMail');
+            const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
+            const btnText = btnSubmit.querySelector('.btn-text');
+            const btnLoader = btnSubmit.querySelector('.btn-loader');
+            const form = document.getElementById('factureMailForm');
+            
+            if (loading) {
+                btnSubmit.disabled = true;
+                if (btnRenvoyer) btnRenvoyer.disabled = true;
+                if (btnText) btnText.style.display = 'none';
+                if (btnLoader) btnLoader.style.display = 'inline-flex';
+                if (form) {
+                    const inputs = form.querySelectorAll('input, select, textarea, button');
+                    inputs.forEach(input => {
+                        if (input !== btnSubmit && input !== btnRenvoyer) {
+                            input.disabled = true;
+                        }
+                    });
+                }
+            } else {
+                btnSubmit.disabled = false;
+                if (btnRenvoyer) btnRenvoyer.disabled = factureMailState.selectedFacture?.emailEnvoye !== 1;
+                if (btnText) btnText.style.display = 'inline';
+                if (btnLoader) btnLoader.style.display = 'none';
+                if (form) {
+                    const inputs = form.querySelectorAll('input, select, textarea');
+                    inputs.forEach(input => {
+                        input.disabled = false;
+                    });
+                }
+            }
+        }
+
+        /**
+         * Affiche le résultat de succès
+         */
+        function showFactureMailSuccess(result) {
+            const resultDiv = document.getElementById('factureMailResult');
+            if (!resultDiv) return;
+            
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'facture-mail-result success';
+            
+            const icon = resultDiv.querySelector('.result-icon');
+            const message = resultDiv.querySelector('.result-message');
+            const details = resultDiv.querySelector('.result-details');
+            
+            if (icon) icon.textContent = '✓';
+            if (message) message.textContent = 'Email envoyé avec succès !';
+            
+            let detailsText = '';
+            if (result.message_id) {
+                detailsText += `Message-ID: ${result.message_id}`;
+            }
+            if (result.log_id) {
+                if (detailsText) detailsText += '\n';
+                detailsText += `Log ID: ${result.log_id}`;
+            }
+            if (result.email) {
+                if (detailsText) detailsText += '\n';
+                detailsText += `Destinataire: ${result.email}`;
+            }
+            
+            if (details) {
+                details.textContent = detailsText || 'Aucun détail disponible';
+                details.onclick = () => {
+                    navigator.clipboard.writeText(detailsText).then(() => {
+                        showToast('Détails copiés !', 'success');
+                    });
+                };
+            }
+        }
+
+        /**
+         * Affiche le résultat d'erreur
+         */
+        function showFactureMailError(errorMsg) {
+            const resultDiv = document.getElementById('factureMailResult');
+            if (!resultDiv) return;
+            
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'facture-mail-result error';
+            
+            const icon = resultDiv.querySelector('.result-icon');
+            const message = resultDiv.querySelector('.result-message');
+            const details = resultDiv.querySelector('.result-details');
+            
+            if (icon) icon.textContent = '✗';
+            if (message) message.textContent = 'Erreur lors de l\'envoi';
+            if (details) {
+                details.textContent = errorMsg;
+                details.onclick = null;
+            }
+        }
+
+        /**
+         * Cache le résultat
+         */
+        function hideFactureMailResult() {
+            const resultDiv = document.getElementById('factureMailResult');
+            if (resultDiv) {
+                resultDiv.style.display = 'none';
+            }
+        }
+
+        /**
+         * Affiche un toast
+         */
+        function showToast(message, type = 'success') {
+            // Créer le conteneur s'il n'existe pas
+            let container = document.querySelector('.toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+            
+            // Créer le toast
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icon = document.createElement('span');
+            icon.className = 'toast-icon';
+            icon.textContent = type === 'success' ? '✓' : '✗';
+            
+            const text = document.createElement('span');
+            text.textContent = message;
+            
+            toast.appendChild(icon);
+            toast.appendChild(text);
+            container.appendChild(toast);
+            
+            // Supprimer après 5 secondes
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => {
+                    toast.remove();
+                    if (container.children.length === 0) {
+                        container.remove();
+                    }
+                }, 300);
+            }, 5000);
         }
 
         // ============================================
