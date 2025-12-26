@@ -44,5 +44,6 @@ return [
         'from_name' => $_ENV['SMTP_FROM_NAME'] ?? 'Camson Group - Facturation',
         'reply_to_email' => $_ENV['SMTP_REPLY_TO'] ?? 'facture@camsongroup.fr',
     ],
+    'auto_send_invoices' => (bool)($_ENV['AUTO_SEND_INVOICES'] ?? false),
 ];
 

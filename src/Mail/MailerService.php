@@ -22,19 +22,21 @@ class MailerService
      * 
      * @param string $to Adresse email du destinataire
      * @param string $subject Sujet de l'email
-     * @param string $body Corps du message (texte)
+     * @param string $textBody Corps du message (texte)
      * @param string|null $pdfPath Chemin absolu vers le fichier PDF à attacher
      * @param string|null $pdfFileName Nom du fichier PDF (si null, utilise basename($pdfPath))
-     * @return void
+     * @param string|null $htmlBody Corps du message HTML (optionnel)
+     * @return string Message-ID généré et assigné à l'email
      * @throws MailerException En cas d'erreur
      */
     public function sendEmailWithPdf(
         string $to,
         string $subject,
-        string $body,
+        string $textBody,
         ?string $pdfPath = null,
-        ?string $pdfFileName = null
-    ): void {
+        ?string $pdfFileName = null,
+        ?string $htmlBody = null
+    ): string {
         // Validation de l'email
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
             throw new MailerException('Adresse email invalide: ' . $to);
@@ -47,10 +49,23 @@ class MailerService
             // Destinataire
             $mail->addAddress($to);
             
-            // Sujet et corps
+            // Sujet
             $mail->Subject = $subject;
-            $mail->Body = $body;
-            $mail->AltBody = strip_tags($body); // Version texte brut
+            
+            // Corps HTML ou texte
+            if (!empty($htmlBody)) {
+                $mail->isHTML(true);
+                $mail->Body = $htmlBody;
+                $mail->AltBody = $textBody;
+            } else {
+                $mail->isHTML(false);
+                $mail->Body = $textBody;
+                $mail->AltBody = $textBody;
+            }
+            
+            // Générer et assigner un Message-ID unique
+            $messageId = $this->generateMessageId();
+            $mail->MessageID = $messageId;
             
             // Attacher le PDF si fourni
             if ($pdfPath !== null) {
@@ -60,7 +75,9 @@ class MailerService
             // Envoyer
             $mail->send();
             
-            error_log("Email envoyé avec succès via PHPMailer à {$to} (Sujet: {$subject})");
+            error_log("Email envoyé avec succès via PHPMailer à {$to} (Sujet: {$subject}, Message-ID: {$messageId})");
+            
+            return $messageId;
             
         } catch (PHPMailerException $e) {
             // Ne pas exposer le mot de passe dans les logs/erreurs
@@ -79,17 +96,33 @@ class MailerService
     }
     
     /**
+     * Génère un Message-ID unique conforme RFC 5322
+     * Format: <timestamp.random@domain>
+     * 
+     * @return string Message-ID
+     */
+    private function generateMessageId(): string
+    {
+        $domain = $_ENV['MAIL_MESSAGE_ID_DOMAIN'] ?? 'cccomputer.fr';
+        $timestamp = time();
+        $random = bin2hex(random_bytes(8));
+        
+        return sprintf('<%d.%s@%s>', $timestamp, $random, $domain);
+    }
+    
+    /**
      * Envoie un email simple (sans pièce jointe)
      * 
      * @param string $to Adresse email du destinataire
      * @param string $subject Sujet de l'email
      * @param string $body Corps du message
-     * @return void
+     * @param string|null $htmlBody Corps HTML optionnel
+     * @return string Message-ID généré
      * @throws MailerException En cas d'erreur
      */
-    public function sendEmail(string $to, string $subject, string $body): void
+    public function sendEmail(string $to, string $subject, string $body, ?string $htmlBody = null): string
     {
-        $this->sendEmailWithPdf($to, $subject, $body, null);
+        return $this->sendEmailWithPdf($to, $subject, $body, null, null, $htmlBody);
     }
     
     /**

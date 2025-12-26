@@ -10,3 +10,4 @@ COMMENT 'Chemin relatif vers l''image uploadée (ex: /uploads/chatroom/filename.
 AFTER `mentions`;
 
 
+

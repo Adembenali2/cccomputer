@@ -138,7 +138,47 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
             $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfWebPath, $factureId]);
             
             $pdo->commit();
-            jsonResponse(['ok' => true, 'facture_id' => $factureId, 'numero' => $numeroFacture, 'pdf_url' => $pdfWebPath]);
+            
+            // Envoi automatique par email (si activé)
+            $emailSent = false;
+            $emailError = null;
+            try {
+                require_once __DIR__ . '/../vendor/autoload.php';
+                $config = require __DIR__ . '/../config/app.php';
+                $invoiceEmailService = new \App\Services\InvoiceEmailService($pdo, $config);
+                
+                if ($invoiceEmailService->isAutoSendEnabled()) {
+                    $result = $invoiceEmailService->sendInvoiceAfterGeneration($factureId, false);
+                    if ($result['success']) {
+                        $emailSent = true;
+                        error_log("[factures_generer] ✅ Facture #{$factureId} envoyée automatiquement par email");
+                    } else {
+                        $emailError = $result['message'];
+                        error_log("[factures_generer] ⚠️ Échec envoi automatique facture #{$factureId}: " . $emailError);
+                    }
+                }
+            } catch (Throwable $e) {
+                // Ne pas bloquer la génération de facture si l'envoi échoue
+                $emailError = $e->getMessage();
+                error_log("[factures_generer] ❌ Erreur envoi automatique (non bloquant): " . $emailError);
+            }
+            
+            $response = [
+                'ok' => true, 
+                'facture_id' => $factureId, 
+                'numero' => $numeroFacture, 
+                'pdf_url' => $pdfWebPath
+            ];
+            
+            if ($emailSent) {
+                $response['email_sent'] = true;
+                $response['message'] = 'Facture générée et envoyée par email';
+            } elseif ($emailError) {
+                $response['email_sent'] = false;
+                $response['email_error'] = $emailError;
+            }
+            
+            jsonResponse($response);
             
         } catch (Exception $e) {
             $pdo->rollBack();

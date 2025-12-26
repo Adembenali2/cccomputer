@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facture - {{brand_name}}</title>
+    <!--[if mso]>
+    <style type="text/css">
+        body, table, td {font-family: Arial, sans-serif !important;}
+    </style>
+    <![endif]-->
+    <style>
+        /* Reset pour clients email */
+        body, table, td, p, a {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        table, td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            outline: none;
+            text-decoration: none;
+        }
+        
+        /* Styles principaux */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #f4f4f4;
+            color: #333333;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .header p {
+            margin: 5px 0 0 0;
+            color: #e0e7ff;
+            font-size: 14px;
+        }
+        
+        /* Content */
+        .content {
+            padding: 30px 20px;
+        }
+        .greeting {
+            font-size: 16px;
+            color: #333333;
+            margin-bottom: 20px;
+        }
+        .invoice-card {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3b82f6;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .invoice-card h2 {
+            margin: 0 0 15px 0;
+            color: #3b82f6;
+            font-size: 20px;
+        }
+        .invoice-detail {
+            margin: 8px 0;
+            font-size: 14px;
+            color: #555555;
+        }
+        .invoice-detail strong {
+            color: #333333;
+        }
+        .invoice-amount {
+            font-size: 24px;
+            font-weight: bold;
+            color: #059669;
+            margin: 15px 0;
+        }
+        .message {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333333;
+            margin: 20px 0;
+        }
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: #3b82f6;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .button:hover {
+            background-color: #2563eb;
+        }
+        
+        /* Footer */
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .footer strong {
+            color: #333333;
+        }
+        .warning {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            margin: 20px 0;
+            font-size: 12px;
+            color: #92400e;
+        }
+        .warning strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f4f4;">
+        <tr>
+            <td align="center" style="padding: 20px 0;">
+                <table role="presentation" class="email-container" cellpadding="0" cellspacing="0" border="0" width="600">
+                    <!-- Header -->
+                    <tr>
+                        <td class="header">
+                            <h1>{{brand_name}}</h1>
+                            <p>Facturation</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td class="content">
+                            <p class="greeting">Bonjour {{client_name}},</p>
+                            
+                            <p class="message">
+                                Veuillez trouver ci-joint la facture <strong>{{invoice_number}}</strong> d'un montant de <strong class="invoice-amount">{{invoice_total_ttc}} € TTC</strong>.
+                            </p>
+                            
+                            <div class="invoice-card">
+                                <h2>Détails de la facture</h2>
+                                <div class="invoice-detail">
+                                    <strong>Numéro de facture :</strong> {{invoice_number}}
+                                </div>
+                                <div class="invoice-detail">
+                                    <strong>Date de facturation :</strong> {{invoice_date}}
+                                </div>
+                                <div class="invoice-detail">
+                                    <strong>Montant TTC :</strong> <span class="invoice-amount">{{invoice_total_ttc}} €</span>
+                                </div>
+                            </div>
+                            
+                            <p class="message">
+                                Le fichier PDF de la facture est joint à cet email.
+                            </p>
+                            
+                            <p class="message">
+                                Cordialement,<br>
+                                <strong>{{brand_name}}</strong>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td class="footer">
+                            <p><strong>{{legal_name}}</strong></p>
+                            <p>{{legal_address}}</p>
+                            <p>{{legal_details}}</p>
+                            <p style="margin-top: 15px;">
+                                <a href="{{site_url}}" style="color: #3b82f6; text-decoration: none;">{{site_url}}</a>
+                            </p>
+                            <div class="warning">
+                                <strong>⚠️ Important</strong>
+                                Cet email est envoyé automatiquement. Merci de ne pas y répondre directement.<br>
+                                Pour toute question, contactez-nous via votre espace client ou par email.
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

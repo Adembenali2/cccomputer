@@ -59,7 +59,7 @@ class MailerFactory
             
             // Options SSL/TLS - En production, on doit vérifier les certificats
             // Ne désactiver la vérification que si explicitement demandé via variable d'env
-            $disableVerify = (bool)($_ENV['SMTP_DISABLE_VERIFY'] ?? false);
+            $disableVerify = filter_var($_ENV['SMTP_DISABLE_VERIFY'] ?? false, FILTER_VALIDATE_BOOLEAN);
             if ($disableVerify) {
                 error_log('ATTENTION: Vérification SSL/TLS désactivée pour SMTP (SMTP_DISABLE_VERIFY=true)');
                 $mail->SMTPOptions = [
@@ -70,6 +70,13 @@ class MailerFactory
                     ]
                 ];
             }
+            
+            // Timeout SMTP (défaut 15 secondes)
+            $smtpTimeout = (int)($_ENV['SMTP_TIMEOUT'] ?? 15);
+            if ($smtpTimeout < 1 || $smtpTimeout > 300) {
+                $smtpTimeout = 15; // Valeur par défaut si invalide
+            }
+            $mail->Timeout = $smtpTimeout;
             
         } catch (PHPMailerException $e) {
             throw new MailerException(
