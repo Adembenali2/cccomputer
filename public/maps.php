@@ -76,6 +76,12 @@ try {
                 <div id="startInfo" class="hint">
                     Aucun point de départ défini.
                 </div>
+                <input type="text" 
+                       id="startAddressInput" 
+                       class="client-search-input" 
+                       placeholder="Adresse de départ (ex: 7 Rue Fraizier, 93210 Saint-Denis)"
+                       value=""
+                       style="margin-top: 0.5rem; width: 100%;">
             </div>
 
             <!-- 2. Clients à visiter -->
@@ -212,6 +218,55 @@ const CONFIG = {
         LNG_MAX: 180
     }
 };
+
+// ==================
+// Point de départ par défaut
+// ==================
+
+const DEFAULT_START_ADDRESS = "7 Rue Fraizier, 93210 Saint-Denis";
+// Coordonnées hardcodées pour éviter le géocodage (approximatives, centre de Saint-Denis)
+const DEFAULT_START_COORDS = [48.9358, 2.3536];
+
+/**
+ * Initialise le point de départ par défaut si aucun n'est défini
+ * Priorité : localStorage > code existant > default hardcodé
+ */
+function initDefaultStartPoint() {
+    // 1. Vérifier si startPoint est déjà défini (par code existant ou localStorage restore)
+    if (startPoint && Array.isArray(startPoint) && startPoint.length === 2) {
+        return; // Déjà défini, ne rien faire
+    }
+    
+    // 2. Vérifier localStorage (si StorageManager existe, il a déjà été restauré)
+    // Mais on vérifie quand même au cas où
+    if (typeof StorageManager !== 'undefined') {
+        const savedStart = StorageManager.loadStartPoint();
+        if (savedStart && Array.isArray(savedStart) && savedStart.length === 2) {
+            // Déjà restauré par maps-enhancements.js, ne rien faire
+            return;
+        }
+    } else {
+        // Fallback : vérifier localStorage directement
+        try {
+            const saved = localStorage.getItem('maps_start_point');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length === 2 && 
+                    isValidCoordinate(parsed[0], parsed[1])) {
+                    // Existe dans localStorage, sera restauré par maps-enhancements.js
+                    return;
+                }
+            }
+        } catch (e) {
+            // Ignorer erreur localStorage
+        }
+    }
+    
+    // 3. Appliquer le default hardcodé (sans géocodage)
+    if (typeof map !== 'undefined' && map && typeof setStartPoint === 'function') {
+        setStartPoint(DEFAULT_START_COORDS, DEFAULT_START_ADDRESS);
+    }
+}
 
 // Cache des clients chargés (avec coordonnées géocodées)
 const clientsCache = new Map(); // id -> {id, name, code, address, lat, lng, basePriority}
@@ -1138,6 +1193,12 @@ function setStartPoint(latlng, label) {
 
     startInfoEl.textContent = `Départ : ${startPoint[0].toFixed(5)}, ${startPoint[1].toFixed(5)}${label ? ' – ' + label : ''}`;
     badgeStartEl.textContent = 'Départ : défini';
+    
+    // Mettre à jour l'input adresse si présent
+    const startAddressInput = document.getElementById('startAddressInput');
+    if (startAddressInput && label) {
+        startAddressInput.value = label;
+    }
 
     map.setView(startPoint, 13);
 }
@@ -1187,7 +1248,38 @@ document.getElementById('btnClearStart').addEventListener('click', () => {
     startPoint = null;
     startInfoEl.textContent = 'Aucun point de départ défini.';
     badgeStartEl.textContent = 'Départ : non défini';
+    
+    // Effacer l'input adresse
+    const startAddressInput = document.getElementById('startAddressInput');
+    if (startAddressInput) {
+        startAddressInput.value = '';
+    }
 });
+
+// Géocoder l'adresse si l'utilisateur tape dans l'input et valide (Enter)
+const startAddressInput = document.getElementById('startAddressInput');
+if (startAddressInput) {
+    startAddressInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const address = startAddressInput.value.trim();
+            if (!address) return;
+            
+            routeMessageEl.textContent = "Géocodage de l'adresse en cours…";
+            routeMessageEl.className = 'maps-message hint';
+            
+            const coords = await geocodeAddress(address);
+            if (coords) {
+                setStartPoint([coords.lat, coords.lng], address);
+                routeMessageEl.textContent = "Point de départ défini.";
+                routeMessageEl.className = 'maps-message success';
+            } else {
+                routeMessageEl.textContent = "Impossible de géocoder cette adresse.";
+                routeMessageEl.className = 'maps-message alert';
+            }
+        }
+    });
+}
 
 // Clic sur la carte pour définir le départ
 map.on('click', (e) => {
@@ -1579,6 +1671,12 @@ document.getElementById('btnRoute').addEventListener('click', () => {
 
 // Charger tous les clients au démarrage (après que toutes les fonctions soient définies)
 loadAllClients();
+
+// Initialiser le point de départ par défaut après un court délai
+// (pour laisser le temps à maps-enhancements.js de restaurer depuis localStorage)
+setTimeout(() => {
+    initDefaultStartPoint();
+}, 2500); // 2.5s : après le restore de maps-enhancements.js (2s) + marge
 </script>
 </body>
 </html>
