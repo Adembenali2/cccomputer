@@ -2198,9 +2198,22 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
             
             try {
-                const response = await fetch(`/API/factures_get_consommation.php?client_id=${clientId}&offre=${offre}&date_debut=${dateDebut}&date_fin=${dateFin}`, {
+                const url = `/API/factures_get_consommation.php?client_id=${encodeURIComponent(clientId)}&offre=${encodeURIComponent(offre)}&date_debut=${encodeURIComponent(dateDebut)}&date_fin=${encodeURIComponent(dateFin)}`;
+                const response = await fetch(url, {
                     credentials: 'include'
                 });
+                
+                // Vérifier si la réponse est OK
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Erreur HTTP:', response.status, errorText);
+                    document.getElementById('factureConsommationInfo').style.display = 'block';
+                    document.getElementById('factureConsommationContent').innerHTML = 
+                        '<p style="color: #ef4444;">Erreur HTTP ' + response.status + ': ' + (errorText.substring(0, 200) || 'Erreur serveur') + '</p>';
+                    document.getElementById('factureLignesContainer').style.display = 'none';
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (data.ok) {

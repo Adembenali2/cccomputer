@@ -76,16 +76,19 @@ try {
         // Récupérer les infos les plus récentes du photocopieur (recherche dans les deux tables)
         $stmtInfo = $pdo->prepare("
             SELECT Nom, Model, Timestamp
-            FROM compteur_relevee
-            WHERE mac_norm = :mac_norm
-              AND mac_norm IS NOT NULL
-              AND mac_norm != ''
-            UNION ALL
-            SELECT Nom, Model, Timestamp
-            FROM compteur_relevee_ancien
-            WHERE mac_norm = :mac_norm
-              AND mac_norm IS NOT NULL
-              AND mac_norm != ''
+            FROM (
+                SELECT Nom, Model, Timestamp
+                FROM compteur_relevee
+                WHERE mac_norm = :mac_norm
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+                UNION ALL
+                SELECT Nom, Model, Timestamp
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac_norm
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+            ) AS combined
             ORDER BY Timestamp DESC
             LIMIT 1
         ");
@@ -105,30 +108,38 @@ try {
     $machines = [];
     
     foreach ($photocopieurs as $pc) {
-        $macNorm = $pc['mac_norm'];
-        if (!$macNorm) continue;
+        $macNorm = $pc['mac_norm'] ?? '';
+        // Vérifier que mac_norm n'est pas vide
+        if (empty($macNorm) || strlen(trim($macNorm)) === 0) {
+            error_log("Photocopieur ID {$pc['id']} n'a pas de mac_norm valide");
+            continue;
+        }
+        $macNorm = trim($macNorm);
         
         // Récupérer le PREMIER relevé du jour de début (recherche dans les deux tables)
         $stmtStart = $pdo->prepare("
-            SELECT 
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor,
-                Timestamp
-            FROM compteur_relevee
-            WHERE mac_norm = :mac_norm
-              AND DATE(Timestamp) = :date_debut
-              AND mac_norm IS NOT NULL
-              AND mac_norm != ''
-            UNION ALL
-            SELECT 
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor,
-                Timestamp
-            FROM compteur_relevee_ancien
-            WHERE mac_norm = :mac_norm
-              AND DATE(Timestamp) = :date_debut
-              AND mac_norm IS NOT NULL
-              AND mac_norm != ''
+            SELECT TotalBW, TotalColor, Timestamp
+            FROM (
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor,
+                    Timestamp
+                FROM compteur_relevee
+                WHERE mac_norm = :mac_norm
+                  AND DATE(Timestamp) = :date_debut
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+                UNION ALL
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor,
+                    Timestamp
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac_norm
+                  AND DATE(Timestamp) = :date_debut
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+            ) AS combined
             ORDER BY Timestamp ASC
             LIMIT 1
         ");
@@ -140,25 +151,28 @@ try {
         
         // Récupérer le DERNIER relevé du jour de fin (recherche dans les deux tables)
         $stmtEnd = $pdo->prepare("
-            SELECT 
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor,
-                Timestamp
-            FROM compteur_relevee
-            WHERE mac_norm = :mac_norm
-              AND DATE(Timestamp) = :date_fin
-              AND mac_norm IS NOT NULL
-              AND mac_norm != ''
-            UNION ALL
-            SELECT 
-                COALESCE(TotalBW, 0) as TotalBW,
-                COALESCE(TotalColor, 0) as TotalColor,
-                Timestamp
-            FROM compteur_relevee_ancien
-            WHERE mac_norm = :mac_norm
-              AND DATE(Timestamp) = :date_fin
-              AND mac_norm IS NOT NULL
-              AND mac_norm != ''
+            SELECT TotalBW, TotalColor, Timestamp
+            FROM (
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor,
+                    Timestamp
+                FROM compteur_relevee
+                WHERE mac_norm = :mac_norm
+                  AND DATE(Timestamp) = :date_fin
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+                UNION ALL
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor,
+                    Timestamp
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac_norm
+                  AND DATE(Timestamp) = :date_fin
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+            ) AS combined
             ORDER BY Timestamp DESC
             LIMIT 1
         ");
@@ -216,15 +230,34 @@ try {
     ]);
     
 } catch (PDOException $e) {
+    $errorInfo = $e->errorInfo ?? [];
     error_log('Erreur PDO factures_get_consommation: ' . $e->getMessage());
+    error_log('SQL State: ' . ($errorInfo[0] ?? 'N/A'));
+    error_log('Driver Code: ' . ($errorInfo[1] ?? 'N/A'));
+    error_log('Driver Message: ' . ($errorInfo[2] ?? 'N/A'));
     error_log('Trace: ' . $e->getTraceAsString());
-    jsonResponse(['ok' => false, 'error' => 'Erreur base de données lors du calcul des consommations'], 500);
+    
+    // En mode développement, retourner plus de détails
+    $isDev = (getenv('APP_ENV') ?: 'production') === 'development';
+    $errorMsg = $isDev 
+        ? 'Erreur base de données: ' . $e->getMessage() . ' (SQL State: ' . ($errorInfo[0] ?? 'N/A') . ')'
+        : 'Erreur base de données lors du calcul des consommations';
+    
+    jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
 } catch (Exception $e) {
     error_log('Erreur factures_get_consommation: ' . $e->getMessage());
+    error_log('File: ' . $e->getFile() . ' Line: ' . $e->getLine());
     error_log('Trace: ' . $e->getTraceAsString());
-    jsonResponse(['ok' => false, 'error' => 'Erreur lors du calcul des consommations: ' . $e->getMessage()], 500);
+    
+    $isDev = (getenv('APP_ENV') ?: 'production') === 'development';
+    $errorMsg = $isDev 
+        ? 'Erreur: ' . $e->getMessage() . ' (' . $e->getFile() . ':' . $e->getLine() . ')'
+        : 'Erreur lors du calcul des consommations';
+    
+    jsonResponse(['ok' => false, 'error' => $errorMsg], 500);
 } catch (Throwable $e) {
     error_log('Erreur fatale factures_get_consommation: ' . $e->getMessage());
+    error_log('File: ' . $e->getFile() . ' Line: ' . $e->getLine());
     error_log('Trace: ' . $e->getTraceAsString());
     jsonResponse(['ok' => false, 'error' => 'Erreur fatale lors du calcul des consommations'], 500);
 }

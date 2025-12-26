@@ -52,16 +52,19 @@ try {
         // Récupérer les infos les plus récentes du photocopieur (recherche dans les deux tables)
         $stmtInfo = $pdo->prepare("
             SELECT Nom, Model, Timestamp
-            FROM compteur_relevee
-            WHERE mac_norm = :mac_norm
-              AND mac_norm IS NOT NULL
-              AND mac_norm != ''
-            UNION ALL
-            SELECT Nom, Model, Timestamp
-            FROM compteur_relevee_ancien
-            WHERE mac_norm = :mac_norm
-              AND mac_norm IS NOT NULL
-              AND mac_norm != ''
+            FROM (
+                SELECT Nom, Model, Timestamp
+                FROM compteur_relevee
+                WHERE mac_norm = :mac_norm
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+                UNION ALL
+                SELECT Nom, Model, Timestamp
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac_norm
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+            ) AS combined
             ORDER BY Timestamp DESC
             LIMIT 1
         ");
