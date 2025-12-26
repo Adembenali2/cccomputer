@@ -13,10 +13,17 @@ use RuntimeException;
  * 
  * Gère :
  * - Envoi automatique après génération de facture
- * - Idempotence (évite double envoi)
+ * - Idempotence (évite double envoi) avec mécanisme de "claim" atomique
+ * - Protection contre requêtes concurrentes
+ * - Protection contre factures bloquées (stuck) en email_envoye=2
  * - Logs dans table email_logs
  * - Gestion d'erreurs avec retry optionnel
  * - Email HTML avec fallback texte
+ * 
+ * Statut email_envoye :
+ * - 0 = non envoyé (disponible pour envoi)
+ * - 2 = en cours d'envoi (claimé par une requête)
+ * - 1 = envoyé (succès)
  */
 class InvoiceEmailService
 {
@@ -47,7 +54,7 @@ class InvoiceEmailService
      * Envoie automatiquement une facture par email après sa génération
      * 
      * @param int $factureId ID de la facture
-     * @param bool $force Forcer l'envoi même si email_envoye = 1
+     * @param bool $force Forcer l'envoi même si email_envoye = 1 (bypass le claim, mais refuse si email_envoye=2)
      * @return array ['success' => bool, 'message' => string, 'log_id' => int|null, 'message_id' => string|null]
      * @throws RuntimeException En cas d'erreur critique
      */
@@ -75,10 +82,11 @@ class InvoiceEmailService
         
         try {
             // ============================================
-            // ÉTAPE A : Transaction courte - Préparation
+            // ÉTAPE A : Transaction courte - Claim atomique
             // ============================================
             $this->pdo->beginTransaction();
             
+            // SELECT avec FOR UPDATE pour verrouiller la ligne
             $stmt = $this->pdo->prepare("
                 SELECT 
                     f.id, f.numero, f.date_facture, f.montant_ttc, f.pdf_path, 
@@ -101,22 +109,135 @@ class InvoiceEmailService
                 throw new RuntimeException("Facture introuvable: #{$factureId}");
             }
             
-            // Vérifier idempotence (éviter double envoi)
-            if (!$force && !empty($facture['email_envoye'])) {
-                $this->pdo->rollBack();
-                error_log("[InvoiceEmailService] Facture #{$factureId} déjà envoyée (email_envoye=1)");
-                return [
-                    'success' => false,
-                    'message' => 'Facture déjà envoyée',
-                    'log_id' => null,
-                    'message_id' => null
-                ];
+            $currentStatus = (int)($facture['email_envoye'] ?? 0);
+            
+            // MÉCANISME DE CLAIM ATOMIQUE
+            $claimSuccess = false;
+            
+            if ($force) {
+                // Mode force : on peut envoyer même si déjà envoyé (email_envoye=1)
+                // MAIS on refuse si email_envoye=2 (déjà en cours) pour éviter 2 envois simultanés
+                if ($currentStatus === 2) {
+                    $this->pdo->rollBack();
+                    error_log("[InvoiceEmailService] Mode force refusé pour facture #{$factureId} : email_envoye=2 (déjà en cours)");
+                    return [
+                        'success' => false,
+                        'message' => 'Facture déjà en cours d\'envoi. Mode force refusé pour éviter double envoi.',
+                        'log_id' => null,
+                        'message_id' => null
+                    ];
+                }
+                
+                // Si email_envoye=1, on peut forcer un nouvel envoi
+                // On met à 2 pour indiquer qu'on est en cours
+                $stmt = $this->pdo->prepare("
+                    UPDATE factures 
+                    SET email_envoye = 2 
+                    WHERE id = :id
+                ");
+                $stmt->execute([':id' => $factureId]);
+                $claimSuccess = true;
+                error_log("[InvoiceEmailService] Mode force activé pour facture #{$factureId} (email_envoye={$currentStatus} → 2)");
+            } else {
+                // Mode normal : claim atomique uniquement si email_envoye = 0
+                if ($currentStatus === 0) {
+                    // Tentative de claim normal
+                    $stmt = $this->pdo->prepare("
+                        UPDATE factures 
+                        SET email_envoye = 2 
+                        WHERE id = :id AND email_envoye = 0
+                    ");
+                    $stmt->execute([':id' => $factureId]);
+                    
+                    if ($stmt->rowCount() > 0) {
+                        $claimSuccess = true;
+                        error_log("[InvoiceEmailService] ✅ Claim réussi pour facture #{$factureId} (email_envoye=0 → 2)");
+                    }
+                } elseif ($currentStatus === 2) {
+                    // Facture en cours (email_envoye=2) : vérifier si stuck
+                    $isStuck = $this->isFactureStuck($factureId);
+                    
+                    if ($isStuck) {
+                        // Facture bloquée : réinitialiser et refaire le claim
+                        error_log("[InvoiceEmailService] 🔓 Facture #{$factureId} détectée comme stuck, réinitialisation...");
+                        
+                        // Remettre email_envoye à 0
+                        $stmt = $this->pdo->prepare("
+                            UPDATE factures 
+                            SET email_envoye = 0 
+                            WHERE id = :id
+                        ");
+                        $stmt->execute([':id' => $factureId]);
+                        
+                        // Marquer le log pending précédent comme failed
+                        $this->markStuckLogAsFailed($factureId);
+                        
+                        // Refaire le claim
+                        $stmt = $this->pdo->prepare("
+                            UPDATE factures 
+                            SET email_envoye = 2 
+                            WHERE id = :id AND email_envoye = 0
+                        ");
+                        $stmt->execute([':id' => $factureId]);
+                        
+                        if ($stmt->rowCount() > 0) {
+                            $claimSuccess = true;
+                            error_log("[InvoiceEmailService] ✅ Claim réussi après réinitialisation stuck pour facture #{$factureId}");
+                        } else {
+                            // Race condition : une autre requête a pris le claim entre temps
+                            $this->pdo->rollBack();
+                            error_log("[InvoiceEmailService] ⚠️ Claim échoué après réinitialisation stuck (race condition) pour facture #{$factureId}");
+                            return [
+                                'success' => false,
+                                'message' => 'Facture réinitialisée mais claim échoué (race condition)',
+                                'log_id' => null,
+                                'message_id' => null
+                            ];
+                        }
+                    } else {
+                        // Facture en cours mais pas stuck : refuser
+                        $this->pdo->rollBack();
+                        error_log("[InvoiceEmailService] Facture #{$factureId} déjà en cours d'envoi (email_envoye=2, pas stuck)");
+                        return [
+                            'success' => false,
+                            'message' => 'Facture déjà en cours d\'envoi par une autre requête',
+                            'log_id' => null,
+                            'message_id' => null
+                        ];
+                    }
+                } elseif ($currentStatus === 1) {
+                    // Facture déjà envoyée
+                    $this->pdo->rollBack();
+                    error_log("[InvoiceEmailService] Facture #{$factureId} déjà envoyée (email_envoye=1)");
+                    return [
+                        'success' => false,
+                        'message' => 'Facture déjà envoyée',
+                        'log_id' => null,
+                        'message_id' => null
+                    ];
+                }
+                
+                // Si claim échoué (cas inattendu)
+                if (!$claimSuccess) {
+                    $this->pdo->rollBack();
+                    error_log("[InvoiceEmailService] Facture #{$factureId} claim échoué (statut inattendu: {$currentStatus})");
+                    return [
+                        'success' => false,
+                        'message' => 'Impossible de réserver la facture pour envoi',
+                        'log_id' => null,
+                        'message_id' => null
+                    ];
+                }
             }
             
             // Vérifier que le client a un email
             $clientEmail = trim($facture['client_email'] ?? '');
             if (empty($clientEmail) || !filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+                // Remettre email_envoye à 0 en cas d'erreur de validation
+                $stmt = $this->pdo->prepare("UPDATE factures SET email_envoye = 0 WHERE id = :id");
+                $stmt->execute([':id' => $factureId]);
                 $this->pdo->rollBack();
+                
                 error_log("[InvoiceEmailService] Email client invalide pour facture #{$factureId}: " . ($clientEmail ?: 'vide'));
                 return [
                     'success' => false,
@@ -126,7 +247,7 @@ class InvoiceEmailService
                 ];
             }
             
-            // Créer l'entrée de log AVANT l'envoi (statut=pending)
+            // Créer l'entrée de log SEULEMENT si le claim a réussi
             $logId = $this->createEmailLog($factureId, $clientEmail, "Facture {$facture['numero']} - CC Computer");
             
             // COMMIT de la transaction courte (pas de SMTP dans la transaction)
@@ -194,7 +315,7 @@ class InvoiceEmailService
                 // ============================================
                 $this->pdo->beginTransaction();
                 
-                // Mettre à jour la facture
+                // Mettre à jour la facture : email_envoye = 1 (succès)
                 $stmt = $this->pdo->prepare("
                     UPDATE factures 
                     SET email_envoye = 1, date_envoi_email = NOW() 
@@ -237,10 +358,19 @@ class InvoiceEmailService
                 // ============================================
                 $errorMessage = $e->getMessage();
                 
-                // IMPORTANT : Transaction séparée pour mettre à jour le log
-                // L'entrée email_logs doit rester même en cas d'erreur
+                // IMPORTANT : Transaction séparée pour mettre à jour le log et remettre email_envoye à 0
+                // Remettre email_envoye à 0 permet le retry
                 $this->pdo->beginTransaction();
                 
+                // Remettre email_envoye à 0 pour permettre retry
+                $stmt = $this->pdo->prepare("
+                    UPDATE factures 
+                    SET email_envoye = 0 
+                    WHERE id = :id
+                ");
+                $stmt->execute([':id' => $factureId]);
+                
+                // Mettre à jour le log avec échec
                 $stmt = $this->pdo->prepare("
                     UPDATE email_logs 
                     SET statut = 'failed', error_message = :error_message
@@ -259,7 +389,7 @@ class InvoiceEmailService
                     error_log("[InvoiceEmailService] PDF temporaire supprimé après erreur: {$pdfPath}");
                 }
                 
-                error_log("[InvoiceEmailService] ❌ Erreur envoi facture #{$factureId}: {$errorMessage}");
+                error_log("[InvoiceEmailService] ❌ Erreur envoi facture #{$factureId}: {$errorMessage} (email_envoye remis à 0 pour retry)");
                 
                 return [
                     'success' => false,
@@ -279,6 +409,11 @@ class InvoiceEmailService
             if ($logId !== null) {
                 try {
                     $this->pdo->beginTransaction();
+                    
+                    // Remettre email_envoye à 0 si on avait réussi le claim
+                    $stmt = $this->pdo->prepare("UPDATE factures SET email_envoye = 0 WHERE id = :id");
+                    $stmt->execute([':id' => $factureId]);
+                    
                     $stmt = $this->pdo->prepare("
                         UPDATE email_logs 
                         SET statut = 'failed', error_message = :error_message
@@ -306,6 +441,74 @@ class InvoiceEmailService
             error_log("[InvoiceEmailService] Stack trace: " . $e->getTraceAsString());
             
             throw new RuntimeException("Erreur lors de l'envoi automatique de la facture: " . $e->getMessage(), 0, $e);
+        }
+    }
+    
+    /**
+     * Vérifie si une facture est bloquée (stuck) en email_envoye=2
+     * 
+     * Une facture est considérée comme stuck si :
+     * - email_envoye = 2
+     * - Il existe un email_logs avec statut='pending' pour cette facture
+     * - Le log pending a été créé il y a plus de 15 minutes
+     * 
+     * @param int $factureId ID de la facture
+     * @return bool True si la facture est stuck, false sinon
+     */
+    private function isFactureStuck(int $factureId): bool
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT 
+                el.id,
+                el.created_at,
+                TIMESTAMPDIFF(MINUTE, el.created_at, NOW()) as minutes_ago
+            FROM email_logs el
+            WHERE el.facture_id = :facture_id
+              AND el.statut = 'pending'
+            ORDER BY el.created_at DESC
+            LIMIT 1
+        ");
+        $stmt->execute([':facture_id' => $factureId]);
+        $pendingLog = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$pendingLog) {
+            // Pas de log pending : la facture n'est pas stuck
+            return false;
+        }
+        
+        $minutesAgo = (int)($pendingLog['minutes_ago'] ?? 0);
+        
+        // Stuck si le log pending a plus de 15 minutes
+        $isStuck = $minutesAgo >= 15;
+        
+        if ($isStuck) {
+            error_log("[InvoiceEmailService] 🔍 Facture #{$factureId} détectée comme stuck : log pending créé il y a {$minutesAgo} minutes");
+        }
+        
+        return $isStuck;
+    }
+    
+    /**
+     * Marque les logs pending stuck comme failed
+     * 
+     * @param int $factureId ID de la facture
+     * @return void
+     */
+    private function markStuckLogAsFailed(int $factureId): void
+    {
+        $stmt = $this->pdo->prepare("
+            UPDATE email_logs 
+            SET statut = 'failed', 
+                error_message = 'Facture stuck détectée (process crash/timeout), réinitialisée pour retry'
+            WHERE facture_id = :facture_id
+              AND statut = 'pending'
+              AND created_at < NOW() - INTERVAL 15 MINUTE
+        ");
+        $stmt->execute([':facture_id' => $factureId]);
+        
+        $rowsAffected = $stmt->rowCount();
+        if ($rowsAffected > 0) {
+            error_log("[InvoiceEmailService] 📝 {$rowsAffected} log(s) pending marqué(s) comme failed pour facture #{$factureId}");
         }
     }
     
@@ -391,6 +594,7 @@ class InvoiceEmailService
         // Variables d'environnement pour le template
         $appUrl = $_ENV['APP_URL'] ?? 'https://cccomputer-production.up.railway.app';
         $brandName = htmlspecialchars('CC Computer', ENT_QUOTES, 'UTF-8');
+        $brandTagline = htmlspecialchars('Facturation', ENT_QUOTES, 'UTF-8'); // Tagline par défaut
         $legalName = htmlspecialchars('Camson Group', ENT_QUOTES, 'UTF-8');
         $legalAddress = htmlspecialchars('97, Boulevard Maurice Berteaux - SANNOIS SASU', ENT_QUOTES, 'UTF-8');
         $legalDetails = htmlspecialchars(
@@ -402,6 +606,7 @@ class InvoiceEmailService
         // Remplacement des placeholders
         $replacements = [
             '{{brand_name}}' => $brandName,
+            '{{brand_tagline}}' => $brandTagline, // Support pour brand_tagline
             '{{client_name}}' => $clientNom,
             '{{invoice_number}}' => $numero,
             '{{invoice_date}}' => $dateFacture,

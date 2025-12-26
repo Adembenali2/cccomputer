@@ -34,6 +34,9 @@ try {
     <!-- CSS spécifique à la page carte -->
     <link rel="stylesheet" href="/assets/css/maps.css">
 
+    <!-- Améliorations JS pour maps.php -->
+    <script src="/assets/js/maps-enhancements.js"></script>
+
     <!-- Leaflet (OpenStreetMap) -->
     <link rel="stylesheet"
           href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"

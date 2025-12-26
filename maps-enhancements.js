@@ -1,12 +1,8 @@
 // ============================================
-// PATCH 3 : JS - Nouvelles fonctions (VERSION CORRIGÉE)
+// PATCH 3 : JS - Nouvelles fonctions (VERSION B - Fichier externe)
+// À inclure via : <script src="/assets/js/maps-enhancements.js"></script>
 // ============================================
 
-// ============================================
-// VERSION A (inline maps.php) - AVEC <script>
-// ============================================
-
-<script>
 // ============================================
 // HELPERS MANQUANTS
 // ============================================
@@ -604,12 +600,3 @@ waitFor(
     100 // 100ms entre chaque tentative (max 5 secondes)
 );
 
-</script>
-
-// ============================================
-// VERSION B (fichier .js externe) - SANS <script>
-// ============================================
-
-// Copier tout le contenu ci-dessus mais RETIRER les balises <script> et </script>
-// (lignes 6 et 387)
-// Le fichier .js externe sera inclus via : <script src="/assets/js/maps-enhancements.js"></script>
