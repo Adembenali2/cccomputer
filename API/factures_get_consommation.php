@@ -178,6 +178,7 @@ try {
         
         // Prendre le plus ancien des deux (premier du jour)
         $startReleve = null;
+        $startDateAjustee = false;
         if ($startReleve1 && $startReleve2) {
             // Comparer les timestamps
             $ts1 = strtotime($startReleve1['Timestamp']);
@@ -187,6 +188,60 @@ try {
             $startReleve = $startReleve1;
         } elseif ($startReleve2) {
             $startReleve = $startReleve2;
+        } else {
+            // Aucun relevé à la date exacte : chercher le dernier relevé avant cette date
+            $stmtStartFallback1 = $pdo->prepare("
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor,
+                    Timestamp
+                FROM compteur_relevee
+                WHERE mac_norm = :mac_norm
+                  AND DATE(Timestamp) < :date_debut
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+                ORDER BY Timestamp DESC
+                LIMIT 1
+            ");
+            $stmtStartFallback1->execute([
+                ':mac_norm' => $macNorm,
+                ':date_debut' => $dateDebut
+            ]);
+            $startFallback1 = $stmtStartFallback1->fetch(PDO::FETCH_ASSOC);
+            
+            $stmtStartFallback2 = $pdo->prepare("
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor,
+                    Timestamp
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac_norm
+                  AND DATE(Timestamp) < :date_debut
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+                ORDER BY Timestamp DESC
+                LIMIT 1
+            ");
+            $stmtStartFallback2->execute([
+                ':mac_norm' => $macNorm,
+                ':date_debut' => $dateDebut
+            ]);
+            $startFallback2 = $stmtStartFallback2->fetch(PDO::FETCH_ASSOC);
+            
+            // Prendre le plus récent des deux (dernier avant la date)
+            if ($startFallback1 && $startFallback2) {
+                $ts1 = strtotime($startFallback1['Timestamp']);
+                $ts2 = strtotime($startFallback2['Timestamp']);
+                $startReleve = ($ts1 >= $ts2) ? $startFallback1 : $startFallback2;
+            } elseif ($startFallback1) {
+                $startReleve = $startFallback1;
+            } elseif ($startFallback2) {
+                $startReleve = $startFallback2;
+            }
+            
+            if ($startReleve) {
+                $startDateAjustee = true;
+            }
         }
         
         // Récupérer le DERNIER relevé du jour de fin (recherche dans les deux tables)
@@ -232,6 +287,7 @@ try {
         
         // Prendre le plus récent des deux (dernier du jour)
         $endReleve = null;
+        $endDateAjustee = false;
         if ($endReleve1 && $endReleve2) {
             // Comparer les timestamps
             $ts1 = strtotime($endReleve1['Timestamp']);
@@ -241,6 +297,60 @@ try {
             $endReleve = $endReleve1;
         } elseif ($endReleve2) {
             $endReleve = $endReleve2;
+        } else {
+            // Aucun relevé à la date exacte : chercher le dernier relevé avant cette date
+            $stmtEndFallback1 = $pdo->prepare("
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor,
+                    Timestamp
+                FROM compteur_relevee
+                WHERE mac_norm = :mac_norm
+                  AND DATE(Timestamp) < :date_fin
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+                ORDER BY Timestamp DESC
+                LIMIT 1
+            ");
+            $stmtEndFallback1->execute([
+                ':mac_norm' => $macNorm,
+                ':date_fin' => $dateFin
+            ]);
+            $endFallback1 = $stmtEndFallback1->fetch(PDO::FETCH_ASSOC);
+            
+            $stmtEndFallback2 = $pdo->prepare("
+                SELECT 
+                    COALESCE(TotalBW, 0) as TotalBW,
+                    COALESCE(TotalColor, 0) as TotalColor,
+                    Timestamp
+                FROM compteur_relevee_ancien
+                WHERE mac_norm = :mac_norm
+                  AND DATE(Timestamp) < :date_fin
+                  AND mac_norm IS NOT NULL
+                  AND mac_norm != ''
+                ORDER BY Timestamp DESC
+                LIMIT 1
+            ");
+            $stmtEndFallback2->execute([
+                ':mac_norm' => $macNorm,
+                ':date_fin' => $dateFin
+            ]);
+            $endFallback2 = $stmtEndFallback2->fetch(PDO::FETCH_ASSOC);
+            
+            // Prendre le plus récent des deux (dernier avant la date)
+            if ($endFallback1 && $endFallback2) {
+                $ts1 = strtotime($endFallback1['Timestamp']);
+                $ts2 = strtotime($endFallback2['Timestamp']);
+                $endReleve = ($ts1 >= $ts2) ? $endFallback1 : $endFallback2;
+            } elseif ($endFallback1) {
+                $endReleve = $endFallback1;
+            } elseif ($endFallback2) {
+                $endReleve = $endFallback2;
+            }
+            
+            if ($endReleve) {
+                $endDateAjustee = true;
+            }
         }
         
         // Calculer les consommations
@@ -279,15 +389,43 @@ try {
             'conso_nb' => $consoNB,
             'conso_couleur' => $consoColor,
             'date_debut_releve' => $startReleve ? $startReleve['Timestamp'] : null,
-            'date_fin_releve' => $endReleve ? $endReleve['Timestamp'] : null
+            'date_fin_releve' => $endReleve ? $endReleve['Timestamp'] : null,
+            'date_debut_ajustee' => $startDateAjustee,
+            'date_fin_ajustee' => $endDateAjustee
         ];
+    }
+    
+    // Vérifier si des dates ont été ajustées
+    $datesAjustees = [];
+    foreach ($machines as $machine) {
+        if ($machine['date_debut_ajustee']) {
+            $dateAjustee = date('d/m/Y', strtotime($machine['date_debut_releve']));
+            $datesAjustees[] = [
+                'type' => 'debut',
+                'date_demandee' => date('d/m/Y', strtotime($dateDebut)),
+                'date_utilisee' => $dateAjustee,
+                'machine' => $machine['nom']
+            ];
+        }
+        if ($machine['date_fin_ajustee']) {
+            $dateAjustee = date('d/m/Y', strtotime($machine['date_fin_releve']));
+            $datesAjustees[] = [
+                'type' => 'fin',
+                'date_demandee' => date('d/m/Y', strtotime($dateFin)),
+                'date_utilisee' => $dateAjustee,
+                'machine' => $machine['nom']
+            ];
+        }
     }
     
     jsonResponse([
         'ok' => true,
         'offre' => $offre,
         'nb_photocopieurs' => count($machines),
-        'machines' => $machines
+        'machines' => $machines,
+        'dates_ajustees' => $datesAjustees,
+        'date_debut_demandee' => $dateDebut,
+        'date_fin_demandee' => $dateFin
     ]);
     
 } catch (PDOException $e) {

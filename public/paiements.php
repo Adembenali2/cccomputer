@@ -2615,6 +2615,43 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 const data = await response.json();
                 
                 if (data.ok) {
+                    // Vérifier si des dates ont été ajustées et mettre à jour les champs
+                    const notificationsContainer = document.getElementById('factureClientNotifications');
+                    if (data.dates_ajustees && data.dates_ajustees.length > 0) {
+                        // Mettre à jour les champs de date avec les dates ajustées
+                        data.dates_ajustees.forEach(ajustement => {
+                            if (ajustement.type === 'debut') {
+                                // Convertir la date utilisée (dd/mm/yyyy) en format YYYY-MM-DD pour le champ
+                                const dateParts = ajustement.date_utilisee.split('/');
+                                if (dateParts.length === 3) {
+                                    const dateAjustee = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+                                    document.getElementById('factureDateDebut').value = dateAjustee;
+                                }
+                            } else if (ajustement.type === 'fin') {
+                                const dateParts = ajustement.date_utilisee.split('/');
+                                if (dateParts.length === 3) {
+                                    const dateAjustee = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+                                    document.getElementById('factureDateFin').value = dateAjustee;
+                                }
+                            }
+                        });
+                        
+                        // Afficher les notifications d'ajustement
+                        if (notificationsContainer) {
+                            let notificationsHtml = '';
+                            data.dates_ajustees.forEach(ajustement => {
+                                const typeText = ajustement.type === 'debut' ? 'début' : 'fin';
+                                notificationsHtml += `
+                                    <div style="padding: 0.75rem 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-bottom: 0.5rem; font-size: 0.875rem; color: #92400E;">
+                                        ℹ️ Aucun relevé reçu le ${ajustement.date_demandee}. Utilisation du dernier relevé disponible du ${ajustement.date_utilisee} (${ajustement.machine}).
+                                    </div>
+                                `;
+                            });
+                            notificationsContainer.innerHTML = notificationsHtml;
+                            notificationsContainer.style.display = 'block';
+                        }
+                    }
+                    
                     // Afficher les informations de consommation avec les compteurs de début et fin
                     let infoHtml = '<h4 style="margin: 0 0 1rem; font-size: 1rem; font-weight: 600;">Relevés de compteurs:</h4>';
                     
