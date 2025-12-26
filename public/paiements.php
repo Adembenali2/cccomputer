@@ -1651,26 +1651,17 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 </div>
 
                 <!-- Champs pour Achat -->
-                <div class="modal-form-row" id="factureAchatFields" style="display: none;">
-                    <div class="modal-form-group">
-                        <label for="factureProduitType">Type de produit <span style="color: #ef4444;">*</span></label>
-                        <select id="factureProduitType" name="produitType" required onchange="onFactureProduitTypeChange()">
-                            <option value="">Sélectionner un type</option>
-                            <option value="PC">PC</option>
-                            <option value="LCD">LCD</option>
-                            <option value="Imprimante">Imprimante</option>
-                            <option value="Papier">Papier</option>
-                            <option value="Toner">Toner</option>
-                            <option value="Autre">Autre (à préciser)</option>
-                        </select>
-                    </div>
-                    <div class="modal-form-group" id="factureProduitAutreGroup" style="display: none;">
-                        <label for="factureProduitAutre">Précision du produit <span style="color: #ef4444;">*</span></label>
-                        <input type="text" id="factureProduitAutre" name="produitAutre" placeholder="Ex: Clavier, Souris, etc.">
-                    </div>
-                    <div class="modal-form-group">
-                        <label for="facturePrixAchat">Prix HT <span style="color: #ef4444;">*</span></label>
-                        <input type="number" id="facturePrixAchat" name="prixAchat" step="0.01" min="0" placeholder="0.00" required onchange="calculateFactureTotalAchat()">
+                <div id="factureAchatFields" style="display: none;">
+                    <div class="facture-lignes-container" style="margin-bottom: 1rem;">
+                        <div class="facture-lignes-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Produits à facturer</h3>
+                            <button type="button" class="btn btn-secondary" onclick="addAchatProduit()" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+                                + Ajouter un produit
+                            </button>
+                        </div>
+                        <div id="factureAchatProduits">
+                            <!-- Les produits seront ajoutés ici dynamiquement -->
+                        </div>
                     </div>
                 </div>
 
@@ -2079,10 +2070,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 document.getElementById('factureOffre').value = '';
                 
                 // Réinitialiser les champs Achat
-                document.getElementById('factureProduitType').value = '';
-                document.getElementById('factureProduitAutre').value = '';
-                document.getElementById('facturePrixAchat').value = '';
-                document.getElementById('factureProduitAutreGroup').style.display = 'none';
+                const achatProduitsContainer = document.getElementById('factureAchatProduits');
+                if (achatProduitsContainer) {
+                    achatProduitsContainer.innerHTML = '';
+                    addAchatProduit(); // Ajouter une première ligne vide
+                }
                 
                 // Afficher/masquer les champs selon le type
                 onFactureTypeChange();
@@ -2183,8 +2175,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 
                 // Rendre les champs Achat requis/non requis
                 document.getElementById('factureOffre').removeAttribute('required');
-                document.getElementById('factureProduitType').setAttribute('required', 'required');
-                document.getElementById('facturePrixAchat').setAttribute('required', 'required');
+                
+                // Ajouter une première ligne de produit si le conteneur est vide
+                const achatProduitsContainer = document.getElementById('factureAchatProduits');
+                if (achatProduitsContainer && achatProduitsContainer.children.length === 0) {
+                    addAchatProduit();
+                }
                 
                 // Réinitialiser les totaux
                 calculateFactureTotalAchat();
@@ -2210,22 +2206,107 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         }
 
         /**
+         * Ajoute une ligne de produit pour une facture Achat
+         */
+        function addAchatProduit() {
+            const container = document.getElementById('factureAchatProduits');
+            if (!container) return;
+            
+            const produitIndex = container.children.length;
+            const produitDiv = document.createElement('div');
+            produitDiv.className = 'facture-ligne achat-produit';
+            produitDiv.style.marginBottom = '1rem';
+            produitDiv.style.padding = '1rem';
+            produitDiv.style.border = '1px solid var(--border-color)';
+            produitDiv.style.borderRadius = 'var(--radius-md)';
+            produitDiv.style.backgroundColor = 'var(--bg-secondary)';
+            
+            produitDiv.innerHTML = `
+                <div class="facture-ligne-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
+                    <div class="facture-ligne-field">
+                        <label>Type de produit <span style="color: #ef4444;">*</span></label>
+                        <select name="achatProduits[${produitIndex}][type]" class="achat-produit-type" required onchange="onAchatProduitTypeChange(this)">
+                            <option value="">Sélectionner un type</option>
+                            <option value="PC">PC</option>
+                            <option value="LCD">LCD</option>
+                            <option value="Imprimante">Imprimante</option>
+                            <option value="Papier">Papier</option>
+                            <option value="Toner">Toner</option>
+                            <option value="Autre">Autre (à préciser)</option>
+                        </select>
+                    </div>
+                    <div class="facture-ligne-field achat-produit-autre-group" style="display: none;">
+                        <label>Précision <span style="color: #ef4444;">*</span></label>
+                        <input type="text" name="achatProduits[${produitIndex}][autre]" class="achat-produit-autre" placeholder="Ex: Clavier, Souris">
+                    </div>
+                    <div class="facture-ligne-field">
+                        <label>Quantité <span style="color: #ef4444;">*</span></label>
+                        <input type="number" name="achatProduits[${produitIndex}][quantite]" class="achat-produit-quantite" step="0.01" min="0" value="1" required onchange="calculateAchatProduitTotal(this)">
+                    </div>
+                    <div class="facture-ligne-field">
+                        <label>Prix unitaire HT (€) <span style="color: #ef4444;">*</span></label>
+                        <input type="number" name="achatProduits[${produitIndex}][prix]" class="achat-produit-prix" step="0.01" min="0" value="0" required onchange="calculateAchatProduitTotal(this)">
+                    </div>
+                    <div class="facture-ligne-field">
+                        <label>Total HT (€)</label>
+                        <input type="number" name="achatProduits[${produitIndex}][total]" class="achat-produit-total" step="0.01" value="0" readonly style="font-weight: 600;">
+                    </div>
+                    <div class="facture-ligne-actions">
+                        <button type="button" class="btn-remove-ligne" onclick="removeAchatProduit(this)" style="padding: 0.5rem; background: var(--danger); color: white; border: none; border-radius: var(--radius-sm); cursor: pointer;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6L6 18M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(produitDiv);
+        }
+
+        /**
+         * Supprime une ligne de produit Achat
+         */
+        function removeAchatProduit(btn) {
+            const container = document.getElementById('factureAchatProduits');
+            if (container && container.children.length > 1) {
+                btn.closest('.achat-produit').remove();
+                calculateFactureTotalAchat();
+            } else if (container && container.children.length === 1) {
+                alert('Vous devez avoir au moins un produit');
+            }
+        }
+
+        /**
          * Gère le changement de type de produit (pour afficher/masquer le champ "Autre")
          */
-        function onFactureProduitTypeChange() {
-            const produitType = document.getElementById('factureProduitType').value;
-            const autreGroup = document.getElementById('factureProduitAutreGroup');
-            const autreInput = document.getElementById('factureProduitAutre');
+        function onAchatProduitTypeChange(select) {
+            const produitDiv = select.closest('.achat-produit');
+            const autreGroup = produitDiv.querySelector('.achat-produit-autre-group');
+            const autreInput = produitDiv.querySelector('.achat-produit-autre');
             
-            if (produitType === 'Autre') {
+            if (select.value === 'Autre') {
                 autreGroup.style.display = 'block';
-                autreInput.setAttribute('required', 'required');
+                if (autreInput) autreInput.setAttribute('required', 'required');
             } else {
                 autreGroup.style.display = 'none';
-                autreInput.removeAttribute('required');
-                autreInput.value = '';
+                if (autreInput) {
+                    autreInput.removeAttribute('required');
+                    autreInput.value = '';
+                }
             }
             
+            calculateAchatProduitTotal(select);
+        }
+
+        /**
+         * Calcule le total d'un produit Achat
+         */
+        function calculateAchatProduitTotal(element) {
+            const produitDiv = element.closest('.achat-produit');
+            const quantite = parseFloat(produitDiv.querySelector('.achat-produit-quantite').value) || 0;
+            const prix = parseFloat(produitDiv.querySelector('.achat-produit-prix').value) || 0;
+            const total = quantite * prix;
+            produitDiv.querySelector('.achat-produit-total').value = total.toFixed(2);
             calculateFactureTotalAchat();
         }
 
@@ -2233,12 +2314,16 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
          * Calcule les totaux pour une facture de type Achat
          */
         function calculateFactureTotalAchat() {
-            const prixHT = parseFloat(document.getElementById('facturePrixAchat').value) || 0;
-            const tauxTVA = 20; // TVA à 20%
-            const tva = prixHT * (tauxTVA / 100);
-            const totalTTC = prixHT + tva;
+            let totalHT = 0;
+            document.querySelectorAll('.achat-produit-total').forEach(input => {
+                totalHT += parseFloat(input.value) || 0;
+            });
             
-            document.getElementById('factureMontantHT').value = prixHT.toFixed(2);
+            const tauxTVA = 20; // TVA à 20%
+            const tva = totalHT * (tauxTVA / 100);
+            const totalTTC = totalHT + tva;
+            
+            document.getElementById('factureMontantHT').value = totalHT.toFixed(2);
             document.getElementById('factureTVA').value = tva.toFixed(2);
             document.getElementById('factureMontantTTC').value = totalTTC.toFixed(2);
         }
@@ -2698,34 +2783,58 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             
             // Gérer le type "Achat"
             if (data.factureType === 'Achat') {
-                const produitType = data.produitType;
-                const produitAutre = data.produitAutre || '';
-                const prixAchat = parseFloat(data.prixAchat) || 0;
+                // Récupérer tous les produits
+                const produits = [];
+                const produitInputs = document.querySelectorAll('.achat-produit');
                 
-                if (!produitType) {
-                    alert('Veuillez sélectionner un type de produit');
+                if (produitInputs.length === 0) {
+                    alert('Veuillez ajouter au moins un produit');
                     return;
                 }
                 
-                if (produitType === 'Autre' && !produitAutre.trim()) {
-                    alert('Veuillez préciser le type de produit');
+                produitInputs.forEach((produitDiv, index) => {
+                    const type = produitDiv.querySelector('.achat-produit-type').value;
+                    const autre = produitDiv.querySelector('.achat-produit-autre')?.value || '';
+                    const quantite = parseFloat(produitDiv.querySelector('.achat-produit-quantite').value) || 0;
+                    const prix = parseFloat(produitDiv.querySelector('.achat-produit-prix').value) || 0;
+                    const total = parseFloat(produitDiv.querySelector('.achat-produit-total').value) || 0;
+                    
+                    if (!type) {
+                        alert(`Veuillez sélectionner un type pour le produit ${index + 1}`);
+                        return;
+                    }
+                    
+                    if (type === 'Autre' && !autre.trim()) {
+                        alert(`Veuillez préciser le type pour le produit ${index + 1}`);
+                        return;
+                    }
+                    
+                    if (quantite <= 0) {
+                        alert(`Veuillez saisir une quantité valide pour le produit ${index + 1}`);
+                        return;
+                    }
+                    
+                    if (prix <= 0) {
+                        alert(`Veuillez saisir un prix valide pour le produit ${index + 1}`);
+                        return;
+                    }
+                    
+                    const produitNom = type === 'Autre' ? autre.trim() : type;
+                    produits.push({
+                        description: produitNom,
+                        type: 'Produit',
+                        quantite: quantite,
+                        prix_unitaire: prix,
+                        total_ht: total
+                    });
+                });
+                
+                if (produits.length === 0) {
+                    alert('Veuillez ajouter au moins un produit valide');
                     return;
                 }
                 
-                if (prixAchat <= 0) {
-                    alert('Veuillez saisir un prix valide');
-                    return;
-                }
-                
-                // Créer la ligne de facture pour l'achat
-                const produitNom = produitType === 'Autre' ? produitAutre.trim() : produitType;
-                data.lignes = [{
-                    description: produitNom,
-                    type: 'Produit',
-                    quantite: 1,
-                    prix_unitaire: prixAchat,
-                    total_ht: prixAchat
-                }];
+                data.lignes = produits;
             } else if (window.factureMachineData) {
                 // Si on a des données de machine (nouveau format), utiliser celui-ci
                 data.offre = window.factureMachineData.offre;
