@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Mail\MailerService;
+use App\Mail\BrevoApiMailerService;
 use App\Mail\MailerException;
 use PDO;
 use RuntimeException;
@@ -288,29 +289,43 @@ class InvoiceEmailService
                 error_log("[InvoiceEmailService] PDF régénéré dans /tmp: {$pdfPath}");
             }
             
-            // Préparer le service Mailer
-            $emailConfig = $this->config['email'] ?? [];
-            $mailerService = new MailerService($emailConfig);
-            
             // Préparer le sujet et les messages (texte + HTML)
             $sujet = "Facture {$facture['numero']} - CC Computer";
             $textBody = $this->buildEmailBody($facture);
             $htmlBody = $this->buildEmailHtmlBody($facture);
             
             // Envoyer l'email (HORS transaction)
+            // Détecter si Brevo API est disponible, sinon fallback SMTP
             $messageId = null;
             try {
                 $fileName = basename($facture['pdf_path'] ?? 'facture_' . $facture['numero'] . '.pdf');
                 $fileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName);
                 
-                $messageId = $mailerService->sendEmailWithPdf(
-                    $clientEmail,
-                    $sujet,
-                    $textBody,
-                    $pdfPath,
-                    $fileName,
-                    $htmlBody
-                );
+                // Utiliser Brevo API si BREVO_API_KEY est défini, sinon SMTP
+                if (!empty($_ENV['BREVO_API_KEY'])) {
+                    error_log("[InvoiceEmailService] Utilisation de l'API Brevo pour l'envoi");
+                    $brevoService = new BrevoApiMailerService();
+                    $messageId = $brevoService->sendEmailWithPdf(
+                        $clientEmail,
+                        $sujet,
+                        $textBody,
+                        $pdfPath,
+                        $fileName,
+                        $htmlBody
+                    );
+                } else {
+                    error_log("[InvoiceEmailService] Utilisation de SMTP (fallback)");
+                    $emailConfig = $this->config['email'] ?? [];
+                    $mailerService = new MailerService($emailConfig);
+                    $messageId = $mailerService->sendEmailWithPdf(
+                        $clientEmail,
+                        $sujet,
+                        $textBody,
+                        $pdfPath,
+                        $fileName,
+                        $htmlBody
+                    );
+                }
                 
                 // ============================================
                 // ÉTAPE C : Transaction courte - Mise à jour succès
