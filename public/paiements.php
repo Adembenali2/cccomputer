@@ -1890,51 +1890,43 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             </div>
             <div class="modal-body">
                 <form id="generationFactureClientsForm" onsubmit="submitGenerationFactureClientsForm(event)">
+                    <div class="modal-form-group" style="padding: 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
+                        <div style="font-weight: 600; color: #92400E; margin-bottom: 0.5rem;">ℹ️ Génération automatique</div>
+                        <div style="font-size: 0.875rem; color: #92400E;">
+                            Les factures seront générées automatiquement pour tous les clients valides de la période sélectionnée.
+                            Les clients sans imprimantes ou sans relevé depuis plus d'un mois seront exclus automatiquement.
+                        </div>
+                    </div>
+
                     <div class="modal-form-row">
                         <div class="modal-form-group">
                             <label for="genFactureDate">Date de facture <span style="color: #ef4444;">*</span></label>
                             <input type="date" id="genFactureDate" name="date_facture" required value="<?= date('Y-m-d') ?>">
                         </div>
                         <div class="modal-form-group">
-                            <label for="genFactureType">Type <span style="color: #ef4444;">*</span></label>
-                            <select id="genFactureType" name="type" required>
-                                <option value="Consommation">Consommation</option>
-                                <option value="Achat">Achat</option>
-                                <option value="Service">Service</option>
+                            <label for="genFactureOffre">Offre <span style="color: #ef4444;">*</span></label>
+                            <select id="genFactureOffre" name="offre" required>
+                                <option value="1000">Offre 1000 (1 imprimante)</option>
+                                <option value="2000">Offre 2000 (2 imprimantes)</option>
                             </select>
+                            <div class="input-hint">Sélectionnez l'offre à appliquer pour tous les clients</div>
                         </div>
                     </div>
 
                     <div class="modal-form-row">
                         <div class="modal-form-group">
-                            <label for="genFactureDateDebut">Date début période</label>
-                            <input type="date" id="genFactureDateDebut" name="date_debut">
+                            <label for="genFactureDateDebut">Date début période <span style="color: #ef4444;">*</span></label>
+                            <input type="date" id="genFactureDateDebut" name="date_debut" required>
+                            <div class="input-hint">Si aucun relevé à cette date, le dernier relevé disponible sera utilisé</div>
                         </div>
                         <div class="modal-form-group">
-                            <label for="genFactureDateFin">Date fin période</label>
-                            <input type="date" id="genFactureDateFin" name="date_fin">
+                            <label for="genFactureDateFin">Date fin période <span style="color: #ef4444;">*</span></label>
+                            <input type="date" id="genFactureDateFin" name="date_fin" required>
+                            <div class="input-hint">Si aucun relevé à cette date, le dernier relevé disponible sera utilisé</div>
                         </div>
                     </div>
 
-                    <div class="modal-form-group">
-                        <label for="genFactureClients">Sélectionner les clients <span style="color: #ef4444;">*</span></label>
-                        <div style="border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; max-height: 300px; overflow-y: auto; background: var(--bg-secondary);">
-                            <div id="genFactureClientsList" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">
-                                    Chargement des clients...
-                                </div>
-                            </div>
-                        </div>
-                        <div class="input-hint">Cochez les clients pour lesquels vous souhaitez générer une facture</div>
-                    </div>
-
-                    <div class="modal-form-group">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="checkbox" id="genFactureEnvoyerEmail" name="envoyer_email" style="width: auto; cursor: pointer;">
-                            <span>Envoyer les factures par email automatiquement</span>
-                        </label>
-                        <div class="input-hint">Si coché, les factures seront envoyées par email aux clients après génération</div>
-                    </div>
+                    <div id="genFactureNotifications" style="display: none; margin-bottom: 1rem;"></div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -4505,10 +4497,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 if (dateInput) {
                     dateInput.value = new Date().toISOString().split('T')[0];
                 }
+                // Masquer les notifications
+                const notificationsDiv = document.getElementById('genFactureNotifications');
+                if (notificationsDiv) {
+                    notificationsDiv.style.display = 'none';
+                    notificationsDiv.innerHTML = '';
+                }
             }
-            
-            // Charger la liste des clients
-            loadClientsForGenerationFacture();
         }
 
         /**
@@ -4527,53 +4522,6 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
-        /**
-         * Charge la liste des clients pour la génération de factures
-         */
-        async function loadClientsForGenerationFacture() {
-            try {
-                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000', {
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                
-                if (data.ok && data.clients) {
-                    const clientsList = document.getElementById('genFactureClientsList');
-                    clientsList.innerHTML = '';
-                    
-                    if (data.clients.length === 0) {
-                        clientsList.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-secondary);">Aucun client disponible</div>';
-                        return;
-                    }
-                    
-                    data.clients.forEach(client => {
-                        const clientDiv = document.createElement('div');
-                        clientDiv.style.display = 'flex';
-                        clientDiv.style.alignItems = 'center';
-                        clientDiv.style.gap = '0.75rem';
-                        clientDiv.style.padding = '0.5rem';
-                        clientDiv.style.borderRadius = 'var(--radius-md)';
-                        clientDiv.style.transition = 'background 0.2s';
-                        clientDiv.onmouseenter = function() { this.style.background = 'var(--bg-primary)'; };
-                        clientDiv.onmouseleave = function() { this.style.background = ''; };
-                        
-                        clientDiv.innerHTML = `
-                            <input type="checkbox" id="client_${client.id}" name="clients[]" value="${client.id}" style="width: auto; cursor: pointer;">
-                            <label for="client_${client.id}" style="flex: 1; cursor: pointer; margin: 0; font-weight: normal;">
-                                <strong>${client.name}</strong>
-                                ${client.code ? ` <span style="color: var(--text-secondary);">(${client.code})</span>` : ''}
-                            </label>
-                        `;
-                        
-                        clientsList.appendChild(clientDiv);
-                    });
-                }
-            } catch (error) {
-                console.error('Erreur lors du chargement des clients:', error);
-                const clientsList = document.getElementById('genFactureClientsList');
-                clientsList.innerHTML = '<div style="text-align: center; padding: 1rem; color: #ef4444;">Erreur lors du chargement des clients</div>';
-            }
-        }
 
         /**
          * Soumet le formulaire de génération de factures pour clients
@@ -4584,11 +4532,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             const form = document.getElementById('generationFactureClientsForm');
             const formData = new FormData(form);
             
-            // Récupérer les clients sélectionnés
-            const clientsSelected = formData.getAll('clients[]');
+            const dateDebut = formData.get('date_debut');
+            const dateFin = formData.get('date_fin');
+            const dateFacture = formData.get('date_facture');
+            const offre = formData.get('offre');
             
-            if (clientsSelected.length === 0) {
-                alert('Veuillez sélectionner au moins un client');
+            if (!dateDebut || !dateFin || !dateFacture || !offre) {
+                alert('Veuillez remplir tous les champs obligatoires');
                 return;
             }
             
@@ -4596,14 +4546,19 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             btnSubmit.disabled = true;
             btnSubmit.textContent = 'Génération en cours...';
             
+            // Masquer les notifications précédentes
+            const notificationsDiv = document.getElementById('genFactureNotifications');
+            if (notificationsDiv) {
+                notificationsDiv.style.display = 'none';
+                notificationsDiv.innerHTML = '';
+            }
+            
             try {
                 const data = {
-                    date_facture: formData.get('date_facture'),
-                    type: formData.get('type'),
-                    date_debut: formData.get('date_debut') || null,
-                    date_fin: formData.get('date_fin') || null,
-                    clients: clientsSelected.map(id => parseInt(id)),
-                    envoyer_email: formData.get('envoyer_email') === 'on'
+                    date_facture: dateFacture,
+                    date_debut: dateDebut,
+                    date_fin: dateFin,
+                    offre: parseInt(offre)
                 };
                 
                 const response = await fetch('/API/factures_generer_clients.php', {
@@ -4631,17 +4586,55 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 console.log('Réponse reçue:', result);
                 
                 if (result.ok) {
-                    showMessage(`${result.factures_generees || clientsSelected.length} facture(s) générée(s) avec succès !`, 'success');
-                    closeGenerationFactureClientsModal();
+                    // Afficher les résultats
+                    let message = `${result.total_generees} facture(s) générée(s) avec succès`;
+                    if (result.total_exclus > 0) {
+                        message += `. ${result.total_exclus} client(s) exclu(s)`;
+                    }
+                    showMessage(message, 'success');
+                    
+                    // Afficher les notifications pour les clients exclus
+                    if (result.clients_exclus && result.clients_exclus.length > 0 && notificationsDiv) {
+                        let notificationsHtml = '<div style="padding: 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-top: 1rem;">';
+                        notificationsHtml += '<div style="font-weight: 600; color: #92400E; margin-bottom: 0.75rem;">⚠️ Clients exclus de la génération:</div>';
+                        notificationsHtml += '<div style="max-height: 200px; overflow-y: auto;">';
+                        
+                        result.clients_exclus.forEach(client => {
+                            notificationsHtml += `
+                                <div style="padding: 0.5rem; margin-bottom: 0.5rem; background: white; border-radius: var(--radius-sm); border-left: 3px solid #FCD34D;">
+                                    <div style="font-weight: 600; color: #92400E; font-size: 0.875rem;">${client.client_nom}</div>
+                                    <div style="font-size: 0.8rem; color: #92400E; margin-top: 0.25rem;">${client.raison}</div>
+                                </div>
+                            `;
+                        });
+                        
+                        notificationsHtml += '</div></div>';
+                        notificationsDiv.innerHTML = notificationsHtml;
+                        notificationsDiv.style.display = 'block';
+                    }
+                    
+                    // Si toutes les factures ont été générées, fermer le modal après 3 secondes
+                    if (result.total_exclus === 0) {
+                        setTimeout(() => {
+                            closeGenerationFactureClientsModal();
+                            // Recharger la page pour voir les nouvelles factures
+                            window.location.reload();
+                        }, 3000);
+                    } else {
+                        // Ne pas fermer automatiquement s'il y a des exclusions
+                        btnSubmit.disabled = false;
+                        btnSubmit.textContent = 'Générer les factures';
+                    }
                 } else {
                     const errorMsg = result.error || 'Erreur inconnue';
                     console.error('Erreur API:', errorMsg);
                     showMessage('Erreur : ' + errorMsg, 'error');
+                    btnSubmit.disabled = false;
+                    btnSubmit.textContent = 'Générer les factures';
                 }
             } catch (error) {
                 console.error('Erreur lors de la génération:', error);
                 showMessage('Erreur lors de la génération des factures: ' + error.message, 'error');
-            } finally {
                 btnSubmit.disabled = false;
                 btnSubmit.textContent = 'Générer les factures';
             }
