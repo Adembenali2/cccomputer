@@ -1,16 +1,22 @@
 <?php
 declare(strict_types=1);
 /**
- * API pour envoyer une facture par email
- * Utilise MailerService (PHPMailer) pour l'envoi SMTP
+ * API pour envoyer une facture par email (renvoi manuel)
+ * 
+ * Délègue entièrement à InvoiceEmailService qui gère :
+ * - Génération/régénération PDF (Railway filesystem éphémère)
+ * - Envoi SMTP via MailerService
+ * - Email HTML + texte + PDF
+ * - Claim atomique email_envoye (0 → 2 → 1)
+ * - Table email_logs
+ * - Gestion des stuck (>15 minutes)
  */
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use App\Mail\MailerService;
-use App\Mail\MailerException;
+use App\Services\InvoiceEmailService;
 
 // Vérifier que c'est une requête POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -20,264 +26,85 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     $pdo = getPdo();
     
-    // Récupération des données
+    // Récupération des données JSON
     $input = file_get_contents('php://input');
     $data = json_decode($input, true);
     
-    if (!$data || empty($data['facture_id']) || empty($data['email'])) {
-        jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
+    if (!$data || !is_array($data)) {
+        jsonResponse(['ok' => false, 'error' => 'Données JSON invalides'], 400);
+    }
+    
+    if (empty($data['facture_id'])) {
+        jsonResponse(['ok' => false, 'error' => 'facture_id requis'], 400);
     }
     
     $factureId = (int)$data['facture_id'];
-    $email = trim($data['email']);
-    $sujet = !empty($data['sujet']) ? trim($data['sujet']) : '';
-    $message = !empty($data['message']) ? trim($data['message']) : '';
     
-    // Validation de l'email
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        jsonResponse(['ok' => false, 'error' => 'Adresse email invalide'], 400);
+    if ($factureId <= 0) {
+        jsonResponse(['ok' => false, 'error' => 'facture_id invalide'], 400);
     }
     
-    // Récupérer la facture avec les infos client
-    $stmt = $pdo->prepare("
-        SELECT 
-            f.id, f.numero, f.date_facture, f.montant_ttc, f.pdf_path, f.pdf_genere,
-            f.id_client, f.type, f.date_debut_periode, f.date_fin_periode,
-            f.montant_ht, f.tva,
-            c.raison_sociale as client_nom, c.email as client_email, c.*
-        FROM factures f
-        LEFT JOIN clients c ON f.id_client = c.id
-        WHERE f.id = :id
-        LIMIT 1
-    ");
-    $stmt->execute([':id' => $factureId]);
-    $facture = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$facture) {
-        jsonResponse(['ok' => false, 'error' => 'Facture introuvable'], 404);
-    }
-    
-    // Préparer les données client pour la génération PDF
-    $client = [
-        'raison_sociale' => $facture['raison_sociale'] ?? $facture['client_nom'] ?? '',
-        'adresse' => $facture['adresse'] ?? '',
-        'code_postal' => $facture['code_postal'] ?? '',
-        'ville' => $facture['ville'] ?? '',
-        'siret' => $facture['siret'] ?? ''
-    ];
-    
-    // Si le PDF n'existe pas ou n'est pas généré, essayer de le régénérer
-    $shouldRegenerate = empty($facture['pdf_path']) || !$facture['pdf_genere'];
-    
-    // Si le PDF est marqué comme généré mais qu'on ne le trouve pas, on régénère aussi
-    if (!$shouldRegenerate && !empty($facture['pdf_path'])) {
-        $pdfPath = MailerService::findPdfPath($facture['pdf_path']);
-        if (!$pdfPath) {
-            error_log("PDF marqué comme généré mais fichier introuvable, régénération nécessaire");
-            $shouldRegenerate = true;
-        }
-    }
-    
-    if ($shouldRegenerate) {
-        // Essayer de régénérer le PDF
-        try {
-            // Inclure seulement les fonctions nécessaires sans exécuter le code principal
-            if (!function_exists('generateFacturePDF')) {
-                require_once __DIR__ . '/factures_generer.php';
-            }
-            
-            // Récupérer les lignes de facture
-            $stmtLignes = $pdo->prepare("SELECT * FROM facture_lignes WHERE id_facture = :id ORDER BY ordre");
-            $stmtLignes->execute([':id' => $factureId]);
-            $lignes = $stmtLignes->fetchAll(PDO::FETCH_ASSOC);
-            
-            // Préparer les données pour la génération
-            $dataForPDF = [
-                'factureClient' => $facture['id_client'],
-                'factureDate' => $facture['date_facture'],
-                'factureType' => $facture['type'],
-                'factureDateDebut' => $facture['date_debut_periode'],
-                'factureDateFin' => $facture['date_fin_periode'],
-                'lignes' => []
-            ];
-            
-            foreach ($lignes as $ligne) {
-                $dataForPDF['lignes'][] = [
-                    'description' => $ligne['description'],
-                    'type' => $ligne['type'],
-                    'quantite' => $ligne['quantite'],
-                    'prix_unitaire' => $ligne['prix_unitaire_ht'],
-                    'total_ht' => $ligne['total_ht']
-                ];
-            }
-            
-            // Générer le PDF
-            $pdfWebPath = generateFacturePDF($pdo, $factureId, $facture, $dataForPDF);
-            
-            // Mettre à jour la facture
-            $stmt = $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ? WHERE id = ?");
-            $stmt->execute([$pdfWebPath, $factureId]);
-            
-            $facture['pdf_path'] = $pdfWebPath;
-            $facture['pdf_genere'] = 1;
-            
-        } catch (Exception $e) {
-            error_log("Erreur lors de la régénération du PDF: " . $e->getMessage());
-            jsonResponse(['ok' => false, 'error' => 'Impossible de générer le PDF de la facture. ' . $e->getMessage()], 500);
-        }
-    }
-    
-    if (empty($facture['pdf_path'])) {
-        jsonResponse(['ok' => false, 'error' => 'Le PDF de la facture n\'existe pas et n\'a pas pu être généré'], 400);
-    }
-    
-    // Trouver le chemin absolu du PDF
-    $pdfPath = null;
-    $isTemporaryPdf = false;
-    
-    try {
-        $pdfPath = MailerService::findPdfPath($facture['pdf_path']);
-        error_log("[MAIL] PDF trouvé avec succès: " . $pdfPath . " (Taille: " . filesize($pdfPath) . " bytes)");
-    } catch (MailerException $e) {
-        error_log("[MAIL] PDF introuvable via findPdfPath: " . $e->getMessage());
-        error_log("[MAIL] Chemin enregistré dans DB: " . $facture['pdf_path']);
-        
-        // Fallback: Si le PDF n'existe pas (Railway stockage éphémère), régénérer à la demande dans /tmp
-        error_log("[MAIL] fallback regen start - Facture ID: {$factureId}");
-        
-        try {
-            // Inclure la fonction de génération PDF
-            require_once __DIR__ . '/factures_generate_pdf_content.php';
-            
-            // Récupérer les données client complètes si nécessaire
-            if (empty($client['raison_sociale'])) {
-                $stmtClient = $pdo->prepare("SELECT * FROM clients WHERE id = :id LIMIT 1");
-                $stmtClient->execute([':id' => $facture['id_client']]);
-                $clientData = $stmtClient->fetch(PDO::FETCH_ASSOC);
-                if (!$clientData) {
-                    throw new RuntimeException('Client introuvable pour la facture #' . $factureId);
-                }
-                $client = [
-                    'raison_sociale' => $clientData['raison_sociale'] ?? '',
-                    'adresse' => $clientData['adresse'] ?? '',
-                    'code_postal' => $clientData['code_postal'] ?? '',
-                    'ville' => $clientData['ville'] ?? '',
-                    'siret' => $clientData['siret'] ?? ''
-                ];
-            }
-            
-            // Générer le PDF directement dans /tmp
-            $tmpDir = sys_get_temp_dir();
-            error_log("[MAIL] Génération PDF dans répertoire temporaire: " . $tmpDir);
-            
-            $pdfPath = generateInvoicePdf($pdo, $factureId, $facture, $client, $tmpDir);
-            $isTemporaryPdf = true;
-            
-            error_log("[MAIL] regen ok path=" . $pdfPath . " (Taille: " . filesize($pdfPath) . " bytes)");
-            
-        } catch (Exception $e) {
-            error_log("[MAIL] regen failed - Erreur: " . $e->getMessage());
-            error_log("[MAIL] regen failed - Stack trace: " . $e->getTraceAsString());
-            jsonResponse([
-                'ok' => false, 
-                'error' => 'Impossible de régénérer le PDF: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-    
-    if (!$pdfPath || !file_exists($pdfPath)) {
-        error_log("[MAIL] ERREUR CRITIQUE: PDF introuvable après toutes les tentatives");
-        jsonResponse([
-            'ok' => false, 
-            'error' => 'Le fichier PDF est introuvable et n\'a pas pu être régénéré. Veuillez contacter l\'administrateur.'
-        ], 500);
-    }
-    
-    // Charger la configuration email
+    // Charger la configuration
     $config = require __DIR__ . '/../config/app.php';
-    $emailConfig = $config['email'] ?? [];
     
-    // Créer le service Mailer
-    try {
-        $mailerService = new MailerService($emailConfig);
-    } catch (MailerException $e) {
-        error_log("Erreur configuration MailerService: " . $e->getMessage());
-        jsonResponse([
-            'ok' => false, 
-            'error' => $e->getMessage()
-        ], 500);
-    }
+    // Instancier InvoiceEmailService
+    $invoiceEmailService = new InvoiceEmailService($pdo, $config);
     
-    // Préparer le sujet et le message
-    if (empty($sujet)) {
-        $sujet = "Facture {$facture['numero']} - CC Computer";
-    }
+    // Envoyer la facture (force=true pour renvoi manuel)
+    // InvoiceEmailService gère tout : PDF, SMTP, logs, claim atomique
+    $result = $invoiceEmailService->sendInvoiceAfterGeneration($factureId, true);
     
-    $messageBody = $message;
-    if (empty($messageBody)) {
-        $messageBody = "Bonjour,\n\n";
-        $messageBody .= "Veuillez trouver ci-joint la facture {$facture['numero']} d'un montant de " . number_format($facture['montant_ttc'], 2, ',', ' ') . " € TTC.\n\n";
-        $messageBody .= "Cordialement,\nCC Computer";
-    } else {
-        $messageBody = $message . "\n\n";
-        $messageBody .= "Veuillez trouver ci-joint la facture {$facture['numero']} d'un montant de " . number_format($facture['montant_ttc'], 2, ',', ' ') . " € TTC.";
-    }
-    
-    // Nettoyer le nom du fichier PDF
-    $fileName = basename($facture['pdf_path']);
-    $fileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName);
-    
-    // Envoyer l'email avec le PDF
-    try {
-        $mailerService->sendEmailWithPdf($email, $sujet, $messageBody, $pdfPath, $fileName);
-        
-        // Mettre à jour la facture pour indiquer qu'elle a été envoyée
-        $stmt = $pdo->prepare("
-            UPDATE factures 
-            SET email_envoye = 1, date_envoi_email = NOW() 
-            WHERE id = :id
-        ");
-        $stmt->execute([':id' => $factureId]);
-        error_log("[MAIL] Facture #{$factureId} marquée comme envoyée par email");
-        
-        // Nettoyer le fichier temporaire si généré dans /tmp
-        if ($isTemporaryPdf && file_exists($pdfPath)) {
-            @unlink($pdfPath);
-            error_log("[MAIL] Fichier temporaire supprimé: " . $pdfPath);
-        }
-        
+    if ($result['success']) {
         jsonResponse([
             'ok' => true,
-            'message' => 'Facture envoyée par email avec succès',
+            'message' => $result['message'],
             'facture_id' => $factureId,
-            'email' => $email
+            'log_id' => $result['log_id'],
+            'message_id' => $result['message_id'],
+            'email' => $result['email'] ?? null
         ]);
+    } else {
+        // Erreur gérée par InvoiceEmailService
+        $httpCode = 500;
         
-    } catch (MailerException $e) {
-        error_log("[MAIL] Erreur MailerService lors de l'envoi: " . $e->getMessage());
-        
-        // Nettoyer le fichier temporaire en cas d'erreur
-        if ($isTemporaryPdf && file_exists($pdfPath)) {
-            @unlink($pdfPath);
-            error_log("[MAIL] Fichier temporaire supprimé après erreur: " . $pdfPath);
+        // Messages d'erreur spécifiques avec codes HTTP appropriés
+        if (strpos($result['message'], 'déjà envoyée') !== false) {
+            $httpCode = 409; // Conflict
+        } elseif (strpos($result['message'], 'déjà en cours') !== false) {
+            $httpCode = 409; // Conflict
+        } elseif (strpos($result['message'], 'introuvable') !== false) {
+            $httpCode = 404; // Not Found
+        } elseif (strpos($result['message'], 'invalide') !== false) {
+            $httpCode = 400; // Bad Request
         }
         
         jsonResponse([
-            'ok' => false, 
-            'error' => $e->getMessage()
-        ], 500);
+            'ok' => false,
+            'error' => $result['message'],
+            'facture_id' => $factureId,
+            'log_id' => $result['log_id'] ?? null
+        ], $httpCode);
     }
     
 } catch (PDOException $e) {
-    error_log('factures_envoyer_email.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
-} catch (MailerException $e) {
-    // Erreur déjà sanitée par MailerService
-    error_log('factures_envoyer_email.php MailerException: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
+    error_log('[factures_envoyer_email] PDOException: ' . $e->getMessage());
+    error_log('[factures_envoyer_email] Stack trace: ' . $e->getTraceAsString());
+    
+    $errorMessage = 'Erreur de base de données';
+    if (defined('APP_DEBUG') && APP_DEBUG) {
+        $errorMessage .= ': ' . $e->getMessage();
+    }
+    
+    jsonResponse(['ok' => false, 'error' => $errorMessage], 500);
+    
 } catch (Throwable $e) {
-    // Ne pas exposer les détails de l'exception au client
-    error_log('factures_envoyer_email.php error: ' . $e->getMessage());
-    error_log('factures_envoyer_email.php stack trace: ' . $e->getTraceAsString());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue lors de l\'envoi de l\'email'], 500);
+    error_log('[factures_envoyer_email] Exception: ' . $e->getMessage());
+    error_log('[factures_envoyer_email] Stack trace: ' . $e->getTraceAsString());
+    
+    $errorMessage = 'Erreur inattendue lors de l\'envoi de l\'email';
+    if (defined('APP_DEBUG') && APP_DEBUG) {
+        $errorMessage .= ': ' . $e->getMessage();
+    }
+    
+    jsonResponse(['ok' => false, 'error' => $errorMessage], 500);
 }
