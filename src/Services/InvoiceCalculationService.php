@@ -106,15 +106,32 @@ class InvoiceCalculationService
      * @param array $calculation Résultat de calculateMachineInvoice()
      * @param string $machineName Nom/identifiant de l'imprimante (ex: "Imprimante A", "HP-123")
      * @param int $offre Offre choisie (1000 ou 2000)
+     * @param array $machineData Données complètes de la machine (optionnel) :
+     *   - compteur_debut_nb, compteur_debut_couleur
+     *   - compteur_fin_nb, compteur_fin_couleur
+     *   - date_debut_releve, date_fin_releve
      * @return array Lignes de facture au format pour facture_lignes
      */
     public static function generateInvoiceLinesForMachine(
         array $calculation,
         string $machineName,
-        int $offre
+        int $offre,
+        array $machineData = []
     ): array {
         $lines = [];
         $ordre = 0;
+        
+        // Extraire les données des compteurs si disponibles
+        $compteurDebutNB = (int)($machineData['compteur_debut_nb'] ?? 0);
+        $compteurDebutCouleur = (int)($machineData['compteur_debut_couleur'] ?? 0);
+        $compteurFinNB = (int)($machineData['compteur_fin_nb'] ?? 0);
+        $compteurFinCouleur = (int)($machineData['compteur_fin_couleur'] ?? 0);
+        $dateDebutReleve = $machineData['date_debut_releve'] ?? null;
+        $dateFinReleve = $machineData['date_fin_releve'] ?? null;
+        
+        // Formater les dates si disponibles
+        $dateDebutFormatted = $dateDebutReleve ? date('d/m/Y', strtotime($dateDebutReleve)) : 'N/A';
+        $dateFinFormatted = $dateFinReleve ? date('d/m/Y', strtotime($dateFinReleve)) : 'N/A';
         
         // Ligne 1: Forfait mensuel (seulement si > 0)
         if ($calculation['forfait_ht'] > 0) {
@@ -140,32 +157,58 @@ class InvoiceCalculationService
             }
         }
         
-        // Ligne 2: Dépassement NB (si > 0)
+        // Ligne 2: Noir & Blanc (toujours affichée, même si consommation <= seuil)
+        $consoNB = $calculation['conso_nb'] ?? 0;
+        $descNB = "Copies N&B - {$machineName}";
+        if ($compteurDebutNB > 0 || $compteurFinNB > 0) {
+            $descNB .= sprintf(
+                " | Début: %s (%s) | Fin: %s (%s)",
+                number_format($compteurDebutNB, 0, ',', ' '),
+                $dateDebutFormatted,
+                number_format($compteurFinNB, 0, ',', ' '),
+                $dateFinFormatted
+            );
+        }
+        
         if ($calculation['excess_nb'] > 0) {
+            // Dépassement : on affiche avec le prix
+            $descNB .= sprintf(" | Dépassement: %d copies x %.2f€", (int)$calculation['excess_nb'], self::PRIX_EXCESS_NB_HT);
             $lines[] = [
-                'description' => sprintf(
-                    "Dépassement NB (%d copies x %.2f€) - %s",
-                    (int)$calculation['excess_nb'],
-                    self::PRIX_EXCESS_NB_HT,
-                    $machineName
-                ),
+                'description' => $descNB,
                 'type' => 'N&B',
                 'quantite' => $calculation['excess_nb'],
                 'prix_unitaire' => self::PRIX_EXCESS_NB_HT,
                 'total_ht' => $calculation['excess_nb_ht'],
                 'ordre' => $ordre++
             ];
+        } else {
+            // Pas de dépassement : on affiche quand même avec consommation = 0€
+            $lines[] = [
+                'description' => $descNB,
+                'type' => 'N&B',
+                'quantite' => $consoNB,
+                'prix_unitaire' => 0.0,
+                'total_ht' => 0.0,
+                'ordre' => $ordre++
+            ];
         }
         
-        // Ligne 3: Couleur (si > 0)
+        // Ligne 3: Couleur (si consommation > 0)
         if ($calculation['conso_couleur'] > 0) {
+            $descCouleur = "Copies couleur - {$machineName}";
+            if ($compteurDebutCouleur > 0 || $compteurFinCouleur > 0) {
+                $descCouleur .= sprintf(
+                    " | Début: %s (%s) | Fin: %s (%s)",
+                    number_format($compteurDebutCouleur, 0, ',', ' '),
+                    $dateDebutFormatted,
+                    number_format($compteurFinCouleur, 0, ',', ' '),
+                    $dateFinFormatted
+                );
+            }
+            $descCouleur .= sprintf(" | %d copies x %.2f€", (int)$calculation['conso_couleur'], self::PRIX_COULEUR_HT);
+            
             $lines[] = [
-                'description' => sprintf(
-                    "Copies couleur (%d copies x %.2f€) - %s",
-                    (int)$calculation['conso_couleur'],
-                    self::PRIX_COULEUR_HT,
-                    $machineName
-                ),
+                'description' => $descCouleur,
                 'type' => 'Couleur',
                 'quantite' => $calculation['conso_couleur'],
                 'prix_unitaire' => self::PRIX_COULEUR_HT,
@@ -208,8 +251,11 @@ class InvoiceCalculationService
      * @param int $offre Offre choisie (1000 ou 2000)
      * @param int $nbImprimantes Nombre d'imprimantes (1 ou 2)
      * @param array $machines Données des machines :
-     *   - machine1: ['conso_nb' => float, 'conso_couleur' => float, 'nom' => string]
-     *   - machine2: ['conso_nb' => float, 'conso_couleur' => float, 'nom' => string] (optionnel)
+     *   - machine1: ['conso_nb' => float, 'conso_couleur' => float, 'nom' => string,
+     *                'compteur_debut_nb' => int, 'compteur_debut_couleur' => int,
+     *                'compteur_fin_nb' => int, 'compteur_fin_couleur' => int,
+     *                'date_debut_releve' => string, 'date_fin_releve' => string]
+     *   - machine2: (mêmes champs, optionnel)
      * @return array Toutes les lignes de facture
      * @throws \InvalidArgumentException Si les données sont invalides
      */
@@ -242,7 +288,8 @@ class InvoiceCalculationService
             true // Première machine
         );
         $machine1Name = $machine1['nom'] ?? 'Imprimante A';
-        $lines1 = self::generateInvoiceLinesForMachine($calc1, $machine1Name, $offre);
+        // Passer les données complètes de la machine pour les compteurs
+        $lines1 = self::generateInvoiceLinesForMachine($calc1, $machine1Name, $offre, $machine1);
         
         foreach ($lines1 as $line) {
             $line['ordre'] = $ordreGlobal++;
@@ -259,7 +306,8 @@ class InvoiceCalculationService
                 false // Deuxième machine (forfait déjà appliqué)
             );
             $machine2Name = $machine2['nom'] ?? 'Imprimante B';
-            $lines2 = self::generateInvoiceLinesForMachine($calc2, $machine2Name, $offre);
+            // Passer les données complètes de la machine pour les compteurs
+            $lines2 = self::generateInvoiceLinesForMachine($calc2, $machine2Name, $offre, $machine2);
             
             foreach ($lines2 as $line) {
                 $line['ordre'] = $ordreGlobal++;

@@ -2306,7 +2306,13 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                 machines[`machine${index + 1}`] = {
                     conso_nb: machine.conso_nb,
                     conso_couleur: machine.conso_couleur,
-                    nom: machine.nom
+                    nom: machine.nom,
+                    compteur_debut_nb: machine.compteur_debut_nb || 0,
+                    compteur_debut_couleur: machine.compteur_debut_couleur || 0,
+                    compteur_fin_nb: machine.compteur_fin_nb || 0,
+                    compteur_fin_couleur: machine.compteur_fin_couleur || 0,
+                    date_debut_releve: machine.date_debut_releve || null,
+                    date_fin_releve: machine.date_fin_releve || null
                 };
             });
             
