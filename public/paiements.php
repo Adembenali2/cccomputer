@@ -1621,7 +1621,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     </div>
                     <div class="modal-form-group">
                         <label for="factureType">Type <span style="color: #ef4444;">*</span></label>
-                        <select id="factureType" name="factureType" required>
+                        <select id="factureType" name="factureType" required onchange="onFactureTypeChange()">
                             <option value="Consommation">Consommation</option>
                             <option value="Achat">Achat</option>
                             <option value="Service">Service</option>
@@ -1629,10 +1629,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     </div>
                 </div>
 
-                <div class="modal-form-row">
+                <!-- Champs pour Consommation -->
+                <div class="modal-form-row" id="factureConsommationFields">
                     <div class="modal-form-group">
                         <label for="factureOffre">Offre <span style="color: #ef4444;">*</span></label>
-                        <select id="factureOffre" name="factureOffre" required onchange="onFactureOffreChange()">
+                        <select id="factureOffre" name="factureOffre" onchange="onFactureOffreChange()">
                             <option value="">Sélectionner une offre</option>
                             <option value="1000">Offre 1000 copies</option>
                             <option value="2000">Offre 2000 copies</option>
@@ -1646,6 +1647,30 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     <div class="modal-form-group">
                         <label for="factureDateFin">Date fin période</label>
                         <input type="date" id="factureDateFin" name="factureDateFin" onchange="loadConsommationData()">
+                    </div>
+                </div>
+
+                <!-- Champs pour Achat -->
+                <div class="modal-form-row" id="factureAchatFields" style="display: none;">
+                    <div class="modal-form-group">
+                        <label for="factureProduitType">Type de produit <span style="color: #ef4444;">*</span></label>
+                        <select id="factureProduitType" name="produitType" required onchange="onFactureProduitTypeChange()">
+                            <option value="">Sélectionner un type</option>
+                            <option value="PC">PC</option>
+                            <option value="LCD">LCD</option>
+                            <option value="Imprimante">Imprimante</option>
+                            <option value="Papier">Papier</option>
+                            <option value="Toner">Toner</option>
+                            <option value="Autre">Autre (à préciser)</option>
+                        </select>
+                    </div>
+                    <div class="modal-form-group" id="factureProduitAutreGroup" style="display: none;">
+                        <label for="factureProduitAutre">Précision du produit <span style="color: #ef4444;">*</span></label>
+                        <input type="text" id="factureProduitAutre" name="produitAutre" placeholder="Ex: Clavier, Souris, etc.">
+                    </div>
+                    <div class="modal-form-group">
+                        <label for="facturePrixAchat">Prix HT <span style="color: #ef4444;">*</span></label>
+                        <input type="number" id="facturePrixAchat" name="prixAchat" step="0.01" min="0" placeholder="0.00" required onchange="calculateFactureTotalAchat()">
                     </div>
                 </div>
 
@@ -2053,6 +2078,15 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 // Réinitialiser le champ offre
                 document.getElementById('factureOffre').value = '';
                 
+                // Réinitialiser les champs Achat
+                document.getElementById('factureProduitType').value = '';
+                document.getElementById('factureProduitAutre').value = '';
+                document.getElementById('facturePrixAchat').value = '';
+                document.getElementById('factureProduitAutreGroup').style.display = 'none';
+                
+                // Afficher/masquer les champs selon le type
+                onFactureTypeChange();
+                
                 // Afficher le modal (seulement l'overlay a besoin de la classe active)
                 overlay.classList.add('active');
                 // Le modal s'affichera automatiquement via le CSS .modal-overlay.active .modal
@@ -2126,6 +2160,87 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 await checkClientPhotocopieurs(clientId, offre);
                 await loadConsommationData();
             }
+        }
+
+        /**
+         * Gère le changement de type de facture
+         */
+        function onFactureTypeChange() {
+            const type = document.getElementById('factureType').value;
+            const consommationFields = document.getElementById('factureConsommationFields');
+            const achatFields = document.getElementById('factureAchatFields');
+            const consommationInfo = document.getElementById('factureConsommationInfo');
+            const lignesContainer = document.getElementById('factureLignesContainer');
+            
+            if (type === 'Achat') {
+                // Masquer les champs Consommation
+                consommationFields.style.display = 'none';
+                consommationInfo.style.display = 'none';
+                lignesContainer.style.display = 'none';
+                
+                // Afficher les champs Achat
+                achatFields.style.display = 'flex';
+                
+                // Rendre les champs Achat requis/non requis
+                document.getElementById('factureOffre').removeAttribute('required');
+                document.getElementById('factureProduitType').setAttribute('required', 'required');
+                document.getElementById('facturePrixAchat').setAttribute('required', 'required');
+                
+                // Réinitialiser les totaux
+                calculateFactureTotalAchat();
+            } else {
+                // Masquer les champs Achat
+                achatFields.style.display = 'none';
+                
+                // Afficher les champs Consommation
+                consommationFields.style.display = 'flex';
+                
+                // Rendre les champs Consommation requis/non requis
+                if (type === 'Consommation') {
+                    document.getElementById('factureOffre').setAttribute('required', 'required');
+                } else {
+                    document.getElementById('factureOffre').removeAttribute('required');
+                }
+                document.getElementById('factureProduitType').removeAttribute('required');
+                document.getElementById('facturePrixAchat').removeAttribute('required');
+                
+                // Réinitialiser les totaux
+                calculateFactureTotal();
+            }
+        }
+
+        /**
+         * Gère le changement de type de produit (pour afficher/masquer le champ "Autre")
+         */
+        function onFactureProduitTypeChange() {
+            const produitType = document.getElementById('factureProduitType').value;
+            const autreGroup = document.getElementById('factureProduitAutreGroup');
+            const autreInput = document.getElementById('factureProduitAutre');
+            
+            if (produitType === 'Autre') {
+                autreGroup.style.display = 'block';
+                autreInput.setAttribute('required', 'required');
+            } else {
+                autreGroup.style.display = 'none';
+                autreInput.removeAttribute('required');
+                autreInput.value = '';
+            }
+            
+            calculateFactureTotalAchat();
+        }
+
+        /**
+         * Calcule les totaux pour une facture de type Achat
+         */
+        function calculateFactureTotalAchat() {
+            const prixHT = parseFloat(document.getElementById('facturePrixAchat').value) || 0;
+            const tauxTVA = 20; // TVA à 20%
+            const tva = prixHT * (tauxTVA / 100);
+            const totalTTC = prixHT + tva;
+            
+            document.getElementById('factureMontantHT').value = prixHT.toFixed(2);
+            document.getElementById('factureTVA').value = tva.toFixed(2);
+            document.getElementById('factureMontantTTC').value = totalTTC.toFixed(2);
         }
 
         /**
@@ -2581,8 +2696,38 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 return;
             }
             
-            // Si on a des données de machine (nouveau format), utiliser celui-ci
-            if (window.factureMachineData) {
+            // Gérer le type "Achat"
+            if (data.factureType === 'Achat') {
+                const produitType = data.produitType;
+                const produitAutre = data.produitAutre || '';
+                const prixAchat = parseFloat(data.prixAchat) || 0;
+                
+                if (!produitType) {
+                    alert('Veuillez sélectionner un type de produit');
+                    return;
+                }
+                
+                if (produitType === 'Autre' && !produitAutre.trim()) {
+                    alert('Veuillez préciser le type de produit');
+                    return;
+                }
+                
+                if (prixAchat <= 0) {
+                    alert('Veuillez saisir un prix valide');
+                    return;
+                }
+                
+                // Créer la ligne de facture pour l'achat
+                const produitNom = produitType === 'Autre' ? produitAutre.trim() : produitType;
+                data.lignes = [{
+                    description: produitNom,
+                    type: 'Produit',
+                    quantite: 1,
+                    prix_unitaire: prixAchat,
+                    total_ht: prixAchat
+                }];
+            } else if (window.factureMachineData) {
+                // Si on a des données de machine (nouveau format), utiliser celui-ci
                 data.offre = window.factureMachineData.offre;
                 data.nb_imprimantes = window.factureMachineData.nb_imprimantes;
                 data.machines = window.factureMachineData.machines;
