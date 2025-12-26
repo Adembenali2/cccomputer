@@ -2317,22 +2317,131 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 machines: machines
             };
             
-            // Afficher un message indiquant que le calcul sera fait côté serveur
+            // Calculer les totaux côté client pour prévisualisation
+            let totalHT = 0;
+            const forfaitHT = 100.0;
+            const prixExcessNB = 0.05;
+            const prixCouleur = 0.09;
+            const offre = parseInt(data.offre);
+            
+            // Calculer selon l'offre
+            if (offre === 1000) {
+                // Offre 1000: forfait 100€ HT + dépassement NB au-delà de 1000 + couleur × 0.09
+                totalHT += forfaitHT; // Toujours le forfait
+                
+                data.machines.forEach((machine) => {
+                    const consoNB = parseFloat(machine.conso_nb) || 0;
+                    const consoCouleur = parseFloat(machine.conso_couleur) || 0;
+                    
+                    // Dépassement NB si > 1000
+                    if (consoNB > 1000) {
+                        const excessNB = consoNB - 1000;
+                        totalHT += excessNB * prixExcessNB;
+                    }
+                    
+                    // Couleur toujours calculée
+                    if (consoCouleur > 0) {
+                        totalHT += consoCouleur * prixCouleur;
+                    }
+                });
+            } else if (offre === 2000) {
+                // Offre 2000: forfait 100€ HT (une seule fois) + par imprimante (dépassement > 2000 + couleur)
+                totalHT += forfaitHT; // Forfait une seule fois
+                
+                data.machines.forEach((machine) => {
+                    const consoNB = parseFloat(machine.conso_nb) || 0;
+                    const consoCouleur = parseFloat(machine.conso_couleur) || 0;
+                    
+                    // Dépassement NB si > 2000 par imprimante
+                    if (consoNB > 2000) {
+                        const excessNB = consoNB - 2000;
+                        totalHT += excessNB * prixExcessNB;
+                    }
+                    
+                    // Couleur toujours calculée par imprimante
+                    if (consoCouleur > 0) {
+                        totalHT += consoCouleur * prixCouleur;
+                    }
+                });
+            }
+            
+            // Calculer TVA et TTC
+            const tva = totalHT * 0.20;
+            const totalTTC = totalHT + tva;
+            
+            // Mettre à jour l'affichage des totaux
+            document.getElementById('factureMontantHT').value = totalHT.toFixed(2);
+            document.getElementById('factureTVA').value = tva.toFixed(2);
+            document.getElementById('factureMontantTTC').value = totalTTC.toFixed(2);
+            
+            // Afficher un récapitulatif du calcul
             const infoDiv = document.createElement('div');
             infoDiv.style.padding = '1rem';
             infoDiv.style.background = 'var(--bg-secondary)';
             infoDiv.style.borderRadius = 'var(--radius-md)';
             infoDiv.style.marginBottom = '1rem';
+            
+            let detailCalcul = '';
+            if (offre === 1000) {
+                data.machines.forEach((machine, index) => {
+                    const consoNB = parseFloat(machine.conso_nb) || 0;
+                    const consoCouleur = parseFloat(machine.conso_couleur) || 0;
+                    
+                    if (index === 0) {
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Forfait:</strong> ${forfaitHT.toFixed(2)} € HT</div>`;
+                    }
+                    
+                    if (consoNB > 1000) {
+                        const excessNB = consoNB - 1000;
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Dépassement N&B:</strong> ${excessNB} copies × ${prixExcessNB.toFixed(2)} € = ${(excessNB * prixExcessNB).toFixed(2)} € HT</div>`;
+                    }
+                    
+                    if (consoCouleur > 0) {
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Couleur (${machine.nom}):</strong> ${consoCouleur} copies × ${prixCouleur.toFixed(2)} € = ${(consoCouleur * prixCouleur).toFixed(2)} € HT</div>`;
+                    }
+                });
+            } else if (offre === 2000) {
+                detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Forfait:</strong> ${forfaitHT.toFixed(2)} € HT</div>`;
+                data.machines.forEach((machine) => {
+                    const consoNB = parseFloat(machine.conso_nb) || 0;
+                    const consoCouleur = parseFloat(machine.conso_couleur) || 0;
+                    
+                    if (consoNB > 2000) {
+                        const excessNB = consoNB - 2000;
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Dépassement N&B (${machine.nom}):</strong> ${excessNB} copies × ${prixExcessNB.toFixed(2)} € = ${(excessNB * prixExcessNB).toFixed(2)} € HT</div>`;
+                    }
+                    
+                    if (consoCouleur > 0) {
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Couleur (${machine.nom}):</strong> ${consoCouleur} copies × ${prixCouleur.toFixed(2)} € = ${(consoCouleur * prixCouleur).toFixed(2)} € HT</div>`;
+                    }
+                });
+            }
+            
             infoDiv.innerHTML = `
-                <p style="margin: 0; color: var(--text-primary);">
-                    <strong>${data.machines.length} imprimante(s)</strong> détectée(s). 
-                    Les lignes de facture seront calculées automatiquement selon l'offre ${data.offre}.
-                </p>
+                <div style="margin-bottom: 0.75rem;">
+                    <strong style="color: var(--text-primary); font-size: 1.05rem;">${data.machines.length} imprimante(s) détectée(s) - Offre ${offre}</strong>
+                </div>
+                <div style="font-size: 0.95rem; color: var(--text-secondary);">
+                    ${detailCalcul || '<div>Aucun dépassement</div>'}
+                </div>
+                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span><strong>Total HT:</strong></span>
+                        <strong>${totalHT.toFixed(2)} €</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span><strong>TVA (20%):</strong></span>
+                        <strong>${tva.toFixed(2)} €</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                        <span><strong style="font-size: 1.1rem;">Total TTC:</strong></span>
+                        <strong style="font-size: 1.1rem; color: var(--accent-primary);">${totalTTC.toFixed(2)} €</strong>
+                    </div>
+                </div>
             `;
             container.appendChild(infoDiv);
             
             document.getElementById('factureLignesContainer').style.display = 'block';
-            calculateFactureTotal();
         }
 
         /**
@@ -2414,6 +2523,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
          * Calcule le total de la facture
          */
         function calculateFactureTotal() {
+            // Si on a des données de machine, ne pas recalculer (déjà calculé dans generateFactureLinesFromConsommation)
+            if (window.factureMachineData) {
+                return; // Les totaux sont déjà calculés et affichés
+            }
+            
+            // Calcul classique depuis les lignes manuelles
             let totalHT = 0;
             document.querySelectorAll('.ligne-total').forEach(input => {
                 totalHT += parseFloat(input.value) || 0;
