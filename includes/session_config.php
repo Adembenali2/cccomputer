@@ -23,6 +23,10 @@ $isBehindProxy = !empty($_SERVER['HTTP_X_FORWARDED_PROTO'])
 // En production HTTPS direct, utiliser SameSite=Lax
 $sameSite = ($isSecure && $isBehindProxy) ? 'None' : 'Lax';
 
+// Nom de session personnalisé (DOIT être défini AVANT session_set_cookie_params et session_start)
+// IMPORTANT: Ce nom doit être identique à celui du bootstrap API pour partager la même session
+session_name('cc_sess');
+
 session_set_cookie_params([
   'lifetime' => 0,             // cookie de session
   'path'     => '/',           // ⬅ IMPORTANT: pas de sous-chemin
