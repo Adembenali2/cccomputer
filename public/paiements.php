@@ -2158,23 +2158,27 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
          * Gère le changement de type de facture
          */
         function onFactureTypeChange() {
-            const type = document.getElementById('factureType').value;
+            const typeSelect = document.getElementById('factureType');
+            if (!typeSelect) return;
+            
+            const type = typeSelect.value;
             const consommationFields = document.getElementById('factureConsommationFields');
             const achatFields = document.getElementById('factureAchatFields');
             const consommationInfo = document.getElementById('factureConsommationInfo');
             const lignesContainer = document.getElementById('factureLignesContainer');
+            const factureOffre = document.getElementById('factureOffre');
             
             if (type === 'Achat') {
                 // Masquer les champs Consommation
-                consommationFields.style.display = 'none';
-                consommationInfo.style.display = 'none';
-                lignesContainer.style.display = 'none';
+                if (consommationFields) consommationFields.style.display = 'none';
+                if (consommationInfo) consommationInfo.style.display = 'none';
+                if (lignesContainer) lignesContainer.style.display = 'none';
                 
                 // Afficher les champs Achat
-                achatFields.style.display = 'flex';
+                if (achatFields) achatFields.style.display = 'block';
                 
                 // Rendre les champs Achat requis/non requis
-                document.getElementById('factureOffre').removeAttribute('required');
+                if (factureOffre) factureOffre.removeAttribute('required');
                 
                 // Ajouter une première ligne de produit si le conteneur est vide
                 const achatProduitsContainer = document.getElementById('factureAchatProduits');
@@ -2186,19 +2190,19 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 calculateFactureTotalAchat();
             } else {
                 // Masquer les champs Achat
-                achatFields.style.display = 'none';
+                if (achatFields) achatFields.style.display = 'none';
                 
                 // Afficher les champs Consommation
-                consommationFields.style.display = 'flex';
+                if (consommationFields) consommationFields.style.display = 'flex';
                 
                 // Rendre les champs Consommation requis/non requis
-                if (type === 'Consommation') {
-                    document.getElementById('factureOffre').setAttribute('required', 'required');
-                } else {
-                    document.getElementById('factureOffre').removeAttribute('required');
+                if (factureOffre) {
+                    if (type === 'Consommation') {
+                        factureOffre.setAttribute('required', 'required');
+                    } else {
+                        factureOffre.removeAttribute('required');
+                    }
                 }
-                document.getElementById('factureProduitType').removeAttribute('required');
-                document.getElementById('facturePrixAchat').removeAttribute('required');
                 
                 // Réinitialiser les totaux
                 calculateFactureTotal();
