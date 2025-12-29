@@ -585,7 +585,11 @@ function renderMessages(messages, append = false) {
 // Chargement des messages
 // ============================================
 async function loadMessages(append = false) {
-    if (isLoading) return;
+    // Empêcher les appels multiples simultanés
+    if (isLoading) {
+        console.log('loadMessages déjà en cours, ignoré');
+        return;
+    }
     isLoading = true;
     
     try {
@@ -620,7 +624,16 @@ async function loadMessages(append = false) {
         }
         
         if (data.ok && data.messages) {
-            renderMessages(data.messages, append);
+            // Ne rendre les messages que s'il y en a de nouveaux
+            if (data.messages.length > 0) {
+                renderMessages(data.messages, append);
+                
+                // Mettre à jour lastMessageId avec le plus grand ID reçu
+                const maxId = Math.max(...data.messages.map(m => m.id || 0));
+                if (maxId > lastMessageId) {
+                    lastMessageId = maxId;
+                }
+            }
             
             // Optimisation du polling : backoff exponentiel si pas de nouveaux messages
             if (data.messages.length === 0) {
@@ -788,7 +801,14 @@ async function sendMessage() {
                 data.message.image_path = imagePath;
             }
             renderMessages([data.message], true);
-            setTimeout(() => loadMessages(true), 500);
+            
+            // Mettre à jour lastMessageId pour que le prochain polling récupère les nouveaux messages
+            if (data.message.id) {
+                lastMessageId = Math.max(lastMessageId, data.message.id);
+            }
+            
+            // Ne pas appeler loadMessages ici car le polling le fera automatiquement
+            // Cela évite les appels multiples et les boucles infinies
             updateConnectionStatus('online');
         } else {
             throw new Error(data.error || 'Erreur lors de l\'envoi');
@@ -1121,11 +1141,28 @@ async function init() {
     
     // Utiliser l'intervalle dynamique pour le polling
     function scheduleNextRefresh() {
-        if (refreshIntervalId) clearInterval(refreshIntervalId);
+        // Nettoyer l'ancien timeout s'il existe
+        if (refreshIntervalId) {
+            clearTimeout(refreshIntervalId);
+            refreshIntervalId = null;
+        }
+        
+        // Programmer le prochain rafraîchissement
         refreshIntervalId = setTimeout(() => {
-            loadMessages(true).then(() => {
+            // Vérifier que nous ne sommes pas déjà en train de charger
+            if (!isLoading) {
+                loadMessages(true).then(() => {
+                    // Programmer le prochain rafraîchissement seulement après la fin du chargement
+                    scheduleNextRefresh();
+                }).catch((error) => {
+                    console.error('Erreur dans scheduleNextRefresh:', error);
+                    // Continuer le polling même en cas d'erreur
+                    scheduleNextRefresh();
+                });
+            } else {
+                // Si on est déjà en train de charger, réessayer plus tard
                 scheduleNextRefresh();
-            });
+            }
         }, refreshInterval);
     }
     

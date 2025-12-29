@@ -3635,7 +3635,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                         'envoyee': '#3b82f6',
                         'payee': '#10b981',
                         'en_retard': '#ef4444',
-                        'annulee': '#9ca3af'
+                        'annulee': '#000000'
                     };
                     const statutLabels = {
                         'brouillon': 'Brouillon',
@@ -3965,7 +3965,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                         'envoyee': '#3b82f6',
                         'payee': '#10b981',
                         'en_retard': '#ef4444',
-                        'annulee': '#9ca3af'
+                        'annulee': '#000000'
                     };
                     const statutLabels = {
                         'brouillon': 'En cours',

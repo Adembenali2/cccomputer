@@ -1227,6 +1227,37 @@ function decode_msg($row) {
             white-space: nowrap;
         }
 
+        /* Couleurs spécifiques pour les statuts de factures */
+        .factures-table .badge.statut-brouillon {
+            background: rgba(107, 114, 128, 0.15);
+            color: #6b7280;
+            border: 1px solid rgba(107, 114, 128, 0.3);
+        }
+
+        .factures-table .badge.statut-envoyee {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .factures-table .badge.statut-payee {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .factures-table .badge.statut-en-retard {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .factures-table .badge.statut-annulee {
+            background: rgba(0, 0, 0, 0.15);
+            color: #000000;
+            border: 1px solid rgba(0, 0, 0, 0.3);
+        }
+
         /* Bouton PDF pour les factures */
         .btn-pdf-facture {
             display: inline-flex;
@@ -2185,24 +2216,17 @@ function decode_msg($row) {
                                 'annulee' => 'Annulée'
                             ];
                             $statusClasses = [
-                                'brouillon' => 'role',
-                                'envoyee' => 'success',
-                                'payee' => 'success',
-                                'en_retard' => 'muted',
-                                'annulee' => 'muted'
-                            ];
-                            $statusColors = [
-                                'brouillon' => '#6b7280',
-                                'envoyee' => '#3b82f6',
-                                'payee' => '#10b981',
-                                'en_retard' => '#ef4444',
-                                'annulee' => '#9ca3af'
+                                'brouillon' => 'statut-brouillon',
+                                'envoyee' => 'statut-envoyee',
+                                'payee' => 'statut-payee',
+                                'en_retard' => 'statut-en-retard',
+                                'annulee' => 'statut-annulee'
                             ];
                             ?>
                             <?php foreach ($recentFactures as $f): ?>
                                 <?php
                                 $status = $f['statut'] ?? 'brouillon';
-                                $statusClass = $statusClasses[$status] ?? 'muted';
+                                $statusClass = $statusClasses[$status] ?? 'statut-brouillon';
                                 ?>
                                 <tr role="row">
                                     <td data-label="Date" role="cell">
@@ -2252,7 +2276,7 @@ function decode_msg($row) {
                                         </strong>
                                     </td>
                                     <td data-label="Statut" role="cell">
-                                        <span class="badge <?= $statusClass ?>">
+                                        <span class="badge <?= $statusClasses[$status] ?? 'statut-brouillon' ?>">
                                             <?= h($statusLabels[$status] ?? $status) ?>
                                         </span>
                                     </td>
