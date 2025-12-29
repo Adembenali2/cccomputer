@@ -584,8 +584,8 @@ try {
                     throw new RuntimeException('Le fichier PDF n\'a pas pu être créé: ' . $actualFilePath);
                 }
                 
-                // Mise à jour chemin PDF
-                $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")
+                // Mise à jour chemin PDF (statut reste 'brouillon' jusqu'à l'envoi par email)
+                $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ? WHERE id = ?")
                     ->execute([$pdfWebPath, $factureId]);
                 
                 $pdo->commit();

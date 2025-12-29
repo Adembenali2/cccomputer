@@ -332,10 +332,10 @@ class InvoiceEmailService
                 // ============================================
                 $this->pdo->beginTransaction();
                 
-                // Mettre à jour la facture : email_envoye = 1 (succès)
+                // Mettre à jour la facture : email_envoye = 1 (succès) et statut = 'envoyee'
                 $stmt = $this->pdo->prepare("
                     UPDATE factures 
-                    SET email_envoye = 1, date_envoi_email = NOW() 
+                    SET email_envoye = 1, date_envoi_email = NOW(), statut = 'envoyee' 
                     WHERE id = :id
                 ");
                 $stmt->execute([':id' => $factureId]);

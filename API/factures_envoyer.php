@@ -305,10 +305,12 @@ try {
     }
     
     // Mettre à jour la facture pour indiquer que l'email a été envoyé
+    // Le statut passe à 'envoyee' quand l'email est envoyé
     $stmt = $pdo->prepare("
         UPDATE factures 
         SET email_envoye = 1, 
-            date_envoi_email = NOW() 
+            date_envoi_email = NOW(),
+            statut = 'envoyee'
         WHERE id = :id
     ");
     $stmt->execute([':id' => $factureId]);

@@ -443,6 +443,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut du paiement mis à jour."];
             }
         }
+        // ===== MISE À JOUR STATUT FACTURE =====
+        elseif ($action === 'update_invoice_status') {
+            if (!$isAdminOrDirigeant) {
+                throw new RuntimeException('Vous n\'êtes pas autorisé à modifier les factures.');
+            }
+
+            $factureId = validateId($_POST['facture_id'] ?? 0, 'ID facture');
+            $newStatus = trim((string)($_POST['statut'] ?? ''));
+
+            $allowedStatuses = ['brouillon', 'envoyee', 'payee', 'en_retard', 'annulee'];
+            if (!in_array($newStatus, $allowedStatuses, true)) {
+                throw new RuntimeException('Statut de facture invalide.');
+            }
+
+            $beforeFacture = safeFetch(
+                $pdo,
+                "SELECT statut, numero FROM factures WHERE id = ?",
+                [$factureId],
+                'profil_facture_before'
+            );
+
+            if (!$beforeFacture) {
+                throw new RuntimeException('Facture introuvable.');
+            }
+
+            if ($beforeFacture['statut'] === $newStatus) {
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Aucun changement de statut pour cette facture."];
+            } else {
+                $stmt = $pdo->prepare("UPDATE factures SET statut = ? WHERE id = ?");
+                $stmt->execute([$newStatus, $factureId]);
+
+                logProfilAction(
+                    $pdo,
+                    $currentUser['id'],
+                    'facture_statut_modifie',
+                    "Modification statut facture #{$factureId} ({$beforeFacture['numero']}): '{$beforeFacture['statut']}' → '{$newStatus}'"
+                );
+
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut de la facture mis à jour."];
+            }
+        }
         // ===== SAUVEGARDE DES PERMISSIONS =====
         elseif ($action === 'save_permissions') {
             if (!$isAdminOrDirigeant) {
@@ -545,6 +586,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectUrl .= '?perm_user=' . $redirectAfterSave;
     } elseif ($action === 'update_payment_status') {
         $redirectUrl .= '#paymentsPanel';
+    } elseif ($action === 'update_invoice_status') {
+        $redirectUrl .= '#facturesPanel';
     }
     header('Location: ' . $redirectUrl);
     exit;
@@ -666,6 +709,37 @@ $recentPayments = safeFetchAll(
     ",
     [],
     'profil_recent_paiements'
+);
+
+// Dernières factures (pour affichage dans le profil)
+// On ne charge que quelques éléments pour ne pas alourdir la page
+$recentFactures = safeFetchAll(
+    $pdo,
+    "
+    SELECT 
+        f.id,
+        f.numero,
+        f.date_facture,
+        f.type,
+        f.montant_ht,
+        f.tva,
+        f.montant_ttc,
+        f.statut,
+        f.pdf_path,
+        f.email_envoye,
+        f.date_envoi_email,
+        f.created_at,
+        c.id AS client_id,
+        c.raison_sociale AS client_nom,
+        c.numero_client AS client_code,
+        c.email AS client_email
+    FROM factures f
+    LEFT JOIN clients c ON f.id_client = c.id
+    ORDER BY f.date_facture DESC, f.created_at DESC
+    LIMIT 30
+    ",
+    [],
+    'profil_recent_factures'
 );
 
 // Récupérer les informations de l'utilisateur connecté
@@ -990,6 +1064,169 @@ function decode_msg($row) {
             margin-top: 2rem;
         }
 
+        /* Styles améliorés pour le tableau des factures */
+        .factures-panel {
+            margin-top: 2rem;
+        }
+
+        .factures-panel .table-responsive {
+            overflow-x: visible;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .factures-table {
+            width: 100%;
+            max-width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .factures-table thead {
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .factures-table thead th {
+            padding: 0.75rem 0.5rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        .factures-table thead th:nth-child(1) { width: 7%; } /* Date */
+        .factures-table thead th:nth-child(2) { width: 9%; } /* Numéro */
+        .factures-table thead th:nth-child(3) { width: 14%; } /* Client */
+        .factures-table thead th:nth-child(4) { width: 8%; } /* Type */
+        .factures-table thead th:nth-child(5) { width: 8%; } /* Montant HT */
+        .factures-table thead th:nth-child(6) { width: 7%; } /* TVA */
+        .factures-table thead th:nth-child(7) { width: 8%; } /* Total TTC */
+        .factures-table thead th:nth-child(8) { width: 10%; } /* Statut */
+        .factures-table thead th:nth-child(9) { width: 9%; } /* PDF */
+        .factures-table thead th:nth-child(10) { width: 20%; } /* Actions */
+
+        .factures-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s ease;
+        }
+
+        .factures-table tbody tr:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .factures-table tbody td {
+            padding: 0.75rem 0.5rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            vertical-align: middle;
+            word-wrap: break-word;
+        }
+
+        .factures-table tbody td:nth-child(1),
+        .factures-table tbody td:nth-child(4),
+        .factures-table tbody td:nth-child(5),
+        .factures-table tbody td:nth-child(6),
+        .factures-table tbody td:nth-child(7) {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .factures-table tbody td:nth-child(3) {
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .factures-table .actions {
+            white-space: nowrap;
+        }
+
+        .factures-table .actions form {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .factures-table .actions select {
+            padding: 0.4rem 0.5rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            min-width: 140px;
+            max-width: 160px;
+            transition: all 0.2s ease;
+        }
+
+        .factures-table .actions select:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .factures-table .actions select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .factures-table .actions button {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+
+        .factures-table .actions button:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .factures-table .badge {
+            display: inline-block;
+            padding: 0.3rem 0.5rem;
+            border-radius: var(--radius-md);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 1024px) {
+            .factures-table {
+                font-size: 0.8rem;
+            }
+
+            .factures-table thead th,
+            .factures-table tbody td {
+                padding: 0.6rem 0.4rem;
+            }
+
+            .factures-table thead th {
+                font-size: 0.75rem;
+            }
+
+            .factures-table .actions form {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.4rem;
+            }
+
+            .factures-table .actions select {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            .factures-table .actions button {
+                width: 100%;
+            }
+        }
+
         .payments-panel .table-responsive {
             overflow-x: visible;
             width: 100%;
@@ -1297,6 +1534,9 @@ function decode_msg($row) {
             </button>
             <button class="btn btn-secondary" id="togglePayments" aria-expanded="false" aria-controls="paymentsPanel">
                 Paiements
+            </button>
+            <button class="btn btn-secondary" id="toggleFactures" aria-expanded="false" aria-controls="facturesPanel">
+                Factures
             </button>
         </div>
         <?php endif; ?>
@@ -1840,6 +2080,155 @@ function decode_msg($row) {
     <?php endif; ?>
     
     <?php if ($isAdminOrDirigeant): ?>
+        <!-- Section Dernières factures -->
+        <section class="panel factures-panel" id="facturesPanel" style="display: none;">
+            <h2 class="panel-title">Dernières factures</h2>
+            <p class="panel-subtitle">
+                Aperçu rapide des 30 dernières factures. Vous pouvez <strong>vérifier le PDF</strong> et mettre à jour le <strong>statut</strong> directement depuis cette page.
+            </p>
+
+            <div class="table-responsive">
+                <table class="users-table factures-table" role="table" aria-label="Dernières factures">
+                    <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Numéro</th>
+                            <th scope="col">Client</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Montant HT</th>
+                            <th scope="col">TVA</th>
+                            <th scope="col">Total TTC</th>
+                            <th scope="col">Statut</th>
+                            <th scope="col">PDF</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($recentFactures)): ?>
+                            <tr>
+                                <td colspan="10" class="aucun" role="cell">Aucune facture enregistrée.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php
+                            $statusLabels = [
+                                'brouillon' => 'En attente',
+                                'envoyee' => 'Prêt à envoyer',
+                                'payee' => 'Payée',
+                                'en_retard' => 'En retard',
+                                'annulee' => 'Annulée'
+                            ];
+                            $statusClasses = [
+                                'brouillon' => 'role',
+                                'envoyee' => 'success',
+                                'payee' => 'success',
+                                'en_retard' => 'muted',
+                                'annulee' => 'muted'
+                            ];
+                            ?>
+                            <?php foreach ($recentFactures as $f): ?>
+                                <?php
+                                $status = $f['statut'] ?? 'brouillon';
+                                $statusClass = $statusClasses[$status] ?? 'muted';
+                                ?>
+                                <tr role="row">
+                                    <td data-label="Date" role="cell">
+                                        <span style="font-weight: 500; color: var(--text-primary);">
+                                            <?= isset($f['date_facture']) ? h(formatDate($f['date_facture'], 'd/m/Y')) : '—' ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Numéro" role="cell">
+                                        <span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
+                                            <?= h($f['numero'] ?? '—') ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Client" role="cell">
+                                        <?php if (!empty($f['client_nom'])): ?>
+                                            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                                <span style="font-weight: 600; color: var(--text-primary);">
+                                                    <?= h($f['client_nom']) ?>
+                                                </span>
+                                                <?php if (!empty($f['client_code'])): ?>
+                                                    <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                                                        <?= h($f['client_code']) ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Type" role="cell">
+                                        <span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 0.875rem; color: var(--text-primary);">
+                                            <?= h($f['type'] ?? '—') ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Montant HT" role="cell">
+                                        <span style="color: var(--text-primary);">
+                                            <?= h(number_format((float)$f['montant_ht'], 2, ',', ' ')) ?> €
+                                        </span>
+                                    </td>
+                                    <td data-label="TVA" role="cell">
+                                        <span style="color: var(--text-primary);">
+                                            <?= h(number_format((float)$f['tva'], 2, ',', ' ')) ?> €
+                                        </span>
+                                    </td>
+                                    <td data-label="Total TTC" role="cell">
+                                        <strong style="color: var(--accent-primary); font-weight: 600;">
+                                            <?= h(number_format((float)$f['montant_ttc'], 2, ',', ' ')) ?> €
+                                        </strong>
+                                    </td>
+                                    <td data-label="Statut" role="cell">
+                                        <span class="badge <?= $statusClass ?>">
+                                            <?= h($statusLabels[$status] ?? $status) ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="PDF" role="cell">
+                                        <?php if (!empty($f['pdf_path'])): ?>
+                                            <a href="/public/view_facture.php?id=<?= (int)$f['id'] ?>" 
+                                               target="_blank" 
+                                               class="btn-justificatif"
+                                               title="Voir le PDF de la facture"
+                                               aria-label="Voir le PDF de la facture <?= h($f['numero']) ?>">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                                </svg>
+                                                Voir PDF
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">Non généré</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Actions" class="actions" role="cell">
+                                        <form method="post" action="/public/profil.php#facturesPanel" class="inline">
+                                            <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+                                            <input type="hidden" name="action" value="update_invoice_status">
+                                            <input type="hidden" name="facture_id" value="<?= (int)$f['id'] ?>">
+                                            <label for="facture-status-<?= (int)$f['id'] ?>" class="sr-only">Statut</label>
+                                            <select id="facture-status-<?= (int)$f['id'] ?>" name="statut">
+                                                <option value="brouillon" <?= $status === 'brouillon' ? 'selected' : '' ?>>En attente</option>
+                                                <option value="envoyee" <?= $status === 'envoyee' ? 'selected' : '' ?>>Prêt à envoyer</option>
+                                                <option value="payee" <?= $status === 'payee' ? 'selected' : '' ?>>Payée</option>
+                                                <option value="en_retard" <?= $status === 'en_retard' ? 'selected' : '' ?>>En retard</option>
+                                                <option value="annulee" <?= $status === 'annulee' ? 'selected' : '' ?>>Annulée</option>
+                                            </select>
+                                            <button type="submit" class="fiche-action-btn" style="margin-left: 0.5rem;">
+                                                Mettre à jour
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    <?php endif; ?>
+    
+    <?php if ($isAdminOrDirigeant): ?>
         <!-- Section Historique des Imports SFTP et IONOS (masquée par défaut) -->
         <section class="panel import-history-panel" id="importHistoryPanel" style="display: none;">
             <h2 class="panel-title">Historique des Imports (SFTP & IONOS)</h2>
@@ -2348,6 +2737,43 @@ function decode_msg($row) {
             } else {
                 // Masquer la section
                 paymentsPanel.style.display = 'none';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+})();
+
+/* Toggle section Factures */
+(function() {
+    const toggleBtn = document.getElementById('toggleFactures');
+    const facturesPanel = document.getElementById('facturesPanel');
+    
+    if (toggleBtn && facturesPanel) {
+        // Si l'URL contient #facturesPanel, afficher automatiquement la section
+        if (window.location.hash === '#facturesPanel') {
+            facturesPanel.style.display = 'block';
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            setTimeout(function() {
+                facturesPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+        
+        toggleBtn.addEventListener('click', function() {
+            const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+            const isHidden = facturesPanel.style.display === 'none';
+            
+            if (isHidden || !isExpanded) {
+                // Afficher la section
+                facturesPanel.style.display = 'block';
+                toggleBtn.setAttribute('aria-expanded', 'true');
+                
+                // Scroll vers la section avec animation
+                setTimeout(function() {
+                    facturesPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 10);
+            } else {
+                // Masquer la section
+                facturesPanel.style.display = 'none';
                 toggleBtn.setAttribute('aria-expanded', 'false');
             }
         });
