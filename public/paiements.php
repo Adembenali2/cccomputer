@@ -1563,6 +1563,30 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     </button>
                 </div>
             </div>
+
+            <!-- Section Envoi en masse -->
+            <div class="section-card" id="sectionEnvoiMasse">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #ec4899, #db2777);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                            <path d="M22 6l-10 7L2 6"></path>
+                        </svg>
+                    </div>
+                    <h3 class="section-card-title">Envoi en masse</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Envoyez plusieurs factures à leurs clients respectifs</p>
+                    <button class="section-card-btn" onclick="openSection('envoi-masse')">
+                        Envoyer en masse
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2109,29 +2133,29 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     
                     <!-- Statistiques en temps réel -->
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.2); border-radius: var(--radius-md); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);">
-                            <div style="font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
                                 <span id="genFactureStatsClients">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.95); font-weight: 500;">Clients traités</div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Clients traités</div>
                         </div>
-                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.2); border-radius: var(--radius-md); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);">
-                            <div style="font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
                                 <span id="genFactureStatsGenerees">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.95); font-weight: 500;">Factures générées</div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Factures générées</div>
                         </div>
-                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.2); border-radius: var(--radius-md); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);">
-                            <div style="font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
                                 <span id="genFactureStatsExclus">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.95); font-weight: 500;">Clients exclus</div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Clients exclus</div>
                         </div>
                     </div>
                     
                     <!-- Liste des résultats en temps réel -->
-                    <div id="genFactureProgressLog" style="margin-top: 1.5rem; max-height: 200px; overflow-y: auto; background: rgba(255,255,255,0.1); border-radius: var(--radius-md); padding: 1rem; display: none;">
-                        <div style="font-weight: 600; color: white; margin-bottom: 0.75rem; font-size: 0.9rem;">Détails de la génération:</div>
+                    <div id="genFactureProgressLog" style="margin-top: 1.5rem; max-height: 200px; overflow-y: auto; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); padding: 1rem; display: none;">
+                        <div style="font-weight: 600; color: #1a202c; margin-bottom: 0.75rem; font-size: 0.9rem;">Détails de la génération:</div>
                         <div id="genFactureProgressLogContent" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
                     </div>
                 </div>
@@ -2139,6 +2163,145 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeGenerationFactureClientsModal()" id="btnCancelGeneration">Annuler</button>
                 <button type="submit" form="generationFactureClientsForm" class="btn btn-primary" id="btnGenererFacturesClients">Générer les factures</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Envoi en masse -->
+    <div class="modal-overlay" id="envoiMasseModalOverlay" onclick="closeEnvoiMasseModal()">
+        <div class="modal" id="envoiMasseModal" onclick="event.stopPropagation()" style="max-width: 1200px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Envoi en masse des factures</h2>
+                <button class="modal-close" onclick="closeEnvoiMasseModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="envoiMasseListLoading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Chargement des factures...
+                </div>
+                <div id="envoiMasseListContainer" style="display: none;">
+                    <!-- Barre de recherche -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="position: relative;">
+                            <input 
+                                type="text" 
+                                id="envoiMasseSearchInput" 
+                                placeholder="Rechercher par numéro, client, date..." 
+                                style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
+                                oninput="filterEnvoiMasseFactures()"
+                            />
+                            <svg 
+                                width="18" 
+                                height="18" 
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                stroke-width="2"
+                                style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none;"
+                            >
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions de sélection -->
+                    <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                        <button type="button" class="btn btn-secondary" onclick="selectAllEnvoiMasse()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            Tout sélectionner
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="deselectAllEnvoiMasse()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            Tout désélectionner
+                        </button>
+                        <span style="margin-left: auto; font-weight: 600; color: var(--text-primary);">
+                            <span id="envoiMasseSelectedCount">0</span> facture(s) sélectionnée(s)
+                        </span>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                        <span><span id="envoiMasseCount">0</span> facture(s) disponible(s)</span>
+                        <span id="envoiMasseFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
+                    </div>
+                    
+                    <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-primary); z-index: 10;">
+                                <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                                    <th style="padding: 0.75rem; text-align: center; width: 50px;">
+                                        <input type="checkbox" id="envoiMasseSelectAll" onchange="toggleSelectAllEnvoiMasse(this)">
+                                    </th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
+                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant TTC</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Email</th>
+                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody id="envoiMasseTableBody">
+                                <!-- Les factures seront ajoutées ici dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="envoiMasseListError" style="display: none; text-align: center; padding: 2rem; color: #ef4444;">
+                    Erreur lors du chargement des factures
+                </div>
+                
+                <!-- Zone de progression -->
+                <div id="envoiMasseProgressContainer" style="display: none; margin-top: 2rem; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: var(--radius-lg); box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                    <!-- Percentage Display -->
+                    <div class="progress-percentage-display" id="envoiMasseProgressPercentDisplay">
+                        <span id="envoiMasseProgressPercent">0</span>%
+                    </div>
+                    
+                    <!-- Progress Status Text -->
+                    <div class="progress-status-text" id="envoiMasseProgressStatus">
+                        Envoi en cours...
+                    </div>
+                    
+                    <!-- Progress Bar Container -->
+                    <div class="progress-container-wrapper">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" id="envoiMasseProgressBar">
+                                <div class="progress-bar-shimmer"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Statistiques en temps réel -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
+                                <span id="envoiMasseStatsTotal">0</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Total</div>
+                        </div>
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
+                                <span id="envoiMasseStatsSuccess">0</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Envoyées</div>
+                        </div>
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
+                                <span id="envoiMasseStatsFailed">0</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Échecs</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Liste des résultats -->
+                    <div id="envoiMasseProgressLog" style="margin-top: 1.5rem; max-height: 300px; overflow-y: auto; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); padding: 1rem; display: none;">
+                        <div style="font-weight: 600; color: #1a202c; margin-bottom: 0.75rem; font-size: 0.9rem;">Détails de l'envoi:</div>
+                        <div id="envoiMasseProgressLogContent" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEnvoiMasseModal()" id="btnCancelEnvoiMasse">Fermer</button>
+                <button type="button" class="btn btn-primary" id="btnEnvoyerMasse" onclick="submitEnvoiMasse()" disabled>
+                    Envoyer les factures sélectionnées
+                </button>
             </div>
         </div>
     </div>
@@ -2235,6 +2398,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 openFactureMailModal();
             } else if (section === 'generation-facture-clients') {
                 openGenerationFactureClientsModal();
+            } else if (section === 'envoi-masse') {
+                openEnvoiMasseModal();
             } else {
                 console.log('Ouverture de la section:', section);
                 alert(`Section "${section}" - À implémenter`);
@@ -5102,21 +5267,21 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
                                 logItem.innerHTML = `
                                     <div style="display:flex; align-items:flex-start; gap:0.6rem;">
-                                        <div style="width: 22px; height: 22px; border-radius: 999px; background: rgba(16,185,129,0.2); display:flex; align-items:center; justify-content:center; color:#22c55e;">
+                                        <div style="width: 22px; height: 22px; border-radius: 999px; background: rgba(16,185,129,0.2); display:flex; align-items:center; justify-content:center; color:#10b981;">
                                             ✓
                                         </div>
                                         <div>
-                                            <div style="font-weight:600; margin-bottom:0.15rem;">
+                                            <div style="font-weight:600; margin-bottom:0.15rem; color: #1a202c;">
                                                 ${facture.client_nom}
                                             </div>
-                                            <div style="font-size:0.8rem; opacity:0.9;">
-                                                Facture <strong>${facture.numero}</strong> • <span style="color:#6ee7b7;">${montant} € TTC</span>
+                                            <div style="font-size:0.8rem; color: rgba(26,32,44,0.7);">
+                                                Facture <strong>${facture.numero}</strong> • <span style="color:#059669;">${montant} € TTC</span>
                                             </div>
                                         </div>
                                     </div>
                                     <button type="button"
                                         onclick="viewFacturePDFById(${facture.facture_id}, '${facture.numero}')"
-                                        style="padding:0.4rem 0.9rem; border-radius:999px; border:1px solid rgba(148,163,184,0.8); background:rgba(15,23,42,0.9); color:#e5e7eb; font-size:0.78rem; font-weight:500; display:inline-flex; align-items:center; gap:0.35rem; cursor:pointer; transition:all 0.15s ease;">
+                                        style="padding:0.4rem 0.9rem; border-radius:999px; border:1px solid var(--border-color); background:var(--accent-primary); color:white; font-size:0.78rem; font-weight:500; display:inline-flex; align-items:center; gap:0.35rem; cursor:pointer; transition:all 0.15s ease;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                             <polyline points="14 2 14 8 20 8"></polyline>
@@ -5129,11 +5294,11 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
                                 logItem.addEventListener('mouseenter', () => {
                                     logItem.style.transform = 'translateY(-2px)';
-                                    logItem.style.boxShadow = '0 12px 30px rgba(15,23,42,0.6)';
+                                    logItem.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                                 });
                                 logItem.addEventListener('mouseleave', () => {
                                     logItem.style.transform = 'translateY(0)';
-                                    logItem.style.boxShadow = '0 8px 20px rgba(15,23,42,0.4)';
+                                    logItem.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
                                 });
 
                                 logContent.appendChild(logItem);
@@ -5144,7 +5309,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         if (result.clients_exclus && result.clients_exclus.length > 0) {
                             result.clients_exclus.forEach(client => {
                                 const logItem = document.createElement('div');
-                                logItem.style.cssText = 'padding: 0.5rem; background: rgba(245,158,11,0.2); border-radius: var(--radius-sm); color: white; font-size: 0.85rem; border-left: 3px solid #f59e0b;';
+                                logItem.style.cssText = 'padding: 0.5rem; background: rgba(245,158,11,0.15); border-radius: var(--radius-sm); color: #92400e; font-size: 0.85rem; border-left: 3px solid #f59e0b;';
                                 logItem.innerHTML = `⚠️ <strong>${client.client_nom}</strong> - ${client.raison}`;
                                 logContent.appendChild(logItem);
                             });
@@ -5403,6 +5568,369 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
+        // ============================================
+        // GESTION DU MODAL ENVOI EN MASSE
+        // ============================================
+        
+        let allEnvoiMasseFactures = [];
+        let filteredEnvoiMasseFactures = [];
+        
+        /**
+         * Ouvre le modal d'envoi en masse
+         */
+        function openEnvoiMasseModal() {
+            const modal = document.getElementById('envoiMasseModal');
+            const overlay = document.getElementById('envoiMasseModalOverlay');
+            
+            if (!modal || !overlay) {
+                console.error('Modal envoi masse introuvable');
+                return;
+            }
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Réinitialiser
+            const progressContainer = document.getElementById('envoiMasseProgressContainer');
+            const listContainer = document.getElementById('envoiMasseListContainer');
+            if (progressContainer) progressContainer.style.display = 'none';
+            if (listContainer) listContainer.style.display = 'none';
+            
+            // Charger les factures
+            loadEnvoiMasseFactures();
+        }
+        
+        /**
+         * Ferme le modal d'envoi en masse
+         */
+        function closeEnvoiMasseModal() {
+            const modal = document.getElementById('envoiMasseModal');
+            const overlay = document.getElementById('envoiMasseModalOverlay');
+            if (modal && overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+        
+        /**
+         * Charge les factures pour l'envoi en masse
+         */
+        async function loadEnvoiMasseFactures() {
+            const loadingDiv = document.getElementById('envoiMasseListLoading');
+            const container = document.getElementById('envoiMasseListContainer');
+            const errorDiv = document.getElementById('envoiMasseListError');
+            
+            loadingDiv.style.display = 'block';
+            container.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/API/factures_liste.php', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.ok && data.factures) {
+                    // Filtrer uniquement les factures avec PDF et email client
+                    allEnvoiMasseFactures = data.factures.filter(f => 
+                        f.pdf_path && f.client_email
+                    );
+                    filteredEnvoiMasseFactures = [...allEnvoiMasseFactures];
+                    
+                    displayEnvoiMasseFactures(allEnvoiMasseFactures);
+                    
+                    document.getElementById('envoiMasseCount').textContent = allEnvoiMasseFactures.length;
+                    loadingDiv.style.display = 'none';
+                    container.style.display = 'block';
+                } else {
+                    errorDiv.textContent = data.error || 'Erreur lors du chargement des factures';
+                    loadingDiv.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement:', error);
+                errorDiv.textContent = 'Erreur: ' + error.message;
+                loadingDiv.style.display = 'none';
+                errorDiv.style.display = 'block';
+            }
+        }
+        
+        /**
+         * Affiche les factures dans le tableau
+         */
+        function displayEnvoiMasseFactures(factures) {
+            const tableBody = document.getElementById('envoiMasseTableBody');
+            const countSpan = document.getElementById('envoiMasseFilteredCount');
+            
+            tableBody.innerHTML = '';
+            
+            if (factures.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            Aucune facture disponible
+                        </td>
+                    </tr>
+                `;
+                countSpan.textContent = '';
+            } else {
+                factures.forEach(facture => {
+                    const row = document.createElement('tr');
+                    row.style.borderBottom = '1px solid var(--border-color)';
+                    row.style.transition = 'background 0.2s';
+                    row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
+                    row.onmouseleave = function() { this.style.background = ''; };
+                    
+                    const emailStatus = facture.email_envoye === 1 ? 
+                        '<span style="color: #10b981; font-weight: 600;">✓ Envoyée</span>' : 
+                        '<span style="color: var(--text-secondary);">Non envoyée</span>';
+                    
+                    row.innerHTML = `
+                        <td style="padding: 0.75rem; text-align: center;">
+                            <input type="checkbox" class="envoi-masse-checkbox" value="${facture.id}" onchange="updateEnvoiMasseSelection()">
+                        </td>
+                        <td style="padding: 0.75rem; font-weight: 600; color: var(--text-primary);">${facture.numero}</td>
+                        <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.date_facture_formatted}</td>
+                        <td style="padding: 0.75rem; color: var(--text-primary);">
+                            ${facture.client_nom || 'Client inconnu'}
+                            ${facture.client_code ? ` (${facture.client_code})` : ''}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">
+                            ${facture.montant_ttc.toFixed(2).replace('.', ',')} €
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
+                            ${facture.client_email || '-'}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center;">
+                            ${emailStatus}
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                
+                if (factures.length !== allEnvoiMasseFactures.length) {
+                    countSpan.textContent = `(${factures.length} sur ${allEnvoiMasseFactures.length})`;
+                } else {
+                    countSpan.textContent = '';
+                }
+            }
+            
+            updateEnvoiMasseSelection();
+        }
+        
+        /**
+         * Filtre les factures selon le terme de recherche
+         */
+        function filterEnvoiMasseFactures() {
+            const searchInput = document.getElementById('envoiMasseSearchInput');
+            const searchTerm = (searchInput.value || '').toLowerCase().trim();
+            
+            if (!searchTerm) {
+                filteredEnvoiMasseFactures = [...allEnvoiMasseFactures];
+                displayEnvoiMasseFactures(filteredEnvoiMasseFactures);
+                return;
+            }
+            
+            filteredEnvoiMasseFactures = allEnvoiMasseFactures.filter(facture => {
+                if (facture.numero && facture.numero.toLowerCase().includes(searchTerm)) return true;
+                if (facture.date_facture_formatted && facture.date_facture_formatted.includes(searchTerm)) return true;
+                if (facture.client_nom && facture.client_nom.toLowerCase().includes(searchTerm)) return true;
+                if (facture.client_code && facture.client_code.toLowerCase().includes(searchTerm)) return true;
+                if (facture.client_email && facture.client_email.toLowerCase().includes(searchTerm)) return true;
+                return false;
+            });
+            
+            displayEnvoiMasseFactures(filteredEnvoiMasseFactures);
+        }
+        
+        /**
+         * Met à jour le compteur de sélection
+         */
+        function updateEnvoiMasseSelection() {
+            const checkboxes = document.querySelectorAll('.envoi-masse-checkbox:checked');
+            const count = checkboxes.length;
+            document.getElementById('envoiMasseSelectedCount').textContent = count;
+            
+            const btnEnvoyer = document.getElementById('btnEnvoyerMasse');
+            if (btnEnvoyer) {
+                btnEnvoyer.disabled = count === 0;
+            }
+        }
+        
+        /**
+         * Sélectionne toutes les factures
+         */
+        function selectAllEnvoiMasse() {
+            document.querySelectorAll('.envoi-masse-checkbox').forEach(cb => {
+                cb.checked = true;
+            });
+            document.getElementById('envoiMasseSelectAll').checked = true;
+            updateEnvoiMasseSelection();
+        }
+        
+        /**
+         * Désélectionne toutes les factures
+         */
+        function deselectAllEnvoiMasse() {
+            document.querySelectorAll('.envoi-masse-checkbox').forEach(cb => {
+                cb.checked = false;
+            });
+            document.getElementById('envoiMasseSelectAll').checked = false;
+            updateEnvoiMasseSelection();
+        }
+        
+        /**
+         * Toggle sélection toutes
+         */
+        function toggleSelectAllEnvoiMasse(checkbox) {
+            document.querySelectorAll('.envoi-masse-checkbox').forEach(cb => {
+                cb.checked = checkbox.checked;
+            });
+            updateEnvoiMasseSelection();
+        }
+        
+        /**
+         * Soumet l'envoi en masse
+         */
+        async function submitEnvoiMasse() {
+            const checkboxes = document.querySelectorAll('.envoi-masse-checkbox:checked');
+            const factureIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            
+            if (factureIds.length === 0) {
+                alert('Veuillez sélectionner au moins une facture');
+                return;
+            }
+            
+            if (!confirm(`Voulez-vous envoyer ${factureIds.length} facture(s) à leurs clients respectifs ?`)) {
+                return;
+            }
+            
+            const listContainer = document.getElementById('envoiMasseListContainer');
+            const progressContainer = document.getElementById('envoiMasseProgressContainer');
+            const btnEnvoyer = document.getElementById('btnEnvoyerMasse');
+            const btnCancel = document.getElementById('btnCancelEnvoiMasse');
+            
+            // Masquer la liste et afficher la progression
+            if (listContainer) listContainer.style.display = 'none';
+            if (progressContainer) progressContainer.style.display = 'block';
+            if (btnEnvoyer) btnEnvoyer.disabled = true;
+            if (btnCancel) btnCancel.disabled = true;
+            
+            // Initialiser la barre de progression
+            const progressBar = document.getElementById('envoiMasseProgressBar');
+            const percentDisplay = document.getElementById('envoiMasseProgressPercentDisplay');
+            const statusText = document.getElementById('envoiMasseProgressStatus');
+            
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.classList.remove('complete');
+                progressBar.classList.add('running');
+            }
+            if (percentDisplay) percentDisplay.classList.remove('complete');
+            if (statusText) {
+                statusText.textContent = 'Envoi en cours...';
+                statusText.classList.remove('complete');
+            }
+            
+            // Réinitialiser les compteurs
+            updateEnvoiMasseProgress(0, factureIds.length, 0, 0);
+            
+            try {
+                const response = await fetch('/API/factures_envoyer_masse.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        facture_ids: factureIds
+                    }),
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Erreur HTTP ' + response.status);
+                }
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    // Mettre à jour avec les résultats
+                    updateEnvoiMasseProgress(100, result.total, result.success, result.failed);
+                    
+                    if (progressBar) {
+                        progressBar.classList.remove('running');
+                        progressBar.classList.add('complete');
+                    }
+                    if (percentDisplay) percentDisplay.classList.add('complete');
+                    if (statusText) {
+                        statusText.textContent = `✓ Envoi terminé : ${result.success} réussie(s), ${result.failed} échec(s)`;
+                        statusText.classList.add('complete');
+                    }
+                    
+                    // Afficher les résultats détaillés
+                    displayEnvoiMasseResults(result.results);
+                    
+                    // Réactiver les boutons
+                    if (btnCancel) btnCancel.disabled = false;
+                    
+                    showMessage(`${result.success} facture(s) envoyée(s) avec succès${result.failed > 0 ? `, ${result.failed} échec(s)` : ''}`, 'success');
+                } else {
+                    throw new Error(result.error || 'Erreur inconnue');
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'envoi en masse:', error);
+                showMessage('Erreur lors de l\'envoi en masse: ' + error.message, 'error');
+                
+                if (progressContainer) progressContainer.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                if (btnEnvoyer) btnEnvoyer.disabled = false;
+                if (btnCancel) btnCancel.disabled = false;
+            }
+        }
+        
+        /**
+         * Met à jour la progression de l'envoi
+         */
+        function updateEnvoiMasseProgress(percent, total, success, failed) {
+            const percentEl = document.getElementById('envoiMasseProgressPercent');
+            const barEl = document.getElementById('envoiMasseProgressBar');
+            const totalEl = document.getElementById('envoiMasseStatsTotal');
+            const successEl = document.getElementById('envoiMasseStatsSuccess');
+            const failedEl = document.getElementById('envoiMasseStatsFailed');
+            
+            if (percentEl) percentEl.textContent = Math.round(percent);
+            if (barEl) barEl.style.width = percent + '%';
+            if (totalEl) totalEl.textContent = total;
+            if (successEl) successEl.textContent = success;
+            if (failedEl) failedEl.textContent = failed;
+        }
+        
+        /**
+         * Affiche les résultats détaillés
+         */
+        function displayEnvoiMasseResults(results) {
+            const logContainer = document.getElementById('envoiMasseProgressLog');
+            const logContent = document.getElementById('envoiMasseProgressLogContent');
+            
+            if (!logContainer || !logContent) return;
+            
+            logContent.innerHTML = '';
+            
+            results.forEach(result => {
+                const logItem = document.createElement('div');
+                if (result.success) {
+                    logItem.style.cssText = 'padding: 0.75rem 1rem; background: rgba(16,185,129,0.15); border-radius: var(--radius-md); color: #065f46; font-size: 0.85rem; border: 1px solid rgba(16,185,129,0.3);';
+                    logItem.innerHTML = `✓ Facture #${result.facture_id} : ${result.message}`;
+                } else {
+                    logItem.style.cssText = 'padding: 0.75rem 1rem; background: rgba(239,68,68,0.15); border-radius: var(--radius-md); color: #991b1b; font-size: 0.85rem; border: 1px solid rgba(239,68,68,0.3);';
+                    logItem.innerHTML = `✗ Facture #${result.facture_id} : ${result.error || 'Erreur inconnue'}`;
+                }
+                logContent.appendChild(logItem);
+            });
+            
+            logContainer.style.display = 'block';
+        }
+
         // Exposer les fonctions globalement pour les onclick
         window.openSection = openSection;
         window.openFactureModal = openFactureModal;
@@ -5436,6 +5964,14 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.openGenerationFactureClientsModal = openGenerationFactureClientsModal;
         window.closeGenerationFactureClientsModal = closeGenerationFactureClientsModal;
         window.submitGenerationFactureClientsForm = submitGenerationFactureClientsForm;
+        window.openEnvoiMasseModal = openEnvoiMasseModal;
+        window.closeEnvoiMasseModal = closeEnvoiMasseModal;
+        window.filterEnvoiMasseFactures = filterEnvoiMasseFactures;
+        window.selectAllEnvoiMasse = selectAllEnvoiMasse;
+        window.deselectAllEnvoiMasse = deselectAllEnvoiMasse;
+        window.toggleSelectAllEnvoiMasse = toggleSelectAllEnvoiMasse;
+        window.updateEnvoiMasseSelection = updateEnvoiMasseSelection;
+        window.submitEnvoiMasse = submitEnvoiMasse;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
@@ -5459,9 +5995,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     const historiquePaiementsModalOverlay = document.getElementById('historiquePaiementsModalOverlay');
                     const factureMailModalOverlay = document.getElementById('factureMailModalOverlay');
                     const generationFactureClientsModalOverlay = document.getElementById('generationFactureClientsModalOverlay');
+                    const envoiMasseModalOverlay = document.getElementById('envoiMasseModalOverlay');
                     
                     if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
                         closePDFViewer();
+                    } else if (envoiMasseModalOverlay && envoiMasseModalOverlay.classList.contains('active')) {
+                        closeEnvoiMasseModal();
                     } else if (generationFactureClientsModalOverlay && generationFactureClientsModalOverlay.classList.contains('active')) {
                         closeGenerationFactureClientsModal();
                     } else if (factureMailModalOverlay && factureMailModalOverlay.classList.contains('active')) {
