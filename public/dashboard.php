@@ -1314,17 +1314,23 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 // Afficher les stats Factures
                 if (stats.factures) {
                     const total = stats.factures.total || 0;
+                    const brouillon = stats.factures.brouillon || 0;
                     const enAttente = stats.factures.en_attente || 0;
                     const envoyee = stats.factures.envoyee || 0;
                     const payee = stats.factures.payee || 0;
+                    const enRetard = stats.factures.en_retard || 0;
+                    const annulee = stats.factures.annulee || 0;
                     
                     if (facturesCountEl) facturesCountEl.textContent = total;
                     
                     if (facturesStatusEl) {
                         const statusParts = [];
+                        if (brouillon > 0) statusParts.push(`<span style="color: #6b7280; font-weight: 600;">${brouillon} brouillon${brouillon > 1 ? 's' : ''}</span>`);
                         if (enAttente > 0) statusParts.push(`<span style="color: #f59e0b; font-weight: 600;">${enAttente} en attente</span>`);
                         if (envoyee > 0) statusParts.push(`<span style="color: #3b82f6; font-weight: 600;">${envoyee} envoyée${envoyee > 1 ? 's' : ''}</span>`);
+                        if (enRetard > 0) statusParts.push(`<span style="color: #ef4444; font-weight: 600;">${enRetard} en retard</span>`);
                         if (payee > 0) statusParts.push(`<span style="color: #16a34a; font-weight: 600;">${payee} payée${payee > 1 ? 's' : ''}</span>`);
+                        if (annulee > 0) statusParts.push(`<span style="color: #6b7280;">${annulee} annulée${annulee > 1 ? 's' : ''}</span>`);
                         
                         if (statusParts.length > 0) {
                             facturesStatusEl.innerHTML = statusParts.join(' • ');

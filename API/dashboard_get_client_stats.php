@@ -116,9 +116,12 @@ try {
             $factSql = "
                 SELECT 
                     COUNT(*) as total,
+                    SUM(CASE WHEN statut = 'brouillon' THEN 1 ELSE 0 END) as brouillon,
                     SUM(CASE WHEN statut = 'en_attente' THEN 1 ELSE 0 END) as en_attente,
                     SUM(CASE WHEN statut = 'envoyee' THEN 1 ELSE 0 END) as envoyee,
-                    SUM(CASE WHEN statut = 'payee' THEN 1 ELSE 0 END) as payee
+                    SUM(CASE WHEN statut = 'payee' THEN 1 ELSE 0 END) as payee,
+                    SUM(CASE WHEN statut = 'en_retard' THEN 1 ELSE 0 END) as en_retard,
+                    SUM(CASE WHEN statut = 'annulee' THEN 1 ELSE 0 END) as annulee
                 FROM factures
                 WHERE id_client = :client_id
             ";
@@ -129,9 +132,12 @@ try {
             if ($factData) {
                 $stats['factures'] = [
                     'total' => (int)$factData['total'],
+                    'brouillon' => (int)$factData['brouillon'],
                     'en_attente' => (int)$factData['en_attente'],
                     'envoyee' => (int)$factData['envoyee'],
-                    'payee' => (int)$factData['payee']
+                    'payee' => (int)$factData['payee'],
+                    'en_retard' => (int)$factData['en_retard'],
+                    'annulee' => (int)$factData['annulee']
                 ];
             }
         }
