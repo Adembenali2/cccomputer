@@ -127,6 +127,151 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <script src="/assets/js/api.js"></script>
     <script src="/assets/js/dashboard.js" defer></script>
+    <style>
+        /* Styles pour les cartes de statistiques (SAV, Livraisons, Factures) */
+        .cdv-stats-card {
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .cdv-stats-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .cdv-stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            border-color: var(--accent-primary);
+        }
+        
+        .cdv-stats-card:hover::before {
+            opacity: 1;
+        }
+        
+        .cdv-stats-sav {
+            border-left: 4px solid #f59e0b;
+        }
+        
+        .cdv-stats-sav .stats-card-icon {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+            color: #f59e0b;
+        }
+        
+        .cdv-stats-livraisons {
+            border-left: 4px solid #10b981;
+        }
+        
+        .cdv-stats-livraisons .stats-card-icon {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
+            color: #10b981;
+        }
+        
+        .cdv-stats-factures {
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .cdv-stats-factures .stats-card-icon {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05));
+            color: #3b82f6;
+        }
+        
+        .stats-card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .stats-card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: transform 0.3s ease;
+        }
+        
+        .cdv-stats-card:hover .stats-card-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+        
+        .stats-card-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+        
+        .stats-card-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.02em;
+        }
+        
+        .stats-card-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .stats-card-count {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1;
+            letter-spacing: -0.02em;
+        }
+        
+        .stats-card-status {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            min-height: 1.2em;
+        }
+        
+        .cdv-stats-card .lbl {
+            display: none;
+        }
+        
+        .cdv-stats-card .val {
+            width: 100%;
+        }
+        
+        @media (max-width: 768px) {
+            .cdv-stats-card {
+                padding: 1rem;
+            }
+            
+            .stats-card-icon {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .stats-card-icon svg {
+                width: 20px;
+                height: 20px;
+            }
+            
+            .stats-card-count {
+                font-size: 1.75rem;
+            }
+        }
+    </style>
     <script>
         // CSRF token pour les requêtes AJAX
         window.CSRF_TOKEN = '<?= htmlspecialchars(ensureCsrfToken(), ENT_QUOTES, 'UTF-8') ?>';
@@ -496,25 +641,51 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 <div class="lbl">Code Postal</div>
                                 <div class="val" id="cf-code_postal-home">—</div>
                             </div>
-                            <div class="cdv-field">
-                                <div class="lbl">SAV</div>
-                                <div class="val" id="cf-sav-stats">
-                                    <span id="cf-sav-count">—</span>
-                                    <span id="cf-sav-status" style="margin-left: 0.5rem; font-size: 0.85rem; color: #666;"></span>
+                            <div class="cdv-field cdv-stats-card cdv-stats-sav">
+                                <div class="stats-card-header">
+                                    <div class="stats-card-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                                        </svg>
+                                    </div>
+                                    <div class="stats-card-title">SAV</div>
+                                </div>
+                                <div class="stats-card-content" id="cf-sav-stats">
+                                    <div class="stats-card-count" id="cf-sav-count">—</div>
+                                    <div class="stats-card-status" id="cf-sav-status"></div>
                                 </div>
                             </div>
-                            <div class="cdv-field">
-                                <div class="lbl">Livraisons</div>
-                                <div class="val" id="cf-livraisons-stats">
-                                    <span id="cf-livraisons-count">—</span>
-                                    <span id="cf-livraisons-status" style="margin-left: 0.5rem; font-size: 0.85rem; color: #666;"></span>
+                            <div class="cdv-field cdv-stats-card cdv-stats-livraisons">
+                                <div class="stats-card-header">
+                                    <div class="stats-card-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="1" y="3" width="15" height="13"/>
+                                            <polygon points="16,8 20,8 23,11 23,16 16,16 16,8"/>
+                                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                                        </svg>
+                                    </div>
+                                    <div class="stats-card-title">Livraisons</div>
+                                </div>
+                                <div class="stats-card-content" id="cf-livraisons-stats">
+                                    <div class="stats-card-count" id="cf-livraisons-count">—</div>
+                                    <div class="stats-card-status" id="cf-livraisons-status"></div>
                                 </div>
                             </div>
-                            <div class="cdv-field">
-                                <div class="lbl">Factures</div>
-                                <div class="val" id="cf-factures-stats">
-                                    <span id="cf-factures-count">—</span>
-                                    <span id="cf-factures-status" style="margin-left: 0.5rem; font-size: 0.85rem; color: #666;"></span>
+                            <div class="cdv-field cdv-stats-card cdv-stats-factures">
+                                <div class="stats-card-header">
+                                    <div class="stats-card-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                                            <line x1="1" y1="10" x2="23" y2="10"/>
+                                            <path d="M7 14h.01M11 14h2"/>
+                                        </svg>
+                                    </div>
+                                    <div class="stats-card-title">Factures</div>
+                                </div>
+                                <div class="stats-card-content" id="cf-factures-stats">
+                                    <div class="stats-card-count" id="cf-factures-count">—</div>
+                                    <div class="stats-card-status" id="cf-factures-status"></div>
                                 </div>
                             </div>
                         </div>
@@ -1096,20 +1267,21 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     const ouvert = stats.sav.ouvert || 0;
                     const enCours = stats.sav.en_cours || 0;
                     const resolu = stats.sav.resolu || 0;
+                    const annule = stats.sav.annule || 0;
                     
                     if (savCountEl) savCountEl.textContent = total;
                     
                     if (savStatusEl) {
                         const statusParts = [];
-                        if (ouvert > 0) statusParts.push(`${ouvert} ouvert${ouvert > 1 ? 's' : ''}`);
-                        if (enCours > 0) statusParts.push(`${enCours} en cours`);
-                        if (resolu > 0) statusParts.push(`${resolu} résolu${resolu > 1 ? 's' : ''}`);
+                        if (ouvert > 0) statusParts.push(`<span style="color: #3b82f6; font-weight: 600;">${ouvert} ouvert${ouvert > 1 ? 's' : ''}</span>`);
+                        if (enCours > 0) statusParts.push(`<span style="color: #f59e0b; font-weight: 600;">${enCours} en cours</span>`);
+                        if (resolu > 0) statusParts.push(`<span style="color: #16a34a; font-weight: 600;">${resolu} résolu${resolu > 1 ? 's' : ''}</span>`);
+                        if (annule > 0) statusParts.push(`<span style="color: #6b7280;">${annule} annulé${annule > 1 ? 's' : ''}</span>`);
                         
                         if (statusParts.length > 0) {
-                            savStatusEl.textContent = '(' + statusParts.join(', ') + ')';
-                            savStatusEl.style.color = (ouvert > 0 || enCours > 0) ? '#f59e0b' : '#16a34a';
+                            savStatusEl.innerHTML = statusParts.join(' • ');
                         } else {
-                            savStatusEl.textContent = '';
+                            savStatusEl.innerHTML = '<span style="color: var(--text-secondary);">Aucun SAV</span>';
                         }
                     }
                 }
@@ -1120,20 +1292,21 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     const planifiee = stats.livraisons.planifiee || 0;
                     const enCours = stats.livraisons.en_cours || 0;
                     const livree = stats.livraisons.livree || 0;
+                    const annulee = stats.livraisons.annulee || 0;
                     
                     if (livraisonsCountEl) livraisonsCountEl.textContent = total;
                     
                     if (livraisonsStatusEl) {
                         const statusParts = [];
-                        if (planifiee > 0) statusParts.push(`${planifiee} planifiée${planifiee > 1 ? 's' : ''}`);
-                        if (enCours > 0) statusParts.push(`${enCours} en cours`);
-                        if (livree > 0) statusParts.push(`${livree} livrée${livree > 1 ? 's' : ''}`);
+                        if (planifiee > 0) statusParts.push(`<span style="color: #f59e0b; font-weight: 600;">${planifiee} planifiée${planifiee > 1 ? 's' : ''}</span>`);
+                        if (enCours > 0) statusParts.push(`<span style="color: #3b82f6; font-weight: 600;">${enCours} en cours</span>`);
+                        if (livree > 0) statusParts.push(`<span style="color: #16a34a; font-weight: 600;">${livree} livrée${livree > 1 ? 's' : ''}</span>`);
+                        if (annulee > 0) statusParts.push(`<span style="color: #6b7280;">${annulee} annulée${annulee > 1 ? 's' : ''}</span>`);
                         
                         if (statusParts.length > 0) {
-                            livraisonsStatusEl.textContent = '(' + statusParts.join(', ') + ')';
-                            livraisonsStatusEl.style.color = (planifiee > 0 || enCours > 0) ? '#f59e0b' : '#16a34a';
+                            livraisonsStatusEl.innerHTML = statusParts.join(' • ');
                         } else {
-                            livraisonsStatusEl.textContent = '';
+                            livraisonsStatusEl.innerHTML = '<span style="color: var(--text-secondary);">Aucune livraison</span>';
                         }
                     }
                 }
@@ -1149,15 +1322,14 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     
                     if (facturesStatusEl) {
                         const statusParts = [];
-                        if (enAttente > 0) statusParts.push(`${enAttente} en attente`);
-                        if (envoyee > 0) statusParts.push(`${envoyee} envoyée${envoyee > 1 ? 's' : ''}`);
-                        if (payee > 0) statusParts.push(`${payee} payée${payee > 1 ? 's' : ''}`);
+                        if (enAttente > 0) statusParts.push(`<span style="color: #f59e0b; font-weight: 600;">${enAttente} en attente</span>`);
+                        if (envoyee > 0) statusParts.push(`<span style="color: #3b82f6; font-weight: 600;">${envoyee} envoyée${envoyee > 1 ? 's' : ''}</span>`);
+                        if (payee > 0) statusParts.push(`<span style="color: #16a34a; font-weight: 600;">${payee} payée${payee > 1 ? 's' : ''}</span>`);
                         
                         if (statusParts.length > 0) {
-                            facturesStatusEl.textContent = '(' + statusParts.join(', ') + ')';
-                            facturesStatusEl.style.color = enAttente > 0 ? '#f59e0b' : (payee > 0 ? '#16a34a' : '#3b82f6');
+                            facturesStatusEl.innerHTML = statusParts.join(' • ');
                         } else {
-                            facturesStatusEl.textContent = '';
+                            facturesStatusEl.innerHTML = '<span style="color: var(--text-secondary);">Aucune facture</span>';
                         }
                     }
                 }
