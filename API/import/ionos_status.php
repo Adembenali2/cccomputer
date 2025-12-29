@@ -27,10 +27,32 @@ try {
     require_once __DIR__ . '/../../includes/api_helpers.php';
     
     initApi();
-    requireApiAuth();
     
-    // Récupérer PDO
-    $pdo = getPdoOrFail();
+    // Pour ce endpoint, on retourne une réponse gracieuse si non authentifié
+    // pour éviter le spam dans les logs Railway (appelé depuis dashboard même si non connecté)
+    if (empty($_SESSION['user_id'])) {
+        echo json_encode([
+            'ok' => true,
+            'server_time' => date('Y-m-d H:i:s'),
+            'has_run' => false,
+            'lastRun' => null
+        ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT);
+        exit;
+    }
+    
+    // Récupérer PDO (gérer gracieusement les erreurs)
+    try {
+        $pdo = getPdo();
+    } catch (RuntimeException $e) {
+        error_log('ionos_status.php: getPdo() failed - ' . $e->getMessage());
+        echo json_encode([
+            'ok' => true,
+            'server_time' => date('Y-m-d H:i:s'),
+            'has_run' => false,
+            'lastRun' => null
+        ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT);
+        exit;
+    }
     
     // Récupérer le dernier run IONOS depuis import_run
     // Filtrer via msg LIKE '%"type":"ionos"%'
