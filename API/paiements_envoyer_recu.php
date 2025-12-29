@@ -85,22 +85,69 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Aucun reçu disponible pour ce paiement'], 400);
     }
     
-    // Trouver le chemin du PDF
+    // Trouver le chemin du PDF du reçu
     $pdfPath = null;
-    try {
-        $pdfPath = MailerService::findPdfPath($paiement['recu_path']);
-    } catch (MailerException $e) {
-        error_log('[paiements_envoyer_recu] Reçu introuvable, tentative de régénération: ' . $e->getMessage());
+    $recuPath = $paiement['recu_path'];
+    
+    // Fonction helper pour trouver le chemin absolu d'un reçu
+    $findRecuPath = function($relativePath) {
+        $possibleBaseDirs = [];
         
-        // Si le reçu n'existe pas mais qu'il est marqué comme généré, on le régénère
+        $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+        if ($docRoot !== '' && is_dir($docRoot)) {
+            $possibleBaseDirs[] = $docRoot;
+        }
+        
+        $projectDir = dirname(__DIR__);
+        if (is_dir($projectDir)) {
+            $possibleBaseDirs[] = $projectDir;
+        }
+        
+        if (is_dir('/app')) {
+            $possibleBaseDirs[] = '/app';
+        }
+        if (is_dir('/var/www/html')) {
+            $possibleBaseDirs[] = '/var/www/html';
+        }
+        
+        // Normaliser le chemin (enlever le slash initial si présent)
+        $normalizedPath = ltrim($relativePath, '/');
+        
+        foreach ($possibleBaseDirs as $baseDir) {
+            $fullPath = rtrim($baseDir, '/') . '/' . $normalizedPath;
+            if (file_exists($fullPath) && is_readable($fullPath)) {
+                return $fullPath;
+            }
+        }
+        
+        return null;
+    };
+    
+    // Essayer de trouver le reçu
+    $pdfPath = $findRecuPath($recuPath);
+    
+    // Si le reçu n'existe pas, essayer de le régénérer
+    if (!$pdfPath) {
+        error_log('[paiements_envoyer_recu] Reçu introuvable: ' . $recuPath);
+        
+        // Si le reçu est marqué comme généré, on le régénère
         if ($paiement['recu_genere']) {
-            require_once __DIR__ . '/paiements_generer_recu.php';
-            $newRecuPath = generateRecuPDF($pdo, $paiementId);
-            $pdfPath = MailerService::findPdfPath($newRecuPath);
-            
-            // Mettre à jour le chemin dans la base
-            $stmt = $pdo->prepare("UPDATE paiements SET recu_path = :recu_path WHERE id = :id");
-            $stmt->execute([':recu_path' => $newRecuPath, ':id' => $paiementId]);
+            try {
+                require_once __DIR__ . '/paiements_generer_recu.php';
+                $newRecuPath = generateRecuPDF($pdo, $paiementId);
+                $pdfPath = $findRecuPath($newRecuPath);
+                
+                if (!$pdfPath) {
+                    jsonResponse(['ok' => false, 'error' => 'Impossible de trouver le reçu après régénération'], 500);
+                }
+                
+                // Mettre à jour le chemin dans la base
+                $stmt = $pdo->prepare("UPDATE paiements SET recu_path = :recu_path WHERE id = :id");
+                $stmt->execute([':recu_path' => $newRecuPath, ':id' => $paiementId]);
+            } catch (Throwable $e) {
+                error_log('[paiements_envoyer_recu] Erreur lors de la régénération: ' . $e->getMessage());
+                jsonResponse(['ok' => false, 'error' => 'Erreur lors de la régénération du reçu: ' . $e->getMessage()], 500);
+            }
         } else {
             jsonResponse(['ok' => false, 'error' => 'Reçu introuvable et non généré'], 404);
         }
