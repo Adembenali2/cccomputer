@@ -767,6 +767,7 @@ $recentPayments = safeFetchAll(
 
 // Dernières factures (pour affichage dans le profil)
 // On ne charge que quelques éléments pour ne pas alourdir la page
+// Récupérer aussi les informations de paiement liées (le plus récent paiement par facture)
 $recentFactures = safeFetchAll(
     $pdo,
     "
@@ -786,9 +787,24 @@ $recentFactures = safeFetchAll(
         c.id AS client_id,
         c.raison_sociale AS client_nom,
         c.numero_client AS client_code,
-        c.email AS client_email
+        c.email AS client_email,
+        p.mode_paiement,
+        p.recu_path AS paiement_justificatif
     FROM factures f
     LEFT JOIN clients c ON f.id_client = c.id
+    LEFT JOIN (
+        SELECT 
+            p1.id_facture,
+            p1.mode_paiement,
+            p1.recu_path
+        FROM paiements p1
+        INNER JOIN (
+            SELECT id_facture, MAX(date_paiement) as max_date
+            FROM paiements
+            WHERE id_facture IS NOT NULL
+            GROUP BY id_facture
+        ) p2 ON p1.id_facture = p2.id_facture AND p1.date_paiement = p2.max_date
+    ) p ON p.id_facture = f.id
     ORDER BY f.date_facture DESC, f.created_at DESC
     LIMIT 30
     ",
@@ -1416,16 +1432,18 @@ function decode_msg($row) {
             white-space: nowrap;
         }
 
-        .factures-table thead th:nth-child(1) { width: 7%; } /* Date */
-        .factures-table thead th:nth-child(2) { width: 9%; } /* Numéro */
-        .factures-table thead th:nth-child(3) { width: 14%; } /* Client */
-        .factures-table thead th:nth-child(4) { width: 8%; } /* Type */
-        .factures-table thead th:nth-child(5) { width: 8%; } /* Montant HT */
-        .factures-table thead th:nth-child(6) { width: 7%; } /* TVA */
-        .factures-table thead th:nth-child(7) { width: 8%; } /* Total TTC */
-        .factures-table thead th:nth-child(8) { width: 10%; } /* Statut */
-        .factures-table thead th:nth-child(9) { width: 9%; } /* PDF */
-        .factures-table thead th:nth-child(10) { width: 20%; } /* Actions */
+        .factures-table thead th:nth-child(1) { width: 6%; } /* Date */
+        .factures-table thead th:nth-child(2) { width: 7%; } /* Numéro */
+        .factures-table thead th:nth-child(3) { width: 11%; } /* Client */
+        .factures-table thead th:nth-child(4) { width: 6%; } /* Type */
+        .factures-table thead th:nth-child(5) { width: 6%; } /* Montant HT */
+        .factures-table thead th:nth-child(6) { width: 5%; } /* TVA */
+        .factures-table thead th:nth-child(7) { width: 6%; } /* Total TTC */
+        .factures-table thead th:nth-child(8) { width: 8%; } /* Statut */
+        .factures-table thead th:nth-child(9) { width: 7%; } /* PDF */
+        .factures-table thead th:nth-child(10) { width: 8%; } /* Méthode paiement */
+        .factures-table thead th:nth-child(11) { width: 8%; } /* Justificatif */
+        .factures-table thead th:nth-child(12) { width: 22%; } /* Actions */
 
         .factures-table tbody tr {
             border-bottom: 1px solid var(--border-color);
@@ -1448,7 +1466,8 @@ function decode_msg($row) {
         .factures-table tbody td:nth-child(4),
         .factures-table tbody td:nth-child(5),
         .factures-table tbody td:nth-child(6),
-        .factures-table tbody td:nth-child(7) {
+        .factures-table tbody td:nth-child(7),
+        .factures-table tbody td:nth-child(10) {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -1467,23 +1486,23 @@ function decode_msg($row) {
         .factures-table .actions form.facture-status-form {
             display: inline-flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.5rem;
             flex-wrap: wrap;
-            padding: 0.5rem;
+            padding: 0.25rem;
             margin: 0;
             width: 100%;
-            min-width: 280px;
+            min-width: 240px;
         }
 
         .factures-table .actions select.facture-status-select {
-            padding: 0.5rem 0.75rem;
+            padding: 0.4rem 0.6rem;
             border: 2px solid var(--border-color);
             border-radius: var(--radius-md);
             background: var(--bg-primary);
             color: var(--text-primary);
-            font-size: 0.875rem;
-            min-width: 150px;
-            max-width: 180px;
+            font-size: 0.8rem;
+            min-width: 120px;
+            max-width: 150px;
             flex: 1 1 auto;
             transition: all 0.2s ease;
             cursor: pointer;
@@ -1502,8 +1521,8 @@ function decode_msg($row) {
         }
 
         .factures-table .actions button.facture-update-btn {
-            padding: 0.5rem 1.25rem;
-            font-size: 0.875rem;
+            padding: 0.4rem 0.9rem;
+            font-size: 0.8rem;
             white-space: nowrap;
             transition: all 0.2s ease;
             margin: 0;
@@ -1588,24 +1607,39 @@ function decode_msg($row) {
             flex-shrink: 0;
         }
 
-        @media (max-width: 1024px) {
+        @media (max-width: 1400px) {
             .factures-table {
                 font-size: 0.8rem;
             }
 
             .factures-table thead th,
             .factures-table tbody td {
-                padding: 0.6rem 0.4rem;
+                padding: 0.5rem 0.35rem;
             }
 
             .factures-table thead th {
                 font-size: 0.75rem;
             }
+        }
+
+        @media (max-width: 1024px) {
+            .factures-table {
+                font-size: 0.75rem;
+            }
+
+            .factures-table thead th,
+            .factures-table tbody td {
+                padding: 0.5rem 0.3rem;
+            }
+
+            .factures-table thead th {
+                font-size: 0.7rem;
+            }
 
             .factures-table .actions form.facture-status-form {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 0.5rem;
+                gap: 0.4rem;
                 min-width: 100%;
             }
 
@@ -1620,8 +1654,8 @@ function decode_msg($row) {
             }
 
             .btn-pdf-facture {
-                padding: 0.45rem 0.75rem;
-                font-size: 0.8rem;
+                padding: 0.4rem 0.6rem;
+                font-size: 0.75rem;
             }
         }
 
@@ -2501,13 +2535,15 @@ function decode_msg($row) {
                             <th scope="col">Total TTC</th>
                             <th scope="col">Statut</th>
                             <th scope="col">PDF</th>
+                            <th scope="col">Méthode paiement</th>
+                            <th scope="col">Justificatif</th>
                             <th scope="col">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($recentFactures)): ?>
                             <tr>
-                                <td colspan="10" class="aucun" role="cell">Aucune facture enregistrée.</td>
+                                <td colspan="12" class="aucun" role="cell">Aucune facture enregistrée.</td>
                             </tr>
                         <?php else: ?>
                             <?php
@@ -2525,11 +2561,20 @@ function decode_msg($row) {
                                 'en_retard' => 'statut-en-retard',
                                 'annulee' => 'statut-annulee'
                             ];
+                            $modePaiementLabels = [
+                                'virement' => 'Virement',
+                                'cb' => 'Carte bancaire',
+                                'cheque' => 'Chèque',
+                                'especes' => 'Espèces',
+                                'autre' => 'Autre'
+                            ];
                             ?>
                             <?php foreach ($recentFactures as $f): ?>
                                 <?php
                                 $status = $f['statut'] ?? 'brouillon';
                                 $statusClass = $statusClasses[$status] ?? 'statut-brouillon';
+                                $modePaiement = $f['mode_paiement'] ?? null;
+                                $justificatif = $f['paiement_justificatif'] ?? null;
                                 ?>
                                 <tr role="row">
                                     <td data-label="Date" role="cell">
@@ -2600,6 +2645,34 @@ function decode_msg($row) {
                                             </a>
                                         <?php else: ?>
                                             <span class="text-muted" style="font-size: 0.875rem; padding: 0.5rem 0;">Non généré</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Méthode paiement" role="cell">
+                                        <?php if (!empty($modePaiement)): ?>
+                                            <span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 0.875rem; color: var(--text-primary);">
+                                                <?= h($modePaiementLabels[$modePaiement] ?? $modePaiement) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Justificatif" role="cell">
+                                        <?php if (!empty($justificatif)): ?>
+                                            <a href="<?= h($justificatif) ?>" 
+                                               target="_blank" 
+                                               class="btn-justificatif"
+                                               title="Voir le justificatif de paiement"
+                                               aria-label="Voir le justificatif de paiement">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                                </svg>
+                                                Voir
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
                                         <?php endif; ?>
                                     </td>
                                     <td data-label="Actions" class="actions" role="cell">
