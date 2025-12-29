@@ -203,13 +203,27 @@ if ($tableExists) {
 // ============================================
 // Configuration globale
 // ============================================
-const CONFIG = {
+    const CONFIG = {
     currentUserId: <?= $currentUserId ?>,
     currentUserName: <?= json_encode($currentUserName) ?>,
     csrfToken: <?= json_encode($CSRF) ?>,
     refreshInterval: 2000, // 2 secondes
     maxMessageLength: 5000
 };
+
+// Vérification de sécurité pour éviter les erreurs
+if (typeof CONFIG.currentUserId === 'undefined' || CONFIG.currentUserId === null) {
+    console.error('Erreur: currentUserId non défini');
+    CONFIG.currentUserId = 0;
+}
+if (typeof CONFIG.currentUserName === 'undefined' || CONFIG.currentUserName === null) {
+    console.error('Erreur: currentUserName non défini');
+    CONFIG.currentUserName = 'Utilisateur';
+}
+if (typeof CONFIG.csrfToken === 'undefined' || CONFIG.csrfToken === null) {
+    console.error('Erreur: csrfToken non défini');
+    CONFIG.csrfToken = '';
+}
 
 // ============================================
 // Éléments DOM
@@ -423,15 +437,30 @@ function getInitials(prenom, nom) {
 }
 
 function renderMessage(message) {
-    const isMe = message.is_me;
+    // Vérification de sécurité
+    if (!message || typeof message !== 'object') {
+        console.error('Message invalide:', message);
+        return '';
+    }
+    
+    const isMe = message.is_me === true || message.is_me === 1;
     const messageClass = isMe ? 'message-me' : 'message-other';
     const authorName = isMe ? 'Moi' : escapeHtml((message.user_prenom || '') + ' ' + (message.user_nom || ''));
     const userInfo = isMe ? '' : `<span class="message-author">${authorName}</span>`;
     
-    // Avatar avec initiales
-    const avatarInitials = isMe 
-        ? getInitials(CONFIG.currentUserName.split(' ')[0] || '', CONFIG.currentUserName.split(' ')[1] || '')
-        : getInitials(message.user_prenom || '', message.user_nom || '');
+    // Avatar avec initiales - avec vérification de sécurité
+    let avatarInitials = '?';
+    try {
+        if (isMe) {
+            const nameParts = (CONFIG.currentUserName || '').split(' ');
+            avatarInitials = getInitials(nameParts[0] || '', nameParts[1] || '');
+        } else {
+            avatarInitials = getInitials(message.user_prenom || '', message.user_nom || '');
+        }
+    } catch (e) {
+        console.error('Erreur génération initiales:', e);
+        avatarInitials = '?';
+    }
     const avatarHtml = `<div class="message-avatar" aria-hidden="true">${avatarInitials}</div>`;
     
     let messageContent = '';

@@ -1067,12 +1067,30 @@ function decode_msg($row) {
         /* Styles améliorés pour le tableau des factures */
         .factures-panel {
             margin-top: 2rem;
+            padding: 1.5rem;
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .factures-panel .panel-title {
+            margin-bottom: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .factures-panel .panel-subtitle {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.5;
         }
 
         .factures-panel .table-responsive {
             overflow-x: visible;
             width: 100%;
             max-width: 100%;
+            margin-top: 1rem;
         }
 
         .factures-table {
@@ -1143,45 +1161,57 @@ function decode_msg($row) {
 
         .factures-table .actions {
             white-space: nowrap;
+            padding: 0.75rem 0.5rem;
         }
 
-        .factures-table .actions form {
+        .factures-table .actions form.facture-status-form {
             display: inline-flex;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.75rem;
             flex-wrap: wrap;
+            padding: 0.5rem;
+            margin: 0;
+            width: 100%;
+            min-width: 280px;
         }
 
-        .factures-table .actions select {
-            padding: 0.4rem 0.5rem;
+        .factures-table .actions select.facture-status-select {
+            padding: 0.5rem 0.75rem;
             border: 2px solid var(--border-color);
             border-radius: var(--radius-md);
             background: var(--bg-primary);
             color: var(--text-primary);
-            font-size: 0.85rem;
-            min-width: 140px;
-            max-width: 160px;
+            font-size: 0.875rem;
+            min-width: 150px;
+            max-width: 180px;
+            flex: 1 1 auto;
             transition: all 0.2s ease;
+            cursor: pointer;
         }
 
-        .factures-table .actions select:hover {
+        .factures-table .actions select.facture-status-select:hover {
             border-color: var(--accent-primary);
+            background: var(--bg-secondary);
         }
 
-        .factures-table .actions select:focus {
+        .factures-table .actions select.facture-status-select:focus {
             outline: none;
             border-color: var(--accent-primary);
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            background: var(--bg-primary);
         }
 
-        .factures-table .actions button {
-            padding: 0.4rem 0.75rem;
-            font-size: 0.85rem;
+        .factures-table .actions button.facture-update-btn {
+            padding: 0.5rem 1.25rem;
+            font-size: 0.875rem;
             white-space: nowrap;
             transition: all 0.2s ease;
+            margin: 0;
+            font-weight: 500;
+            flex: 0 0 auto;
         }
 
-        .factures-table .actions button:hover {
+        .factures-table .actions button.facture-update-btn:hover {
             transform: translateY(-1px);
             box-shadow: var(--shadow-md);
         }
@@ -1195,6 +1225,36 @@ function decode_msg($row) {
             text-transform: uppercase;
             letter-spacing: 0.3px;
             white-space: nowrap;
+        }
+
+        /* Bouton PDF pour les factures */
+        .btn-pdf-facture {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.875rem;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            text-decoration: none;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-sm);
+            white-space: nowrap;
+        }
+
+        .btn-pdf-facture:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            color: white;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .btn-pdf-facture svg {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
         }
 
         @media (max-width: 1024px) {
@@ -1211,19 +1271,26 @@ function decode_msg($row) {
                 font-size: 0.75rem;
             }
 
-            .factures-table .actions form {
+            .factures-table .actions form.facture-status-form {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 0.4rem;
+                gap: 0.5rem;
+                min-width: 100%;
             }
 
-            .factures-table .actions select {
+            .factures-table .actions select.facture-status-select {
                 width: 100%;
                 max-width: 100%;
+                min-width: 100%;
             }
 
-            .factures-table .actions button {
+            .factures-table .actions button.facture-update-btn {
                 width: 100%;
+            }
+
+            .btn-pdf-facture {
+                padding: 0.45rem 0.75rem;
+                font-size: 0.8rem;
             }
         }
 
@@ -2111,8 +2178,8 @@ function decode_msg($row) {
                         <?php else: ?>
                             <?php
                             $statusLabels = [
-                                'brouillon' => 'En attente',
-                                'envoyee' => 'Prêt à envoyer',
+                                'brouillon' => 'Brouillon',
+                                'envoyee' => 'Envoyée',
                                 'payee' => 'Payée',
                                 'en_retard' => 'En retard',
                                 'annulee' => 'Annulée'
@@ -2123,6 +2190,13 @@ function decode_msg($row) {
                                 'payee' => 'success',
                                 'en_retard' => 'muted',
                                 'annulee' => 'muted'
+                            ];
+                            $statusColors = [
+                                'brouillon' => '#6b7280',
+                                'envoyee' => '#3b82f6',
+                                'payee' => '#10b981',
+                                'en_retard' => '#ef4444',
+                                'annulee' => '#9ca3af'
                             ];
                             ?>
                             <?php foreach ($recentFactures as $f): ?>
@@ -2186,7 +2260,7 @@ function decode_msg($row) {
                                         <?php if (!empty($f['pdf_path'])): ?>
                                             <a href="/public/view_facture.php?id=<?= (int)$f['id'] ?>" 
                                                target="_blank" 
-                                               class="btn-justificatif"
+                                               class="btn-justificatif btn-pdf-facture"
                                                title="Voir le PDF de la facture"
                                                aria-label="Voir le PDF de la facture <?= h($f['numero']) ?>">
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2198,23 +2272,23 @@ function decode_msg($row) {
                                                 Voir PDF
                                             </a>
                                         <?php else: ?>
-                                            <span class="text-muted" style="font-size: 0.875rem;">Non généré</span>
+                                            <span class="text-muted" style="font-size: 0.875rem; padding: 0.5rem 0;">Non généré</span>
                                         <?php endif; ?>
                                     </td>
                                     <td data-label="Actions" class="actions" role="cell">
-                                        <form method="post" action="/public/profil.php#facturesPanel" class="inline">
+                                        <form method="post" action="/public/profil.php#facturesPanel" class="inline facture-status-form">
                                             <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
                                             <input type="hidden" name="action" value="update_invoice_status">
                                             <input type="hidden" name="facture_id" value="<?= (int)$f['id'] ?>">
                                             <label for="facture-status-<?= (int)$f['id'] ?>" class="sr-only">Statut</label>
-                                            <select id="facture-status-<?= (int)$f['id'] ?>" name="statut">
-                                                <option value="brouillon" <?= $status === 'brouillon' ? 'selected' : '' ?>>En attente</option>
-                                                <option value="envoyee" <?= $status === 'envoyee' ? 'selected' : '' ?>>Prêt à envoyer</option>
+                                            <select id="facture-status-<?= (int)$f['id'] ?>" name="statut" class="facture-status-select">
+                                                <option value="brouillon" <?= $status === 'brouillon' ? 'selected' : '' ?>>Brouillon</option>
+                                                <option value="envoyee" <?= $status === 'envoyee' ? 'selected' : '' ?>>Envoyée</option>
                                                 <option value="payee" <?= $status === 'payee' ? 'selected' : '' ?>>Payée</option>
                                                 <option value="en_retard" <?= $status === 'en_retard' ? 'selected' : '' ?>>En retard</option>
                                                 <option value="annulee" <?= $status === 'annulee' ? 'selected' : '' ?>>Annulée</option>
                                             </select>
-                                            <button type="submit" class="fiche-action-btn" style="margin-left: 0.5rem;">
+                                            <button type="submit" class="fiche-action-btn facture-update-btn">
                                                 Mettre à jour
                                             </button>
                                         </form>
