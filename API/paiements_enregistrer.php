@@ -42,6 +42,53 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Date de paiement invalide'], 400);
     }
     
+    // Générer automatiquement la référence si elle n'est pas fournie
+    if (empty($reference)) {
+        // Extraire année, mois, jour de la date de paiement
+        $dateParts = explode('-', $datePaiement);
+        $annee = $dateParts[0];
+        $mois = $dateParts[1];
+        $jour = $dateParts[2];
+        
+        // Trouver le dernier numéro pour cette date
+        $stmt = $pdo->prepare("
+            SELECT reference 
+            FROM paiements 
+            WHERE reference LIKE :pattern 
+            ORDER BY reference DESC 
+            LIMIT 1
+        ");
+        $pattern = 'P' . $annee . $mois . $jour . '%';
+        $stmt->execute([':pattern' => $pattern]);
+        $dernierRef = $stmt->fetchColumn();
+        
+        // Déterminer le prochain numéro
+        $numero = 1;
+        if ($dernierRef) {
+            // Extraire le numéro de la dernière référence (les 3 derniers chiffres)
+            $dernierNumero = (int)substr($dernierRef, -3);
+            $numero = $dernierNumero + 1;
+        }
+        
+        // Formater le numéro sur 3 chiffres
+        $numeroFormate = str_pad($numero, 3, '0', STR_PAD_LEFT);
+        
+        // Générer la référence : P + année + mois + jour + numéro
+        $reference = 'P' . $annee . $mois . $jour . $numeroFormate;
+        
+        // Vérifier l'unicité (sécurité supplémentaire)
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM paiements WHERE reference = :reference");
+        $stmt->execute([':reference' => $reference]);
+        $exists = $stmt->fetchColumn() > 0;
+        
+        if ($exists) {
+            // Si la référence existe déjà (cas très rare), incrémenter
+            $numero++;
+            $numeroFormate = str_pad($numero, 3, '0', STR_PAD_LEFT);
+            $reference = 'P' . $annee . $mois . $jour . $numeroFormate;
+        }
+    }
+    
     // Vérifier que la facture existe et récupérer les infos
     $stmt = $pdo->prepare("
         SELECT f.id, f.id_client, f.numero, f.montant_ttc, f.statut
@@ -169,7 +216,8 @@ try {
             'message' => 'Paiement enregistré avec succès',
             'paiement_id' => $paiementId,
             'facture_id' => $factureId,
-            'nouveau_statut' => $nouveauStatutFacture
+            'nouveau_statut' => $nouveauStatutFacture,
+            'reference' => $reference
         ]);
         
     } catch (Exception $e) {

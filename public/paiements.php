@@ -2349,8 +2349,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
                     <div class="modal-form-group">
                         <label for="payerReference">Référence du paiement</label>
-                        <input type="text" id="payerReference" name="reference" placeholder="Ex: VIR-2025-001, CHQ-001, etc.">
-                        <div class="input-hint">Numéro de chèque, référence de virement, etc.</div>
+                        <input type="text" id="payerReference" name="reference" readonly style="background-color: var(--bg-secondary); cursor: not-allowed;" placeholder="Générée automatiquement">
+                        <div class="input-hint">La référence sera générée automatiquement au format P + année + mois + jour + numéro unique (ex: P20251229001)</div>
                     </div>
 
                     <div class="modal-form-group">
@@ -5429,6 +5429,12 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 if (dateInput) {
                     dateInput.value = new Date().toISOString().split('T')[0];
                 }
+                // Réinitialiser la référence (sera générée automatiquement)
+                const referenceInput = document.getElementById('payerReference');
+                if (referenceInput) {
+                    referenceInput.value = '';
+                    referenceInput.placeholder = 'Générée automatiquement';
+                }
             }
             
             // Charger les factures non payées
@@ -5548,7 +5554,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 console.log('Réponse reçue:', result);
                 
                 if (result.ok) {
-                    showMessage('Paiement enregistré avec succès !', 'success');
+                    const refMessage = result.reference ? ` Référence: ${result.reference}` : '';
+                    showMessage('Paiement enregistré avec succès !' + refMessage, 'success');
                     closePayerModal();
                     // Recharger la liste des paiements si le modal est ouvert
                     if (document.getElementById('paiementsModalOverlay')?.classList.contains('active')) {
