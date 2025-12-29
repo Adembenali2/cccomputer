@@ -86,25 +86,28 @@ try {
             
             // 2. Vérifier si le client a reçu un relevé dans le dernier mois
             $dateLimite = date('Y-m-d', strtotime('-1 month'));
+            // Attention : avec PDO MySQL en mode prepared natif, on ne peut pas réutiliser le même
+            // paramètre nommé plusieurs fois dans la requête, sinon on obtient HY093.
+            // On utilise donc 2 paramètres différents avec la même valeur.
             $stmt = $pdo->prepare("
                 SELECT MAX(Timestamp) as dernier_releve
                 FROM (
                     SELECT Timestamp
                     FROM compteur_relevee cr
                     INNER JOIN photocopieurs_clients pc ON cr.mac_norm = pc.mac_norm
-                    WHERE pc.id_client = :client_id
+                    WHERE pc.id_client = :client_id1
                       AND cr.mac_norm IS NOT NULL
                       AND cr.mac_norm != ''
                     UNION ALL
                     SELECT Timestamp
                     FROM compteur_relevee_ancien cra
                     INNER JOIN photocopieurs_clients pc2 ON cra.mac_norm = pc2.mac_norm
-                    WHERE pc2.id_client = :client_id
+                    WHERE pc2.id_client = :client_id2
                       AND cra.mac_norm IS NOT NULL
                       AND cra.mac_norm != ''
                 ) AS combined
             ");
-            $stmt->execute([':client_id' => $clientId]);
+            $stmt->execute([':client_id1' => $clientId, ':client_id2' => $clientId]);
             $resultReleve = $stmt->fetch(PDO::FETCH_ASSOC);
             $dernierReleve = $resultReleve['dernier_releve'] ?? null;
             

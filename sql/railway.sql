@@ -21,6 +21,7 @@ CREATE TABLE `chatroom_messages` (
   `message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Contenu du message',
   `date_envoi` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date et heure d''envoi du message',
   `mentions` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT 'JSON array des IDs utilisateurs mentionnés (@username)',
+  `image_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Chemin relatif vers l''image uploadée (ex: /uploads/chatroom/filename.jpg)',
   `type_lien` enum('client','livraison','sav') COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Type de lien associé',
   `id_lien` int DEFAULT NULL COMMENT 'ID du client/livraison/SAV lié',
   PRIMARY KEY (`id`),
@@ -29,7 +30,7 @@ CREATE TABLE `chatroom_messages` (
   KEY `idx_type_lien` (`type_lien`,`id_lien`),
   KEY `idx_date_envoi_desc` (`date_envoi` DESC),
   CONSTRAINT `fk_chatroom_messages_user` FOREIGN KEY (`id_user`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `chatroom_notifications`;
 CREATE TABLE `chatroom_notifications` (
@@ -46,7 +47,21 @@ CREATE TABLE `chatroom_notifications` (
   KEY `idx_date_creation` (`date_creation`),
   CONSTRAINT `fk_chatroom_notif_message` FOREIGN KEY (`id_message`) REFERENCES `chatroom_messages` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_chatroom_notif_user` FOREIGN KEY (`id_user`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=61 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=126 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `client_geocode`;
+CREATE TABLE `client_geocode` (
+  `id_client` int NOT NULL,
+  `address_hash` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Hash MD5 de l''adresse géocodée',
+  `lat` decimal(10,8) DEFAULT NULL COMMENT 'Latitude',
+  `lng` decimal(11,8) DEFAULT NULL COMMENT 'Longitude',
+  `display_name` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Nom d''affichage retourné par le géocodage',
+  `geocoded_at` datetime DEFAULT NULL COMMENT 'Date du premier géocodage',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Date de dernière mise à jour',
+  PRIMARY KEY (`id_client`),
+  KEY `idx_address_hash` (`address_hash`),
+  CONSTRAINT `fk_client_geocode_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `client_stock`;
 CREATE TABLE `client_stock` (
@@ -62,21 +77,7 @@ CREATE TABLE `client_stock` (
   KEY `idx_client_stock_client` (`id_client`),
   KEY `idx_client_stock_product` (`product_type`,`product_id`),
   CONSTRAINT `fk_client_stock_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-DROP TABLE IF EXISTS `client_geocode`;
-CREATE TABLE `client_geocode` (
-  `id_client` int NOT NULL,
-  `address_hash` varchar(32) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Hash MD5 de l''adresse géocodée',
-  `lat` decimal(10,8) DEFAULT NULL COMMENT 'Latitude',
-  `lng` decimal(11,8) DEFAULT NULL COMMENT 'Longitude',
-  `display_name` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Nom d''affichage retourné par le géocodage',
-  `geocoded_at` datetime DEFAULT NULL COMMENT 'Date du premier géocodage',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Date de dernière mise à jour',
-  PRIMARY KEY (`id_client`),
-  KEY `idx_address_hash` (`address_hash`),
-  CONSTRAINT `fk_client_geocode_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `clients`;
 CREATE TABLE `clients` (
@@ -108,7 +109,12 @@ CREATE TABLE `clients` (
   `pdfcontrat` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `iban` varchar(34) COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_clients_numero` (`numero_client`)
+  UNIQUE KEY `uq_clients_numero` (`numero_client`),
+  KEY `idx_clients_email` (`email`),
+  KEY `idx_clients_raison_sociale` (`raison_sociale`(100)),
+  KEY `idx_clients_ville` (`ville`),
+  KEY `idx_clients_code_postal` (`code_postal`),
+  KEY `idx_clients_raison_ville` (`raison_sociale`(50),`ville`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `compteur_relevee`;
@@ -143,8 +149,9 @@ CREATE TABLE `compteur_relevee` (
   `mac_norm` char(12) COLLATE utf8mb4_general_ci GENERATED ALWAYS AS (replace(upper(`MacAddress`),_utf8mb4':',_utf8mb4'')) STORED,
   PRIMARY KEY (`id`),
   KEY `ix_compteur_date` (`Timestamp`),
-  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`)
-) ENGINE=InnoDB AUTO_INCREMENT=109978 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`),
+  KEY `idx_compteur_mac_ts_desc` (`mac_norm`,`Timestamp` DESC)
+) ENGINE=InnoDB AUTO_INCREMENT=112710 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `compteur_relevee_ancien`;
 CREATE TABLE `compteur_relevee_ancien` (
@@ -179,8 +186,74 @@ CREATE TABLE `compteur_relevee_ancien` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_mac_ts_ancien` (`mac_norm`,`Timestamp`),
   KEY `ix_compteur_date` (`Timestamp`),
-  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`)
-) ENGINE=InnoDB AUTO_INCREMENT=149430 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`),
+  KEY `idx_compteur_ancien_mac_ts_desc` (`mac_norm`,`Timestamp` DESC)
+) ENGINE=InnoDB AUTO_INCREMENT=150544 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `email_logs`;
+CREATE TABLE `email_logs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `facture_id` int DEFAULT NULL COMMENT 'ID de la facture liée (peut être NULL pour autres types)',
+  `type_email` enum('facture','paiement','autre') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'facture' COMMENT 'Type d''email envoyé',
+  `destinataire` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Adresse email du destinataire',
+  `sujet` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Sujet de l''email',
+  `statut` enum('pending','sent','failed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending' COMMENT 'Statut de l''envoi',
+  `message_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Message ID retourné par le serveur SMTP (pour traçabilité)',
+  `error_message` text COLLATE utf8mb4_general_ci COMMENT 'Message d''erreur en cas d''échec',
+  `sent_at` datetime DEFAULT NULL COMMENT 'Date et heure d''envoi effectif',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date de création de l''entrée',
+  PRIMARY KEY (`id`),
+  KEY `idx_email_logs_facture` (`facture_id`),
+  KEY `idx_email_logs_statut` (`statut`),
+  KEY `idx_email_logs_created_at` (`created_at`),
+  KEY `idx_email_logs_destinataire` (`destinataire`),
+  CONSTRAINT `fk_email_logs_facture` FOREIGN KEY (`facture_id`) REFERENCES `factures` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Journal des envois d''emails (factures, paiements, etc.)';
+
+DROP TABLE IF EXISTS `facture_lignes`;
+CREATE TABLE `facture_lignes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_facture` int NOT NULL,
+  `description` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `type` enum('N&B','Couleur','Service','Produit') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `quantite` decimal(10,2) NOT NULL DEFAULT '1.00',
+  `prix_unitaire_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `total_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `ordre` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_facture_lignes_facture` (`id_facture`),
+  CONSTRAINT `fk_facture_lignes_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=80 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `factures`;
+CREATE TABLE `factures` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_client` int NOT NULL,
+  `numero` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `date_facture` date NOT NULL,
+  `date_debut_periode` date DEFAULT NULL COMMENT 'Date de début de période de consommation (20 du mois)',
+  `date_fin_periode` date DEFAULT NULL COMMENT 'Date de fin de période de consommation (20 du mois suivant)',
+  `type` enum('Consommation','Achat','Service') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Consommation',
+  `montant_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `tva` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `montant_ttc` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `statut` enum('brouillon','envoyee','payee','en_retard','annulee') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'brouillon',
+  `pdf_genere` tinyint(1) NOT NULL DEFAULT '0',
+  `pdf_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email_envoye` tinyint(1) NOT NULL DEFAULT '0',
+  `date_envoi_email` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL COMMENT 'ID de l''utilisateur qui a créé la facture',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_factures_numero` (`numero`),
+  KEY `idx_factures_client` (`id_client`),
+  KEY `idx_factures_date` (`date_facture`),
+  KEY `idx_factures_statut` (`statut`),
+  KEY `idx_factures_created_by` (`created_by`),
+  CONSTRAINT `fk_factures_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_factures_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `historique`;
 CREATE TABLE `historique` (
@@ -192,8 +265,10 @@ CREATE TABLE `historique` (
   `date_action` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`),
-  KEY `idx_date_action` (`date_action`)
-) ENGINE=InnoDB AUTO_INCREMENT=555 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  KEY `idx_date_action` (`date_action`),
+  KEY `idx_historique_user_date` (`user_id`,`date_action` DESC),
+  KEY `idx_historique_date_action` (`date_action` DESC)
+) ENGINE=InnoDB AUTO_INCREMENT=805 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `import_run`;
 CREATE TABLE `import_run` (
@@ -204,8 +279,23 @@ CREATE TABLE `import_run` (
   `ok` tinyint(1) NOT NULL,
   `msg` text,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2891 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6150 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+DROP TABLE IF EXISTS `import_run_item`;
+CREATE TABLE `import_run_item` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `run_id` int NOT NULL COMMENT 'Référence vers import_run.id',
+  `filename` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Nom du fichier traité',
+  `status` enum('success','error','skipped') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'error' COMMENT 'Statut du traitement',
+  `inserted_rows` int NOT NULL DEFAULT '0' COMMENT 'Nombre de lignes insérées (0 ou 1)',
+  `error` text COLLATE utf8mb4_general_ci COMMENT 'Message d''erreur si status=error',
+  `duration_ms` decimal(10,2) DEFAULT NULL COMMENT 'Durée du traitement en millisecondes',
+  `processed_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date/heure de traitement',
+  PRIMARY KEY (`id`),
+  KEY `idx_run_id` (`run_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_processed_at` (`processed_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=6219 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Logs détaillés par fichier pour les imports SFTP';
 
 DROP TABLE IF EXISTS `lcd_catalog`;
 CREATE TABLE `lcd_catalog` (
@@ -264,9 +354,12 @@ CREATE TABLE `livraisons` (
   KEY `idx_livraisons_date_prevue` (`date_prevue`),
   KEY `idx_livraisons_date_reelle` (`date_reelle`),
   KEY `idx_livraisons_statut` (`statut`),
+  KEY `idx_livraisons_date_statut` (`date_prevue`,`statut`),
+  KEY `idx_livraisons_livreur_statut` (`id_livreur`,`statut`),
+  KEY `idx_livraisons_reference` (`reference`),
   CONSTRAINT `fk_livraisons_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_livraisons_livreur` FOREIGN KEY (`id_livreur`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `messagerie`;
 CREATE TABLE `messagerie` (
@@ -312,6 +405,35 @@ CREATE TABLE `messagerie_lectures` (
   CONSTRAINT `fk_lecture_message` FOREIGN KEY (`id_message`) REFERENCES `messagerie` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_lecture_utilisateur` FOREIGN KEY (`id_utilisateur`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `paiements`;
+CREATE TABLE `paiements` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_facture` int DEFAULT NULL COMMENT 'ID de la facture liée (peut être NULL pour paiement sans facture)',
+  `id_client` int NOT NULL COMMENT 'ID du client',
+  `montant` decimal(10,2) NOT NULL,
+  `date_paiement` date NOT NULL,
+  `mode_paiement` enum('virement','cb','cheque','especes','autre') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'virement',
+  `reference` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Référence du paiement (ex: VIR-2025-001)',
+  `commentaire` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `statut` enum('en_cours','recu','refuse','annule') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'en_cours',
+  `recu_genere` tinyint(1) NOT NULL DEFAULT '0',
+  `recu_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email_envoye` tinyint(1) NOT NULL DEFAULT '0',
+  `date_envoi_email` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL COMMENT 'ID de l''utilisateur qui a créé le paiement',
+  PRIMARY KEY (`id`),
+  KEY `idx_paiements_facture` (`id_facture`),
+  KEY `idx_paiements_client` (`id_client`),
+  KEY `idx_paiements_date` (`date_paiement`),
+  KEY `idx_paiements_statut` (`statut`),
+  KEY `idx_paiements_created_by` (`created_by`),
+  CONSTRAINT `fk_paiements_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_paiements_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_paiements_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `paper_catalog`;
 CREATE TABLE `paper_catalog` (
@@ -389,7 +511,7 @@ CREATE TABLE `photocopieurs_clients` (
   UNIQUE KEY `u_mac` (`mac_norm`),
   KEY `idx_pc_client` (`id_client`),
   CONSTRAINT `fk_pc_client__clients_id` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `sav`;
 CREATE TABLE `sav` (
@@ -424,9 +546,12 @@ CREATE TABLE `sav` (
   KEY `idx_sav_priorite` (`priorite`),
   KEY `idx_sav_mac_norm` (`mac_norm`),
   KEY `idx_sav_date_intervention` (`date_intervention_prevue`),
+  KEY `idx_sav_date_statut` (`date_ouverture`,`statut`),
+  KEY `idx_sav_technicien_statut` (`id_technicien`,`statut`),
+  KEY `idx_sav_reference` (`reference`),
   CONSTRAINT `fk_sav_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_sav_technicien` FOREIGN KEY (`id_technicien`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `sav_pieces_utilisees`;
 CREATE TABLE `sav_pieces_utilisees` (
@@ -442,6 +567,18 @@ CREATE TABLE `sav_pieces_utilisees` (
   CONSTRAINT `fk_sav_pieces_sav` FOREIGN KEY (`id_sav`) REFERENCES `sav` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+DROP TABLE IF EXISTS `sftp_jobs`;
+CREATE TABLE `sftp_jobs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `status` enum('pending','running','done','failed') NOT NULL DEFAULT 'pending',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `started_at` datetime DEFAULT NULL,
+  `finished_at` datetime DEFAULT NULL,
+  `summary` json DEFAULT NULL,
+  `error` text,
+  `triggered_by` int DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 DROP TABLE IF EXISTS `toner_catalog`;
 CREATE TABLE `toner_catalog` (
@@ -455,7 +592,7 @@ CREATE TABLE `toner_catalog` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_toner` (`marque`,`modele`,`couleur`),
   UNIQUE KEY `uq_toner_barcode` (`barcode`)
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 DROP TABLE IF EXISTS `toner_moves`;
 CREATE TABLE `toner_moves` (
@@ -469,7 +606,7 @@ CREATE TABLE `toner_moves` (
   PRIMARY KEY (`id`),
   KEY `idx_toner_time` (`toner_id`,`created_at`),
   CONSTRAINT `fk_toner_moves_catalog` FOREIGN KEY (`toner_id`) REFERENCES `toner_catalog` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 DROP TABLE IF EXISTS `user_permissions`;
 CREATE TABLE `user_permissions` (
@@ -485,80 +622,6 @@ CREATE TABLE `user_permissions` (
   KEY `idx_page` (`page`),
   CONSTRAINT `fk_user_permissions_user` FOREIGN KEY (`user_id`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=181 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-DROP TABLE IF EXISTS `factures`;
-CREATE TABLE `factures` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `id_client` int NOT NULL,
-  `numero` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `date_facture` date NOT NULL,
-  `date_debut_periode` date DEFAULT NULL COMMENT 'Date de début de période de consommation (20 du mois)',
-  `date_fin_periode` date DEFAULT NULL COMMENT 'Date de fin de période de consommation (20 du mois suivant)',
-  `type` enum('Consommation','Achat','Service') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Consommation',
-  `montant_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
-  `tva` decimal(10,2) NOT NULL DEFAULT '0.00',
-  `montant_ttc` decimal(10,2) NOT NULL DEFAULT '0.00',
-  `statut` enum('brouillon','envoyee','payee','en_retard','annulee') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'brouillon',
-  `pdf_genere` tinyint(1) NOT NULL DEFAULT '0',
-  `pdf_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `email_envoye` tinyint(1) NOT NULL DEFAULT '0',
-  `date_envoi_email` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `created_by` int DEFAULT NULL COMMENT 'ID de l''utilisateur qui a créé la facture',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_factures_numero` (`numero`),
-  KEY `idx_factures_client` (`id_client`),
-  KEY `idx_factures_date` (`date_facture`),
-  KEY `idx_factures_statut` (`statut`),
-  KEY `idx_factures_created_by` (`created_by`),
-  CONSTRAINT `fk_factures_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_factures_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-DROP TABLE IF EXISTS `facture_lignes`;
-CREATE TABLE `facture_lignes` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `id_facture` int NOT NULL,
-  `description` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `type` enum('N&B','Couleur','Service','Produit') COLLATE utf8mb4_general_ci NOT NULL,
-  `quantite` decimal(10,2) NOT NULL DEFAULT '1.00',
-  `prix_unitaire_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
-  `total_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
-  `ordre` int NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`),
-  KEY `idx_facture_lignes_facture` (`id_facture`),
-  CONSTRAINT `fk_facture_lignes_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-DROP TABLE IF EXISTS `paiements`;
-CREATE TABLE `paiements` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `id_facture` int DEFAULT NULL COMMENT 'ID de la facture liée (peut être NULL pour paiement sans facture)',
-  `id_client` int NOT NULL COMMENT 'ID du client',
-  `montant` decimal(10,2) NOT NULL,
-  `date_paiement` date NOT NULL,
-  `mode_paiement` enum('virement','cb','cheque','especes','autre') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'virement',
-  `reference` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Référence du paiement (ex: VIR-2025-001)',
-  `commentaire` text COLLATE utf8mb4_general_ci,
-  `statut` enum('en_cours','recu','refuse','annule') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'en_cours',
-  `recu_genere` tinyint(1) NOT NULL DEFAULT '0',
-  `recu_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `email_envoye` tinyint(1) NOT NULL DEFAULT '0',
-  `date_envoi_email` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `created_by` int DEFAULT NULL COMMENT 'ID de l''utilisateur qui a créé le paiement',
-  PRIMARY KEY (`id`),
-  KEY `idx_paiements_facture` (`id_facture`),
-  KEY `idx_paiements_client` (`id_client`),
-  KEY `idx_paiements_date` (`date_paiement`),
-  KEY `idx_paiements_statut` (`statut`),
-  KEY `idx_paiements_created_by` (`created_by`),
-  CONSTRAINT `fk_paiements_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_paiements_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_paiements_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `utilisateurs`;
 CREATE TABLE `utilisateurs` (
@@ -576,7 +639,9 @@ CREATE TABLE `utilisateurs` (
   `last_activity` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_email_unique` (`Email`),
-  KEY `idx_last_activity` (`last_activity`)
+  KEY `idx_last_activity` (`last_activity`),
+  KEY `idx_utilisateurs_email` (`Email`),
+  KEY `idx_utilisateurs_nom_prenom` (`nom`,`prenom`)
 ) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP VIEW IF EXISTS `v_compteur_last`;
