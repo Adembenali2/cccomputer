@@ -402,6 +402,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "Réinitialisation mot de passe utilisateur #{$id}: {$targetName} ({$targetEmail}) | Réinitialisé par: {$resetterName}");
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Mot de passe réinitialisé."];
         }
+        // ===== MISE À JOUR STATUT PAIEMENT =====
+        elseif ($action === 'update_payment_status') {
+            if (!$isAdminOrDirigeant) {
+                throw new RuntimeException('Vous n\'êtes pas autorisé à modifier les paiements.');
+            }
+
+            $paymentId = validateId($_POST['payment_id'] ?? 0, 'ID paiement');
+            $newStatus = trim((string)($_POST['statut'] ?? ''));
+
+            $allowedStatuses = ['en_cours', 'recu', 'refuse', 'annule'];
+            if (!in_array($newStatus, $allowedStatuses, true)) {
+                throw new RuntimeException('Statut de paiement invalide.');
+            }
+
+            $beforePayment = safeFetch(
+                $pdo,
+                "SELECT statut FROM paiements WHERE id = ?",
+                [$paymentId],
+                'profil_payment_before'
+            );
+
+            if (!$beforePayment) {
+                throw new RuntimeException('Paiement introuvable.');
+            }
+
+            if ($beforePayment['statut'] === $newStatus) {
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Aucun changement de statut pour ce paiement."];
+            } else {
+                $stmt = $pdo->prepare("UPDATE paiements SET statut = ? WHERE id = ?");
+                $stmt->execute([$newStatus, $paymentId]);
+
+                logProfilAction(
+                    $pdo,
+                    $currentUser['id'],
+                    'paiement_statut_modifie',
+                    "Modification statut paiement #{$paymentId}: '{$beforePayment['statut']}' → '{$newStatus}'"
+                );
+
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut du paiement mis à jour."];
+            }
+        }
         // ===== SAUVEGARDE DES PERMISSIONS =====
         elseif ($action === 'save_permissions') {
             if (!$isAdminOrDirigeant) {
@@ -581,6 +622,34 @@ $stats = safeFetch($pdo, "
 $totalUsers = (int)($stats['total'] ?? 0);
 $activeUsers = (int)($stats['actifs'] ?? 0);
 $inactiveUsers = (int)($stats['inactifs'] ?? 0);
+
+// Derniers paiements (pour affichage dans le profil)
+// On ne charge que quelques éléments pour ne pas alourdir la page
+$recentPayments = safeFetchAll(
+    $pdo,
+    "
+    SELECT 
+        p.id,
+        p.id_facture,
+        p.id_client,
+        p.montant,
+        p.date_paiement,
+        p.mode_paiement,
+        p.statut,
+        p.reference,
+        p.created_at,
+        c.raison_sociale AS client_nom,
+        c.numero_client AS client_code,
+        f.numero AS facture_numero
+    FROM paiements p
+    LEFT JOIN clients c ON p.id_client = c.id
+    LEFT JOIN factures f ON p.id_facture = f.id
+    ORDER BY p.date_paiement DESC, p.created_at DESC
+    LIMIT 20
+    ",
+    [],
+    'profil_recent_paiements'
+);
 
 // Récupérer les informations de l'utilisateur connecté
 $currentUserInfo = safeFetch($pdo, 
@@ -1254,6 +1323,116 @@ function decode_msg($row) {
                     </div>
                 <?php endif; ?>
             </form>
+        </section>
+    <?php endif; ?>
+    
+    <?php if ($isAdminOrDirigeant): ?>
+        <!-- Section Derniers paiements -->
+        <section class="panel payments-panel" id="paymentsPanel">
+            <h2 class="panel-title">Derniers paiements enregistrés</h2>
+            <p class="panel-subtitle">
+                Aperçu rapide des 20 derniers paiements. Vous pouvez mettre à jour le <strong>statut</strong> directement depuis cette page.
+            </p>
+
+            <div class="table-responsive">
+                <table class="users-table" role="table" aria-label="Derniers paiements">
+                    <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Client</th>
+                            <th scope="col">Facture</th>
+                            <th scope="col">Montant</th>
+                            <th scope="col">Mode</th>
+                            <th scope="col">Statut</th>
+                            <th scope="col">Référence</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($recentPayments)): ?>
+                            <tr>
+                                <td colspan="8" class="aucun" role="cell">Aucun paiement enregistré.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php
+                            $modeLabels = [
+                                'virement' => 'Virement',
+                                'cb' => 'Carte bancaire',
+                                'cheque' => 'Chèque',
+                                'especes' => 'Espèces',
+                                'autre' => 'Autre'
+                            ];
+                            $statusLabels = [
+                                'en_cours' => 'En cours',
+                                'recu' => 'Reçu',
+                                'refuse' => 'Refusé',
+                                'annule' => 'Annulé'
+                            ];
+                            ?>
+                            <?php foreach ($recentPayments as $p): ?>
+                                <?php
+                                $status = $p['statut'] ?? 'en_cours';
+                                $statusClass = 'muted';
+                                if ($status === 'recu') {
+                                    $statusClass = 'success';
+                                } elseif ($status === 'refuse' || $status === 'annule') {
+                                    $statusClass = 'role';
+                                }
+                                ?>
+                                <tr role="row">
+                                    <td data-label="Date" role="cell">
+                                        <?= isset($p['date_paiement']) ? h(formatDate($p['date_paiement'], 'd/m/Y')) : '—' ?>
+                                    </td>
+                                    <td data-label="Client" role="cell">
+                                        <?php if (!empty($p['client_nom'])): ?>
+                                            <?= h($p['client_nom']) ?>
+                                            <?php if (!empty($p['client_code'])): ?>
+                                                <span class="meta-sub"><?= h($p['client_code']) ?></span>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            —
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Facture" role="cell">
+                                        <?= !empty($p['facture_numero']) ? h($p['facture_numero']) : '—' ?>
+                                    </td>
+                                    <td data-label="Montant" role="cell">
+                                        <?= h(number_format((float)$p['montant'], 2, ',', ' ')) ?> €
+                                    </td>
+                                    <td data-label="Mode" role="cell">
+                                        <?= h($modeLabels[$p['mode_paiement']] ?? $p['mode_paiement']) ?>
+                                    </td>
+                                    <td data-label="Statut" role="cell">
+                                        <span class="badge <?= $statusClass ?>">
+                                            <?= h($statusLabels[$status] ?? $status) ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Référence" role="cell">
+                                        <?= !empty($p['reference']) ? h($p['reference']) : '—' ?>
+                                    </td>
+                                    <td data-label="Actions" class="actions" role="cell">
+                                        <form method="post" action="/public/profil.php#paymentsPanel" class="inline">
+                                            <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+                                            <input type="hidden" name="action" value="update_payment_status">
+                                            <input type="hidden" name="payment_id" value="<?= (int)$p['id'] ?>">
+                                            <label for="payment-status-<?= (int)$p['id'] ?>" class="sr-only">Statut</label>
+                                            <select id="payment-status-<?= (int)$p['id'] ?>" name="statut">
+                                                <option value="en_cours" <?= $status === 'en_cours' ? 'selected' : '' ?>>En cours</option>
+                                                <option value="recu" <?= $status === 'recu' ? 'selected' : '' ?>>Reçu</option>
+                                                <option value="refuse" <?= $status === 'refuse' ? 'selected' : '' ?>>Refusé</option>
+                                                <option value="annule" <?= $status === 'annule' ? 'selected' : '' ?>>Annulé</option>
+                                            </select>
+                                            <button type="submit" class="fiche-action-btn" style="margin-left: 0.5rem;">
+                                                Mettre à jour
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </section>
     <?php endif; ?>
     
