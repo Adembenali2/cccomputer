@@ -5,23 +5,44 @@
 require_once __DIR__ . '/../includes/api_helpers.php';
 
 initApi();
-requireApiAuth();
+
+// Pour ce endpoint spécifique, on retourne 0 au lieu d'une erreur si non authentifié
+// pour ne pas bloquer le header et éviter le spam dans les logs Railway (comportement similaire à messagerie_get_unread_count.php)
+if (empty($_SESSION['user_id'])) {
+    jsonResponse([
+        'ok' => true,
+        'count' => 0,
+        'notifications' => []
+    ]);
+}
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
     }
 
-    // Vérifier que l'utilisateur est authentifié (requireApiAuth() devrait déjà l'avoir fait, mais double vérification)
-    $currentUserId = (int)($_SESSION['user_id'] ?? 0);
+    // Vérifier que l'utilisateur est authentifié
+    $currentUserId = (int)$_SESSION['user_id'];
     if ($currentUserId <= 0) {
-        // Si requireApiAuth() a déjà vérifié, cette erreur ne devrait jamais se produire
-        // Mais on la garde pour sécurité
-        jsonResponse(['ok' => false, 'error' => 'unauthorized'], 401);
+        // Ne devrait jamais arriver car on a déjà vérifié au-dessus, mais sécurité
+        jsonResponse([
+            'ok' => true,
+            'count' => 0,
+            'notifications' => []
+        ]);
     }
     
-    // Récupérer PDO
-    $pdo = getPdoOrFail();
+    // Récupérer PDO (gérer gracieusement les erreurs pour ce endpoint de polling)
+    try {
+        $pdo = getPdo();
+    } catch (RuntimeException $e) {
+        error_log('chatroom_get_notifications.php: getPdo() failed - ' . $e->getMessage());
+        jsonResponse([
+            'ok' => true,
+            'count' => 0,
+            'notifications' => []
+        ]);
+    }
 
     // Vérifier que la table existe
     $tableExists = false;
@@ -99,9 +120,19 @@ try {
 
 } catch (PDOException $e) {
     error_log('chatroom_get_notifications.php - Erreur PDO: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
-} catch (Exception $e) {
+    // Retourner 0 au lieu d'une erreur pour éviter de bloquer le header et polluer les logs Railway
+    jsonResponse([
+        'ok' => true,
+        'count' => 0,
+        'notifications' => []
+    ]);
+} catch (Throwable $e) {
     error_log('chatroom_get_notifications.php - Erreur: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
+    // Retourner 0 au lieu d'une erreur pour éviter de bloquer le header et polluer les logs Railway
+    jsonResponse([
+        'ok' => true,
+        'count' => 0,
+        'notifications' => []
+    ]);
 }
 

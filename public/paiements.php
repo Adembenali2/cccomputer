@@ -520,9 +520,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
 
         .chart-container {
             position: relative;
-            height: 400px;
+            height: 450px;
             margin-top: 1.5rem;
             width: 100%;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.05) 100%);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
         }
         
         .chart-container canvas {
@@ -533,8 +537,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 400px;
+            height: 450px;
             color: var(--text-secondary);
+            font-size: 1rem;
         }
 
         @media (max-width: 768px) {
@@ -6142,7 +6147,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 statsChart.destroy();
             }
             
-            // Créer le nouveau graphique
+            // Créer le nouveau graphique avec un style amélioré
             statsChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -6152,52 +6157,261 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                             label: 'Noir et Blanc',
                             data: data.noir_blanc,
                             borderColor: '#1f2937',
-                            backgroundColor: 'rgba(31, 41, 55, 0.1)',
+                            backgroundColor: (context) => {
+                                const chart = context.chart;
+                                const {ctx, chartArea} = chart;
+                                if (!chartArea) {
+                                    return 'rgba(31, 41, 55, 0.1)';
+                                }
+                                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                                gradient.addColorStop(0, 'rgba(31, 41, 55, 0.25)');
+                                gradient.addColorStop(0.5, 'rgba(31, 41, 55, 0.15)');
+                                gradient.addColorStop(1, 'rgba(31, 41, 55, 0.05)');
+                                return gradient;
+                            },
+                            borderWidth: 3,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#1f2937',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointHoverBackgroundColor: '#111827',
+                            pointHoverBorderColor: '#ffffff',
+                            pointHoverBorderWidth: 3,
                             tension: 0.4,
-                            fill: false
+                            fill: true,
+                            shadowOffsetX: 0,
+                            shadowOffsetY: 4,
+                            shadowBlur: 8,
+                            shadowColor: 'rgba(31, 41, 55, 0.2)'
                         },
                         {
                             label: 'Couleur',
                             data: data.couleur,
                             borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            backgroundColor: (context) => {
+                                const chart = context.chart;
+                                const {ctx, chartArea} = chart;
+                                if (!chartArea) {
+                                    return 'rgba(59, 130, 246, 0.1)';
+                                }
+                                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                                gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+                                gradient.addColorStop(0.5, 'rgba(59, 130, 246, 0.15)');
+                                gradient.addColorStop(1, 'rgba(59, 130, 246, 0.05)');
+                                return gradient;
+                            },
+                            borderWidth: 3,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointHoverBackgroundColor: '#2563eb',
+                            pointHoverBorderColor: '#ffffff',
+                            pointHoverBorderWidth: 3,
                             tension: 0.4,
-                            fill: false
+                            fill: true,
+                            shadowOffsetX: 0,
+                            shadowOffsetY: 4,
+                            shadowBlur: 8,
+                            shadowColor: 'rgba(59, 130, 246, 0.2)'
                         },
                         {
                             label: 'Total Pages',
                             data: data.total_pages,
                             borderColor: '#10b981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            backgroundColor: (context) => {
+                                const chart = context.chart;
+                                const {ctx, chartArea} = chart;
+                                if (!chartArea) {
+                                    return 'rgba(16, 185, 129, 0.1)';
+                                }
+                                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                                gradient.addColorStop(0, 'rgba(16, 185, 129, 0.25)');
+                                gradient.addColorStop(0.5, 'rgba(16, 185, 129, 0.15)');
+                                gradient.addColorStop(1, 'rgba(16, 185, 129, 0.05)');
+                                return gradient;
+                            },
+                            borderWidth: 3,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#10b981',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointHoverBackgroundColor: '#059669',
+                            pointHoverBorderColor: '#ffffff',
+                            pointHoverBorderWidth: 3,
                             tension: 0.4,
-                            fill: false
+                            fill: true,
+                            shadowOffsetX: 0,
+                            shadowOffsetY: 4,
+                            shadowBlur: 8,
+                            shadowColor: 'rgba(16, 185, 129, 0.2)'
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1500,
+                        easing: 'easeInOutQuart',
+                        x: {
+                            type: 'number',
+                            easing: 'easeInOutQuart',
+                            from: 0
+                        },
+                        y: {
+                            type: 'number',
+                            easing: 'easeInOutQuart',
+                            from: 0
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
                     plugins: {
                         legend: {
                             position: 'top',
+                            align: 'end',
+                            labels: {
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                padding: 15,
+                                font: {
+                                    size: 13,
+                                    weight: '500',
+                                    family: 'system-ui, -apple-system, sans-serif'
+                                },
+                                color: 'var(--text-primary)',
+                                boxWidth: 12,
+                                boxHeight: 12
+                            },
+                            onClick: (e, legendItem, legend) => {
+                                const index = legendItem.datasetIndex;
+                                const chart = legend.chart;
+                                const meta = chart.getDatasetMeta(index);
+                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                                chart.update();
+                            }
                         },
                         title: {
                             display: true,
-                            text: 'Consommation quotidienne des clients'
+                            text: 'Consommation quotidienne des clients',
+                            font: {
+                                size: 18,
+                                weight: '600',
+                                family: 'system-ui, -apple-system, sans-serif'
+                            },
+                            color: 'var(--text-primary)',
+                            padding: {
+                                top: 10,
+                                bottom: 20
+                            }
+                        },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            titleFont: {
+                                size: 14,
+                                weight: '600'
+                            },
+                            bodyFont: {
+                                size: 13,
+                                weight: '400'
+                            },
+                            cornerRadius: 8,
+                            displayColors: true,
+                            boxPadding: 6,
+                            usePointStyle: true,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += new Intl.NumberFormat('fr-FR').format(context.parsed.y) + ' pages';
+                                    }
+                                    return label;
+                                },
+                                title: function(context) {
+                                    return 'Date: ' + context[0].label;
+                                }
+                            }
                         }
                     },
                     scales: {
                         x: {
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.05)',
+                                lineWidth: 1,
+                                drawBorder: true,
+                                borderColor: 'rgba(0, 0, 0, 0.1)'
+                            },
                             ticks: {
                                 maxRotation: 45,
-                                minRotation: 45
+                                minRotation: 45,
+                                font: {
+                                    size: 11,
+                                    weight: '400'
+                                },
+                                color: 'var(--text-secondary)',
+                                padding: 8
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date',
+                                font: {
+                                    size: 13,
+                                    weight: '600'
+                                },
+                                color: 'var(--text-primary)',
+                                padding: {
+                                    top: 10,
+                                    bottom: 5
+                                }
                             }
                         },
                         y: {
                             beginAtZero: true,
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.05)',
+                                lineWidth: 1,
+                                drawBorder: true,
+                                borderColor: 'rgba(0, 0, 0, 0.1)'
+                            },
                             ticks: {
+                                font: {
+                                    size: 11,
+                                    weight: '400'
+                                },
+                                color: 'var(--text-secondary)',
+                                padding: 8,
                                 callback: function(value) {
-                                    return value.toLocaleString('fr-FR');
+                                    return new Intl.NumberFormat('fr-FR').format(value);
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Nombre de pages',
+                                font: {
+                                    size: 13,
+                                    weight: '600'
+                                },
+                                color: 'var(--text-primary)',
+                                padding: {
+                                    top: 5,
+                                    bottom: 10
                                 }
                             }
                         }
