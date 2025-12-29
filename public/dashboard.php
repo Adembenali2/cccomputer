@@ -794,8 +794,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         }, 300);
     }
     
-    // Alias pour compatibilité
-    const showNotification = showNotificationToast;
+    // Note: On utilise showNotificationToast directement pour éviter les conflits avec window.showNotification de api.js
 
     // --- Ouverture / fermeture popup ---
     (function() {
