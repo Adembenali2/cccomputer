@@ -54,8 +54,9 @@ try {
     // Charger la fonction de génération de numéro de facture
     require_once __DIR__ . '/factures_generer.php';
     
-            // Récupérer tous les clients actifs
-    $stmt = $pdo->prepare("SELECT id, raison_sociale, adresse, code_postal, ville, siret, email FROM clients WHERE actif = 1 ORDER BY raison_sociale");
+    // Récupérer tous les clients (la colonne `actif` n'existe pas dans certains schémas)
+    // Le filtrage des clients réellement facturables est géré plus bas (imprimantes, relevés, etc.)
+    $stmt = $pdo->prepare("SELECT id, raison_sociale, adresse, code_postal, ville, siret, email FROM clients ORDER BY raison_sociale");
     $stmt->execute();
     $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -79,16 +80,6 @@ try {
                     'client_id' => $clientId,
                     'client_nom' => $clientNom,
                     'raison' => 'Aucune imprimante attribuée'
-                ];
-                continue;
-            }
-            
-            // Vérifier l'offre si nécessaire
-            if ($offre === 2000 && $nbPhotocopieurs !== 2) {
-                $clientsExclus[] = [
-                    'client_id' => $clientId,
-                    'client_nom' => $clientNom,
-                    'raison' => "L'offre 2000 nécessite exactement 2 imprimantes. Ce client en a {$nbPhotocopieurs}."
                 ];
                 continue;
             }
