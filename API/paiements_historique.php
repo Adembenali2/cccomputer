@@ -31,6 +31,7 @@ try {
             f.montant_ttc as facture_montant_ttc,
             c.raison_sociale as client_nom,
             c.numero_client as client_code,
+            c.email as client_email,
             u.nom as created_by_nom,
             u.prenom as created_by_prenom
         FROM paiements p
@@ -99,6 +100,7 @@ try {
             'facture_montant_ttc' => $paiement['facture_montant_ttc'] ? (float)$paiement['facture_montant_ttc'] : null,
             'client_nom' => $paiement['client_nom'],
             'client_code' => $paiement['client_code'],
+            'client_email' => $paiement['client_email'],
             'created_by_nom' => $paiement['created_by_nom'],
             'created_by_prenom' => $paiement['created_by_prenom'],
             'created_by_full' => trim(($paiement['created_by_prenom'] ?? '') . ' ' . ($paiement['created_by_nom'] ?? ''))

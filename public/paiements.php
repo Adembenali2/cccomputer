@@ -4300,19 +4300,32 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
                         </span>
                     `;
                     
-                    // Actions (justificatif si disponible)
+                    // Actions (justificatif et envoi si disponible)
                     let actions = '<span style="color: var(--text-muted); font-size: 0.85rem;">-</span>';
                     if (paiement.recu_path) {
                         actions = `
-                            <button onclick="viewJustificatif('${paiement.recu_path}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 0.25rem;">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                    <polyline points="14 2 14 8 20 8"></polyline>
-                                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                                </svg>
-                                Justificatif
-                            </button>
+                            <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
+                                <button onclick="viewJustificatif('${paiement.recu_path}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    </svg>
+                                    Voir
+                                </button>
+                                ${paiement.client_email ? `
+                                    <button onclick="sendRecuEmail(${paiement.id}, '${paiement.reference || ''}')" style="padding: 0.4rem 0.75rem; background: #10b981; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';" title="Envoyer le re√ßu par email">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                            <polyline points="22,6 12,13 2,6"></polyline>
+                                        </svg>
+                                        Envoyer
+                                    </button>
+                                ` : `
+                                    <span style="color: var(--text-muted); font-size: 0.75rem;" title="Client sans email">Pas d'email</span>
+                                `}
+                            </div>
                         `;
                     }
                     
@@ -5970,6 +5983,8 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
         window.filterHistoriquePaiements = filterHistoriquePaiements;
         window.filterHistoriquePaiementsByStatus = filterHistoriquePaiementsByStatus;
         window.viewJustificatif = viewJustificatif;
+        window.sendRecuEmail = sendRecuEmail;
+        window.sendRecuEmail = sendRecuEmail;
         window.openFactureMailModal = openFactureMailModal;
         window.closeFactureMailModal = closeFactureMailModal;
         window.submitFactureMailForm = submitFactureMailForm;
