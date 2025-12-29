@@ -6207,19 +6207,58 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         }
 
         /**
-         * Exporte les données en Excel
+         * Exporte les données en Excel avec les filtres appliqués
          */
         function exportToExcel() {
-            const clientId = document.getElementById('filterClient').value;
-            const mois = document.getElementById('filterMois').value;
-            const annee = document.getElementById('filterAnnee').value;
-            
-            const params = new URLSearchParams();
-            if (clientId) params.append('client_id', clientId);
-            if (mois) params.append('mois', mois);
-            if (annee) params.append('annee', annee);
-            
-            window.location.href = `/API/paiements_export_excel.php?${params.toString()}`;
+            try {
+                const clientId = document.getElementById('filterClient')?.value || '';
+                const mois = document.getElementById('filterMois')?.value || '';
+                const annee = document.getElementById('filterAnnee')?.value || '';
+                
+                const params = new URLSearchParams();
+                
+                // Ajouter les filtres seulement s'ils ont une valeur
+                if (clientId && clientId !== '' && clientId !== '0') {
+                    params.append('client_id', clientId);
+                }
+                if (mois && mois !== '' && mois !== '0') {
+                    params.append('mois', mois);
+                }
+                if (annee && annee !== '' && annee !== '0') {
+                    params.append('annee', annee);
+                }
+                
+                // Construire l'URL et déclencher le téléchargement
+                const url = `/API/paiements_export_excel.php?${params.toString()}`;
+                
+                // Afficher un message de chargement
+                const btn = document.getElementById('btnExportExcel');
+                if (btn) {
+                    const originalText = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<span style="display: inline-flex; align-items: center; gap: 0.5rem;"><span class="spinner" style="width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></span> Export en cours...</span>';
+                    
+                    // Créer un lien temporaire pour déclencher le téléchargement
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    // Réinitialiser le bouton après un court délai
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    }, 2000);
+                } else {
+                    // Fallback si le bouton n'est pas trouvé
+                    window.location.href = url;
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'export Excel:', error);
+                showMessage('Erreur lors de l\'export Excel: ' + error.message, 'error');
+            }
         }
     </script>
 </body>
