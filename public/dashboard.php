@@ -151,7 +151,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 <p class="card-count"><?= htmlspecialchars($nb_sav_a_traiter, ENT_QUOTES, 'UTF-8') ?></p>
             </div>
 
-            <div class="dash-card" data-href="livraison.php" tabindex="0" role="button" aria-label="Accéder aux livraisons">
+            <div class="dash-card" data-href="/public/livraison.php" tabindex="0" role="button" aria-label="Accéder aux livraisons">
                 <div class="card-icon deliveries" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
                         <rect x="1" y="3" width="15" height="13"/>
@@ -164,7 +164,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 <p class="card-count"><?= htmlspecialchars($nb_livraisons_a_faire, ENT_QUOTES, 'UTF-8') ?></p>
             </div>
 
-            <div class="dash-card" data-href="clients.php" id="clientsCard" tabindex="0" role="button" aria-label="Accéder aux clients">
+            <div class="dash-card" data-href="/public/clients.php" id="clientsCard" tabindex="0" role="button" aria-label="Accéder aux clients">
                 <div class="card-icon clients" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -177,7 +177,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 <p class="card-count"><?= htmlspecialchars($nbClients, ENT_QUOTES, 'UTF-8') ?></p>
             </div>
 
-            <div class="dash-card" data-href="stock.php" tabindex="0" role="button" aria-label="Accéder au stock">
+            <div class="dash-card" data-href="/public/stock.php" tabindex="0" role="button" aria-label="Accéder au stock">
                 <div class="card-icon stock" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2">
                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -216,7 +216,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 </div>
             </div>
 
-            <div class="dash-card" data-href="paiements.php" tabindex="0" role="button" aria-label="Accéder aux paiements">
+            <div class="dash-card" data-href="/public/paiements.php" tabindex="0" role="button" aria-label="Accéder aux paiements">
                 <div class="card-icon payments" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
                         <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
@@ -228,7 +228,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 <p class="card-count">—</p>
             </div>
 
-            <div class="dash-card" data-href="historique.php" tabindex="0" role="button" aria-label="Accéder aux historiques">
+            <div class="dash-card" data-href="/public/historique.php" tabindex="0" role="button" aria-label="Accéder aux historiques">
                 <div class="card-icon history" aria-hidden="true">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
@@ -382,9 +382,13 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     <a href="#" class="client-card" 
                        data-client-id="<?= htmlspecialchars($client['id'], ENT_QUOTES, 'UTF-8') ?>"
                        data-raison-l="<?= htmlspecialchars(strtolower($client['raison_sociale'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                       data-raison="<?= htmlspecialchars(strtolower($client['raison_sociale'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                        data-nom-l="<?= htmlspecialchars(strtolower($client['nom_dirigeant'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                       data-nom="<?= htmlspecialchars(strtolower($client['nom_dirigeant'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                        data-prenom-l="<?= htmlspecialchars(strtolower($client['prenom_dirigeant'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                       data-prenom="<?= htmlspecialchars(strtolower($client['prenom_dirigeant'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                        data-numero-l="<?= htmlspecialchars(strtolower($client['numero_client'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                       data-numero="<?= htmlspecialchars(strtolower($client['numero_client'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                        aria-label="Voir la fiche de <?= htmlspecialchars($client['raison_sociale'] ?? 'Client', ENT_QUOTES, 'UTF-8') ?>">
                         <div class="client-info">
                             <strong><?= htmlspecialchars($client['raison_sociale'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></strong>
@@ -725,15 +729,34 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     // Données clients fournies côté serveur
     const CLIENTS_DATA = <?= json_encode($clients, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
 
+    // Vérifier que apiClient est disponible
+    if (typeof apiClient === 'undefined') {
+        console.error('apiClient n\'est pas défini. Vérifiez que api.js est chargé.');
+    }
+
+    // Helper pour échapper HTML (défini en premier pour être disponible partout)
+    function escapeHtml(text) {
+        if (text == null || text === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
     // Fonction pour afficher une notification toast (partagée entre SFTP et IONOS)
-    function showNotification(title, message, type = 'info') {
-        // Créer l'élément de notification
+    // Utilise window.showNotification si disponible (défini dans api.js), sinon définit une version locale
+    function showNotificationToast(title, message, type = 'info') {
+        // Si window.showNotification existe déjà (défini dans api.js), l'utiliser
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(title + ': ' + message, type);
+            return;
+        }
+        // Sinon, créer une notification toast personnalisée
         const notification = document.createElement('div');
         notification.className = `sftp-notification sftp-notification-${type}`;
         notification.innerHTML = `
             <div class="sftp-notification-content">
-                <strong>${title}</strong>
-                <span>${message}</span>
+                <strong>${escapeHtml(title)}</strong>
+                <span>${escapeHtml(message)}</span>
             </div>
             <button class="sftp-notification-close" aria-label="Fermer">&times;</button>
         `;
@@ -748,18 +771,21 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
         // Fermeture automatique après 5 secondes
         const autoClose = setTimeout(() => {
-            closeNotification(notification);
+            closeNotificationToast(notification);
         }, 5000);
         
         // Bouton de fermeture
         const closeBtn = notification.querySelector('.sftp-notification-close');
-        closeBtn.addEventListener('click', () => {
-            clearTimeout(autoClose);
-            closeNotification(notification);
-        });
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                clearTimeout(autoClose);
+                closeNotificationToast(notification);
+            });
+        }
     }
     
-    function closeNotification(notification) {
+    function closeNotificationToast(notification) {
+        if (!notification) return;
         notification.classList.remove('sftp-notification-show');
         setTimeout(() => {
             if (notification.parentNode) {
@@ -767,6 +793,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         }, 300);
     }
+    
+    // Alias pour compatibilité
+    const showNotification = showNotificationToast;
 
     // --- Ouverture / fermeture popup ---
     (function() {
@@ -1068,6 +1097,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             deliveryList.innerHTML = '<p class="hint">Chargement...</p>';
             
             try {
+                if (typeof apiClient === 'undefined') {
+                    throw new Error('apiClient n\'est pas disponible');
+                }
                 const data = await apiClient.json(`/API/dashboard_get_deliveries.php?client_id=${clientId}`, {
                     method: 'GET'
                 }, {
@@ -1128,7 +1160,8 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 
             } catch (err) {
                 if (err.name !== 'AbortError') {
-                    showNotification('Erreur de chargement des livraisons', 'error');
+                    console.error('Erreur chargement livraisons:', err);
+                    showNotificationToast('Erreur', 'Erreur de chargement des livraisons', 'error');
                 }
                 deliveryList.innerHTML = '<p class="hint" style="color: #dc2626;">Erreur de chargement des livraisons.</p>';
             }
@@ -1140,6 +1173,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             if (!select) return;
             
             try {
+                if (typeof apiClient === 'undefined') {
+                    throw new Error('apiClient n\'est pas disponible');
+                }
                 const data = await apiClient.json('/API/dashboard_get_livreurs.php', {
                     method: 'GET'
                 }, {
@@ -1186,9 +1222,14 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const response = await fetch(`/API/dashboard_get_stock_products.php?type=${encodeURIComponent(type)}`, {
                     credentials: 'include'
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
-                if (!data.ok) {
+                if (!data || !data.ok) {
                     select.innerHTML = '<option value="">Erreur de chargement</option>';
                     return;
                 }
@@ -1210,12 +1251,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         }
         
-        // Helper pour échapper HTML
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
 
         // Gestion formulaire attribution : bouton Annuler
         const assignCancelBtn = document.getElementById('assign-cancel-btn');
@@ -1450,10 +1485,15 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     body: JSON.stringify(data)
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const result = await response.json();
                 
-                if (!result.ok) {
-                    errorDiv.textContent = result.error || 'Erreur lors de la création de la livraison';
+                if (!result || !result.ok) {
+                    const errorMsg = result && result.error ? result.error : 'Erreur lors de la création de la livraison';
+                    errorDiv.textContent = errorMsg;
                     errorDiv.style.display = 'block';
                     return;
                 }
@@ -1464,17 +1504,26 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 
                 deliveryForm.style.display = 'none';
                 deliveryForm.reset();
-                document.getElementById('deliveryProductContainer').style.display = 'none';
-                document.getElementById('deliveryQuantityContainer').style.display = 'none';
-                toggleDeliveryForm.textContent = '➕ Ajouter';
+                const productContainer = document.getElementById('deliveryProductContainer');
+                const quantityContainer = document.getElementById('deliveryQuantityContainer');
+                if (productContainer) productContainer.style.display = 'none';
+                if (quantityContainer) quantityContainer.style.display = 'none';
+                if (toggleDeliveryForm) toggleDeliveryForm.textContent = '➕ Ajouter';
                 errorDiv.style.display = 'none';
                 
                 // Afficher un message de succès temporaire
                 const successMsg = document.createElement('div');
                 successMsg.style.cssText = 'padding: 0.5rem; background: #d1fae5; color: #065f46; border-radius: 4px; margin-bottom: 1rem;';
-                successMsg.textContent = '✅ ' + (result.message || 'Livraison créée avec succès');
-                deliveryFormContainer.insertBefore(successMsg, deliveryFormContainer.firstChild);
-                setTimeout(() => successMsg.remove(), 3000);
+                const successText = result && result.message ? result.message : 'Livraison créée avec succès';
+                successMsg.textContent = '✅ ' + successText;
+                if (deliveryFormContainer) {
+                    deliveryFormContainer.insertBefore(successMsg, deliveryFormContainer.firstChild);
+                    setTimeout(() => {
+                        if (successMsg.parentNode) {
+                            successMsg.remove();
+                        }
+                    }, 3000);
+                }
                 
             } catch (err) {
                 console.error('Erreur création livraison:', err);
@@ -1509,14 +1558,16 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     } catch (e) {
                         // Pas de JSON, utiliser le texte brut
                     }
-                    savList.innerHTML = `<p class="hint" style="color: #dc2626;">Erreur ${response.status}: ${errorData?.error || errorText || 'Erreur de chargement'}</p>`;
+                    const errorMsg = errorData && errorData.error ? errorData.error : (errorText || 'Erreur de chargement');
+                    savList.innerHTML = `<p class="hint" style="color: #dc2626;">Erreur ${response.status}: ${escapeHtml(errorMsg)}</p>`;
                     return;
                 }
                 
                 const data = await response.json();
                 
-                if (!data.ok) {
-                    savList.innerHTML = `<p class="hint" style="color: #dc2626;">Erreur: ${data.error || 'Erreur de chargement'}</p>`;
+                if (!data || !data.ok) {
+                    const errorMsg = data && data.error ? data.error : 'Erreur de chargement';
+                    savList.innerHTML = `<p class="hint" style="color: #dc2626;">Erreur: ${escapeHtml(errorMsg)}</p>`;
                     return;
                 }
                 
@@ -1599,6 +1650,9 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             if (!select) return;
             
             try {
+                if (typeof apiClient === 'undefined') {
+                    throw new Error('apiClient n\'est pas disponible');
+                }
                 const data = await apiClient.json('/API/dashboard_get_techniciens.php', {
                     method: 'GET'
                 }, {
@@ -1622,7 +1676,8 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 
             } catch (err) {
                 if (err.name !== 'AbortError') {
-                    showNotification('Erreur de chargement des techniciens', 'error');
+                    console.error('Erreur chargement techniciens:', err);
+                    showNotificationToast('Erreur', 'Erreur de chargement des techniciens', 'error');
                 }
                 select.innerHTML = '<option value="">Erreur de chargement</option>';
             }
@@ -1704,10 +1759,15 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     body: JSON.stringify(data)
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const result = await response.json();
                 
-                if (!result.ok) {
-                    errorDiv.textContent = result.error || 'Erreur lors de la création du SAV';
+                if (!result || !result.ok) {
+                    const errorMsg = result && result.error ? result.error : 'Erreur lors de la création du SAV';
+                    errorDiv.textContent = errorMsg;
                     errorDiv.style.display = 'block';
                     return;
                 }
@@ -1718,15 +1778,22 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 
                 savForm.style.display = 'none';
                 savForm.reset();
-                toggleSavForm.textContent = '➕ Ajouter';
+                if (toggleSavForm) toggleSavForm.textContent = '➕ Ajouter';
                 errorDiv.style.display = 'none';
                 
                 // Afficher un message de succès temporaire
                 const successMsg = document.createElement('div');
                 successMsg.style.cssText = 'padding: 0.5rem; background: #d1fae5; color: #065f46; border-radius: 4px; margin-bottom: 1rem;';
-                successMsg.textContent = '✅ ' + (result.message || 'SAV créé avec succès');
-                savFormContainer.insertBefore(successMsg, savFormContainer.firstChild);
-                setTimeout(() => successMsg.remove(), 3000);
+                const successText = result && result.message ? result.message : 'SAV créé avec succès';
+                successMsg.textContent = '✅ ' + successText;
+                if (savFormContainer) {
+                    savFormContainer.insertBefore(successMsg, savFormContainer.firstChild);
+                    setTimeout(() => {
+                        if (successMsg.parentNode) {
+                            successMsg.remove();
+                        }
+                    }, 3000);
+                }
                 
             } catch (err) {
                 console.error('Erreur création SAV:', err);
@@ -1846,23 +1913,30 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 loading.style.display = 'none';
                 status.style.display = 'block';
                 
-                if (!response.ok || !data.ok) {
-                    const errorMsg = data.error || `HTTP ${response.status}`;
-                    document.getElementById('sftpErrorText').textContent = errorMsg;
-                    document.getElementById('sftpImportError').style.display = 'block';
+                if (!response.ok || !data || !data.ok) {
+                    const errorMsg = (data && data.error) ? data.error : `HTTP ${response.status}`;
+                    const errorTextEl = document.getElementById('sftpErrorText');
+                    const errorEl = document.getElementById('sftpImportError');
+                    if (errorTextEl) errorTextEl.textContent = errorMsg;
+                    if (errorEl) errorEl.style.display = 'block';
                     setStatusBadge('UNKNOWN');
                     return;
                 }
                 
                 // Masquer l'erreur si succès
-                document.getElementById('sftpImportError').style.display = 'none';
+                const errorEl = document.getElementById('sftpImportError');
+                if (errorEl) errorEl.style.display = 'none';
                 
                 if (!data.has_run || !data.lastRun) {
                     setStatusBadge('UNKNOWN');
-                    document.getElementById('sftpLastRun').textContent = 'Aucune exécution';
-                    document.getElementById('sftpFilesProcessed').textContent = '—';
-                    document.getElementById('sftpFilesDeleted').textContent = '—';
-                    document.getElementById('sftpInsertedRows').textContent = '—';
+                    const lastRunEl = document.getElementById('sftpLastRun');
+                    const filesProcessedEl = document.getElementById('sftpFilesProcessed');
+                    const filesDeletedEl = document.getElementById('sftpFilesDeleted');
+                    const insertedRowsEl = document.getElementById('sftpInsertedRows');
+                    if (lastRunEl) lastRunEl.textContent = 'Aucune exécution';
+                    if (filesProcessedEl) filesProcessedEl.textContent = '—';
+                    if (filesDeletedEl) filesDeletedEl.textContent = '—';
+                    if (insertedRowsEl) insertedRowsEl.textContent = '—';
                     // Initialiser lastRunId si c'est le premier chargement
                     if (lastRunId === null) {
                         lastRunId = null; // Pas de run encore
@@ -1880,10 +1954,14 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 setStatusBadge(displayStatus);
                 
                 // Afficher les métriques
-                document.getElementById('sftpLastRun').textContent = formatDateTime(run.ended_at);
-                document.getElementById('sftpFilesProcessed').textContent = run.files_processed ?? '—';
-                document.getElementById('sftpFilesDeleted').textContent = run.files_deleted ?? '—';
-                document.getElementById('sftpInsertedRows').textContent = run.inserted_rows ?? '—';
+                const lastRunEl = document.getElementById('sftpLastRun');
+                const filesProcessedEl = document.getElementById('sftpFilesProcessed');
+                const filesDeletedEl = document.getElementById('sftpFilesDeleted');
+                const insertedRowsEl = document.getElementById('sftpInsertedRows');
+                if (lastRunEl) lastRunEl.textContent = formatDateTime(run.ended_at);
+                if (filesProcessedEl) filesProcessedEl.textContent = run.files_processed ?? '—';
+                if (filesDeletedEl) filesDeletedEl.textContent = run.files_deleted ?? '—';
+                if (insertedRowsEl) insertedRowsEl.textContent = run.inserted_rows ?? '—';
                 
                 // Détecter les nouveaux runs et afficher les notifications
                 const currentRunId = run.id;
@@ -1899,19 +1977,19 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
                     
                     if (displayStatus === 'RUN_OK') {
-                        showNotification(
+                        showNotificationToast(
                             '✅ Import réussi',
                             `${run.files_processed} ${filesText} importé(s) en ${durationSeconds}s`,
                             'success'
                         );
                     } else if (displayStatus === 'PARTIAL') {
-                        showNotification(
+                        showNotificationToast(
                             '⚠️ Import partiel',
                             `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
                             'info'
                         );
                     } else if (displayStatus === 'RUN_FAILED') {
-                        showNotification(
+                        showNotificationToast(
                             '❌ Erreur import',
                             `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import SFTP'}`,
                             'error'
@@ -1920,7 +1998,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 } else if (isNewRun && displayStatus === 'RUN_FAILED') {
                     // Notification même si aucun fichier traité mais erreur
                     const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
-                    showNotification(
+                    showNotificationToast(
                         '❌ Erreur import',
                         `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import SFTP'}`,
                         'error'
@@ -1931,19 +2009,23 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 lastRunId = currentRunId;
                 
                 // Afficher l'erreur si présente
+                const errorTextEl = document.getElementById('sftpErrorText');
+                const errorEl = document.getElementById('sftpImportError');
                 if (run.error) {
-                    document.getElementById('sftpErrorText').textContent = run.error;
-                    document.getElementById('sftpImportError').style.display = 'block';
+                    if (errorTextEl) errorTextEl.textContent = run.error;
+                    if (errorEl) errorEl.style.display = 'block';
                 } else {
-                    document.getElementById('sftpImportError').style.display = 'none';
+                    if (errorEl) errorEl.style.display = 'none';
                 }
                 
             } catch(error) {
                 console.error('[SFTP] Erreur refresh:', error);
                 loading.style.display = 'none';
                 status.style.display = 'block';
-                document.getElementById('sftpErrorText').textContent = error.message || 'Erreur de connexion';
-                document.getElementById('sftpImportError').style.display = 'block';
+                const errorTextEl = document.getElementById('sftpErrorText');
+                const errorEl = document.getElementById('sftpImportError');
+                if (errorTextEl) errorTextEl.textContent = error.message || 'Erreur de connexion';
+                if (errorEl) errorEl.style.display = 'block';
                 setStatusBadge('UNKNOWN');
             } finally {
                 isFetching = false;
@@ -1975,12 +2057,12 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     
                     const result = await response.json();
                     
-                    if (result.ok && result.last_run) {
+                    if (result && result.ok && result.last_run) {
                         const run = result.last_run;
                         const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
                         const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
                         
-                        showNotification(
+                        showNotificationToast(
                             '✅ Import terminé',
                             `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
                             'success'
@@ -1992,15 +2074,16 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                             refreshStatus();
                         }, 1000);
                     } else {
-                        showNotification(
+                        const errorMsg = result && result.error ? result.error : 'Erreur lors de l\'import';
+                        showNotificationToast(
                             '❌ Erreur',
-                            result.error || 'Erreur lors de l\'import',
+                            errorMsg,
                             'error'
                         );
                     }
                 } catch (error) {
                     console.error('[SFTP] Erreur trigger:', error);
-                    showNotification(
+                    showNotificationToast(
                         '❌ Erreur',
                         'Impossible de lancer l\'import: ' + error.message,
                         'error'
@@ -2129,15 +2212,20 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 
                 const data = await response.json();
                 
-                if (!data.ok || !data.has_run) {
+                if (!data || !data.ok || !data.has_run) {
                     loading.style.display = 'none';
                     status.style.display = 'block';
                     setStatusBadge('UNKNOWN');
-                    document.getElementById('ionosLastRun').textContent = '—';
-                    document.getElementById('ionosRowsSeen').textContent = '—';
-                    document.getElementById('ionosRowsProcessed').textContent = '—';
-                    document.getElementById('ionosRowsInserted').textContent = '—';
-                    document.getElementById('ionosImportError').style.display = 'none';
+                    const lastRunEl = document.getElementById('ionosLastRun');
+                    const rowsSeenEl = document.getElementById('ionosRowsSeen');
+                    const rowsProcessedEl = document.getElementById('ionosRowsProcessed');
+                    const rowsInsertedEl = document.getElementById('ionosRowsInserted');
+                    const errorEl = document.getElementById('ionosImportError');
+                    if (lastRunEl) lastRunEl.textContent = '—';
+                    if (rowsSeenEl) rowsSeenEl.textContent = '—';
+                    if (rowsProcessedEl) rowsProcessedEl.textContent = '—';
+                    if (rowsInsertedEl) rowsInsertedEl.textContent = '—';
+                    if (errorEl) errorEl.style.display = 'none';
                     return;
                 }
                 
@@ -2154,10 +2242,14 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 setStatusBadge(displayStatus);
                 
                 // Afficher les métriques
-                document.getElementById('ionosLastRun').textContent = formatDateTime(run.ended_at);
-                document.getElementById('ionosRowsSeen').textContent = run.rows_seen ?? '—';
-                document.getElementById('ionosRowsProcessed').textContent = run.rows_processed ?? '—';
-                document.getElementById('ionosRowsInserted').textContent = run.rows_inserted ?? '—';
+                const lastRunEl = document.getElementById('ionosLastRun');
+                const rowsSeenEl = document.getElementById('ionosRowsSeen');
+                const rowsProcessedEl = document.getElementById('ionosRowsProcessed');
+                const rowsInsertedEl = document.getElementById('ionosRowsInserted');
+                if (lastRunEl) lastRunEl.textContent = formatDateTime(run.ended_at);
+                if (rowsSeenEl) rowsSeenEl.textContent = run.rows_seen ?? '—';
+                if (rowsProcessedEl) rowsProcessedEl.textContent = run.rows_processed ?? '—';
+                if (rowsInsertedEl) rowsInsertedEl.textContent = run.rows_inserted ?? '—';
                 
                 // Détecter les nouveaux runs et afficher les notifications
                 const currentRunId = run.id;
@@ -2171,19 +2263,19 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
                     
                     if (displayStatus === 'RUN_OK') {
-                        showNotification(
+                        showNotificationToast(
                             '✅ Import IONOS réussi',
                             `${run.rows_processed} ${rowsText} importée(s) en ${durationSeconds}s`,
                             'success'
                         );
                     } else if (displayStatus === 'PARTIAL') {
-                        showNotification(
+                        showNotificationToast(
                             '⚠️ Import IONOS partiel',
                             `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
                             'info'
                         );
                     } else if (displayStatus === 'RUN_FAILED') {
-                        showNotification(
+                        showNotificationToast(
                             '❌ Erreur import IONOS',
                             `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import IONOS'}`,
                             'error'
@@ -2191,7 +2283,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     }
                 } else if (isNewRun && displayStatus === 'RUN_FAILED') {
                     const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
-                    showNotification(
+                    showNotificationToast(
                         '❌ Erreur import IONOS',
                         `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import IONOS'}`,
                         'error'
@@ -2201,19 +2293,23 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 lastRunId = currentRunId;
                 
                 // Afficher l'erreur si présente
+                const errorTextEl = document.getElementById('ionosErrorText');
+                const errorEl = document.getElementById('ionosImportError');
                 if (run.error) {
-                    document.getElementById('ionosErrorText').textContent = run.error;
-                    document.getElementById('ionosImportError').style.display = 'block';
+                    if (errorTextEl) errorTextEl.textContent = run.error;
+                    if (errorEl) errorEl.style.display = 'block';
                 } else {
-                    document.getElementById('ionosImportError').style.display = 'none';
+                    if (errorEl) errorEl.style.display = 'none';
                 }
                 
             } catch(error) {
                 console.error('[IONOS] Erreur refresh:', error);
                 loading.style.display = 'none';
                 status.style.display = 'block';
-                document.getElementById('ionosErrorText').textContent = error.message || 'Erreur de connexion';
-                document.getElementById('ionosImportError').style.display = 'block';
+                const errorTextEl = document.getElementById('ionosErrorText');
+                const errorEl = document.getElementById('ionosImportError');
+                if (errorTextEl) errorTextEl.textContent = error.message || 'Erreur de connexion';
+                if (errorEl) errorEl.style.display = 'block';
                 setStatusBadge('UNKNOWN');
             } finally {
                 isFetching = false;
@@ -2238,18 +2334,17 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        credentials: 'include',
                         body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
                     });
                     
                     const result = await response.json();
                     
-                    if (result.ok && result.last_run) {
+                    if (result && result.ok && result.last_run) {
                         const run = result.last_run;
                         const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
                         const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
                         
-                        showNotification(
+                        showNotificationToast(
                             '✅ Import IONOS terminé',
                             `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
                             'success'
@@ -2260,15 +2355,16 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                             refreshStatus();
                         }, 1000);
                     } else {
-                        showNotification(
+                        const errorMsg = result && result.error ? result.error : 'Erreur lors de l\'import IONOS';
+                        showNotificationToast(
                             '❌ Erreur',
-                            result.error || 'Erreur lors de l\'import IONOS',
+                            errorMsg,
                             'error'
                         );
                     }
                 } catch (error) {
                     console.error('[IONOS] Erreur trigger:', error);
-                    showNotification(
+                    showNotificationToast(
                         '❌ Erreur',
                         'Impossible de lancer l\'import IONOS: ' + error.message,
                         'error'

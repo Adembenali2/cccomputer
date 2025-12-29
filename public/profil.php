@@ -484,6 +484,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut de la facture mis à jour."];
             }
         }
+        // ===== MISE À JOUR STATUT SAV =====
+        elseif ($action === 'update_sav_status') {
+            if (!$isAdminOrDirigeant) {
+                throw new RuntimeException('Vous n\'êtes pas autorisé à modifier les SAV.');
+            }
+
+            $savId = validateId($_POST['sav_id'] ?? 0, 'ID SAV');
+            $newStatus = trim((string)($_POST['statut'] ?? ''));
+
+            $allowedStatuses = ['ouvert', 'en_cours', 'resolu', 'annule'];
+            if (!in_array($newStatus, $allowedStatuses, true)) {
+                throw new RuntimeException('Statut de SAV invalide.');
+            }
+
+            $beforeSav = safeFetch(
+                $pdo,
+                "SELECT statut, reference FROM sav WHERE id = ?",
+                [$savId],
+                'profil_sav_before'
+            );
+
+            if (!$beforeSav) {
+                throw new RuntimeException('SAV introuvable.');
+            }
+
+            if ($beforeSav['statut'] === $newStatus) {
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Aucun changement de statut pour ce SAV."];
+            } else {
+                // Si on passe de "résolu" à "ouvert", on peut réinitialiser la date de fermeture
+                $updateSql = "UPDATE sav SET statut = ?";
+                $updateParams = [$newStatus];
+                
+                if ($beforeSav['statut'] === 'resolu' && $newStatus === 'ouvert') {
+                    $updateSql .= ", date_fermeture = NULL";
+                }
+                
+                $updateSql .= " WHERE id = ?";
+                $updateParams[] = $savId;
+                
+                $stmt = $pdo->prepare($updateSql);
+                $stmt->execute($updateParams);
+
+                logProfilAction(
+                    $pdo,
+                    $currentUser['id'],
+                    'sav_statut_modifie',
+                    "Modification statut SAV #{$savId} ({$beforeSav['reference']}): '{$beforeSav['statut']}' → '{$newStatus}'"
+                );
+
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut du SAV mis à jour."];
+            }
+        }
         // ===== SAUVEGARDE DES PERMISSIONS =====
         elseif ($action === 'save_permissions') {
             if (!$isAdminOrDirigeant) {
@@ -588,6 +640,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectUrl .= '#paymentsPanel';
     } elseif ($action === 'update_invoice_status') {
         $redirectUrl .= '#facturesPanel';
+    } elseif ($action === 'update_sav_status') {
+        $redirectUrl .= '#savPanel';
     }
     header('Location: ' . $redirectUrl);
     exit;
@@ -740,6 +794,40 @@ $recentFactures = safeFetchAll(
     ",
     [],
     'profil_recent_factures'
+);
+
+// Derniers SAV résolus (pour affichage dans le profil)
+// On ne charge que les SAV résolus pour permettre de les rouvrir
+$recentSav = safeFetchAll(
+    $pdo,
+    "
+    SELECT 
+        s.id,
+        s.reference,
+        s.description,
+        s.date_ouverture,
+        s.date_fermeture,
+        s.date_intervention_prevue,
+        s.statut,
+        s.priorite,
+        s.type_panne,
+        s.commentaire,
+        s.created_at,
+        s.updated_at,
+        c.id AS client_id,
+        c.raison_sociale AS client_nom,
+        c.numero_client AS client_code,
+        u.nom AS technicien_nom,
+        u.prenom AS technicien_prenom
+    FROM sav s
+    LEFT JOIN clients c ON s.id_client = c.id
+    LEFT JOIN utilisateurs u ON s.id_technicien = u.id
+    WHERE s.statut = 'resolu'
+    ORDER BY s.date_fermeture DESC, s.updated_at DESC
+    LIMIT 30
+    ",
+    [],
+    'profil_recent_sav'
 );
 
 // Récupérer les informations de l'utilisateur connecté
@@ -1071,6 +1159,218 @@ function decode_msg($row) {
             background: var(--bg-primary);
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-sm);
+        }
+
+        /* Styles améliorés pour le tableau des SAV */
+        .sav-panel {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .sav-panel .panel-title {
+            margin-bottom: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .sav-panel .panel-subtitle {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .sav-panel .table-responsive {
+            overflow-x: visible;
+            width: 100%;
+            max-width: 100%;
+            margin-top: 1rem;
+        }
+
+        .sav-table {
+            width: 100%;
+            max-width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .sav-table thead {
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .sav-table thead th {
+            padding: 0.75rem 0.5rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        .sav-table thead th:nth-child(1) { width: 8%; } /* Date ouverture */
+        .sav-table thead th:nth-child(2) { width: 9%; } /* Référence */
+        .sav-table thead th:nth-child(3) { width: 12%; } /* Client */
+        .sav-table thead th:nth-child(4) { width: 20%; } /* Description */
+        .sav-table thead th:nth-child(5) { width: 8%; } /* Type panne */
+        .sav-table thead th:nth-child(6) { width: 8%; } /* Priorité */
+        .sav-table thead th:nth-child(7) { width: 8%; } /* Date fermeture */
+        .sav-table thead th:nth-child(8) { width: 10%; } /* Technicien */
+        .sav-table thead th:nth-child(9) { width: 8%; } /* Statut */
+        .sav-table thead th:nth-child(10) { width: 19%; } /* Actions */
+
+        .sav-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s ease;
+        }
+
+        .sav-table tbody tr:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .sav-table tbody td {
+            padding: 0.75rem 0.5rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            vertical-align: middle;
+            word-wrap: break-word;
+        }
+
+        .sav-table tbody td:nth-child(1),
+        .sav-table tbody td:nth-child(2),
+        .sav-table tbody td:nth-child(5),
+        .sav-table tbody td:nth-child(6),
+        .sav-table tbody td:nth-child(7),
+        .sav-table tbody td:nth-child(9) {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .sav-table tbody td:nth-child(3),
+        .sav-table tbody td:nth-child(4),
+        .sav-table tbody td:nth-child(8) {
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .sav-table .actions {
+            white-space: nowrap;
+            padding: 0.75rem 0.5rem;
+        }
+
+        .sav-table .actions form.sav-status-form {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            padding: 0.5rem;
+            margin: 0;
+            width: 100%;
+            min-width: 280px;
+        }
+
+        .sav-table .actions select.sav-status-select {
+            padding: 0.5rem 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            min-width: 150px;
+            max-width: 180px;
+            flex: 1 1 auto;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .sav-table .actions select.sav-status-select:hover {
+            border-color: var(--accent-primary);
+            background: var(--bg-secondary);
+        }
+
+        .sav-table .actions select.sav-status-select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            background: var(--bg-primary);
+        }
+
+        .sav-table .actions button.sav-update-btn {
+            padding: 0.5rem 1.25rem;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+            margin: 0;
+            font-weight: 500;
+            flex: 0 0 auto;
+        }
+
+        .sav-table .actions button.sav-update-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Couleurs spécifiques pour les statuts de SAV */
+        .sav-table .badge.statut-ouvert {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .sav-table .badge.statut-en-cours {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .sav-table .badge.statut-resolu {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .sav-table .badge.statut-annule {
+            background: rgba(0, 0, 0, 0.15);
+            color: #000000;
+            border: 1px solid rgba(0, 0, 0, 0.3);
+        }
+
+        @media (max-width: 1024px) {
+            .sav-table {
+                font-size: 0.8rem;
+            }
+
+            .sav-table thead th,
+            .sav-table tbody td {
+                padding: 0.6rem 0.4rem;
+            }
+
+            .sav-table thead th {
+                font-size: 0.75rem;
+            }
+
+            .sav-table .actions form.sav-status-form {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.5rem;
+                min-width: 100%;
+            }
+
+            .sav-table .actions select.sav-status-select {
+                width: 100%;
+                max-width: 100%;
+                min-width: 100%;
+            }
+
+            .sav-table .actions button.sav-update-btn {
+                width: 100%;
+            }
         }
 
         .factures-panel .panel-title {
@@ -1635,6 +1935,9 @@ function decode_msg($row) {
             </button>
             <button class="btn btn-secondary" id="toggleFactures" aria-expanded="false" aria-controls="facturesPanel">
                 Factures
+            </button>
+            <button class="btn btn-secondary" id="toggleSav" aria-expanded="false" aria-controls="savPanel">
+                SAV Résolus
             </button>
         </div>
         <?php endif; ?>
@@ -2327,6 +2630,165 @@ function decode_msg($row) {
     <?php endif; ?>
     
     <?php if ($isAdminOrDirigeant): ?>
+        <!-- Section SAV Résolus -->
+        <section class="panel sav-panel" id="savPanel" style="display: none;">
+            <h2 class="panel-title">SAV Résolus</h2>
+            <p class="panel-subtitle">
+                Aperçu rapide des 30 derniers SAV résolus. Vous pouvez <strong>réouvrir un SAV</strong> en modifiant son statut de "résolu" à "ouvert".
+            </p>
+
+            <div class="table-responsive">
+                <table class="users-table sav-table" role="table" aria-label="SAV résolus">
+                    <thead>
+                        <tr>
+                            <th scope="col">Date ouverture</th>
+                            <th scope="col">Référence</th>
+                            <th scope="col">Client</th>
+                            <th scope="col">Description</th>
+                            <th scope="col">Type panne</th>
+                            <th scope="col">Priorité</th>
+                            <th scope="col">Date fermeture</th>
+                            <th scope="col">Technicien</th>
+                            <th scope="col">Statut</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($recentSav)): ?>
+                            <tr>
+                                <td colspan="10" class="aucun" role="cell">Aucun SAV résolu enregistré.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php
+                            $statusLabels = [
+                                'ouvert' => 'Ouvert',
+                                'en_cours' => 'En cours',
+                                'resolu' => 'Résolu',
+                                'annule' => 'Annulé'
+                            ];
+                            $statusClasses = [
+                                'ouvert' => 'statut-ouvert',
+                                'en_cours' => 'statut-en-cours',
+                                'resolu' => 'statut-resolu',
+                                'annule' => 'statut-annule'
+                            ];
+                            $prioriteLabels = [
+                                'basse' => 'Basse',
+                                'normale' => 'Normale',
+                                'haute' => 'Haute',
+                                'urgente' => 'Urgente'
+                            ];
+                            $prioriteColors = [
+                                'basse' => '#6b7280',
+                                'normale' => '#3b82f6',
+                                'haute' => '#f59e0b',
+                                'urgente' => '#ef4444'
+                            ];
+                            $typePanneLabels = [
+                                'logiciel' => 'Logiciel',
+                                'materiel' => 'Matériel',
+                                'piece_rechangeable' => 'Pièce réchangeable'
+                            ];
+                            ?>
+                            <?php foreach ($recentSav as $s): ?>
+                                <?php
+                                $status = $s['statut'] ?? 'resolu';
+                                $statusClass = $statusClasses[$status] ?? 'statut-resolu';
+                                $priorite = $s['priorite'] ?? 'normale';
+                                $prioriteColor = $prioriteColors[$priorite] ?? '#6b7280';
+                                $technicienNom = trim(($s['technicien_prenom'] ?? '') . ' ' . ($s['technicien_nom'] ?? ''));
+                                if ($technicienNom === '') {
+                                    $technicienNom = '—';
+                                }
+                                ?>
+                                <tr role="row">
+                                    <td data-label="Date ouverture" role="cell">
+                                        <span style="font-weight: 500; color: var(--text-primary);">
+                                            <?= isset($s['date_ouverture']) ? h(formatDate($s['date_ouverture'], 'd/m/Y')) : '—' ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Référence" role="cell">
+                                        <span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
+                                            <?= h($s['reference'] ?? '—') ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Client" role="cell">
+                                        <?php if (!empty($s['client_nom'])): ?>
+                                            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                                <span style="font-weight: 600; color: var(--text-primary);">
+                                                    <?= h($s['client_nom']) ?>
+                                                </span>
+                                                <?php if (!empty($s['client_code'])): ?>
+                                                    <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                                                        <?= h($s['client_code']) ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Description" role="cell">
+                                        <span style="color: var(--text-primary); max-width: 300px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<?= h($s['description'] ?? '') ?>">
+                                            <?= h(mb_substr($s['description'] ?? '', 0, 80)) ?><?= mb_strlen($s['description'] ?? '') > 80 ? '...' : '' ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Type panne" role="cell">
+                                        <?php if (!empty($s['type_panne'])): ?>
+                                            <span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 0.875rem; color: var(--text-primary);">
+                                                <?= h($typePanneLabels[$s['type_panne']] ?? $s['type_panne']) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Priorité" role="cell">
+                                        <span style="display: inline-block; padding: 0.25rem 0.5rem; background: <?= $prioriteColor ?>20; border: 1px solid <?= $prioriteColor ?>40; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 500; color: <?= $prioriteColor ?>;">
+                                            <?= h($prioriteLabels[$priorite] ?? $priorite) ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Date fermeture" role="cell">
+                                        <span style="font-weight: 500; color: var(--text-primary);">
+                                            <?= isset($s['date_fermeture']) ? h(formatDate($s['date_fermeture'], 'd/m/Y')) : '—' ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Technicien" role="cell">
+                                        <span style="color: var(--text-primary);">
+                                            <?= h($technicienNom) ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Statut" role="cell">
+                                        <span class="badge <?= $statusClass ?>">
+                                            <?= h($statusLabels[$status] ?? $status) ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Actions" class="actions" role="cell">
+                                        <form method="post" action="/public/profil.php#savPanel" class="inline sav-status-form">
+                                            <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+                                            <input type="hidden" name="action" value="update_sav_status">
+                                            <input type="hidden" name="sav_id" value="<?= (int)$s['id'] ?>">
+                                            <label for="sav-status-<?= (int)$s['id'] ?>" class="sr-only">Statut</label>
+                                            <select id="sav-status-<?= (int)$s['id'] ?>" name="statut" class="sav-status-select">
+                                                <option value="ouvert" <?= $status === 'ouvert' ? 'selected' : '' ?>>Ouvert</option>
+                                                <option value="en_cours" <?= $status === 'en_cours' ? 'selected' : '' ?>>En cours</option>
+                                                <option value="resolu" <?= $status === 'resolu' ? 'selected' : '' ?>>Résolu</option>
+                                                <option value="annule" <?= $status === 'annule' ? 'selected' : '' ?>>Annulé</option>
+                                            </select>
+                                            <button type="submit" class="fiche-action-btn sav-update-btn">
+                                                Mettre à jour
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    <?php endif; ?>
+    
+    <?php if ($isAdminOrDirigeant): ?>
         <!-- Section Historique des Imports SFTP et IONOS (masquée par défaut) -->
         <section class="panel import-history-panel" id="importHistoryPanel" style="display: none;">
             <h2 class="panel-title">Historique des Imports (SFTP & IONOS)</h2>
@@ -2872,6 +3334,43 @@ function decode_msg($row) {
             } else {
                 // Masquer la section
                 facturesPanel.style.display = 'none';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+})();
+
+/* Toggle section SAV */
+(function() {
+    const toggleBtn = document.getElementById('toggleSav');
+    const savPanel = document.getElementById('savPanel');
+    
+    if (toggleBtn && savPanel) {
+        // Si l'URL contient #savPanel, afficher automatiquement la section
+        if (window.location.hash === '#savPanel') {
+            savPanel.style.display = 'block';
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            setTimeout(function() {
+                savPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+        
+        toggleBtn.addEventListener('click', function() {
+            const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+            const isHidden = savPanel.style.display === 'none';
+            
+            if (isHidden || !isExpanded) {
+                // Afficher la section
+                savPanel.style.display = 'block';
+                toggleBtn.setAttribute('aria-expanded', 'true');
+                
+                // Scroll vers la section avec animation
+                setTimeout(function() {
+                    savPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 10);
+            } else {
+                // Masquer la section
+                savPanel.style.display = 'none';
                 toggleBtn.setAttribute('aria-expanded', 'false');
             }
         });
