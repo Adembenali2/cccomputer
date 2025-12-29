@@ -77,29 +77,35 @@ function getPdoOrFail(): PDO {
  * Log minimal pour debug prod (une fois par endpoint)
  */
 function requireApiAuth(): void {
-    if (empty($_SESSION['user_id'])) {
-        // Logging minimal pour debug (une fois par endpoint, pas de spam)
-        static $logged = false;
-        if (!$logged) {
-            $endpoint = $_SERVER['REQUEST_URI'] ?? 'unknown';
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
-            $origin = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? 'unknown';
-            $sessionId = session_id() ?: 'no-session';
-            $cookieName = session_name();
-            $cookies = json_encode($_COOKIE);
-            $sessionData = json_encode($_SESSION);
-            error_log(sprintf(
-                '[API Auth] Session manquante - Endpoint: %s | Session ID: %s | Cookie Name: %s | Cookies: %s | Session: %s | Origin: %s | UA: %s',
-                $endpoint,
-                $sessionId,
-                $cookieName,
-                $cookies,
-                $sessionData,
-                $origin,
-                substr($userAgent, 0, 100)
-            ));
-            $logged = true;
+    // Vérifier que la session est active
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        // Si la session n'est pas active, essayer de la démarrer
+        if (session_status() === PHP_SESSION_NONE) {
+            // Le bootstrap devrait déjà avoir démarré la session, mais on essaie quand même
+            session_start();
         }
+    }
+    
+    // Vérifier que l'utilisateur est authentifié
+    if (empty($_SESSION['user_id'])) {
+        // Ne pas logger les erreurs 401 pour les endpoints appelés fréquemment (polling)
+        // Cela évite de polluer les logs Railway avec des erreurs normales
+        // Les endpoints comme chatroom_get_notifications sont appelés toutes les 10 secondes
+        $endpoint = $_SERVER['REQUEST_URI'] ?? 'unknown';
+        $isPollingEndpoint = strpos($endpoint, 'chatroom_get_notifications') !== false 
+                          || strpos($endpoint, 'messagerie_get_unread_count') !== false
+                          || strpos($endpoint, 'chatroom_get.php') !== false;
+        
+        // Logger seulement si ce n'est pas un endpoint de polling (pour éviter le spam)
+        if (!$isPollingEndpoint && session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION)) {
+            // Session active mais pas d'user_id - problème d'authentification (seulement pour endpoints non-polling)
+            error_log(sprintf(
+                '[API Auth] Session active mais user_id manquant - Endpoint: %s | Session ID: %s',
+                $endpoint,
+                session_id() ?: 'no-session'
+            ));
+        }
+        
         http_response_code(401);
         jsonResponse(['ok' => false, 'error' => 'NO_SESSION'], 401);
     }
@@ -217,7 +223,7 @@ function initApi(): void {
         // Tester la connexion avec prepare() pour cohérence
         $stmt = $pdo->prepare('SELECT 1');
         $stmt->execute();
-        error_log('initApi: Connexion PDO initialisée via DatabaseConnection');
+        // Log supprimé pour réduire le bruit dans les logs Railway
         
     } catch (Throwable $e) {
         $errorInfo = [];

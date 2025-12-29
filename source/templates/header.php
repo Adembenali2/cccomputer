@@ -242,9 +242,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (chatroomData.ok) {
               chatroomCount = chatroomData.count || 0;
             }
+          } else if (chatroomResponse.status === 401) {
+            // 401 est normal si l'utilisateur n'est pas connecté ou la session a expiré
+            // Ne pas logger d'erreur pour éviter le spam dans les logs
+            chatroomCount = 0;
           }
         } catch (err) {
-          // Ignorer les erreurs de chatroom (table peut ne pas exister)
+          // Ignorer les erreurs de chatroom (table peut ne pas exister, timeout, etc.)
+          // Ne pas logger pour éviter le spam dans les logs
+          chatroomCount = 0;
         }
         
         // Récupérer les messages non lus de l'ancienne messagerie

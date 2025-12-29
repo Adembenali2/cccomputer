@@ -69,9 +69,8 @@ class DatabaseConnection {
             
             self::$instance = new PDO($dsn, $user, $pass, $options);
             
-            // Log de succès pour le débogage (sans informations sensibles)
-            $safeDsn = preg_replace('/:[^@]+@/', ':****@', $dsn);
-            error_log("DatabaseConnection::getInstance() - PDO créé: DSN=$safeDsn");
+            // Log supprimé pour réduire le bruit dans les logs Railway
+            // La connexion PDO est créée silencieusement
             
             return self::$instance;
             

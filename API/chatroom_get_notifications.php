@@ -7,16 +7,16 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 initApi();
 requireApiAuth();
 
-// Debug temporaire pour Railway
-error_log("chatroom_get_notifications - SID=" . session_id() . " COOKIE=" . json_encode($_COOKIE) . " SESSION=" . json_encode($_SESSION));
-
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
     }
 
+    // Vérifier que l'utilisateur est authentifié (requireApiAuth() devrait déjà l'avoir fait, mais double vérification)
     $currentUserId = (int)($_SESSION['user_id'] ?? 0);
     if ($currentUserId <= 0) {
+        // Si requireApiAuth() a déjà vérifié, cette erreur ne devrait jamais se produire
+        // Mais on la garde pour sécurité
         jsonResponse(['ok' => false, 'error' => 'unauthorized'], 401);
     }
     
