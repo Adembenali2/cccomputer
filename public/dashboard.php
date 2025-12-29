@@ -1913,10 +1913,12 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 loading.style.display = 'none';
                 status.style.display = 'block';
                 
+                // Récupérer les éléments une seule fois
+                const errorTextEl = document.getElementById('sftpErrorText');
+                const errorEl = document.getElementById('sftpImportError');
+                
                 if (!response.ok || !data || !data.ok) {
                     const errorMsg = (data && data.error) ? data.error : `HTTP ${response.status}`;
-                    const errorTextEl = document.getElementById('sftpErrorText');
-                    const errorEl = document.getElementById('sftpImportError');
                     if (errorTextEl) errorTextEl.textContent = errorMsg;
                     if (errorEl) errorEl.style.display = 'block';
                     setStatusBadge('UNKNOWN');
@@ -1924,7 +1926,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 }
                 
                 // Masquer l'erreur si succès
-                const errorEl = document.getElementById('sftpImportError');
                 if (errorEl) errorEl.style.display = 'none';
                 
                 if (!data.has_run || !data.lastRun) {
@@ -2008,9 +2009,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 // Mettre à jour le dernier run_id vu
                 lastRunId = currentRunId;
                 
-                // Afficher l'erreur si présente
-                const errorTextEl = document.getElementById('sftpErrorText');
-                const errorEl = document.getElementById('sftpImportError');
+                // Afficher l'erreur si présente (réutiliser les variables déclarées plus haut)
                 if (run.error) {
                     if (errorTextEl) errorTextEl.textContent = run.error;
                     if (errorEl) errorEl.style.display = 'block';
@@ -2022,10 +2021,11 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 console.error('[SFTP] Erreur refresh:', error);
                 loading.style.display = 'none';
                 status.style.display = 'block';
-                const errorTextEl = document.getElementById('sftpErrorText');
-                const errorEl = document.getElementById('sftpImportError');
-                if (errorTextEl) errorTextEl.textContent = error.message || 'Erreur de connexion';
-                if (errorEl) errorEl.style.display = 'block';
+                // Récupérer les éléments dans le catch (scope différent)
+                const catchErrorTextEl = document.getElementById('sftpErrorText');
+                const catchErrorEl = document.getElementById('sftpImportError');
+                if (catchErrorTextEl) catchErrorTextEl.textContent = error.message || 'Erreur de connexion';
+                if (catchErrorEl) catchErrorEl.style.display = 'block';
                 setStatusBadge('UNKNOWN');
             } finally {
                 isFetching = false;
@@ -2212,6 +2212,10 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 
                 const data = await response.json();
                 
+                // Récupérer les éléments une seule fois au début
+                const errorTextEl = document.getElementById('ionosErrorText');
+                const errorEl = document.getElementById('ionosImportError');
+                
                 if (!data || !data.ok || !data.has_run) {
                     loading.style.display = 'none';
                     status.style.display = 'block';
@@ -2220,7 +2224,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     const rowsSeenEl = document.getElementById('ionosRowsSeen');
                     const rowsProcessedEl = document.getElementById('ionosRowsProcessed');
                     const rowsInsertedEl = document.getElementById('ionosRowsInserted');
-                    const errorEl = document.getElementById('ionosImportError');
                     if (lastRunEl) lastRunEl.textContent = '—';
                     if (rowsSeenEl) rowsSeenEl.textContent = '—';
                     if (rowsProcessedEl) rowsProcessedEl.textContent = '—';
@@ -2292,9 +2295,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 
                 lastRunId = currentRunId;
                 
-                // Afficher l'erreur si présente
-                const errorTextEl = document.getElementById('ionosErrorText');
-                const errorEl = document.getElementById('ionosImportError');
+                // Afficher l'erreur si présente (réutiliser les variables déclarées plus haut)
                 if (run.error) {
                     if (errorTextEl) errorTextEl.textContent = run.error;
                     if (errorEl) errorEl.style.display = 'block';
@@ -2306,10 +2307,11 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 console.error('[IONOS] Erreur refresh:', error);
                 loading.style.display = 'none';
                 status.style.display = 'block';
-                const errorTextEl = document.getElementById('ionosErrorText');
-                const errorEl = document.getElementById('ionosImportError');
-                if (errorTextEl) errorTextEl.textContent = error.message || 'Erreur de connexion';
-                if (errorEl) errorEl.style.display = 'block';
+                // Récupérer les éléments dans le catch (scope différent)
+                const catchErrorTextEl = document.getElementById('ionosErrorText');
+                const catchErrorEl = document.getElementById('ionosImportError');
+                if (catchErrorTextEl) catchErrorTextEl.textContent = error.message || 'Erreur de connexion';
+                if (catchErrorEl) catchErrorEl.style.display = 'block';
                 setStatusBadge('UNKNOWN');
             } finally {
                 isFetching = false;
