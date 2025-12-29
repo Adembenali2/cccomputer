@@ -6183,10 +6183,16 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         },
                         title: {
                             display: true,
-                            text: 'Évolution des impressions par mois'
+                            text: 'Consommation quotidienne des clients'
                         }
                     },
                     scales: {
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        },
                         y: {
                             beginAtZero: true,
                             ticks: {

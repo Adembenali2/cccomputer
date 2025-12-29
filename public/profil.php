@@ -458,20 +458,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Utilisateur introuvable.');
             }
             
-            // Liste des pages disponibles
+            // Liste des pages disponibles (organisées par catégories)
             $availablePages = [
+                // Pages principales
                 'dashboard' => 'Dashboard',
                 'agenda' => 'Agenda',
+                'historique' => 'Historique',
+                
+                // Gestion clients
                 'clients' => 'Clients',
                 'client_fiche' => 'Fiche Client',
-                'historique' => 'Historique',
-                'profil' => 'Gestion Utilisateurs',
-                'maps' => 'Cartes & Planification',
+                
+                // Gestion financière
+                'paiements' => 'Paiements & Factures',
+                
+                // Communication
                 'messagerie' => 'Messagerie',
+                
+                // Opérations
                 'sav' => 'SAV',
                 'livraison' => 'Livraisons',
                 'stock' => 'Stock',
-                'photocopieurs_details' => 'Détails Photocopieurs'
+                'photocopieurs_details' => 'Détails Photocopieurs',
+                
+                // Planification
+                'maps' => 'Cartes & Planification',
+                
+                // Administration
+                'profil' => 'Gestion Utilisateurs'
             ];
             
             // Récupérer les permissions envoyées
@@ -682,20 +696,34 @@ $filtersActive = ($search !== '');
 // ========================================================================
 // GESTION DES PERMISSIONS (ACL)
 // ========================================================================
-// Liste des pages disponibles pour les permissions
+// Liste des pages disponibles pour les permissions (organisées par catégories)
 $availablePages = [
+    // Pages principales
     'dashboard' => 'Dashboard',
     'agenda' => 'Agenda',
+    'historique' => 'Historique',
+    
+    // Gestion clients
     'clients' => 'Clients',
     'client_fiche' => 'Fiche Client',
-    'historique' => 'Historique',
-    'profil' => 'Gestion Utilisateurs',
-    'maps' => 'Cartes & Planification',
+    
+    // Gestion financière
+    'paiements' => 'Paiements & Factures',
+    
+    // Communication
     'messagerie' => 'Messagerie',
+    
+    // Opérations
     'sav' => 'SAV',
     'livraison' => 'Livraisons',
     'stock' => 'Stock',
-    'photocopieurs_details' => 'Détails Photocopieurs'
+    'photocopieurs_details' => 'Détails Photocopieurs',
+    
+    // Planification
+    'maps' => 'Cartes & Planification',
+    
+    // Administration
+    'profil' => 'Gestion Utilisateurs'
 ];
 
 // Utilisateur cible pour les permissions (utilise l'utilisateur en édition si présent, sinon sélectionné)
@@ -1129,6 +1157,50 @@ function decode_msg($row) {
                 height: 14px;
             }
         }
+
+        /* Styles pour les catégories de permissions */
+        .permission-category {
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .permission-category:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .permission-category-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0 0 1rem 0;
+            padding: 0.75rem 1rem;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--accent-primary);
+        }
+
+        .permission-category .permission-item {
+            margin-left: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .permission-category .permission-item:last-child {
+            margin-bottom: 0;
+        }
+
+        @media (max-width: 768px) {
+            .permission-category-title {
+                font-size: 0.95rem;
+                padding: 0.6rem 0.8rem;
+            }
+
+            .permission-category .permission-item {
+                margin-left: 0.5rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1471,22 +1543,51 @@ function decode_msg($row) {
                         </div>
                         
                         <div class="permissions-list">
-                            <?php foreach ($availablePages as $pageKey => $pageName): ?>
-                                <?php $isAllowed = $userPermissions[$pageKey] ?? true; ?>
-                                <div class="permission-item">
-                                    <label class="permission-toggle">
-                                        <input type="checkbox" 
-                                               name="permissions[<?= h($pageKey) ?>]" 
-                                               value="1" 
-                                               <?= $isAllowed ? 'checked' : '' ?>
-                                               class="permission-checkbox"
-                                               data-page="<?= h($pageKey) ?>">
-                                        <span class="toggle-slider"></span>
-                                        <span class="permission-label">
-                                            <strong><?= h($pageName) ?></strong>
-                                            <small><?= h($pageKey) ?>.php</small>
-                                        </span>
-                                    </label>
+                            <?php
+                            // Organiser les pages par catégories pour l'affichage
+                            $pagesByCategory = [
+                                'Pages principales' => ['dashboard', 'agenda', 'historique'],
+                                'Gestion clients' => ['clients', 'client_fiche'],
+                                'Gestion financière' => ['paiements'],
+                                'Communication' => ['messagerie'],
+                                'Opérations' => ['sav', 'livraison', 'stock', 'photocopieurs_details'],
+                                'Planification' => ['maps'],
+                                'Administration' => ['profil']
+                            ];
+                            
+                            $categoryLabels = [
+                                'Pages principales' => '📊 Pages principales',
+                                'Gestion clients' => '👥 Gestion clients',
+                                'Gestion financière' => '💰 Gestion financière',
+                                'Communication' => '💬 Communication',
+                                'Opérations' => '⚙️ Opérations',
+                                'Planification' => '🗺️ Planification',
+                                'Administration' => '🔐 Administration'
+                            ];
+                            
+                            foreach ($pagesByCategory as $category => $pageKeys): ?>
+                                <div class="permission-category">
+                                    <h4 class="permission-category-title"><?= h($categoryLabels[$category] ?? $category) ?></h4>
+                                    <?php foreach ($pageKeys as $pageKey): ?>
+                                        <?php if (isset($availablePages[$pageKey])): ?>
+                                            <?php $isAllowed = $userPermissions[$pageKey] ?? true; ?>
+                                            <div class="permission-item">
+                                                <label class="permission-toggle">
+                                                    <input type="checkbox" 
+                                                           name="permissions[<?= h($pageKey) ?>]" 
+                                                           value="1" 
+                                                           <?= $isAllowed ? 'checked' : '' ?>
+                                                           class="permission-checkbox"
+                                                           data-page="<?= h($pageKey) ?>">
+                                                    <span class="toggle-slider"></span>
+                                                    <span class="permission-label">
+                                                        <strong><?= h($availablePages[$pageKey]) ?></strong>
+                                                        <small><?= h($pageKey) ?>.php</small>
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
                                 </div>
                             <?php endforeach; ?>
                         </div>
