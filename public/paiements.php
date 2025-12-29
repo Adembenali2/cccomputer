@@ -1207,7 +1207,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         }
 
         .progress-percentage-display.complete {
-            color: #10b981;
+            color: white;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
             animation: pulse 2s ease-in-out infinite;
         }
 
@@ -1325,8 +1326,9 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         }
 
         .progress-status-text.complete {
-            color: #10b981;
+            color: white;
             font-weight: 600;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
         }
 
         /* Smooth number transition */
@@ -2107,23 +2109,23 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     
                     <!-- Statistiques en temps réel -->
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.15); border-radius: var(--radius-md); backdrop-filter: blur(10px);">
-                            <div style="font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem;">
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.2); border-radius: var(--radius-md); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
                                 <span id="genFactureStatsClients">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">Clients traités</div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.95); font-weight: 500;">Clients traités</div>
                         </div>
-                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.15); border-radius: var(--radius-md); backdrop-filter: blur(10px);">
-                            <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin-bottom: 0.25rem;">
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.2); border-radius: var(--radius-md); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
                                 <span id="genFactureStatsGenerees">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">Factures générées</div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.95); font-weight: 500;">Factures générées</div>
                         </div>
-                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.15); border-radius: var(--radius-md); backdrop-filter: blur(10px);">
-                            <div style="font-size: 2rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.25rem;">
+                        <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.2); border-radius: var(--radius-md); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);">
+                            <div style="font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
                                 <span id="genFactureStatsExclus">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">Clients exclus</div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.95); font-weight: 500;">Clients exclus</div>
                         </div>
                     </div>
                     

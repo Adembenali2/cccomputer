@@ -639,6 +639,7 @@ $recentPayments = safeFetchAll(
         p.mode_paiement,
         p.statut,
         p.reference,
+        p.recu_path,
         p.created_at,
         c.raison_sociale AS client_nom,
         c.numero_client AS client_code,
@@ -954,6 +955,179 @@ function decode_msg($row) {
             border-right: 7px solid transparent;
             border-top: 7px solid var(--border-color);
             margin-top: 1px;
+        }
+
+        /* Styles améliorés pour le tableau des paiements */
+        .payments-panel {
+            margin-top: 2rem;
+        }
+
+        .payments-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .payments-table thead {
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .payments-table thead th {
+            padding: 1rem 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .payments-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s ease;
+        }
+
+        .payments-table tbody tr:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .payments-table tbody td {
+            padding: 1rem 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            vertical-align: middle;
+        }
+
+        .payments-table .actions {
+            white-space: nowrap;
+        }
+
+        .payments-table .actions form {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .payments-table .actions select {
+            padding: 0.5rem 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            min-width: 120px;
+            transition: all 0.2s ease;
+        }
+
+        .payments-table .actions select:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .payments-table .actions select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .payments-table .actions button {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+
+        .payments-table .actions button:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Bouton justificatif */
+        .btn-justificatif {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            text-decoration: none;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-justificatif:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            color: white;
+        }
+
+        .btn-justificatif svg {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        /* Amélioration des badges de statut dans le tableau */
+        .payments-table .badge {
+            display: inline-block;
+            padding: 0.4rem 0.75rem;
+            border-radius: var(--radius-md);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Responsive pour le tableau des paiements */
+        @media (max-width: 1024px) {
+            .payments-table {
+                font-size: 0.875rem;
+            }
+
+            .payments-table thead th,
+            .payments-table tbody td {
+                padding: 0.75rem 0.5rem;
+            }
+
+            .payments-table .actions form {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.5rem;
+            }
+
+            .payments-table .actions select {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .payments-table {
+                display: block;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .payments-table thead th {
+                font-size: 0.8rem;
+                padding: 0.75rem 0.5rem;
+            }
+
+            .payments-table tbody td {
+                font-size: 0.85rem;
+                padding: 0.75rem 0.5rem;
+            }
+
+            .btn-justificatif {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.8rem;
+            }
+
+            .btn-justificatif svg {
+                width: 14px;
+                height: 14px;
+            }
         }
     </style>
 </head>
@@ -1340,7 +1514,7 @@ function decode_msg($row) {
             </p>
 
             <div class="table-responsive">
-                <table class="users-table" role="table" aria-label="Derniers paiements">
+                <table class="users-table payments-table" role="table" aria-label="Derniers paiements">
                     <thead>
                         <tr>
                             <th scope="col">Date</th>
@@ -1350,13 +1524,14 @@ function decode_msg($row) {
                             <th scope="col">Mode</th>
                             <th scope="col">Statut</th>
                             <th scope="col">Référence</th>
+                            <th scope="col">Justificatif</th>
                             <th scope="col">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($recentPayments)): ?>
                             <tr>
-                                <td colspan="8" class="aucun" role="cell">Aucun paiement enregistré.</td>
+                                <td colspan="9" class="aucun" role="cell">Aucun paiement enregistré.</td>
                             </tr>
                         <?php else: ?>
                             <?php
@@ -1386,26 +1561,44 @@ function decode_msg($row) {
                                 ?>
                                 <tr role="row">
                                     <td data-label="Date" role="cell">
-                                        <?= isset($p['date_paiement']) ? h(formatDate($p['date_paiement'], 'd/m/Y')) : '—' ?>
+                                        <span style="font-weight: 500; color: var(--text-primary);">
+                                            <?= isset($p['date_paiement']) ? h(formatDate($p['date_paiement'], 'd/m/Y')) : '—' ?>
+                                        </span>
                                     </td>
                                     <td data-label="Client" role="cell">
                                         <?php if (!empty($p['client_nom'])): ?>
-                                            <?= h($p['client_nom']) ?>
-                                            <?php if (!empty($p['client_code'])): ?>
-                                                <span class="meta-sub"><?= h($p['client_code']) ?></span>
-                                            <?php endif; ?>
+                                            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                                <span style="font-weight: 600; color: var(--text-primary);">
+                                                    <?= h($p['client_nom']) ?>
+                                                </span>
+                                                <?php if (!empty($p['client_code'])): ?>
+                                                    <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                                                        <?= h($p['client_code']) ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
                                         <?php else: ?>
-                                            —
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
                                         <?php endif; ?>
                                     </td>
                                     <td data-label="Facture" role="cell">
-                                        <?= !empty($p['facture_numero']) ? h($p['facture_numero']) : '—' ?>
+                                        <?php if (!empty($p['facture_numero'])): ?>
+                                            <span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 500; color: var(--text-primary);">
+                                                <?= h($p['facture_numero']) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td data-label="Montant" role="cell">
-                                        <?= h(number_format((float)$p['montant'], 2, ',', ' ')) ?> €
+                                        <strong style="color: var(--accent-primary); font-weight: 600;">
+                                            <?= h(number_format((float)$p['montant'], 2, ',', ' ')) ?> €
+                                        </strong>
                                     </td>
                                     <td data-label="Mode" role="cell">
-                                        <?= h($modeLabels[$p['mode_paiement']] ?? $p['mode_paiement']) ?>
+                                        <span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 0.875rem; color: var(--text-primary);">
+                                            <?= h($modeLabels[$p['mode_paiement']] ?? $p['mode_paiement']) ?>
+                                        </span>
                                     </td>
                                     <td data-label="Statut" role="cell">
                                         <span class="badge <?= $statusClass ?>">
@@ -1413,7 +1606,32 @@ function decode_msg($row) {
                                         </span>
                                     </td>
                                     <td data-label="Référence" role="cell">
-                                        <?= !empty($p['reference']) ? h($p['reference']) : '—' ?>
+                                        <?php if (!empty($p['reference'])): ?>
+                                            <code style="background: var(--bg-secondary); padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.85rem; color: var(--text-primary); font-family: 'Courier New', monospace;">
+                                                <?= h($p['reference']) ?>
+                                            </code>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Justificatif" role="cell">
+                                        <?php if (!empty($p['recu_path'])): ?>
+                                            <a href="<?= h($p['recu_path']) ?>" 
+                                               target="_blank" 
+                                               class="btn-justificatif"
+                                               title="Voir le justificatif"
+                                               aria-label="Voir le justificatif du paiement">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                                </svg>
+                                                Voir
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="text-muted" style="font-size: 0.875rem;">—</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td data-label="Actions" class="actions" role="cell">
                                         <form method="post" action="/public/profil.php#paymentsPanel" class="inline">
