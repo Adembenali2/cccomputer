@@ -4798,12 +4798,50 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     if (logContainer && logContent) {
                         logContent.innerHTML = '';
                         
-                        // Afficher les factures générées
+                        // Afficher les factures générées (style carte + bouton PDF)
                         if (result.factures_generees && result.factures_generees.length > 0) {
                             result.factures_generees.forEach(facture => {
                                 const logItem = document.createElement('div');
-                                logItem.style.cssText = 'padding: 0.5rem; background: rgba(16,185,129,0.2); border-radius: var(--radius-sm); color: white; font-size: 0.85rem; border-left: 3px solid #10b981;';
-                                logItem.innerHTML = `✅ <strong>${facture.client_nom}</strong> - Facture ${facture.numero} (${parseFloat(facture.montant_ttc).toFixed(2)}€)`;
+                                logItem.style.cssText = 'padding: 0.75rem 1rem; background: rgba(15,23,42,0.6); border-radius: var(--radius-md); color: white; font-size: 0.85rem; border: 1px solid rgba(148,163,184,0.4); display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; box-shadow: 0 8px 20px rgba(15,23,42,0.4);';
+
+                                const montant = parseFloat(facture.montant_ttc || 0).toFixed(2).replace('.', ',');
+
+                                logItem.innerHTML = `
+                                    <div style="display:flex; align-items:flex-start; gap:0.6rem;">
+                                        <div style="width: 22px; height: 22px; border-radius: 999px; background: rgba(16,185,129,0.2); display:flex; align-items:center; justify-content:center; color:#22c55e;">
+                                            ✓
+                                        </div>
+                                        <div>
+                                            <div style="font-weight:600; margin-bottom:0.15rem;">
+                                                ${facture.client_nom}
+                                            </div>
+                                            <div style="font-size:0.8rem; opacity:0.9;">
+                                                Facture <strong>${facture.numero}</strong> • <span style="color:#6ee7b7;">${montant} € TTC</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="button"
+                                        onclick="viewFacturePDFById(${facture.facture_id}, '${facture.numero}')"
+                                        style="padding:0.4rem 0.9rem; border-radius:999px; border:1px solid rgba(148,163,184,0.8); background:rgba(15,23,42,0.9); color:#e5e7eb; font-size:0.78rem; font-weight:500; display:inline-flex; align-items:center; gap:0.35rem; cursor:pointer; transition:all 0.15s ease;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                            <polyline points="14 2 14 8 20 8"></polyline>
+                                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        </svg>
+                                        Ouvrir le PDF
+                                    </button>
+                                `;
+
+                                logItem.addEventListener('mouseenter', () => {
+                                    logItem.style.transform = 'translateY(-2px)';
+                                    logItem.style.boxShadow = '0 12px 30px rgba(15,23,42,0.6)';
+                                });
+                                logItem.addEventListener('mouseleave', () => {
+                                    logItem.style.transform = 'translateY(0)';
+                                    logItem.style.boxShadow = '0 8px 20px rgba(15,23,42,0.4)';
+                                });
+
                                 logContent.appendChild(logItem);
                             });
                         }
