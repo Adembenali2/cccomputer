@@ -191,15 +191,30 @@ try {
         
         $paiementId = $pdo->lastInsertId();
         
-        // Mettre à jour le justificatif si présent
-        if ($justificatifPath) {
+        // Générer le reçu de paiement en PDF
+        $recuPath = null;
+        try {
+            require_once __DIR__ . '/paiements_generer_recu.php';
+            $recuPath = generateRecuPDF($pdo, $paiementId);
+        } catch (Throwable $e) {
+            error_log('paiements_enregistrer.php - Erreur génération reçu: ' . $e->getMessage());
+            // On continue même si la génération du reçu échoue
+        }
+        
+        // Mettre à jour le reçu généré et le justificatif si présent
+        // Priorité : justificatif uploadé > reçu généré
+        $finalRecuPath = $justificatifPath ?: $recuPath;
+        
+        if ($finalRecuPath) {
             $stmt = $pdo->prepare("
                 UPDATE paiements 
-                SET recu_path = :recu_path 
+                SET recu_path = :recu_path,
+                    recu_genere = :recu_genere
                 WHERE id = :id
             ");
             $stmt->execute([
-                ':recu_path' => $justificatifPath,
+                ':recu_path' => $finalRecuPath,
+                ':recu_genere' => ($recuPath && !$justificatifPath) ? 1 : 0,
                 ':id' => $paiementId
             ]);
         }
@@ -225,7 +240,9 @@ try {
             'paiement_id' => $paiementId,
             'facture_id' => $factureId,
             'nouveau_statut' => $nouveauStatutFacture,
-            'reference' => $reference
+            'reference' => $reference,
+            'recu_path' => $finalRecuPath ?? null,
+            'recu_genere' => $recuPath ? true : false
         ]);
         
     } catch (Exception $e) {
