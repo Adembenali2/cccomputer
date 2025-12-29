@@ -529,6 +529,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectUrl .= '?edit=' . $id;
     } elseif ($action === 'save_permissions' && isset($redirectAfterSave)) {
         $redirectUrl .= '?perm_user=' . $redirectAfterSave;
+    } elseif ($action === 'update_payment_status') {
+        $redirectUrl .= '#paymentsPanel';
     }
     header('Location: ' . $redirectUrl);
     exit;
@@ -968,6 +970,9 @@ function decode_msg($row) {
             <button class="btn btn-secondary" id="toggleImportHistory" aria-expanded="false" aria-controls="importHistoryPanel">
                 Historique des Imports
             </button>
+            <button class="btn btn-secondary" id="togglePayments" aria-expanded="false" aria-controls="paymentsPanel">
+                Paiements
+            </button>
         </div>
         <?php endif; ?>
     </header>
@@ -1328,7 +1333,7 @@ function decode_msg($row) {
     
     <?php if ($isAdminOrDirigeant): ?>
         <!-- Section Derniers paiements -->
-        <section class="panel payments-panel" id="paymentsPanel">
+        <section class="panel payments-panel" id="paymentsPanel" style="display: none;">
             <h2 class="panel-title">Derniers paiements enregistrés</h2>
             <p class="panel-subtitle">
                 Aperçu rapide des 20 derniers paiements. Vous pouvez mettre à jour le <strong>statut</strong> directement depuis cette page.
@@ -1908,6 +1913,43 @@ function decode_msg($row) {
             } else {
                 // Masquer la section
                 historyPanel.style.display = 'none';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+})();
+
+/* Toggle section Paiements */
+(function() {
+    const toggleBtn = document.getElementById('togglePayments');
+    const paymentsPanel = document.getElementById('paymentsPanel');
+    
+    if (toggleBtn && paymentsPanel) {
+        // Si l'URL contient #paymentsPanel, afficher automatiquement la section
+        if (window.location.hash === '#paymentsPanel') {
+            paymentsPanel.style.display = 'block';
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            setTimeout(function() {
+                paymentsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+        
+        toggleBtn.addEventListener('click', function() {
+            const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+            const isHidden = paymentsPanel.style.display === 'none';
+            
+            if (isHidden || !isExpanded) {
+                // Afficher la section
+                paymentsPanel.style.display = 'block';
+                toggleBtn.setAttribute('aria-expanded', 'true');
+                
+                // Scroll vers la section avec animation
+                setTimeout(function() {
+                    paymentsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 10);
+            } else {
+                // Masquer la section
+                paymentsPanel.style.display = 'none';
                 toggleBtn.setAttribute('aria-expanded', 'false');
             }
         });

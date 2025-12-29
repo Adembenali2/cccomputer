@@ -1188,6 +1188,152 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 max-width: none;
             }
         }
+
+        /* ====== Progress Bar Styles ====== */
+        .progress-container-wrapper {
+            position: relative;
+            width: 100%;
+            margin-bottom: 1.5rem;
+        }
+
+        .progress-percentage-display {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .progress-percentage-display.complete {
+            color: #10b981;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 16px;
+            position: relative;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease, box-shadow 0.4s ease;
+            overflow: hidden;
+            background: linear-gradient(90deg, #10b981 0%, #3b82f6 50%, #8b5cf6 100%);
+            background-size: 200% 100%;
+            animation: gradientShift 3s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .progress-bar-fill.running {
+            box-shadow: 
+                0 0 20px rgba(59, 130, 246, 0.5),
+                0 0 40px rgba(139, 92, 246, 0.3),
+                0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .progress-bar-fill.complete {
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            background-size: 100% 100%;
+            animation: none;
+            box-shadow: 
+                0 0 30px rgba(16, 185, 129, 0.6),
+                0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .progress-bar-shimmer {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.4),
+                transparent
+            );
+            animation: shimmer 2s infinite;
+        }
+
+        .progress-bar-fill.complete .progress-bar-shimmer {
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.3),
+                transparent
+            );
+            animation: shimmerSuccess 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                left: -100%;
+            }
+            100% {
+                left: 100%;
+            }
+        }
+
+        @keyframes shimmerSuccess {
+            0% {
+                left: -100%;
+                opacity: 0.5;
+            }
+            100% {
+                left: 100%;
+                opacity: 1;
+            }
+        }
+
+        .progress-status-text {
+            text-align: center;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .progress-status-text.complete {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        /* Smooth number transition */
+        .progress-percentage-display span {
+            display: inline-block;
+            transition: transform 0.2s ease;
+        }
     </style>
 </head>
 <body>
@@ -1940,17 +2086,22 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 
                 <!-- Zone de progression -->
                 <div id="genFactureProgressContainer" style="display: none; margin-top: 2rem; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: var(--radius-lg); box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-                    <div style="text-align: center; color: white; margin-bottom: 1.5rem;">
-                        <div style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">
-                            <span id="genFactureProgressPercent">0</span>%
-                        </div>
-                        <div style="font-size: 0.9rem; opacity: 0.9;">Génération en cours...</div>
+                    <!-- Percentage Display -->
+                    <div class="progress-percentage-display" id="genFactureProgressPercentDisplay">
+                        <span id="genFactureProgressPercent">0</span>%
                     </div>
                     
-                    <!-- Barre de progression -->
-                    <div style="width: 100%; height: 24px; background: rgba(255,255,255,0.2); border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; position: relative;">
-                        <div id="genFactureProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981 0%, #34d399 100%); border-radius: 12px; transition: width 0.3s ease; position: relative; overflow: hidden;">
-                            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: shimmer 2s infinite;"></div>
+                    <!-- Progress Status Text -->
+                    <div class="progress-status-text" id="genFactureProgressStatus">
+                        Génération en cours...
+                    </div>
+                    
+                    <!-- Progress Bar Container -->
+                    <div class="progress-container-wrapper">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" id="genFactureProgressBar">
+                                <div class="progress-bar-shimmer"></div>
+                            </div>
                         </div>
                     </div>
                     
@@ -4580,6 +4731,25 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 btnCancel.disabled = false;
             }
             
+            // Réinitialiser la barre de progression
+            const progressBar = document.getElementById('genFactureProgressBar');
+            const percentDisplay = document.getElementById('genFactureProgressPercentDisplay');
+            const statusText = document.getElementById('genFactureProgressStatus');
+            
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.classList.remove('complete', 'running');
+                progressBar.style.background = 'linear-gradient(90deg, #10b981 0%, #3b82f6 50%, #8b5cf6 100%)';
+                progressBar.style.backgroundSize = '200% 100%';
+            }
+            if (percentDisplay) {
+                percentDisplay.classList.remove('complete');
+            }
+            if (statusText) {
+                statusText.textContent = 'Génération en cours...';
+                statusText.classList.remove('complete');
+            }
+            
             // Réinitialiser les compteurs
             updateProgress(0, 0, 0, 0);
             
@@ -4658,6 +4828,26 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 progressContainer.style.display = 'block';
             }
             
+            // Initialiser la barre de progression avec l'état "running"
+            const progressBar = document.getElementById('genFactureProgressBar');
+            const percentDisplay = document.getElementById('genFactureProgressPercentDisplay');
+            const statusText = document.getElementById('genFactureProgressStatus');
+            
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.classList.remove('complete');
+                progressBar.classList.add('running');
+                progressBar.style.background = 'linear-gradient(90deg, #10b981 0%, #3b82f6 50%, #8b5cf6 100%)';
+                progressBar.style.backgroundSize = '200% 100%';
+            }
+            if (percentDisplay) {
+                percentDisplay.classList.remove('complete');
+            }
+            if (statusText) {
+                statusText.textContent = 'Génération en cours...';
+                statusText.classList.remove('complete');
+            }
+            
             btnSubmit.disabled = true;
             btnSubmit.style.display = 'none';
             if (btnCancel) {
@@ -4678,6 +4868,38 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             let statsExclus = 0;
             let progressInterval;
             
+            // Fonction pour calculer la couleur du gradient basée sur le pourcentage
+            function getProgressGradient(percent) {
+                if (percent >= 100) {
+                    // État de succès : vert solide
+                    return 'linear-gradient(90deg, #10b981 0%, #059669 100%)';
+                }
+                
+                // Gradient dynamique : vert → bleu → violet
+                // 0-33% : vert vers bleu
+                // 33-66% : bleu vers violet
+                // 66-100% : violet plus intense
+                
+                if (percent <= 33) {
+                    // Vert vers bleu
+                    const ratio = percent / 33;
+                    const greenStop = Math.max(0, 100 - (ratio * 50));
+                    const blueStart = 50 + (ratio * 20);
+                    return `linear-gradient(90deg, #10b981 0%, #3b82f6 ${greenStop}%, #3b82f6 ${blueStart}%, #8b5cf6 100%)`;
+                } else if (percent <= 66) {
+                    // Bleu vers violet
+                    const ratio = (percent - 33) / 33;
+                    const blueStop = 50 - (ratio * 20);
+                    const purpleStart = 50 + (ratio * 20);
+                    return `linear-gradient(90deg, #10b981 0%, #3b82f6 ${blueStop}%, #8b5cf6 ${purpleStart}%, #7c3aed 100%)`;
+                } else {
+                    // Violet intense
+                    const ratio = (percent - 66) / 34;
+                    const purpleIntensity = 0.5 + (ratio * 0.5);
+                    return `linear-gradient(90deg, #10b981 0%, #3b82f6 30%, #8b5cf6 60%, #7c3aed 100%)`;
+                }
+            }
+
             // Fonction pour mettre à jour la progression avec animations
             function updateProgressWithAnimation(percent, clients, generees, exclus) {
                 progressPercent = Math.min(100, Math.max(0, percent));
@@ -4686,20 +4908,90 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 statsExclus = exclus;
                 
                 const percentEl = document.getElementById('genFactureProgressPercent');
+                const percentDisplay = document.getElementById('genFactureProgressPercentDisplay');
+                const statusText = document.getElementById('genFactureProgressStatus');
                 const barEl = document.getElementById('genFactureProgressBar');
                 const clientsEl = document.getElementById('genFactureStatsClients');
                 const genereesEl = document.getElementById('genFactureStatsGenerees');
                 const exclusEl = document.getElementById('genFactureStatsExclus');
                 
+                // Mettre à jour le pourcentage avec transition douce
                 if (percentEl) {
-                    percentEl.textContent = Math.round(progressPercent);
+                    const roundedPercent = Math.round(progressPercent);
+                    // Animation de compteur pour le pourcentage (plus fluide)
+                    let currentValue = parseInt(percentEl.textContent) || 0;
+                    const targetValue = roundedPercent;
+                    
+                    if (currentValue !== targetValue) {
+                        // Annuler toute animation en cours
+                        if (window.progressCounterAnimation) {
+                            cancelAnimationFrame(window.progressCounterAnimation);
+                        }
+                        
+                        const updateCounter = () => {
+                            if (currentValue < targetValue) {
+                                currentValue = Math.min(targetValue, currentValue + Math.ceil((targetValue - currentValue) / 5) || 1);
+                                percentEl.textContent = currentValue;
+                                if (currentValue < targetValue) {
+                                    window.progressCounterAnimation = requestAnimationFrame(updateCounter);
+                                } else {
+                                    percentEl.textContent = targetValue;
+                                    window.progressCounterAnimation = null;
+                                }
+                            } else if (currentValue > targetValue) {
+                                currentValue = Math.max(targetValue, currentValue - Math.ceil((currentValue - targetValue) / 5) || 1);
+                                percentEl.textContent = currentValue;
+                                if (currentValue > targetValue) {
+                                    window.progressCounterAnimation = requestAnimationFrame(updateCounter);
+                                } else {
+                                    percentEl.textContent = targetValue;
+                                    window.progressCounterAnimation = null;
+                                }
+                            }
+                        };
+                        window.progressCounterAnimation = requestAnimationFrame(updateCounter);
+                    }
                 }
+                
+                // Mettre à jour la barre de progression
                 if (barEl) {
                     barEl.style.width = progressPercent + '%';
+                    
+                    // Gérer les états (running vs complete)
+                    if (progressPercent >= 100) {
+                        // État de succès
+                        barEl.classList.remove('running');
+                        barEl.classList.add('complete');
+                        barEl.style.background = getProgressGradient(100);
+                        barEl.style.backgroundSize = '100% 100%';
+                        
+                        if (percentDisplay) {
+                            percentDisplay.classList.add('complete');
+                        }
+                        if (statusText) {
+                            statusText.textContent = '✓ Génération terminée avec succès !';
+                            statusText.classList.add('complete');
+                        }
+                    } else {
+                        // État en cours
+                        barEl.classList.remove('complete');
+                        barEl.classList.add('running');
+                        barEl.style.background = getProgressGradient(progressPercent);
+                        barEl.style.backgroundSize = '200% 100%';
+                        
+                        if (percentDisplay) {
+                            percentDisplay.classList.remove('complete');
+                        }
+                        if (statusText) {
+                            statusText.textContent = 'Génération en cours...';
+                            statusText.classList.remove('complete');
+                        }
+                    }
                 }
+                
+                // Mettre à jour les statistiques avec animations
                 if (clientsEl) {
                     clientsEl.textContent = statsClients;
-                    // Animation de compteur
                     clientsEl.style.transition = 'transform 0.2s ease';
                     clientsEl.style.transform = 'scale(1.1)';
                     setTimeout(() => {
