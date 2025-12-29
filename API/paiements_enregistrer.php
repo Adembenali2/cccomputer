@@ -145,6 +145,13 @@ try {
         $justificatifPath = '/uploads/paiements/' . $fileName;
     }
     
+    // Déterminer le statut du paiement selon le mode de paiement
+    // Espèce ou CB → "recu" (reçu), autres → "en_cours" (en attente)
+    $statutPaiement = 'en_cours';
+    if (in_array($modePaiement, ['especes', 'cb'], true)) {
+        $statutPaiement = 'recu';
+    }
+    
     // Déterminer le nouveau statut de la facture selon le mode de paiement
     // Espèce ou CB → "payee", autres → "brouillon" (en cours)
     $nouveauStatutFacture = null;
@@ -166,7 +173,7 @@ try {
                 mode_paiement, reference, commentaire, statut, created_by
             ) VALUES (
                 :id_facture, :id_client, :montant, :date_paiement,
-                :mode_paiement, :reference, :commentaire, 'recu', :created_by
+                :mode_paiement, :reference, :commentaire, :statut, :created_by
             )
         ");
         
@@ -178,6 +185,7 @@ try {
             ':mode_paiement' => $modePaiement,
             ':reference' => $reference,
             ':commentaire' => $commentaire,
+            ':statut' => $statutPaiement,
             ':created_by' => $userId
         ]);
         
