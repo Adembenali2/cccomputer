@@ -4435,6 +4435,63 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             }
         }
 
+        /**
+         * Envoie le reçu de paiement par email au client
+         */
+        async function sendRecuEmail(paiementId, reference) {
+            if (!paiementId) {
+                if (typeof showNotification === 'function') {
+                    showNotification('Erreur', 'ID de paiement manquant', 'error');
+                } else {
+                    alert('Erreur: ID de paiement manquant');
+                }
+                return;
+            }
+
+            if (!confirm(`Êtes-vous sûr de vouloir envoyer le reçu ${reference || ''} par email au client ?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/API/paiements_envoyer_recu.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        paiement_id: paiementId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    if (typeof showNotification === 'function') {
+                        showNotification('Succès', `Reçu envoyé avec succès à ${data.email || 'le client'}`, 'success');
+                    } else {
+                        alert(`Reçu envoyé avec succès à ${data.email || 'le client'}`);
+                    }
+                    // Recharger l'historique pour mettre à jour le statut
+                    if (typeof loadHistoriquePaiements === 'function') {
+                        loadHistoriquePaiements();
+                    }
+                } else {
+                    if (typeof showNotification === 'function') {
+                        showNotification('Erreur', data.error || 'Erreur lors de l\'envoi du reçu', 'error');
+                    } else {
+                        alert('Erreur: ' + (data.error || 'Erreur lors de l\'envoi du reçu'));
+                    }
+                }
+            } catch (error) {
+                console.error('Erreur envoi reçu:', error);
+                if (typeof showNotification === 'function') {
+                    showNotification('Erreur', 'Erreur lors de l\'envoi du reçu', 'error');
+                } else {
+                    alert('Erreur lors de l\'envoi du reçu');
+                }
+            }
+        }
+
         // ============================================
         // GESTION DU MODAL FACTURE MAIL
         // ============================================
@@ -5983,7 +6040,6 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         window.filterHistoriquePaiements = filterHistoriquePaiements;
         window.filterHistoriquePaiementsByStatus = filterHistoriquePaiementsByStatus;
         window.viewJustificatif = viewJustificatif;
-        window.sendRecuEmail = sendRecuEmail;
         window.sendRecuEmail = sendRecuEmail;
         window.openFactureMailModal = openFactureMailModal;
         window.closeFactureMailModal = closeFactureMailModal;

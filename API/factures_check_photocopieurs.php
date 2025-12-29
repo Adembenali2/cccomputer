@@ -3,16 +3,10 @@
  * API pour vérifier le nombre de photocopieurs d'un client
  */
 
-// Désactiver l'affichage des erreurs PHP (on veut du JSON propre)
-error_reporting(E_ALL);
-ini_set('display_errors', '0');
-ini_set('log_errors', '1');
-
-require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 
-// S'assurer que le header JSON est bien défini (au cas où auth.php aurait fait un output)
-header('Content-Type: application/json; charset=utf-8');
+initApi();
+requireApiAuth();
 
 $clientId = filter_input(INPUT_GET, 'client_id', FILTER_VALIDATE_INT);
 
@@ -21,7 +15,7 @@ if (!$clientId) {
 }
 
 try {
-    $pdo = getPdo();
+    $pdo = getPdoOrFail();
     
     // Compter les photocopieurs du client
     $stmt = $pdo->prepare("SELECT COUNT(*) as nb FROM photocopieurs_clients WHERE id_client = :client_id");
