@@ -990,9 +990,17 @@ function decode_msg($row) {
             margin-top: 2rem;
         }
 
+        .payments-panel .table-responsive {
+            overflow-x: visible;
+            width: 100%;
+            max-width: 100%;
+        }
+
         .payments-table {
             width: 100%;
+            max-width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
 
         .payments-table thead {
@@ -1001,14 +1009,25 @@ function decode_msg($row) {
         }
 
         .payments-table thead th {
-            padding: 1rem 0.75rem;
+            padding: 0.75rem 0.5rem;
             text-align: left;
             font-weight: 600;
             color: var(--text-primary);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
         }
+
+        .payments-table thead th:nth-child(1) { width: 7%; } /* Date */
+        .payments-table thead th:nth-child(2) { width: 14%; } /* Client */
+        .payments-table thead th:nth-child(3) { width: 7%; } /* Facture */
+        .payments-table thead th:nth-child(4) { width: 7%; } /* Montant */
+        .payments-table thead th:nth-child(5) { width: 9%; } /* Mode */
+        .payments-table thead th:nth-child(6) { width: 9%; } /* Statut */
+        .payments-table thead th:nth-child(7) { width: 9%; } /* Référence */
+        .payments-table thead th:nth-child(8) { width: 9%; } /* Justificatif */
+        .payments-table thead th:nth-child(9) { width: 19%; } /* Actions */
 
         .payments-table tbody tr {
             border-bottom: 1px solid var(--border-color);
@@ -1020,10 +1039,42 @@ function decode_msg($row) {
         }
 
         .payments-table tbody td {
-            padding: 1rem 0.75rem;
+            padding: 0.75rem 0.5rem;
             color: var(--text-primary);
-            font-size: 0.95rem;
+            font-size: 0.875rem;
             vertical-align: middle;
+            word-wrap: break-word;
+        }
+
+        /* Cellules avec texte tronqué (sauf client et actions) */
+        .payments-table tbody td:nth-child(1),
+        .payments-table tbody td:nth-child(3),
+        .payments-table tbody td:nth-child(4),
+        .payments-table tbody td:nth-child(5),
+        .payments-table tbody td:nth-child(6),
+        .payments-table tbody td:nth-child(7) {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Cellule client peut avoir plusieurs lignes */
+        .payments-table tbody td:nth-child(2) {
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        /* Colonnes spécifiques avec gestion du texte */
+        .payments-table tbody td:nth-child(2) { /* Client */
+            max-width: 180px;
+        }
+
+        .payments-table tbody td:nth-child(3) { /* Facture */
+            max-width: 100px;
+        }
+
+        .payments-table tbody td:nth-child(7) { /* Référence */
+            max-width: 130px;
         }
 
         .payments-table .actions {
@@ -1033,17 +1084,19 @@ function decode_msg($row) {
         .payments-table .actions form {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
+            flex-wrap: wrap;
         }
 
         .payments-table .actions select {
-            padding: 0.5rem 0.75rem;
+            padding: 0.4rem 0.5rem;
             border: 2px solid var(--border-color);
             border-radius: var(--radius-md);
             background: var(--bg-primary);
             color: var(--text-primary);
-            font-size: 0.9rem;
-            min-width: 120px;
+            font-size: 0.85rem;
+            min-width: 100px;
+            max-width: 120px;
             transition: all 0.2s ease;
         }
 
@@ -1058,8 +1111,8 @@ function decode_msg($row) {
         }
 
         .payments-table .actions button {
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
             white-space: nowrap;
             transition: all 0.2s ease;
         }
@@ -1073,16 +1126,17 @@ function decode_msg($row) {
         .btn-justificatif {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 0.75rem;
+            gap: 0.4rem;
+            padding: 0.4rem 0.6rem;
             background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
             color: white;
             text-decoration: none;
             border-radius: var(--radius-md);
-            font-size: 0.875rem;
+            font-size: 0.8rem;
             font-weight: 500;
             transition: all 0.2s ease;
             box-shadow: var(--shadow-sm);
+            white-space: nowrap;
         }
 
         .btn-justificatif:hover {
@@ -1100,32 +1154,57 @@ function decode_msg($row) {
         /* Amélioration des badges de statut dans le tableau */
         .payments-table .badge {
             display: inline-block;
-            padding: 0.4rem 0.75rem;
+            padding: 0.3rem 0.5rem;
             border-radius: var(--radius-md);
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        /* Optimisation des éléments du tableau */
+        .payments-table code {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.4rem;
+            max-width: 100%;
+            display: inline-block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .payments-table .text-muted {
+            font-size: 0.8rem;
         }
 
         /* Responsive pour le tableau des paiements */
         @media (max-width: 1024px) {
             .payments-table {
-                font-size: 0.875rem;
+                font-size: 0.8rem;
             }
 
             .payments-table thead th,
             .payments-table tbody td {
-                padding: 0.75rem 0.5rem;
+                padding: 0.6rem 0.4rem;
+            }
+
+            .payments-table thead th {
+                font-size: 0.75rem;
             }
 
             .payments-table .actions form {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 0.5rem;
+                gap: 0.4rem;
             }
 
             .payments-table .actions select {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            .payments-table .actions button {
                 width: 100%;
             }
         }

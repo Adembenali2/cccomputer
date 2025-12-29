@@ -19,22 +19,13 @@ try {
     $mois = isset($_GET['mois']) ? (int)$_GET['mois'] : null;
     $annee = isset($_GET['annee']) ? (int)$_GET['annee'] : null;
     
-    // Construire les conditions WHERE
+    // Construire les conditions WHERE pour les tables individuelles (sans alias cr)
     $whereConditions = [];
     $params = [];
     
-    // Filtre par client
-    if ($idClient !== null && $idClient > 0) {
-        $whereConditions[] = "EXISTS (
-            SELECT 1 FROM photocopieurs_clients pc 
-            WHERE pc.mac_norm = cr.mac_norm AND pc.id_client = :id_client
-        )";
-        $params[':id_client'] = $idClient;
-    }
-    
     // Filtre par année
     if ($annee !== null && $annee > 0) {
-        $whereConditions[] = "YEAR(cr.Timestamp) = :annee";
+        $whereConditions[] = "YEAR(Timestamp) = :annee";
         $params[':annee'] = $annee;
     }
     
@@ -42,19 +33,26 @@ try {
     if ($mois !== null && $mois > 0 && $mois <= 12) {
         if ($annee === null || $annee <= 0) {
             $annee = (int)date('Y');
-            $whereConditions[] = "YEAR(cr.Timestamp) = :annee";
+            $whereConditions[] = "YEAR(Timestamp) = :annee";
             $params[':annee'] = $annee;
         }
-        $whereConditions[] = "MONTH(cr.Timestamp) = :mois";
+        $whereConditions[] = "MONTH(Timestamp) = :mois";
         $params[':mois'] = $mois;
     }
     
     // Si aucun filtre de date, limiter aux 90 derniers jours
     if ($annee === null && $mois === null) {
-        $whereConditions[] = "DATE(cr.Timestamp) >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
+        $whereConditions[] = "DATE(Timestamp) >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
     }
     
     $whereClause = !empty($whereConditions) ? " AND " . implode(" AND ", $whereConditions) : "";
+    
+    // Construire la condition pour le filtre client (sera appliquée après le JOIN)
+    $clientFilter = "";
+    if ($idClient !== null && $idClient > 0) {
+        $clientFilter = " AND pc.id_client = :id_client";
+        $params[':id_client'] = $idClient;
+    }
     
     // Requête pour calculer la consommation quotidienne
     // 1. Combiner les deux tables
@@ -127,6 +125,7 @@ try {
                         " . $whereClause . "
                     ) cr
                     INNER JOIN photocopieurs_clients pc ON cr.mac_norm = pc.mac_norm
+                    WHERE 1=1 " . $clientFilter . "
                     GROUP BY DATE(cr.Timestamp), YEAR(cr.Timestamp), MONTH(cr.Timestamp), DAY(cr.Timestamp), cr.mac_norm
                 ) AS daily_max
             ) AS with_prev
@@ -135,22 +134,27 @@ try {
         ORDER BY date_jour ASC
     ";
     
-    // Dupliquer les paramètres pour les deux parties de l'UNION
+    // Dupliquer les paramètres pour les deux parties de l'UNION (sauf id_client qui est après le JOIN)
     $finalParams = [];
     foreach ($params as $key => $value) {
-        $finalParams[$key . '_1'] = $value;
-        $finalParams[$key . '_2'] = $value;
+        if ($key === ':id_client') {
+            // Le filtre client est utilisé une seule fois après le JOIN
+            $finalParams[$key] = $value;
+        } else {
+            // Les autres paramètres sont utilisés deux fois (une fois par table dans l'UNION)
+            $finalParams[$key . '_1'] = $value;
+            $finalParams[$key . '_2'] = $value;
+        }
     }
     
-    // Remplacer les paramètres dans la requête pour la première partie
-    $sql = str_replace(':id_client', ':id_client_1', $sql);
+    // Remplacer les paramètres dans la requête pour la première partie de l'UNION
     $sql = str_replace(':annee', ':annee_1', $sql);
     $sql = str_replace(':mois', ':mois_1', $sql);
     
     // Remplacer dans la deuxième partie de l'UNION (après UNION ALL)
     $sqlParts = explode('UNION ALL', $sql);
     if (count($sqlParts) === 2) {
-        $sqlParts[1] = str_replace([':id_client_1', ':annee_1', ':mois_1'], [':id_client_2', ':annee_2', ':mois_2'], $sqlParts[1]);
+        $sqlParts[1] = str_replace([':annee_1', ':mois_1'], [':annee_2', ':mois_2'], $sqlParts[1]);
         $sql = $sqlParts[0] . 'UNION ALL' . $sqlParts[1];
     }
     
