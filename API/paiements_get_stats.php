@@ -54,19 +54,23 @@ try {
         $params[':id_client'] = $idClient;
     }
     
-    // Requête pour calculer la consommation quotidienne
+    // Déterminer le type de regroupement selon les filtres
+    // Si année uniquement (sans mois) -> groupe par mois
+    // Si mois spécifié -> groupe par jour
+    // Sinon -> groupe par jour (90 derniers jours)
+    $groupByMonth = ($annee !== null && $annee > 0 && ($mois === null || $mois <= 0));
+    
+    // Requête pour calculer la consommation
     // 1. Combiner les deux tables
     // 2. Prendre le dernier relevé de chaque jour pour chaque mac_norm
     // 3. Calculer la différence avec le jour précédent
+    $selectFields = $groupByMonth 
+        ? "annee, mois, COALESCE(SUM(consommation_bw), 0) AS total_noir_blanc, COALESCE(SUM(consommation_color), 0) AS total_couleur, COALESCE(SUM(consommation_pages), 0) AS total_pages"
+        : "date_jour, annee, mois, jour, COALESCE(SUM(consommation_bw), 0) AS total_noir_blanc, COALESCE(SUM(consommation_color), 0) AS total_couleur, COALESCE(SUM(consommation_pages), 0) AS total_pages";
+    
     $sql = "
         SELECT 
-            date_jour,
-            annee,
-            mois,
-            jour,
-            COALESCE(SUM(consommation_bw), 0) AS total_noir_blanc,
-            COALESCE(SUM(consommation_color), 0) AS total_couleur,
-            COALESCE(SUM(consommation_pages), 0) AS total_pages
+            " . $selectFields . "
         FROM (
             SELECT 
                 date_jour,
@@ -129,10 +133,21 @@ try {
                     GROUP BY DATE(cr.Timestamp), YEAR(cr.Timestamp), MONTH(cr.Timestamp), DAY(cr.Timestamp), cr.mac_norm
                 ) AS daily_max
             ) AS with_prev
-        ) AS daily_consumption
+        ) AS daily_consumption";
+    
+    // Grouper selon le type de filtre
+    if ($groupByMonth) {
+        // Grouper par mois quand on filtre uniquement par année
+        // Le GROUP BY est déjà dans le SELECT avec SUM()
+        $sql .= "
+        GROUP BY annee, mois
+        ORDER BY annee ASC, mois ASC";
+    } else {
+        // Grouper par jour (filtre mois ou pas de filtre)
+        $sql .= "
         GROUP BY date_jour, annee, mois, jour
-        ORDER BY date_jour ASC
-    ";
+        ORDER BY date_jour ASC";
+    }
     
     // Dupliquer les paramètres pour les deux parties de l'UNION (sauf id_client qui est après le JOIN)
     $finalParams = [];
@@ -167,15 +182,24 @@ try {
         'labels' => [],
         'noir_blanc' => [],
         'couleur' => [],
-        'total_pages' => []
+        'total_pages' => [],
+        'group_by' => $groupByMonth ? 'month' : 'day'
     ];
     
+    $moisNoms = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    $moisNomsCourts = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    
     foreach ($results as $row) {
-        // Format de label : "01 Jan" pour afficher le jour
-        $moisNoms = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-        $moisNom = $moisNoms[(int)$row['mois']] ?? '';
-        $jour = str_pad((string)$row['jour'], 2, '0', STR_PAD_LEFT);
-        $label = $jour . ' ' . $moisNom;
+        if ($groupByMonth) {
+            // Format de label : "Janvier 2025" pour afficher le mois
+            $moisNom = $moisNoms[(int)$row['mois']] ?? '';
+            $label = $moisNom . ' ' . $row['annee'];
+        } else {
+            // Format de label : "01 Jan" pour afficher le jour
+            $moisNom = $moisNomsCourts[(int)$row['mois']] ?? '';
+            $jour = isset($row['jour']) ? str_pad((string)$row['jour'], 2, '0', STR_PAD_LEFT) : '';
+            $label = $jour . ' ' . $moisNom;
+        }
         
         $data['labels'][] = $label;
         $data['noir_blanc'][] = (int)$row['total_noir_blanc'];

@@ -6147,107 +6147,44 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                 statsChart.destroy();
             }
             
-            // Créer le nouveau graphique avec un style amélioré
+            // Déterminer le titre selon le type de regroupement
+            const groupBy = data.group_by || 'day';
+            const chartTitle = groupBy === 'month' 
+                ? 'Consommation mensuelle des clients' 
+                : 'Consommation quotidienne des clients';
+            
+            // Créer le nouveau graphique avec un style amélioré (barres)
             statsChart = new Chart(ctx, {
-                type: 'line',
+                type: 'bar',
                 data: {
                     labels: data.labels,
                     datasets: [
                         {
                             label: 'Noir et Blanc',
                             data: data.noir_blanc,
-                            borderColor: '#1f2937',
-                            backgroundColor: (context) => {
-                                const chart = context.chart;
-                                const {ctx, chartArea} = chart;
-                                if (!chartArea) {
-                                    return 'rgba(31, 41, 55, 0.1)';
-                                }
-                                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                                gradient.addColorStop(0, 'rgba(31, 41, 55, 0.25)');
-                                gradient.addColorStop(0.5, 'rgba(31, 41, 55, 0.15)');
-                                gradient.addColorStop(1, 'rgba(31, 41, 55, 0.05)');
-                                return gradient;
-                            },
-                            borderWidth: 3,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            pointBackgroundColor: '#1f2937',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 2,
-                            pointHoverBackgroundColor: '#111827',
-                            pointHoverBorderColor: '#ffffff',
-                            pointHoverBorderWidth: 3,
-                            tension: 0.4,
-                            fill: true,
-                            shadowOffsetX: 0,
-                            shadowOffsetY: 4,
-                            shadowBlur: 8,
-                            shadowColor: 'rgba(31, 41, 55, 0.2)'
+                            backgroundColor: '#1f2937',
+                            borderColor: '#111827',
+                            borderWidth: 2,
+                            borderRadius: 4,
+                            borderSkipped: false,
                         },
                         {
                             label: 'Couleur',
                             data: data.couleur,
-                            borderColor: '#3b82f6',
-                            backgroundColor: (context) => {
-                                const chart = context.chart;
-                                const {ctx, chartArea} = chart;
-                                if (!chartArea) {
-                                    return 'rgba(59, 130, 246, 0.1)';
-                                }
-                                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                                gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
-                                gradient.addColorStop(0.5, 'rgba(59, 130, 246, 0.15)');
-                                gradient.addColorStop(1, 'rgba(59, 130, 246, 0.05)');
-                                return gradient;
-                            },
-                            borderWidth: 3,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            pointBackgroundColor: '#3b82f6',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 2,
-                            pointHoverBackgroundColor: '#2563eb',
-                            pointHoverBorderColor: '#ffffff',
-                            pointHoverBorderWidth: 3,
-                            tension: 0.4,
-                            fill: true,
-                            shadowOffsetX: 0,
-                            shadowOffsetY: 4,
-                            shadowBlur: 8,
-                            shadowColor: 'rgba(59, 130, 246, 0.2)'
+                            backgroundColor: '#3b82f6',
+                            borderColor: '#2563eb',
+                            borderWidth: 2,
+                            borderRadius: 4,
+                            borderSkipped: false,
                         },
                         {
                             label: 'Total Pages',
                             data: data.total_pages,
-                            borderColor: '#10b981',
-                            backgroundColor: (context) => {
-                                const chart = context.chart;
-                                const {ctx, chartArea} = chart;
-                                if (!chartArea) {
-                                    return 'rgba(16, 185, 129, 0.1)';
-                                }
-                                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                                gradient.addColorStop(0, 'rgba(16, 185, 129, 0.25)');
-                                gradient.addColorStop(0.5, 'rgba(16, 185, 129, 0.15)');
-                                gradient.addColorStop(1, 'rgba(16, 185, 129, 0.05)');
-                                return gradient;
-                            },
-                            borderWidth: 3,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            pointBackgroundColor: '#10b981',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 2,
-                            pointHoverBackgroundColor: '#059669',
-                            pointHoverBorderColor: '#ffffff',
-                            pointHoverBorderWidth: 3,
-                            tension: 0.4,
-                            fill: true,
-                            shadowOffsetX: 0,
-                            shadowOffsetY: 4,
-                            shadowBlur: 8,
-                            shadowColor: 'rgba(16, 185, 129, 0.2)'
+                            backgroundColor: '#10b981',
+                            borderColor: '#059669',
+                            borderWidth: 2,
+                            borderRadius: 4,
+                            borderSkipped: false,
                         }
                     ]
                 },
@@ -6255,30 +6192,89 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     responsive: true,
                     maintainAspectRatio: false,
                     animation: {
-                        duration: 1500,
-                        easing: 'easeInOutQuart',
-                        x: {
-                            type: 'number',
-                            easing: 'easeInOutQuart',
-                            from: 0
-                        },
-                        y: {
-                            type: 'number',
-                            easing: 'easeInOutQuart',
-                            from: 0
-                        }
+                        duration: 1000,
+                        easing: 'easeOutQuart'
                     },
                     interaction: {
                         intersect: false,
                         mode: 'index'
+                    },
+                    scales: {
+                        x: {
+                            stacked: false,
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.05)',
+                                lineWidth: 1,
+                                drawBorder: true,
+                                borderColor: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                maxRotation: groupBy === 'month' ? 0 : 45,
+                                minRotation: groupBy === 'month' ? 0 : 45,
+                                font: {
+                                    size: 11,
+                                    weight: '400'
+                                },
+                                color: 'var(--text-secondary)',
+                                padding: 8
+                            },
+                            title: {
+                                display: true,
+                                text: groupBy === 'month' ? 'Mois' : 'Date',
+                                font: {
+                                    size: 13,
+                                    weight: '600'
+                                },
+                                color: 'var(--text-primary)',
+                                padding: {
+                                    top: 10,
+                                    bottom: 5
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            stacked: false,
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.05)',
+                                lineWidth: 1,
+                                drawBorder: true,
+                                borderColor: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 11,
+                                    weight: '400'
+                                },
+                                color: 'var(--text-secondary)',
+                                padding: 8,
+                                callback: function(value) {
+                                    return new Intl.NumberFormat('fr-FR').format(value);
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Nombre de pages',
+                                font: {
+                                    size: 13,
+                                    weight: '600'
+                                },
+                                color: 'var(--text-primary)',
+                                padding: {
+                                    top: 5,
+                                    bottom: 10
+                                }
+                            }
+                        }
                     },
                     plugins: {
                         legend: {
                             position: 'top',
                             align: 'end',
                             labels: {
-                                usePointStyle: true,
-                                pointStyle: 'circle',
+                                usePointStyle: false,
                                 padding: 15,
                                 font: {
                                     size: 13,
@@ -6286,7 +6282,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                                     family: 'system-ui, -apple-system, sans-serif'
                                 },
                                 color: 'var(--text-primary)',
-                                boxWidth: 12,
+                                boxWidth: 20,
                                 boxHeight: 12
                             },
                             onClick: (e, legendItem, legend) => {
@@ -6299,7 +6295,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         },
                         title: {
                             display: true,
-                            text: 'Consommation quotidienne des clients',
+                            text: chartTitle,
                             font: {
                                 size: 18,
                                 weight: '600',
@@ -6343,75 +6339,8 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                                     return label;
                                 },
                                 title: function(context) {
-                                    return 'Date: ' + context[0].label;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                display: true,
-                                color: 'rgba(0, 0, 0, 0.05)',
-                                lineWidth: 1,
-                                drawBorder: true,
-                                borderColor: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45,
-                                font: {
-                                    size: 11,
-                                    weight: '400'
-                                },
-                                color: 'var(--text-secondary)',
-                                padding: 8
-                            },
-                            title: {
-                                display: true,
-                                text: 'Date',
-                                font: {
-                                    size: 13,
-                                    weight: '600'
-                                },
-                                color: 'var(--text-primary)',
-                                padding: {
-                                    top: 10,
-                                    bottom: 5
-                                }
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                display: true,
-                                color: 'rgba(0, 0, 0, 0.05)',
-                                lineWidth: 1,
-                                drawBorder: true,
-                                borderColor: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                font: {
-                                    size: 11,
-                                    weight: '400'
-                                },
-                                color: 'var(--text-secondary)',
-                                padding: 8,
-                                callback: function(value) {
-                                    return new Intl.NumberFormat('fr-FR').format(value);
-                                }
-                            },
-                            title: {
-                                display: true,
-                                text: 'Nombre de pages',
-                                font: {
-                                    size: 13,
-                                    weight: '600'
-                                },
-                                color: 'var(--text-primary)',
-                                padding: {
-                                    top: 5,
-                                    bottom: 10
+                                    const titleLabel = groupBy === 'month' ? 'Mois' : 'Date';
+                                    return titleLabel + ': ' + context[0].label;
                                 }
                             }
                         }

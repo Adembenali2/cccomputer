@@ -496,6 +496,27 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                                 <div class="lbl">Code Postal</div>
                                 <div class="val" id="cf-code_postal-home">—</div>
                             </div>
+                            <div class="cdv-field">
+                                <div class="lbl">SAV</div>
+                                <div class="val" id="cf-sav-stats">
+                                    <span id="cf-sav-count">—</span>
+                                    <span id="cf-sav-status" style="margin-left: 0.5rem; font-size: 0.85rem; color: #666;"></span>
+                                </div>
+                            </div>
+                            <div class="cdv-field">
+                                <div class="lbl">Livraisons</div>
+                                <div class="val" id="cf-livraisons-stats">
+                                    <span id="cf-livraisons-count">—</span>
+                                    <span id="cf-livraisons-status" style="margin-left: 0.5rem; font-size: 0.85rem; color: #666;"></span>
+                                </div>
+                            </div>
+                            <div class="cdv-field">
+                                <div class="lbl">Factures</div>
+                                <div class="val" id="cf-factures-stats">
+                                    <span id="cf-factures-count">—</span>
+                                    <span id="cf-factures-status" style="margin-left: 0.5rem; font-size: 0.85rem; color: #666;"></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1036,6 +1057,118 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             });
         }
 
+        // Charger les statistiques du client (SAV, livraisons, factures)
+        async function loadClientStats(clientId) {
+            const savCountEl = document.getElementById('cf-sav-count');
+            const savStatusEl = document.getElementById('cf-sav-status');
+            const livraisonsCountEl = document.getElementById('cf-livraisons-count');
+            const livraisonsStatusEl = document.getElementById('cf-livraisons-status');
+            const facturesCountEl = document.getElementById('cf-factures-count');
+            const facturesStatusEl = document.getElementById('cf-factures-status');
+            
+            // Réinitialiser les valeurs
+            if (savCountEl) savCountEl.textContent = '—';
+            if (savStatusEl) savStatusEl.textContent = '';
+            if (livraisonsCountEl) livraisonsCountEl.textContent = '—';
+            if (livraisonsStatusEl) livraisonsStatusEl.textContent = '';
+            if (facturesCountEl) facturesCountEl.textContent = '—';
+            if (facturesStatusEl) facturesStatusEl.textContent = '';
+            
+            try {
+                if (typeof apiClient === 'undefined') {
+                    throw new Error('apiClient n\'est pas disponible');
+                }
+                const data = await apiClient.json(`/API/dashboard_get_client_stats.php?client_id=${clientId}`, {
+                    method: 'GET'
+                }, {
+                    abortKey: 'load_client_stats_' + clientId
+                });
+                
+                if (!data || !data.ok || !data.stats) {
+                    return;
+                }
+                
+                const stats = data.stats;
+                
+                // Afficher les stats SAV
+                if (stats.sav) {
+                    const total = stats.sav.total || 0;
+                    const ouvert = stats.sav.ouvert || 0;
+                    const enCours = stats.sav.en_cours || 0;
+                    const resolu = stats.sav.resolu || 0;
+                    
+                    if (savCountEl) savCountEl.textContent = total;
+                    
+                    if (savStatusEl) {
+                        const statusParts = [];
+                        if (ouvert > 0) statusParts.push(`${ouvert} ouvert${ouvert > 1 ? 's' : ''}`);
+                        if (enCours > 0) statusParts.push(`${enCours} en cours`);
+                        if (resolu > 0) statusParts.push(`${resolu} résolu${resolu > 1 ? 's' : ''}`);
+                        
+                        if (statusParts.length > 0) {
+                            savStatusEl.textContent = '(' + statusParts.join(', ') + ')';
+                            savStatusEl.style.color = (ouvert > 0 || enCours > 0) ? '#f59e0b' : '#16a34a';
+                        } else {
+                            savStatusEl.textContent = '';
+                        }
+                    }
+                }
+                
+                // Afficher les stats Livraisons
+                if (stats.livraisons) {
+                    const total = stats.livraisons.total || 0;
+                    const planifiee = stats.livraisons.planifiee || 0;
+                    const enCours = stats.livraisons.en_cours || 0;
+                    const livree = stats.livraisons.livree || 0;
+                    
+                    if (livraisonsCountEl) livraisonsCountEl.textContent = total;
+                    
+                    if (livraisonsStatusEl) {
+                        const statusParts = [];
+                        if (planifiee > 0) statusParts.push(`${planifiee} planifiée${planifiee > 1 ? 's' : ''}`);
+                        if (enCours > 0) statusParts.push(`${enCours} en cours`);
+                        if (livree > 0) statusParts.push(`${livree} livrée${livree > 1 ? 's' : ''}`);
+                        
+                        if (statusParts.length > 0) {
+                            livraisonsStatusEl.textContent = '(' + statusParts.join(', ') + ')';
+                            livraisonsStatusEl.style.color = (planifiee > 0 || enCours > 0) ? '#f59e0b' : '#16a34a';
+                        } else {
+                            livraisonsStatusEl.textContent = '';
+                        }
+                    }
+                }
+                
+                // Afficher les stats Factures
+                if (stats.factures) {
+                    const total = stats.factures.total || 0;
+                    const enAttente = stats.factures.en_attente || 0;
+                    const envoyee = stats.factures.envoyee || 0;
+                    const payee = stats.factures.payee || 0;
+                    
+                    if (facturesCountEl) facturesCountEl.textContent = total;
+                    
+                    if (facturesStatusEl) {
+                        const statusParts = [];
+                        if (enAttente > 0) statusParts.push(`${enAttente} en attente`);
+                        if (envoyee > 0) statusParts.push(`${envoyee} envoyée${envoyee > 1 ? 's' : ''}`);
+                        if (payee > 0) statusParts.push(`${payee} payée${payee > 1 ? 's' : ''}`);
+                        
+                        if (statusParts.length > 0) {
+                            facturesStatusEl.textContent = '(' + statusParts.join(', ') + ')';
+                            facturesStatusEl.style.color = enAttente > 0 ? '#f59e0b' : (payee > 0 ? '#16a34a' : '#3b82f6');
+                        } else {
+                            facturesStatusEl.textContent = '';
+                        }
+                    }
+                }
+                
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Erreur chargement stats client:', err);
+                }
+            }
+        }
+
         function loadClientDetail(id){
             const client = (CLIENTS_DATA || []).find(c => String(c.id) === String(id)) || {};
             fillClientFields(client);
@@ -1066,6 +1199,12 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             
             showDetail();
             
+            // Charger les statistiques du client
+            const clientIdNum = parseInt(id, 10);
+            if (clientIdNum && clientIdNum > 0) {
+                loadClientStats(clientIdNum);
+            }
+            
             // Charger les livreurs
             loadLivreurs();
             
@@ -1081,7 +1220,6 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             // Si l'onglet sav est actif, charger les SAV
             const savTab = document.querySelector('.cdv-nav-btn[data-tab="sav"]');
             if (savTab && savTab.getAttribute('aria-selected') === 'true') {
-                const clientIdNum = parseInt(id, 10);
                 if (clientIdNum && clientIdNum > 0) {
                     loadSavs(clientIdNum);
                 }
