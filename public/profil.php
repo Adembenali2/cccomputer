@@ -733,6 +733,66 @@ function decode_msg($row) {
             line-height: 1.4;
         }
 
+        /* Quick actions bar */
+        .quick-actions-bar {
+            display: flex;
+            gap: 1rem;
+            margin: 1.5rem 0 2rem 0;
+            flex-wrap: wrap;
+        }
+
+        .quick-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.5rem;
+            background: var(--bg-primary);
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-sm);
+            white-space: nowrap;
+        }
+
+        .quick-action-btn:hover {
+            background: var(--bg-secondary);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .quick-action-btn:active {
+            transform: translateY(0);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .quick-action-btn svg {
+            flex-shrink: 0;
+            stroke-width: 2.5;
+        }
+
+        .quick-action-btn span {
+            line-height: 1;
+        }
+
+        @media (max-width: 768px) {
+            .quick-actions-bar {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .quick-action-btn {
+                width: 100%;
+                justify-content: center;
+                padding: 1rem 1.5rem;
+            }
+        }
+
         /* Flash messages améliorés */
         .flash {
             border: 1px solid var(--border-color);
@@ -1715,6 +1775,27 @@ function decode_msg($row) {
         <p class="page-sub">Page réservée aux administrateurs (Admin), dirigeants, techniciens et livreurs pour créer, modifier et activer/désactiver des comptes.</p>
         
     </header>
+
+    <div class="quick-actions-bar">
+        <a href="/public/sav.php" class="quick-action-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>SAV</span>
+        </a>
+        <a href="/public/paiements.php" class="quick-action-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span>Paiements</span>
+        </a>
+        <a href="/public/paiements.php?view=factures" class="quick-action-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Factures</span>
+        </a>
+    </div>
 
     <section class="profil-meta">
         <div class="meta-card">
