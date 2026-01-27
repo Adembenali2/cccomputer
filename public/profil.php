@@ -1026,6 +1026,14 @@ function decode_msg($row) {
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-sm);
             scroll-margin-top: 100px; /* Offset pour le scroll */
+            display: none; /* Caché par défaut */
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .payments-panel.active {
+            display: block; /* Affiché quand actif */
+            opacity: 1;
         }
 
         .payments-panel .panel-title {
@@ -1049,6 +1057,14 @@ function decode_msg($row) {
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-sm);
             scroll-margin-top: 100px; /* Offset pour le scroll */
+            display: none; /* Caché par défaut */
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .factures-panel.active {
+            display: block; /* Affiché quand actif */
+            opacity: 1;
         }
 
         /* Styles améliorés pour le tableau des SAV */
@@ -1059,6 +1075,14 @@ function decode_msg($row) {
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-sm);
             scroll-margin-top: 100px; /* Offset pour le scroll */
+            display: none; /* Caché par défaut */
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sav-panel.active {
+            display: block; /* Affiché quand actif */
+            opacity: 1;
         }
 
         .sav-panel .panel-title {
@@ -2688,23 +2712,37 @@ function decode_msg($row) {
 /* Fonction pour le scroll smooth vers les sections */
 function scrollToSection(event, sectionId) {
     event.preventDefault();
+    
+    // Cacher toutes les sections d'abord
+    const allSections = document.querySelectorAll('.sav-panel, .payments-panel, .factures-panel');
+    allSections.forEach(function(section) {
+        section.classList.remove('active');
+    });
+    
+    // Afficher la section demandée
     const section = document.getElementById(sectionId);
     if (section) {
-        const headerOffset = 100; // Offset pour le header fixe si présent
-        const elementPosition = section.getBoundingClientRect().top;
-        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-        window.scrollTo({
-            top: offsetPosition,
-            behavior: 'smooth'
-        });
+        // Ajouter la classe active pour afficher la section
+        section.classList.add('active');
         
-        // Ajouter un highlight temporaire
-        section.style.transition = 'box-shadow 0.3s ease';
-        section.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.5)';
+        // Attendre un peu pour que l'affichage se fasse avant de scroller
         setTimeout(function() {
-            section.style.boxShadow = '';
-        }, 2000);
+            const headerOffset = 100; // Offset pour le header fixe si présent
+            const elementPosition = section.getBoundingClientRect().top;
+            const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+            window.scrollTo({
+                top: offsetPosition,
+                behavior: 'smooth'
+            });
+            
+            // Ajouter un highlight temporaire
+            section.style.transition = 'box-shadow 0.3s ease';
+            section.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.5)';
+            setTimeout(function() {
+                section.style.boxShadow = '';
+            }, 2000);
+        }, 50);
     }
 }
 
