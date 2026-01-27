@@ -10,6 +10,7 @@ authorize_page('paiements', []); // Accessible √† tous les utilisateurs connect√
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Paiement - CC Computer</title>
+    <link rel="icon" type="image/png" href="/assets/logos/logo.png">
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>

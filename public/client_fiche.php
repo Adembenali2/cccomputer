@@ -280,6 +280,7 @@ if (($_GET['saved'] ?? '') === '1') {
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Fiche client — <?= h($client['raison_sociale']) ?></title>
+  <link rel="icon" type="image/png" href="/assets/logos/logo.png">
 
   <link rel="stylesheet" href="/assets/css/main.css" />
   <link rel="stylesheet" href="/assets/css/client_fiche.css" />

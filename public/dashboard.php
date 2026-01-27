@@ -124,6 +124,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Dashboard - CCComputer</title>
+    <link rel="icon" type="image/png" href="/assets/logos/logo.png">
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
     <script src="/assets/js/api.js"></script>
     <script src="/assets/js/dashboard.js" defer></script>

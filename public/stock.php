@@ -322,6 +322,7 @@ $sectionImages = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="csrf-token" content="<?= h($_SESSION['csrf_token'] ?? '') ?>">
     <title>Stock - CCComputer</title>
+    <link rel="icon" type="image/png" href="/assets/logos/logo.png">
 
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/stock.css" />

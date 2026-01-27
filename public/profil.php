@@ -745,6 +745,7 @@ function decode_msg($row) {
     <meta charset="UTF-8">
     <title>Gestion des utilisateurs</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/assets/logos/logo.png">
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/profil.css">
     <style>
@@ -1109,7 +1110,7 @@ function decode_msg($row) {
             width: 100%;
             max-width: 100%;
             border-collapse: collapse;
-            table-layout: fixed;
+            table-layout: auto;
         }
 
         .sav-table thead {
@@ -1128,16 +1129,16 @@ function decode_msg($row) {
             white-space: nowrap;
         }
 
-        .sav-table thead th:nth-child(1) { width: 8%; } /* Date ouverture */
-        .sav-table thead th:nth-child(2) { width: 9%; } /* Référence */
-        .sav-table thead th:nth-child(3) { width: 12%; } /* Client */
-        .sav-table thead th:nth-child(4) { width: 20%; } /* Description */
-        .sav-table thead th:nth-child(5) { width: 8%; } /* Type panne */
-        .sav-table thead th:nth-child(6) { width: 8%; } /* Priorité */
-        .sav-table thead th:nth-child(7) { width: 8%; } /* Date fermeture */
-        .sav-table thead th:nth-child(8) { width: 10%; } /* Technicien */
-        .sav-table thead th:nth-child(9) { width: 8%; } /* Statut */
-        .sav-table thead th:nth-child(10) { width: 19%; } /* Actions */
+        .sav-table thead th:nth-child(1) { width: 10%; min-width: 110px; } /* Date ouverture */
+        .sav-table thead th:nth-child(2) { width: 11%; min-width: 120px; } /* Référence */
+        .sav-table thead th:nth-child(3) { width: 13%; min-width: 130px; } /* Client */
+        .sav-table thead th:nth-child(4) { width: 18%; min-width: 180px; } /* Description */
+        .sav-table thead th:nth-child(5) { width: 10%; min-width: 100px; } /* Type panne */
+        .sav-table thead th:nth-child(6) { width: 9%; min-width: 90px; } /* Priorité */
+        .sav-table thead th:nth-child(7) { width: 10%; min-width: 110px; } /* Date fermeture */
+        .sav-table thead th:nth-child(8) { width: 11%; min-width: 120px; } /* Technicien */
+        .sav-table thead th:nth-child(9) { width: 8%; min-width: 80px; } /* Statut */
+        .sav-table thead th:nth-child(10) { width: 18%; min-width: 150px; } /* Actions */
 
         .sav-table tbody tr {
             border-bottom: 1px solid var(--border-color);
@@ -1149,7 +1150,7 @@ function decode_msg($row) {
         }
 
         .sav-table tbody td {
-            padding: 0.75rem 0.5rem;
+            padding: 0.75rem 0.75rem;
             color: var(--text-primary);
             font-size: 0.875rem;
             vertical-align: middle;

@@ -448,6 +448,7 @@ function formatDetails(PDO $pdo, ?string $details): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Historique des Actions - CCComputer</title>
     <meta name="description" content="Consultez l'historique des actions effectuées sur le système">
+    <link rel="icon" type="image/png" href="/assets/logos/logo.png">
     
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/historique.css">

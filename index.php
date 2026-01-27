@@ -109,6 +109,7 @@ $redirectUrl = !empty($_SESSION['user_id'])
   <meta charset="UTF-8">
   <title>Bienvenue | CCComputer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/assets/logos/logo.png">
 
   <!-- Fallback si JS désactivé -->
   <noscript>
