@@ -3508,7 +3508,10 @@ function decode_msg($row) {
         const toggleBtn = document.getElementById('toggleImportHistory');
         const historyPanel = document.getElementById('importHistoryPanel');
         
-        if (!toggleBtn || !historyPanel) return;
+        if (!toggleBtn || !historyPanel) {
+            console.error('Éléments non trouvés: toggleImportHistory ou importHistoryPanel');
+            return;
+        }
         
         // Si l'URL contient #importHistoryPanel, afficher automatiquement la section
         if (window.location.hash === '#importHistoryPanel') {
@@ -3521,7 +3524,13 @@ function decode_msg($row) {
         
         toggleBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            const isCurrentlyVisible = historyPanel.style.display !== 'none' && historyPanel.style.display !== '';
+            e.stopPropagation();
+            
+            // Vérifier l'état actuel de manière plus fiable
+            const currentDisplay = window.getComputedStyle(historyPanel).display;
+            const isCurrentlyVisible = currentDisplay !== 'none';
+            
+            console.log('Toggle import history - isVisible:', isCurrentlyVisible, 'currentDisplay:', currentDisplay);
             
             if (isCurrentlyVisible) {
                 // Masquer la section
@@ -3535,15 +3544,17 @@ function decode_msg($row) {
                 // Scroll vers la section avec animation
                 setTimeout(function() {
                     historyPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 10);
+                }, 50);
             }
         });
     }
     
+    // Attendre que le DOM soit complètement chargé
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initImportHistoryToggle);
     } else {
-        initImportHistoryToggle();
+        // DOM déjà chargé, exécuter immédiatement
+        setTimeout(initImportHistoryToggle, 100);
     }
 })();
 
@@ -3553,7 +3564,10 @@ function decode_msg($row) {
         const toggleBtn = document.getElementById('togglePayments');
         const paymentsPanel = document.getElementById('paymentsPanel');
         
-        if (!toggleBtn || !paymentsPanel) return;
+        if (!toggleBtn || !paymentsPanel) {
+            console.error('Éléments non trouvés: togglePayments ou paymentsPanel');
+            return;
+        }
         
         // Si l'URL contient #paymentsPanel, afficher automatiquement la section
         if (window.location.hash === '#paymentsPanel') {
@@ -3566,7 +3580,13 @@ function decode_msg($row) {
         
         toggleBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            const isCurrentlyVisible = paymentsPanel.style.display !== 'none' && paymentsPanel.style.display !== '';
+            e.stopPropagation();
+            
+            // Vérifier l'état actuel de manière plus fiable
+            const currentDisplay = window.getComputedStyle(paymentsPanel).display;
+            const isCurrentlyVisible = currentDisplay !== 'none';
+            
+            console.log('Toggle payments - isVisible:', isCurrentlyVisible, 'currentDisplay:', currentDisplay);
             
             if (isCurrentlyVisible) {
                 // Masquer la section
@@ -3580,15 +3600,17 @@ function decode_msg($row) {
                 // Scroll vers la section avec animation
                 setTimeout(function() {
                     paymentsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 10);
+                }, 50);
             }
         });
     }
     
+    // Attendre que le DOM soit complètement chargé
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initPaymentsToggle);
     } else {
-        initPaymentsToggle();
+        // DOM déjà chargé, exécuter immédiatement
+        setTimeout(initPaymentsToggle, 100);
     }
 })();
 
@@ -3598,7 +3620,10 @@ function decode_msg($row) {
         const toggleBtn = document.getElementById('toggleFactures');
         const facturesPanel = document.getElementById('facturesPanel');
         
-        if (!toggleBtn || !facturesPanel) return;
+        if (!toggleBtn || !facturesPanel) {
+            console.error('Éléments non trouvés: toggleFactures ou facturesPanel');
+            return;
+        }
         
         // Si l'URL contient #facturesPanel, afficher automatiquement la section
         if (window.location.hash === '#facturesPanel') {
@@ -3611,7 +3636,13 @@ function decode_msg($row) {
         
         toggleBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            const isCurrentlyVisible = facturesPanel.style.display !== 'none' && facturesPanel.style.display !== '';
+            e.stopPropagation();
+            
+            // Vérifier l'état actuel de manière plus fiable
+            const currentDisplay = window.getComputedStyle(facturesPanel).display;
+            const isCurrentlyVisible = currentDisplay !== 'none';
+            
+            console.log('Toggle factures - isVisible:', isCurrentlyVisible, 'currentDisplay:', currentDisplay);
             
             if (isCurrentlyVisible) {
                 // Masquer la section
@@ -3625,15 +3656,17 @@ function decode_msg($row) {
                 // Scroll vers la section avec animation
                 setTimeout(function() {
                     facturesPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 10);
+                }, 50);
             }
         });
     }
     
+    // Attendre que le DOM soit complètement chargé
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initFacturesToggle);
     } else {
-        initFacturesToggle();
+        // DOM déjà chargé, exécuter immédiatement
+        setTimeout(initFacturesToggle, 100);
     }
 })();
 
@@ -3643,7 +3676,10 @@ function decode_msg($row) {
         const toggleBtn = document.getElementById('toggleSav');
         const savPanel = document.getElementById('savPanel');
         
-        if (!toggleBtn || !savPanel) return;
+        if (!toggleBtn || !savPanel) {
+            console.error('Éléments non trouvés: toggleSav ou savPanel');
+            return;
+        }
         
         // Si l'URL contient #savPanel, afficher automatiquement la section
         if (window.location.hash === '#savPanel') {
@@ -3656,7 +3692,13 @@ function decode_msg($row) {
         
         toggleBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            const isCurrentlyVisible = savPanel.style.display !== 'none' && savPanel.style.display !== '';
+            e.stopPropagation();
+            
+            // Vérifier l'état actuel de manière plus fiable
+            const currentDisplay = window.getComputedStyle(savPanel).display;
+            const isCurrentlyVisible = currentDisplay !== 'none';
+            
+            console.log('Toggle SAV - isVisible:', isCurrentlyVisible, 'currentDisplay:', currentDisplay);
             
             if (isCurrentlyVisible) {
                 // Masquer la section
@@ -3670,15 +3712,17 @@ function decode_msg($row) {
                 // Scroll vers la section avec animation
                 setTimeout(function() {
                     savPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 10);
+                }, 50);
             }
         });
     }
     
+    // Attendre que le DOM soit complètement chargé
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initSavToggle);
     } else {
-        initSavToggle();
+        // DOM déjà chargé, exécuter immédiatement
+        setTimeout(initSavToggle, 100);
     }
 })();
 
