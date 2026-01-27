@@ -51,16 +51,6 @@ try {
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
 <main class="page-container">
-    <!-- Bouton menu mobile -->
-    <button type="button" id="mobileMenuToggle" class="mobile-menu-toggle" aria-label="Ouvrir le menu">
-        <span></span>
-        <span></span>
-        <span></span>
-    </button>
-
-    <!-- Overlay pour mobile -->
-    <div id="mobileOverlay" class="mobile-overlay"></div>
-
     <header class="page-header">
         <h1 class="page-title">Carte & planification de tournée</h1>
         <p class="page-sub">
@@ -201,9 +191,10 @@ try {
                     <!-- Instructions détaillées remplies en JS -->
                 </div>
             </div>
+            </div>
         </aside>
 
-        <!-- PANNEAU DROIT : CARTE -->
+        <!-- CARTE EN HAUT -->
         <section class="map-wrapper">
             <div class="map-toolbar">
                 <div class="map-toolbar-left">
@@ -1879,48 +1870,70 @@ if (clientSearchClear) {
 loadAllClients();
 
 // ==================
-// Gestion du menu mobile
+// Gestion du panneau repliable (mobile)
 // ==================
 
-const mobileMenuToggle = document.getElementById('mobileMenuToggle');
 const mapsPanel = document.getElementById('mapsPanel');
-const mobileOverlay = document.getElementById('mobileOverlay');
-const closeMobilePanel = document.getElementById('closeMobilePanel');
+const togglePanelBtn = document.getElementById('togglePanelBtn');
+const panelHeader = document.getElementById('panelHeader');
 
-function openMobilePanel() {
-    mapsPanel.classList.add('mobile-open');
-    mobileOverlay.classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-function closeMobilePanelFunc() {
-    mapsPanel.classList.remove('mobile-open');
-    mobileOverlay.classList.remove('active');
-    document.body.style.overflow = '';
-}
-
-if (mobileMenuToggle) {
-    mobileMenuToggle.addEventListener('click', openMobilePanel);
-}
-
-if (closeMobilePanel) {
-    closeMobilePanel.addEventListener('click', closeMobilePanelFunc);
-}
-
-if (mobileOverlay) {
-    mobileOverlay.addEventListener('click', closeMobilePanelFunc);
-}
-
-// Fermer le panneau lors du redimensionnement si on passe en desktop
-let resizeTimer;
-window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-        if (window.innerWidth > 1024) {
-            closeMobilePanelFunc();
+function togglePanel() {
+    if (mapsPanel) {
+        mapsPanel.classList.toggle('collapsed');
+        if (togglePanelBtn) {
+            togglePanelBtn.textContent = mapsPanel.classList.contains('collapsed') ? '▲' : '▼';
         }
-    }, 250);
-});
+    }
+}
+
+if (togglePanelBtn) {
+    togglePanelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePanel();
+    });
+}
+
+if (panelHeader) {
+    panelHeader.addEventListener('click', (e) => {
+        // Ne toggle que si on clique sur le header, pas sur les boutons
+        if (e.target === panelHeader || e.target.closest('h2')) {
+            togglePanel();
+        }
+    });
+}
+
+// ==================
+// Gestion du panneau repliable (mobile)
+// ==================
+
+const mapsPanel = document.getElementById('mapsPanel');
+const togglePanelBtn = document.getElementById('togglePanelBtn');
+const panelHeader = document.getElementById('panelHeader');
+
+function togglePanel() {
+    if (mapsPanel) {
+        mapsPanel.classList.toggle('collapsed');
+        if (togglePanelBtn) {
+            togglePanelBtn.textContent = mapsPanel.classList.contains('collapsed') ? '▲' : '▼';
+        }
+    }
+}
+
+if (togglePanelBtn) {
+    togglePanelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePanel();
+    });
+}
+
+if (panelHeader) {
+    panelHeader.addEventListener('click', (e) => {
+        // Ne toggle que si on clique sur le header, pas sur les boutons
+        if (e.target === panelHeader || e.target.closest('h2')) {
+            togglePanel();
+        }
+    });
+}
 
 // Initialiser le point de départ par défaut après un court délai
 // (pour laisser le temps à maps-enhancements.js de restaurer depuis localStorage)

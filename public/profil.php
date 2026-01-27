@@ -7,6 +7,11 @@
 // ========================================================================
 // SÉCURITÉ D'ABORD
 // ========================================================================
+// Headers de sécurité (doit être avant tout output)
+if (!headers_sent()) {
+    require_once __DIR__ . '/../includes/security_headers.php';
+}
+
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('profil', ['Admin', 'Dirigeant', 'Technicien', 'Livreur']);
 require_once __DIR__ . '/../includes/helpers.php';
@@ -3502,96 +3507,61 @@ function decode_msg($row) {
     }
 })();
 
-/* Gestion des toggles pour toutes les sections - Version simplifiée et robuste */
+/* Gestion des toggles pour toutes les sections - Version ultra-simplifiée */
 (function() {
     'use strict';
     
-    // Configuration des toggles
-    const toggles = [
-        { buttonId: 'toggleImportHistory', panelId: 'importHistoryPanel' },
-        { buttonId: 'togglePayments', panelId: 'paymentsPanel' },
-        { buttonId: 'toggleFactures', panelId: 'facturesPanel' },
-        { buttonId: 'toggleSav', panelId: 'savPanel' }
-    ];
-    
-    function togglePanel(panel) {
-        if (!panel) return false;
-        
-        const currentDisplay = panel.style.display || window.getComputedStyle(panel).display;
-        const isHidden = currentDisplay === 'none' || currentDisplay === '';
-        
-        if (isHidden) {
-            // Afficher
-            panel.style.display = 'block';
-            panel.setAttribute('data-visible', 'true');
-            
-            // Scroll après un court délai
-            setTimeout(function() {
-                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-            return true;
-        } else {
-            // Masquer
-            panel.style.display = 'none';
-            panel.setAttribute('data-visible', 'false');
-            return false;
-        }
-    }
-    
-    function initToggle(config) {
-        const btn = document.getElementById(config.buttonId);
-        const panel = document.getElementById(config.panelId);
+    function setupSectionToggle(buttonId, panelId) {
+        var btn = document.getElementById(buttonId);
+        var panel = document.getElementById(panelId);
         
         if (!btn || !panel) {
-            console.warn('Toggle non initialisé:', config.buttonId, 'ou', config.panelId, 'non trouvé');
-            return false;
+            console.warn('Éléments manquants pour', buttonId);
+            return;
         }
         
-        // Vérifier le hash dans l'URL
-        if (window.location.hash === '#' + config.panelId) {
+        // Vérifier le hash dans l'URL au chargement
+        if (window.location.hash === '#' + panelId) {
             panel.style.display = 'block';
             btn.setAttribute('aria-expanded', 'true');
-            setTimeout(function() {
+            window.setTimeout(function() {
                 panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 200);
+            }, 300);
         }
         
-        // Ajouter l'événement click
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        // Gestionnaire de clic
+        btn.onclick = function(event) {
+            event.preventDefault();
+            event.stopPropagation();
             
-            const isNowVisible = togglePanel(panel);
-            btn.setAttribute('aria-expanded', isNowVisible ? 'true' : 'false');
-        });
-        
-        return true;
-    }
-    
-    function initAllToggles() {
-        console.log('Initialisation des toggles de sections...');
-        let successCount = 0;
-        
-        toggles.forEach(function(config) {
-            if (initToggle(config)) {
-                successCount++;
+            var isVisible = panel.style.display !== 'none';
+            
+            if (isVisible) {
+                panel.style.display = 'none';
+                btn.setAttribute('aria-expanded', 'false');
+            } else {
+                panel.style.display = 'block';
+                btn.setAttribute('aria-expanded', 'true');
+                window.setTimeout(function() {
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
             }
-        });
-        
-        console.log('Toggles initialisés:', successCount + '/' + toggles.length);
+        };
     }
     
-    // Initialisation
-    function start() {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initAllToggles);
-        } else {
-            // DOM déjà chargé
-            initAllToggles();
-        }
+    function initToggles() {
+        setupSectionToggle('toggleImportHistory', 'importHistoryPanel');
+        setupSectionToggle('togglePayments', 'paymentsPanel');
+        setupSectionToggle('toggleFactures', 'facturesPanel');
+        setupSectionToggle('toggleSav', 'savPanel');
     }
     
-    start();
+    // Attendre le chargement du DOM
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initToggles);
+    } else {
+        window.setTimeout(initToggles, 50);
+    }
 })();
 
 /* Gestion des boutons de nettoyage des recherches */
