@@ -1979,6 +1979,11 @@ function decode_msg($row) {
 
     <section class="profil-meta">
         <div class="meta-card">
+            <div class="meta-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+            </div>
             <span class="meta-label">Total utilisateurs</span>
             <strong class="meta-value"><?= h((string)$totalUsers) ?></strong>
             <?php if ($totalUsers >= USERS_LIMIT): ?>
@@ -1986,14 +1991,29 @@ function decode_msg($row) {
             <?php endif; ?>
         </div>
         <div class="meta-card">
+            <div class="meta-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
             <span class="meta-label">Actifs</span>
             <strong class="meta-value success"><?= h((string)$activeUsers) ?></strong>
         </div>
         <div class="meta-card">
+            <div class="meta-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
             <span class="meta-label">Inactifs</span>
             <strong class="meta-value" style="color: #dc2626;"><?= h((string)$inactiveUsers) ?></strong>
         </div>
         <div class="meta-card">
+            <div class="meta-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+            </div>
             <span class="meta-label">Personne connectée</span>
             <strong class="meta-value" style="font-size: 1.1rem;">
                 <?php if ($currentUserInfo): ?>
@@ -2007,6 +2027,11 @@ function decode_msg($row) {
             <?php endif; ?>
         </div>
         <div class="meta-card">
+            <div class="meta-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            </div>
             <span class="meta-label">En ligne</span>
             <div class="online-users-wrapper" style="position: relative;">
                 <strong class="meta-value online-count" style="color: #16a34a; cursor: help;" 
@@ -2049,18 +2074,27 @@ function decode_msg($row) {
         <div class="filter-bar">
             <div class="filter-field grow">
                 <label for="q" class="sr-only">Rechercher</label>
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
                 <input class="filter-input" type="search" id="q" name="q" value="<?= h($search) ?>" 
-                       placeholder="Rechercher par nom, prénom ou email (commence par)…" 
+                       placeholder="Rechercher par nom, prénom ou email…" 
                        aria-label="Rechercher un utilisateur" 
                        autocomplete="off" />
-                <span class="search-loading" id="searchLoading" style="display: none;" aria-hidden="true">⏳</span>
+                <span class="search-loading" id="searchLoading" style="display: none;" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18" class="spinner">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </span>
                 <button type="button" class="input-clear" id="clearSearch" aria-label="Effacer la recherche" style="<?= $search === '' ? 'display: none;' : '' ?>">
-                    <span aria-hidden="true">✕</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                 </button>
             </div>
             </div>
         <div class="filter-hint">
-            <small>Recherche en temps réel - tapez un nom, prénom ou email (recherche par début de mot).</small>
+            <small>💡 Recherche en temps réel - tapez un nom, prénom, email ou rôle</small>
         </div>
     </form>
 
@@ -2153,6 +2187,9 @@ function decode_msg($row) {
                                     <?php else: ?>
                                         <a class="btn btn-primary" href="/public/profil.php?edit=<?= (int)$u['id'] ?>" 
                                            aria-label="Modifier l'utilisateur <?= h($u['nom'] . ' ' . $u['prenom']) ?>">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
                                             Modifier
                                         </a>
                                         <?php if ($isAdminOrDirigeant): ?>
@@ -2164,7 +2201,17 @@ function decode_msg($row) {
                                             <button type="submit" 
                                                     class="btn <?= $u['statut'] === 'actif' ? 'btn-danger' : 'btn-success' ?>"
                                                     aria-label="<?= $u['statut'] === 'actif' ? 'Désactiver' : 'Activer' ?> l'utilisateur <?= h($u['nom'] . ' ' . $u['prenom']) ?>">
-                                                <?= $u['statut'] === 'actif' ? 'Désactiver' : 'Activer' ?>
+                                                <?php if ($u['statut'] === 'actif'): ?>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                                    </svg>
+                                                    Désactiver
+                                                <?php else: ?>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    Activer
+                                                <?php endif; ?>
                                             </button>
                                         </form>
                                         <?php endif; ?>
