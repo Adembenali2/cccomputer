@@ -369,18 +369,25 @@
 }
 
 .maps-panel .btn-group {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
+  align-items: stretch;
+}
+
+.maps-panel .btn-group button {
+  flex: 1;
+  min-width: 140px;
 }
 
 @media (max-width: 768px) {
   .maps-panel .btn-group {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
   
   .maps-panel .btn-group button {
     width: 100%;
+    min-width: auto;
   }
 }
 
@@ -625,24 +632,57 @@
 
 .selected-client-controls {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.25rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .selected-client-controls {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+  
+  .selected-client-controls label {
+    width: 100%;
+  }
+  
+  .selected-client-controls select {
+    width: 100%;
+  }
 }
 
 .selected-client-controls label {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
 }
 
 .selected-client-controls select {
-  margin-left: 0.25rem;
-  font-size: 0.78rem;
-  padding: 0.15rem 0.35rem;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
   color: var(--text-primary);
+  min-width: 120px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.selected-client-controls select:hover {
+  border-color: var(--accent-primary);
+}
+
+.selected-client-controls select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .chip-remove {

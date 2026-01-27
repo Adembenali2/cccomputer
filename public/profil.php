@@ -407,140 +407,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "Réinitialisation mot de passe utilisateur #{$id}: {$targetName} ({$targetEmail}) | Réinitialisé par: {$resetterName}");
             $_SESSION['flash'] = ['type' => 'success', 'msg' => "Mot de passe réinitialisé."];
         }
-        // ===== MISE À JOUR STATUT PAIEMENT =====
-        elseif ($action === 'update_payment_status') {
-            if (!$isAdminOrDirigeant) {
-                throw new RuntimeException('Vous n\'êtes pas autorisé à modifier les paiements.');
-            }
-
-            $paymentId = validateId($_POST['payment_id'] ?? 0, 'ID paiement');
-            $newStatus = trim((string)($_POST['statut'] ?? ''));
-
-            $allowedStatuses = ['en_cours', 'recu', 'refuse', 'annule'];
-            if (!in_array($newStatus, $allowedStatuses, true)) {
-                throw new RuntimeException('Statut de paiement invalide.');
-            }
-
-            $beforePayment = safeFetch(
-                $pdo,
-                "SELECT statut FROM paiements WHERE id = ?",
-                [$paymentId],
-                'profil_payment_before'
-            );
-
-            if (!$beforePayment) {
-                throw new RuntimeException('Paiement introuvable.');
-            }
-
-            if ($beforePayment['statut'] === $newStatus) {
-                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Aucun changement de statut pour ce paiement."];
-            } else {
-                $stmt = $pdo->prepare("UPDATE paiements SET statut = ? WHERE id = ?");
-                $stmt->execute([$newStatus, $paymentId]);
-
-                logProfilAction(
-                    $pdo,
-                    $currentUser['id'],
-                    'paiement_statut_modifie',
-                    "Modification statut paiement #{$paymentId}: '{$beforePayment['statut']}' → '{$newStatus}'"
-                );
-
-                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut du paiement mis à jour."];
-            }
-        }
-        // ===== MISE À JOUR STATUT FACTURE =====
-        elseif ($action === 'update_invoice_status') {
-            if (!$isAdminOrDirigeant) {
-                throw new RuntimeException('Vous n\'êtes pas autorisé à modifier les factures.');
-            }
-
-            $factureId = validateId($_POST['facture_id'] ?? 0, 'ID facture');
-            $newStatus = trim((string)($_POST['statut'] ?? ''));
-
-            $allowedStatuses = ['brouillon', 'envoyee', 'payee', 'en_retard', 'annulee'];
-            if (!in_array($newStatus, $allowedStatuses, true)) {
-                throw new RuntimeException('Statut de facture invalide.');
-            }
-
-            $beforeFacture = safeFetch(
-                $pdo,
-                "SELECT statut, numero FROM factures WHERE id = ?",
-                [$factureId],
-                'profil_facture_before'
-            );
-
-            if (!$beforeFacture) {
-                throw new RuntimeException('Facture introuvable.');
-            }
-
-            if ($beforeFacture['statut'] === $newStatus) {
-                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Aucun changement de statut pour cette facture."];
-            } else {
-                $stmt = $pdo->prepare("UPDATE factures SET statut = ? WHERE id = ?");
-                $stmt->execute([$newStatus, $factureId]);
-
-                logProfilAction(
-                    $pdo,
-                    $currentUser['id'],
-                    'facture_statut_modifie',
-                    "Modification statut facture #{$factureId} ({$beforeFacture['numero']}): '{$beforeFacture['statut']}' → '{$newStatus}'"
-                );
-
-                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut de la facture mis à jour."];
-            }
-        }
-        // ===== MISE À JOUR STATUT SAV =====
-        elseif ($action === 'update_sav_status') {
-            if (!$isAdminOrDirigeant) {
-                throw new RuntimeException('Vous n\'êtes pas autorisé à modifier les SAV.');
-            }
-
-            $savId = validateId($_POST['sav_id'] ?? 0, 'ID SAV');
-            $newStatus = trim((string)($_POST['statut'] ?? ''));
-
-            $allowedStatuses = ['ouvert', 'en_cours', 'resolu', 'annule'];
-            if (!in_array($newStatus, $allowedStatuses, true)) {
-                throw new RuntimeException('Statut de SAV invalide.');
-            }
-
-            $beforeSav = safeFetch(
-                $pdo,
-                "SELECT statut, reference FROM sav WHERE id = ?",
-                [$savId],
-                'profil_sav_before'
-            );
-
-            if (!$beforeSav) {
-                throw new RuntimeException('SAV introuvable.');
-            }
-
-            if ($beforeSav['statut'] === $newStatus) {
-                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Aucun changement de statut pour ce SAV."];
-            } else {
-                // Si on passe de "résolu" à "ouvert", on peut réinitialiser la date de fermeture
-                $updateSql = "UPDATE sav SET statut = ?";
-                $updateParams = [$newStatus];
-                
-                if ($beforeSav['statut'] === 'resolu' && $newStatus === 'ouvert') {
-                    $updateSql .= ", date_fermeture = NULL";
-                }
-                
-                $updateSql .= " WHERE id = ?";
-                $updateParams[] = $savId;
-                
-                $stmt = $pdo->prepare($updateSql);
-                $stmt->execute($updateParams);
-
-                logProfilAction(
-                    $pdo,
-                    $currentUser['id'],
-                    'sav_statut_modifie',
-                    "Modification statut SAV #{$savId} ({$beforeSav['reference']}): '{$beforeSav['statut']}' → '{$newStatus}'"
-                );
-
-                $_SESSION['flash'] = ['type' => 'success', 'msg' => "Statut du SAV mis à jour."];
-            }
-        }
         // ===== SAUVEGARDE DES PERMISSIONS =====
         elseif ($action === 'save_permissions') {
             if (!$isAdminOrDirigeant) {
@@ -641,12 +507,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectUrl .= '?edit=' . $id;
     } elseif ($action === 'save_permissions' && isset($redirectAfterSave)) {
         $redirectUrl .= '?perm_user=' . $redirectAfterSave;
-    } elseif ($action === 'update_payment_status') {
-        $redirectUrl .= '#paymentsPanel';
-    } elseif ($action === 'update_invoice_status') {
-        $redirectUrl .= '#facturesPanel';
-    } elseif ($action === 'update_sav_status') {
-        $redirectUrl .= '#savPanel';
     }
     header('Location: ' . $redirectUrl);
     exit;
@@ -658,12 +518,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Paramètres de recherche - barre de recherche unique avec filtrage intelligent
 $search = sanitizeSearch($_GET['q'] ?? '');
-
-// Paramètres de recherche pour les sections spécifiques
-$searchPayments = sanitizeSearch($_GET['search_payments'] ?? '');
-$searchFactures = sanitizeSearch($_GET['search_factures'] ?? '');
-$searchSav = sanitizeSearch($_GET['search_sav'] ?? '');
-$searchImports = sanitizeSearch($_GET['search_imports'] ?? '');
 
 // Construction de la requête SQL optimisée avec recherche partielle intelligente
 $params = [];
@@ -746,135 +600,6 @@ $stats = safeFetch($pdo, "
 $totalUsers = (int)($stats['total'] ?? 0);
 $activeUsers = (int)($stats['actifs'] ?? 0);
 $inactiveUsers = (int)($stats['inactifs'] ?? 0);
-
-// Tous les paiements (avec filtrage optionnel)
-$paymentsParams = [];
-$paymentsWhere = [];
-if ($searchPayments !== '') {
-    $searchPattern = '%' . $searchPayments . '%';
-    $paymentsWhere[] = "(LOWER(c.raison_sociale) LIKE LOWER(:search_payments) 
-                        OR LOWER(c.nom_dirigeant) LIKE LOWER(:search_payments) 
-                        OR LOWER(c.prenom_dirigeant) LIKE LOWER(:search_payments))";
-    $paymentsParams[':search_payments'] = $searchPattern;
-}
-$paymentsSql = "
-    SELECT 
-        p.id,
-        p.id_facture,
-        p.id_client,
-        p.montant,
-        p.date_paiement,
-        p.mode_paiement,
-        p.statut,
-        p.reference,
-        p.recu_path,
-        p.created_at,
-        c.raison_sociale AS client_nom,
-        c.numero_client AS client_code,
-        c.nom_dirigeant,
-        c.prenom_dirigeant,
-        f.numero AS facture_numero
-    FROM paiements p
-    LEFT JOIN clients c ON p.id_client = c.id
-    LEFT JOIN factures f ON p.id_facture = f.id";
-if (!empty($paymentsWhere)) {
-    $paymentsSql .= " WHERE " . implode(' AND ', $paymentsWhere);
-}
-$paymentsSql .= " ORDER BY p.date_paiement DESC, p.created_at DESC";
-$recentPayments = safeFetchAll($pdo, $paymentsSql, $paymentsParams, 'profil_all_paiements');
-
-// Toutes les factures (avec filtrage optionnel)
-$facturesParams = [];
-$facturesWhere = [];
-if ($searchFactures !== '') {
-    $searchPattern = '%' . $searchFactures . '%';
-    $facturesWhere[] = "(LOWER(c.raison_sociale) LIKE LOWER(:search_factures) 
-                        OR LOWER(c.nom_dirigeant) LIKE LOWER(:search_factures) 
-                        OR LOWER(c.prenom_dirigeant) LIKE LOWER(:search_factures))";
-    $facturesParams[':search_factures'] = $searchPattern;
-}
-$facturesSql = "
-    SELECT 
-        f.id,
-        f.numero,
-        f.date_facture,
-        f.type,
-        f.montant_ht,
-        f.tva,
-        f.montant_ttc,
-        f.statut,
-        f.pdf_path,
-        f.email_envoye,
-        f.date_envoi_email,
-        f.created_at,
-        c.id AS client_id,
-        c.raison_sociale AS client_nom,
-        c.numero_client AS client_code,
-        c.email AS client_email,
-        c.nom_dirigeant,
-        c.prenom_dirigeant,
-        p.mode_paiement,
-        p.recu_path AS paiement_justificatif
-    FROM factures f
-    LEFT JOIN clients c ON f.id_client = c.id
-    LEFT JOIN (
-        SELECT 
-            p1.id_facture,
-            p1.mode_paiement,
-            p1.recu_path
-        FROM paiements p1
-        INNER JOIN (
-            SELECT id_facture, MAX(date_paiement) as max_date
-            FROM paiements
-            WHERE id_facture IS NOT NULL
-            GROUP BY id_facture
-        ) p2 ON p1.id_facture = p2.id_facture AND p1.date_paiement = p2.max_date
-    ) p ON p.id_facture = f.id";
-if (!empty($facturesWhere)) {
-    $facturesSql .= " WHERE " . implode(' AND ', $facturesWhere);
-}
-$facturesSql .= " ORDER BY f.date_facture DESC, f.created_at DESC";
-$recentFactures = safeFetchAll($pdo, $facturesSql, $facturesParams, 'profil_all_factures');
-
-// Tous les SAV résolus (avec filtrage optionnel)
-$savParams = [];
-$savWhere = ["s.statut = 'resolu'"];
-if ($searchSav !== '') {
-    $searchPattern = '%' . $searchSav . '%';
-    $savWhere[] = "(LOWER(c.raison_sociale) LIKE LOWER(:search_sav) 
-                   OR LOWER(c.nom_dirigeant) LIKE LOWER(:search_sav) 
-                   OR LOWER(c.prenom_dirigeant) LIKE LOWER(:search_sav)
-                   OR LOWER(u.nom) LIKE LOWER(:search_sav)
-                   OR LOWER(u.prenom) LIKE LOWER(:search_sav))";
-    $savParams[':search_sav'] = $searchPattern;
-}
-$savSql = "
-    SELECT 
-        s.id,
-        s.reference,
-        s.description,
-        s.date_ouverture,
-        s.date_fermeture,
-        s.date_intervention_prevue,
-        s.statut,
-        s.priorite,
-        s.type_panne,
-        s.commentaire,
-        s.created_at,
-        s.updated_at,
-        c.id AS client_id,
-        c.raison_sociale AS client_nom,
-        c.numero_client AS client_code,
-        c.nom_dirigeant,
-        c.prenom_dirigeant,
-        u.nom AS technicien_nom,
-        u.prenom AS technicien_prenom
-    FROM sav s
-    LEFT JOIN clients c ON s.id_client = c.id
-    LEFT JOIN utilisateurs u ON s.id_technicien = u.id
-    WHERE " . implode(' AND ', $savWhere) . "
-    ORDER BY s.date_fermeture DESC, s.updated_at DESC";
-$recentSav = safeFetchAll($pdo, $savSql, $savParams, 'profil_all_sav');
 
 // Récupérer les informations de l'utilisateur connecté
 $currentUserInfo = safeFetch($pdo, 
@@ -1989,22 +1714,6 @@ function decode_msg($row) {
         <h1 class="page-title">Gestion des utilisateurs</h1>
         <p class="page-sub">Page réservée aux administrateurs (Admin), dirigeants, techniciens et livreurs pour créer, modifier et activer/désactiver des comptes.</p>
         
-        <?php if ($isAdminOrDirigeant): ?>
-        <div class="import-mini">
-            <button type="button" class="btn btn-secondary" id="toggleImportHistory" aria-expanded="false" aria-controls="importHistoryPanel">
-                Historique des Imports
-            </button>
-            <button type="button" class="btn btn-secondary" id="togglePayments" aria-expanded="false" aria-controls="paymentsPanel">
-                Paiements
-            </button>
-            <button type="button" class="btn btn-secondary" id="toggleFactures" aria-expanded="false" aria-controls="facturesPanel">
-                Factures
-            </button>
-            <button type="button" class="btn btn-secondary" id="toggleSav" aria-expanded="false" aria-controls="savPanel">
-                SAV Résolus
-            </button>
-        </div>
-        <?php endif; ?>
     </header>
 
     <section class="profil-meta">
@@ -2436,17 +2145,9 @@ function decode_msg($row) {
             </form>
         </section>
     <?php endif; ?>
-    
-    <?php if ($isAdminOrDirigeant): ?>
-        <!-- Section Tous les paiements -->
-        <section class="panel payments-panel" id="paymentsPanel" style="display: none;">
-            <h2 class="panel-title">Tous les paiements enregistrés</h2>
-            <p class="panel-subtitle">
-                Liste complète de tous les paiements. Vous pouvez mettre à jour le <strong>statut</strong> directement depuis cette page.
-            </p>
+</main>
 
-            <!-- Barre de recherche pour les paiements -->
-            <form method="get" action="/public/profil.php#paymentsPanel" class="filtre-form" style="margin-bottom: 1.5rem;">
+<?php if ($editing): ?>
                 <div class="filter-bar">
                     <div class="filter-field grow">
                         <label for="search_payments" class="sr-only">Rechercher dans les paiements</label>
@@ -3507,139 +3208,7 @@ function decode_msg($row) {
     }
 })();
 
-/* Gestion des toggles pour toutes les sections - Version ultra-simple et directe */
-window.addEventListener('load', function() {
-    console.log('🚀 Initialisation des toggles après chargement complet');
-    
-    // Toggle pour Historique des Imports
-    var btnImports = document.getElementById('toggleImportHistory');
-    var panelImports = document.getElementById('importHistoryPanel');
-    if (btnImports && panelImports) {
-        btnImports.onclick = function(e) {
-            e.preventDefault();
-            var isHidden = panelImports.style.display === 'none' || window.getComputedStyle(panelImports).display === 'none';
-            panelImports.style.display = isHidden ? 'block' : 'none';
-            btnImports.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
-            if (isHidden) {
-                setTimeout(function() { panelImports.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
-            }
-        };
-        if (window.location.hash === '#importHistoryPanel') {
-            panelImports.style.display = 'block';
-            btnImports.setAttribute('aria-expanded', 'true');
-        }
-        console.log('✅ Toggle imports configuré');
-    } else {
-        console.warn('⚠️ Éléments imports non trouvés');
-    }
-    
-    // Toggle pour Paiements
-    var btnPayments = document.getElementById('togglePayments');
-    var panelPayments = document.getElementById('paymentsPanel');
-    if (btnPayments && panelPayments) {
-        btnPayments.onclick = function(e) {
-            e.preventDefault();
-            var isHidden = panelPayments.style.display === 'none' || window.getComputedStyle(panelPayments).display === 'none';
-            panelPayments.style.display = isHidden ? 'block' : 'none';
-            btnPayments.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
-            if (isHidden) {
-                setTimeout(function() { panelPayments.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
-            }
-        };
-        if (window.location.hash === '#paymentsPanel') {
-            panelPayments.style.display = 'block';
-            btnPayments.setAttribute('aria-expanded', 'true');
-        }
-        console.log('✅ Toggle payments configuré');
-    } else {
-        console.warn('⚠️ Éléments payments non trouvés');
-    }
-    
-    // Toggle pour Factures
-    var btnFactures = document.getElementById('toggleFactures');
-    var panelFactures = document.getElementById('facturesPanel');
-    if (btnFactures && panelFactures) {
-        btnFactures.onclick = function(e) {
-            e.preventDefault();
-            var isHidden = panelFactures.style.display === 'none' || window.getComputedStyle(panelFactures).display === 'none';
-            panelFactures.style.display = isHidden ? 'block' : 'none';
-            btnFactures.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
-            if (isHidden) {
-                setTimeout(function() { panelFactures.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
-            }
-        };
-        if (window.location.hash === '#facturesPanel') {
-            panelFactures.style.display = 'block';
-            btnFactures.setAttribute('aria-expanded', 'true');
-        }
-        console.log('✅ Toggle factures configuré');
-    } else {
-        console.warn('⚠️ Éléments factures non trouvés');
-    }
-    
-    // Toggle pour SAV
-    var btnSav = document.getElementById('toggleSav');
-    var panelSav = document.getElementById('savPanel');
-    if (btnSav && panelSav) {
-        btnSav.onclick = function(e) {
-            e.preventDefault();
-            var isHidden = panelSav.style.display === 'none' || window.getComputedStyle(panelSav).display === 'none';
-            panelSav.style.display = isHidden ? 'block' : 'none';
-            btnSav.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
-            if (isHidden) {
-                setTimeout(function() { panelSav.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
-            }
-        };
-        if (window.location.hash === '#savPanel') {
-            panelSav.style.display = 'block';
-            btnSav.setAttribute('aria-expanded', 'true');
-        }
-        console.log('✅ Toggle SAV configuré');
-    } else {
-        console.warn('⚠️ Éléments SAV non trouvés');
-    }
-    
-    console.log('🎉 Tous les toggles initialisés');
-});
 
-/* Gestion des boutons de nettoyage des recherches */
-(function() {
-    // Nettoyage recherche paiements
-    const clearPaymentsBtn = document.getElementById('clearPaymentsSearch');
-    const paymentsSearchInput = document.getElementById('search_payments');
-    if (clearPaymentsBtn && paymentsSearchInput) {
-        clearPaymentsBtn.addEventListener('click', function() {
-            window.location.href = '/public/profil.php#paymentsPanel';
-        });
-    }
-    
-    // Nettoyage recherche factures
-    const clearFacturesBtn = document.getElementById('clearFacturesSearch');
-    const facturesSearchInput = document.getElementById('search_factures');
-    if (clearFacturesBtn && facturesSearchInput) {
-        clearFacturesBtn.addEventListener('click', function() {
-            window.location.href = '/public/profil.php#facturesPanel';
-        });
-    }
-    
-    // Nettoyage recherche SAV
-    const clearSavBtn = document.getElementById('clearSavSearch');
-    const savSearchInput = document.getElementById('search_sav');
-    if (clearSavBtn && savSearchInput) {
-        clearSavBtn.addEventListener('click', function() {
-            window.location.href = '/public/profil.php#savPanel';
-        });
-    }
-    
-    // Nettoyage recherche imports
-    const clearImportsBtn = document.getElementById('clearImportsSearch');
-    const importsSearchInput = document.getElementById('search_imports');
-    if (clearImportsBtn && importsSearchInput) {
-        clearImportsBtn.addEventListener('click', function() {
-            window.location.href = '/public/profil.php#importHistoryPanel';
-        });
-    }
-})();
 </script>
 
 </body>

@@ -62,9 +62,9 @@ try {
     <section class="maps-layout">
         <!-- PANNEAU GAUCHE : PARAMÈTRES / CLIENTS -->
         <aside class="maps-panel" id="mapsPanel" aria-label="Panneau de planification de tournée">
-            <div class="maps-panel-header">
+            <div class="maps-panel-header" id="panelHeader">
                 <h2>Planifier un trajet</h2>
-                <button type="button" id="closeMobilePanel" class="close-mobile-panel" aria-label="Fermer le panneau">×</button>
+                <button type="button" id="togglePanelBtn" class="toggle-panel-btn" aria-label="Replier/Déplier le panneau">▼</button>
             </div>
             <small>1. Définissez un point de départ, 2. Sélectionnez les clients, 3. Calculez l’itinéraire.</small>
 
@@ -85,10 +85,10 @@ try {
                        placeholder="Adresse de départ (ex: 7 Rue Fraizier, 93210 Saint-Denis)"
                        value=""
                        style="margin-top: 0.5rem; width: 100%;">
-            </div>
+                </div>
 
-            <!-- 2. Clients à visiter -->
-            <div>
+                <!-- 2. Clients à visiter -->
+                <div>
                 <div class="section-title">2. Clients à visiter</div>
                 <p class="hint">
                     Recherchez un client (nom, code, adresse) puis ajoutez-le à la tournée.
@@ -120,10 +120,10 @@ try {
                     <p class="hint">Aucun client sélectionné pour le moment.</p>
                     <span id="selectedClientsCount" style="display:none;">0</span>
                 </div>
-            </div>
+                </div>
 
-            <!-- Clients non trouvés -->
-            <div id="notFoundClientsSection" style="display:none;">
+                <!-- Clients non trouvés -->
+                <div id="notFoundClientsSection" style="display:none;">
                 <div class="section-title">Clients non trouvés</div>
                 <p class="hint">
                     Les clients suivants n'ont pas pu être géolocalisés. Vérifiez leurs adresses.
@@ -131,10 +131,10 @@ try {
                 <div class="not-found-clients" id="notFoundClients">
                     <!-- Rempli dynamiquement -->
                 </div>
-            </div>
+                </div>
 
-            <!-- 3. Calcul itinéraire -->
-            <div>
+                <!-- 3. Calcul itinéraire -->
+                <div>
                 <div class="section-title">3. Calculer l’itinéraire</div>
                 <div class="btn-group">
                     <button type="button" id="btnRoute" class="primary">🚐 Calculer l’itinéraire</button>
@@ -190,7 +190,7 @@ try {
                 <div id="routeTurns" class="route-turns" style="display:none;">
                     <!-- Instructions détaillées remplies en JS -->
                 </div>
-            </div>
+                </div>
             </div>
         </aside>
 
