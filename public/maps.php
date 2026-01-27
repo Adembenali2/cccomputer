@@ -46,7 +46,7 @@ try {
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
 </head>
-<body class="page-maps">
+<body class="page-maps" id="maps-page">
 
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
@@ -97,7 +97,15 @@ try {
                            id="clientSearch"
                            class="client-search-input"
                            placeholder="Rechercher un client (nom, code, adresse)…"
-                           autocomplete="off">
+                           autocomplete="off"
+                           aria-label="Rechercher un client">
+                    <button type="button" 
+                            id="clientSearchClear" 
+                            class="client-search-clear" 
+                            aria-label="Effacer la recherche"
+                            title="Effacer">
+                        ×
+                    </button>
                     <div id="clientResults"
                          class="client-results"
                          aria-label="Résultats de recherche de clients">
@@ -107,6 +115,7 @@ try {
 
                 <div class="selected-clients" id="selectedClients">
                     <p class="hint">Aucun client sélectionné pour le moment.</p>
+                    <span id="selectedClientsCount" style="display:none;">0</span>
                 </div>
             </div>
 
@@ -192,7 +201,49 @@ try {
                     <span class="badge" id="badgeStart">Départ : non défini</span>
                 </div>
             </div>
-            <div id="map" aria-label="Carte des clients"></div>
+            <div id="map" aria-label="Carte des clients">
+                <!-- Légende des marqueurs -->
+                <div class="map-legend" id="mapLegend" role="region" aria-label="Légende des marqueurs">
+                    <div class="map-legend-title">Légende</div>
+                    <div class="map-legend-item">
+                        <div class="map-legend-color" style="background: #16a34a;"></div>
+                        <span class="map-legend-label">Client normal</span>
+                    </div>
+                    <div class="map-legend-item">
+                        <div class="map-legend-color" style="background: #3b82f6;"></div>
+                        <span class="map-legend-label">Livraison en cours</span>
+                    </div>
+                    <div class="map-legend-item">
+                        <div class="map-legend-color" style="background: #eab308;"></div>
+                        <span class="map-legend-label">SAV en cours</span>
+                    </div>
+                    <div class="map-legend-item">
+                        <div class="map-legend-color" style="background: #ef4444;"></div>
+                        <span class="map-legend-label">SAV + Livraison</span>
+                    </div>
+                </div>
+                
+                <!-- Filtres de marqueurs -->
+                <div class="map-filters" id="mapFilters" role="region" aria-label="Filtres de marqueurs">
+                    <div class="map-filters-title">Filtres</div>
+                    <label class="map-filter-toggle">
+                        <input type="checkbox" data-filter="all" checked>
+                        <span>Tous</span>
+                    </label>
+                    <label class="map-filter-toggle">
+                        <input type="checkbox" data-filter="normal" checked>
+                        <span>Clients normaux</span>
+                    </label>
+                    <label class="map-filter-toggle">
+                        <input type="checkbox" data-filter="livraison" checked>
+                        <span>Livraisons</span>
+                    </label>
+                    <label class="map-filter-toggle">
+                        <input type="checkbox" data-filter="sav" checked>
+                        <span>SAV</span>
+                    </label>
+                </div>
+            </div>
         </section>
     </section>
 </main>
@@ -733,12 +784,18 @@ function addClientToMap(client, autoFit = true) {
         const marker = clientMarkers[client.id];
         marker.setLatLng([client.lat, client.lng]);
         marker.setIcon(createMarkerIcon(markerType));
+        marker.options.clientId = client.id; // S'assurer que clientId est défini
+        // Appliquer les filtres après mise à jour
+        if (typeof applyMarkerFilters === 'function') {
+            applyMarkerFilters();
+        }
         return true;
     }
     
     // Créer un nouveau marqueur avec la bonne couleur
     const marker = L.marker([client.lat, client.lng], {
-        icon: createMarkerIcon(markerType)
+        icon: createMarkerIcon(markerType),
+        clientId: client.id // Stocker l'ID pour les filtres
     }).addTo(map);
     
     // Afficher l'adresse exacte de la base de données
@@ -766,6 +823,11 @@ function addClientToMap(client, autoFit = true) {
     
     marker.bindPopup(popupContent);
     clientMarkers[client.id] = marker;
+    
+    // Appliquer les filtres après ajout
+    if (typeof applyMarkerFilters === 'function') {
+        applyMarkerFilters();
+    }
     
     // Ajuster la vue pour inclure tous les clients seulement si autoFit est true
     if (autoFit) {
@@ -1669,6 +1731,121 @@ document.getElementById('btnRoute').addEventListener('click', () => {
         });
 });
 
+// ==================
+// Gestion des filtres de marqueurs
+// ==================
+
+const activeFilters = new Set(['all', 'sav', 'livraison', 'normal']);
+
+function applyMarkerFilters() {
+    if (!map || !clientMarkers) return;
+    
+    Object.values(clientMarkers).forEach(marker => {
+        const clientId = marker.options?.clientId;
+        if (!clientId) return;
+        
+        const client = clientsCache.get(clientId);
+        if (!client) return;
+        
+        let visible = false;
+        
+        if (activeFilters.has('all')) {
+            visible = true;
+        } else {
+            const hasSav = client.hasSav || false;
+            const hasLivraison = client.hasLivraison || false;
+            
+            if (activeFilters.has('sav') && hasSav) visible = true;
+            if (activeFilters.has('livraison') && hasLivraison) visible = true;
+            if (activeFilters.has('normal') && !hasSav && !hasLivraison) visible = true;
+        }
+        
+        if (visible) {
+            if (!map.hasLayer(marker)) {
+                map.addLayer(marker);
+            }
+        } else {
+            if (map.hasLayer(marker)) {
+                map.removeLayer(marker);
+            }
+        }
+    });
+}
+
+// Initialiser les filtres
+document.addEventListener('DOMContentLoaded', () => {
+    const filterToggles = document.querySelectorAll('#mapFilters input[type="checkbox"]');
+    filterToggles.forEach(toggle => {
+        toggle.addEventListener('change', () => {
+            const filter = toggle.dataset.filter;
+            
+            // Si "Tous" est coché, décocher les autres
+            if (filter === 'all' && toggle.checked) {
+                filterToggles.forEach(t => {
+                    if (t !== toggle && t.dataset.filter !== 'all') {
+                        t.checked = false;
+                        activeFilters.delete(t.dataset.filter);
+                    }
+                });
+                activeFilters.clear();
+                activeFilters.add('all');
+            } else if (filter === 'all' && !toggle.checked) {
+                // Si "Tous" est décoché, cocher tous les autres
+                filterToggles.forEach(t => {
+                    if (t.dataset.filter !== 'all') {
+                        t.checked = true;
+                        activeFilters.add(t.dataset.filter);
+                    }
+                });
+                activeFilters.delete('all');
+            } else {
+                // Gestion des autres filtres
+                if (toggle.checked) {
+                    activeFilters.add(filter);
+                    // Décocher "Tous" si un filtre spécifique est coché
+                    const allToggle = document.querySelector('#mapFilters input[data-filter="all"]');
+                    if (allToggle) {
+                        allToggle.checked = false;
+                        activeFilters.delete('all');
+                    }
+                } else {
+                    activeFilters.delete(filter);
+                    // Si aucun filtre spécifique n'est coché, cocher "Tous"
+                    const hasAnySpecific = Array.from(filterToggles).some(t => 
+                        t.dataset.filter !== 'all' && t.checked
+                    );
+                    if (!hasAnySpecific) {
+                        const allToggle = document.querySelector('#mapFilters input[data-filter="all"]');
+                        if (allToggle) {
+                            allToggle.checked = true;
+                            activeFilters.clear();
+                            activeFilters.add('all');
+                        }
+                    }
+                }
+            }
+            
+            applyMarkerFilters();
+        });
+    });
+});
+
+// Bouton clear pour la recherche
+const clientSearchClear = document.getElementById('clientSearchClear');
+if (clientSearchClear) {
+    clientSearchClear.addEventListener('click', () => {
+        clientSearchInput.value = '';
+        clientResultsEl.innerHTML = '';
+        clientResultsEl.style.display = 'none';
+        clientSearchClear.classList.remove('visible');
+        clientSearchInput.focus();
+    });
+    
+    clientSearchInput.addEventListener('input', () => {
+        clientSearchClear.classList.toggle('visible', clientSearchInput.value.length > 0);
+    });
+}
+
 // Charger tous les clients au démarrage (après que toutes les fonctions soient définies)
 loadAllClients();
 
@@ -1676,6 +1853,8 @@ loadAllClients();
 // (pour laisser le temps à maps-enhancements.js de restaurer depuis localStorage)
 setTimeout(() => {
     initDefaultStartPoint();
+    // Appliquer les filtres après chargement des clients
+    applyMarkerFilters();
 }, 2500); // 2.5s : après le restore de maps-enhancements.js (2s) + marge
 </script>
 </body>

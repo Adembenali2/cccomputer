@@ -654,6 +654,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Paramètres de recherche - barre de recherche unique avec filtrage intelligent
 $search = sanitizeSearch($_GET['q'] ?? '');
 
+// Paramètres de recherche pour les sections spécifiques
+$searchPayments = sanitizeSearch($_GET['search_payments'] ?? '');
+$searchFactures = sanitizeSearch($_GET['search_factures'] ?? '');
+$searchSav = sanitizeSearch($_GET['search_sav'] ?? '');
+$searchImports = sanitizeSearch($_GET['search_imports'] ?? '');
+
 // Construction de la requête SQL optimisée avec recherche partielle intelligente
 $params = [];
 $where = [];
@@ -736,11 +742,17 @@ $totalUsers = (int)($stats['total'] ?? 0);
 $activeUsers = (int)($stats['actifs'] ?? 0);
 $inactiveUsers = (int)($stats['inactifs'] ?? 0);
 
-// Derniers paiements (pour affichage dans le profil)
-// On ne charge que quelques éléments pour ne pas alourdir la page
-$recentPayments = safeFetchAll(
-    $pdo,
-    "
+// Tous les paiements (avec filtrage optionnel)
+$paymentsParams = [];
+$paymentsWhere = [];
+if ($searchPayments !== '') {
+    $searchPattern = '%' . $searchPayments . '%';
+    $paymentsWhere[] = "(LOWER(c.raison_sociale) LIKE LOWER(:search_payments) 
+                        OR LOWER(c.nom_dirigeant) LIKE LOWER(:search_payments) 
+                        OR LOWER(c.prenom_dirigeant) LIKE LOWER(:search_payments))";
+    $paymentsParams[':search_payments'] = $searchPattern;
+}
+$paymentsSql = "
     SELECT 
         p.id,
         p.id_facture,
@@ -754,23 +766,29 @@ $recentPayments = safeFetchAll(
         p.created_at,
         c.raison_sociale AS client_nom,
         c.numero_client AS client_code,
+        c.nom_dirigeant,
+        c.prenom_dirigeant,
         f.numero AS facture_numero
     FROM paiements p
     LEFT JOIN clients c ON p.id_client = c.id
-    LEFT JOIN factures f ON p.id_facture = f.id
-    ORDER BY p.date_paiement DESC, p.created_at DESC
-    LIMIT 20
-    ",
-    [],
-    'profil_recent_paiements'
-);
+    LEFT JOIN factures f ON p.id_facture = f.id";
+if (!empty($paymentsWhere)) {
+    $paymentsSql .= " WHERE " . implode(' AND ', $paymentsWhere);
+}
+$paymentsSql .= " ORDER BY p.date_paiement DESC, p.created_at DESC";
+$recentPayments = safeFetchAll($pdo, $paymentsSql, $paymentsParams, 'profil_all_paiements');
 
-// Dernières factures (pour affichage dans le profil)
-// On ne charge que quelques éléments pour ne pas alourdir la page
-// Récupérer aussi les informations de paiement liées (le plus récent paiement par facture)
-$recentFactures = safeFetchAll(
-    $pdo,
-    "
+// Toutes les factures (avec filtrage optionnel)
+$facturesParams = [];
+$facturesWhere = [];
+if ($searchFactures !== '') {
+    $searchPattern = '%' . $searchFactures . '%';
+    $facturesWhere[] = "(LOWER(c.raison_sociale) LIKE LOWER(:search_factures) 
+                        OR LOWER(c.nom_dirigeant) LIKE LOWER(:search_factures) 
+                        OR LOWER(c.prenom_dirigeant) LIKE LOWER(:search_factures))";
+    $facturesParams[':search_factures'] = $searchPattern;
+}
+$facturesSql = "
     SELECT 
         f.id,
         f.numero,
@@ -788,6 +806,8 @@ $recentFactures = safeFetchAll(
         c.raison_sociale AS client_nom,
         c.numero_client AS client_code,
         c.email AS client_email,
+        c.nom_dirigeant,
+        c.prenom_dirigeant,
         p.mode_paiement,
         p.recu_path AS paiement_justificatif
     FROM factures f
@@ -804,19 +824,26 @@ $recentFactures = safeFetchAll(
             WHERE id_facture IS NOT NULL
             GROUP BY id_facture
         ) p2 ON p1.id_facture = p2.id_facture AND p1.date_paiement = p2.max_date
-    ) p ON p.id_facture = f.id
-    ORDER BY f.date_facture DESC, f.created_at DESC
-    LIMIT 30
-    ",
-    [],
-    'profil_recent_factures'
-);
+    ) p ON p.id_facture = f.id";
+if (!empty($facturesWhere)) {
+    $facturesSql .= " WHERE " . implode(' AND ', $facturesWhere);
+}
+$facturesSql .= " ORDER BY f.date_facture DESC, f.created_at DESC";
+$recentFactures = safeFetchAll($pdo, $facturesSql, $facturesParams, 'profil_all_factures');
 
-// Derniers SAV résolus (pour affichage dans le profil)
-// On ne charge que les SAV résolus pour permettre de les rouvrir
-$recentSav = safeFetchAll(
-    $pdo,
-    "
+// Tous les SAV résolus (avec filtrage optionnel)
+$savParams = [];
+$savWhere = ["s.statut = 'resolu'"];
+if ($searchSav !== '') {
+    $searchPattern = '%' . $searchSav . '%';
+    $savWhere[] = "(LOWER(c.raison_sociale) LIKE LOWER(:search_sav) 
+                   OR LOWER(c.nom_dirigeant) LIKE LOWER(:search_sav) 
+                   OR LOWER(c.prenom_dirigeant) LIKE LOWER(:search_sav)
+                   OR LOWER(u.nom) LIKE LOWER(:search_sav)
+                   OR LOWER(u.prenom) LIKE LOWER(:search_sav))";
+    $savParams[':search_sav'] = $searchPattern;
+}
+$savSql = "
     SELECT 
         s.id,
         s.reference,
@@ -833,18 +860,16 @@ $recentSav = safeFetchAll(
         c.id AS client_id,
         c.raison_sociale AS client_nom,
         c.numero_client AS client_code,
+        c.nom_dirigeant,
+        c.prenom_dirigeant,
         u.nom AS technicien_nom,
         u.prenom AS technicien_prenom
     FROM sav s
     LEFT JOIN clients c ON s.id_client = c.id
     LEFT JOIN utilisateurs u ON s.id_technicien = u.id
-    WHERE s.statut = 'resolu'
-    ORDER BY s.date_fermeture DESC, s.updated_at DESC
-    LIMIT 30
-    ",
-    [],
-    'profil_recent_sav'
-);
+    WHERE " . implode(' AND ', $savWhere) . "
+    ORDER BY s.date_fermeture DESC, s.updated_at DESC";
+$recentSav = safeFetchAll($pdo, $savSql, $savParams, 'profil_all_sav');
 
 // Récupérer les informations de l'utilisateur connecté
 $currentUserInfo = safeFetch($pdo, 
@@ -2408,12 +2433,41 @@ function decode_msg($row) {
     <?php endif; ?>
     
     <?php if ($isAdminOrDirigeant): ?>
-        <!-- Section Derniers paiements -->
+        <!-- Section Tous les paiements -->
         <section class="panel payments-panel" id="paymentsPanel" style="display: none;">
-            <h2 class="panel-title">Derniers paiements enregistrés</h2>
+            <h2 class="panel-title">Tous les paiements enregistrés</h2>
             <p class="panel-subtitle">
-                Aperçu rapide des 20 derniers paiements. Vous pouvez mettre à jour le <strong>statut</strong> directement depuis cette page.
+                Liste complète de tous les paiements. Vous pouvez mettre à jour le <strong>statut</strong> directement depuis cette page.
             </p>
+
+            <!-- Barre de recherche pour les paiements -->
+            <form method="get" action="/public/profil.php#paymentsPanel" class="filtre-form" style="margin-bottom: 1.5rem;">
+                <div class="filter-bar">
+                    <div class="filter-field grow">
+                        <label for="search_payments" class="sr-only">Rechercher dans les paiements</label>
+                        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input class="filter-input" type="search" id="search_payments" name="search_payments" 
+                               value="<?= h($searchPayments) ?>" 
+                               placeholder="Rechercher par raison sociale, nom ou prénom du client…" 
+                               aria-label="Rechercher dans les paiements" 
+                               autocomplete="off" />
+                        <?php if ($searchPayments !== ''): ?>
+                            <button type="button" class="input-clear" id="clearPaymentsSearch" aria-label="Effacer la recherche">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if ($searchPayments !== ''): ?>
+                    <div class="filter-hint">
+                        <small>🔍 Filtre actif : "<?= h($searchPayments) ?>" - <?= count($recentPayments) ?> résultat(s)</small>
+                    </div>
+                <?php endif; ?>
+            </form>
 
             <div class="table-responsive">
                 <table class="users-table payments-table" role="table" aria-label="Derniers paiements">
@@ -2562,12 +2616,41 @@ function decode_msg($row) {
     <?php endif; ?>
     
     <?php if ($isAdminOrDirigeant): ?>
-        <!-- Section Dernières factures -->
+        <!-- Section Toutes les factures -->
         <section class="panel factures-panel" id="facturesPanel" style="display: none;">
-            <h2 class="panel-title">Dernières factures</h2>
+            <h2 class="panel-title">Toutes les factures <span class="badge role" style="font-size: 0.75rem; margin-left: 0.5rem;"><?= count($recentFactures) ?></span></h2>
             <p class="panel-subtitle">
-                Aperçu rapide des 30 dernières factures. Vous pouvez <strong>vérifier le PDF</strong> et mettre à jour le <strong>statut</strong> directement depuis cette page.
+                Liste complète de toutes les factures. Vous pouvez <strong>vérifier le PDF</strong> et mettre à jour le <strong>statut</strong> directement depuis cette page.
             </p>
+
+            <!-- Barre de recherche pour les factures -->
+            <form method="get" action="/public/profil.php#facturesPanel" class="filtre-form" style="margin-bottom: 1.5rem;">
+                <div class="filter-bar">
+                    <div class="filter-field grow">
+                        <label for="search_factures" class="sr-only">Rechercher dans les factures</label>
+                        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input class="filter-input" type="search" id="search_factures" name="search_factures" 
+                               value="<?= h($searchFactures) ?>" 
+                               placeholder="Rechercher par raison sociale, nom ou prénom du client…" 
+                               aria-label="Rechercher dans les factures" 
+                               autocomplete="off" />
+                        <?php if ($searchFactures !== ''): ?>
+                            <button type="button" class="input-clear" id="clearFacturesSearch" aria-label="Effacer la recherche">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if ($searchFactures !== ''): ?>
+                    <div class="filter-hint">
+                        <small>🔍 Filtre actif : "<?= h($searchFactures) ?>" - <?= count($recentFactures) ?> résultat(s)</small>
+                    </div>
+                <?php endif; ?>
+            </form>
 
             <div class="table-responsive">
                 <table class="users-table factures-table" role="table" aria-label="Dernières factures">
@@ -2752,10 +2835,39 @@ function decode_msg($row) {
     <?php if ($isAdminOrDirigeant): ?>
         <!-- Section SAV Résolus -->
         <section class="panel sav-panel" id="savPanel" style="display: none;">
-            <h2 class="panel-title">SAV Résolus</h2>
+            <h2 class="panel-title">SAV Résolus <span class="badge role" style="font-size: 0.75rem; margin-left: 0.5rem;"><?= count($recentSav) ?></span></h2>
             <p class="panel-subtitle">
-                Aperçu rapide des 30 derniers SAV résolus. Vous pouvez <strong>réouvrir un SAV</strong> en modifiant son statut de "résolu" à "ouvert".
+                Liste complète de tous les SAV résolus. Vous pouvez <strong>réouvrir un SAV</strong> en modifiant son statut de "résolu" à "ouvert".
             </p>
+
+            <!-- Barre de recherche pour les SAV -->
+            <form method="get" action="/public/profil.php#savPanel" class="filtre-form" style="margin-bottom: 1.5rem;">
+                <div class="filter-bar">
+                    <div class="filter-field grow">
+                        <label for="search_sav" class="sr-only">Rechercher dans les SAV</label>
+                        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input class="filter-input" type="search" id="search_sav" name="search_sav" 
+                               value="<?= h($searchSav) ?>" 
+                               placeholder="Rechercher par raison sociale, nom, prénom du client ou technicien…" 
+                               aria-label="Rechercher dans les SAV" 
+                               autocomplete="off" />
+                        <?php if ($searchSav !== ''): ?>
+                            <button type="button" class="input-clear" id="clearSavSearch" aria-label="Effacer la recherche">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if ($searchSav !== ''): ?>
+                    <div class="filter-hint">
+                        <small>🔍 Filtre actif : "<?= h($searchSav) ?>" - <?= count($recentSav) ?> résultat(s)</small>
+                    </div>
+                <?php endif; ?>
+            </form>
 
             <div class="table-responsive">
                 <table class="users-table sav-table" role="table" aria-label="SAV résolus">
@@ -2911,12 +3023,48 @@ function decode_msg($row) {
     <?php if ($isAdminOrDirigeant): ?>
         <!-- Section Historique des Imports SFTP et IONOS (masquée par défaut) -->
         <section class="panel import-history-panel" id="importHistoryPanel" style="display: none;">
-            <h2 class="panel-title">Historique des Imports (SFTP & IONOS)</h2>
-            <p class="panel-subtitle">Historique complet des exécutions d'import SFTP et IONOS avec détails (fichiers/lignes traités, lignes insérées, erreurs, etc.).</p>
+            <h2 class="panel-title">Historique des Imports (SFTP & IONOS) <span class="badge role" style="font-size: 0.75rem; margin-left: 0.5rem;"><?= count($importHistory) ?></span></h2>
+            <p class="panel-subtitle">Historique complet de toutes les exécutions d'import SFTP et IONOS avec détails (fichiers/lignes traités, lignes insérées, erreurs, etc.).</p>
+            
+            <!-- Barre de recherche pour les imports (optionnelle, pour cohérence) -->
+            <form method="get" action="/public/profil.php#importHistoryPanel" class="filtre-form" style="margin-bottom: 1.5rem;">
+                <div class="filter-bar">
+                    <div class="filter-field grow">
+                        <label for="search_imports" class="sr-only">Rechercher dans les imports</label>
+                        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input class="filter-input" type="search" id="search_imports" name="search_imports" 
+                               value="<?= h($searchImports) ?>" 
+                               placeholder="Rechercher par date ou type d'import…" 
+                               aria-label="Rechercher dans les imports" 
+                               autocomplete="off" />
+                        <?php if ($searchImports !== ''): ?>
+                            <button type="button" class="input-clear" id="clearImportsSearch" aria-label="Effacer la recherche">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if ($searchImports !== ''): ?>
+                    <div class="filter-hint">
+                        <small>🔍 Filtre actif : "<?= h($searchImports) ?>" - <?= count($importHistory) ?> résultat(s)</small>
+                    </div>
+                <?php endif; ?>
+            </form>
             
             <?php
-            // Récupérer l'historique des imports SFTP et IONOS
-            $importHistory = safeFetchAll($pdo, "
+            // Récupérer l'historique des imports SFTP et IONOS (avec filtrage optionnel)
+            $importsParams = [];
+            $importsWhere = ["(msg LIKE '%\"type\":\"sftp\"%' OR msg LIKE '%\"type\":\"ionos\"%' OR msg LIKE '%\"type\":\"sftp_check\"%' OR msg LIKE '%\"type\":\"ionos_check\"%')"];
+            
+            // Pour les imports, on peut filtrer par date ou contenu du message
+            // Le filtrage par nom/prénom/raison sociale n'est pas applicable ici
+            // mais on peut garder le paramètre pour cohérence
+            
+            $importsSql = "
                 SELECT 
                     id,
                     ran_at,
@@ -2925,13 +3073,9 @@ function decode_msg($row) {
                     ok,
                     msg
                 FROM import_run
-                WHERE msg LIKE '%\"type\":\"sftp\"%' 
-                   OR msg LIKE '%\"type\":\"ionos\"%'
-                   OR msg LIKE '%\"type\":\"sftp_check\"%'
-                   OR msg LIKE '%\"type\":\"ionos_check\"%'
-                ORDER BY ran_at DESC
-                LIMIT 50
-            ", [], 'import_history');
+                WHERE " . implode(' AND ', $importsWhere) . "
+                ORDER BY ran_at DESC";
+            $importHistory = safeFetchAll($pdo, $importsSql, $importsParams, 'import_history');
             
             // Fonction pour parser le message JSON et extraire les informations
             function parseImportMessage($msg): array {
@@ -3364,6 +3508,15 @@ function decode_msg($row) {
     const historyPanel = document.getElementById('importHistoryPanel');
     
     if (toggleBtn && historyPanel) {
+        // Si l'URL contient #importHistoryPanel, afficher automatiquement la section
+        if (window.location.hash === '#importHistoryPanel') {
+            historyPanel.style.display = 'block';
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            setTimeout(function() {
+                historyPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+        
         toggleBtn.addEventListener('click', function() {
             const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
             const isHidden = historyPanel.style.display === 'none';
@@ -3493,6 +3646,45 @@ function decode_msg($row) {
                 savPanel.style.display = 'none';
                 toggleBtn.setAttribute('aria-expanded', 'false');
             }
+        });
+    }
+})();
+
+/* Gestion des boutons de nettoyage des recherches */
+(function() {
+    // Nettoyage recherche paiements
+    const clearPaymentsBtn = document.getElementById('clearPaymentsSearch');
+    const paymentsSearchInput = document.getElementById('search_payments');
+    if (clearPaymentsBtn && paymentsSearchInput) {
+        clearPaymentsBtn.addEventListener('click', function() {
+            window.location.href = '/public/profil.php#paymentsPanel';
+        });
+    }
+    
+    // Nettoyage recherche factures
+    const clearFacturesBtn = document.getElementById('clearFacturesSearch');
+    const facturesSearchInput = document.getElementById('search_factures');
+    if (clearFacturesBtn && facturesSearchInput) {
+        clearFacturesBtn.addEventListener('click', function() {
+            window.location.href = '/public/profil.php#facturesPanel';
+        });
+    }
+    
+    // Nettoyage recherche SAV
+    const clearSavBtn = document.getElementById('clearSavSearch');
+    const savSearchInput = document.getElementById('search_sav');
+    if (clearSavBtn && savSearchInput) {
+        clearSavBtn.addEventListener('click', function() {
+            window.location.href = '/public/profil.php#savPanel';
+        });
+    }
+    
+    // Nettoyage recherche imports
+    const clearImportsBtn = document.getElementById('clearImportsSearch');
+    const importsSearchInput = document.getElementById('search_imports');
+    if (clearImportsBtn && importsSearchInput) {
+        clearImportsBtn.addEventListener('click', function() {
+            window.location.href = '/public/profil.php#importHistoryPanel';
         });
     }
 })();
