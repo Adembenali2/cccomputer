@@ -1902,39 +1902,6 @@ if (panelHeader) {
     });
 }
 
-// ==================
-// Gestion du panneau repliable (mobile)
-// ==================
-
-const mapsPanel = document.getElementById('mapsPanel');
-const togglePanelBtn = document.getElementById('togglePanelBtn');
-const panelHeader = document.getElementById('panelHeader');
-
-function togglePanel() {
-    if (mapsPanel) {
-        mapsPanel.classList.toggle('collapsed');
-        if (togglePanelBtn) {
-            togglePanelBtn.textContent = mapsPanel.classList.contains('collapsed') ? '▲' : '▼';
-        }
-    }
-}
-
-if (togglePanelBtn) {
-    togglePanelBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        togglePanel();
-    });
-}
-
-if (panelHeader) {
-    panelHeader.addEventListener('click', (e) => {
-        // Ne toggle que si on clique sur le header, pas sur les boutons
-        if (e.target === panelHeader || e.target.closest('h2')) {
-            togglePanel();
-        }
-    });
-}
-
 // Initialiser le point de départ par défaut après un court délai
 // (pour laisser le temps à maps-enhancements.js de restaurer depuis localStorage)
 setTimeout(() => {

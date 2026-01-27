@@ -70,7 +70,7 @@ function normalizeLatLng(point) {
 /**
  * Attend qu'une condition soit vraie avant d'exécuter un callback
  */
-function waitFor(predicate, callback, tries = 40, delay = 100) {
+function waitFor(predicate, callback, tries = 100, delay = 100) {
     if (predicate()) {
         callback();
         return;
@@ -84,7 +84,8 @@ function waitFor(predicate, callback, tries = 40, delay = 100) {
             callback();
         } else if (attempts >= tries) {
             clearInterval(interval);
-            console.warn('waitFor: timeout, condition never met');
+            // Ne pas afficher d'avertissement si les fonctions ne sont pas critiques
+            // console.warn('waitFor: timeout, condition never met');
         }
     }, delay);
 }
@@ -531,6 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================
 
 // Utiliser waitFor au lieu de setTimeout pour plus de robustesse
+// Augmenter le nombre de tentatives pour laisser plus de temps au chargement
 waitFor(
     () => typeof addClientToRoute !== 'undefined' && typeof setStartPoint !== 'undefined' && typeof renderSelectedClients !== 'undefined',
     () => {
@@ -596,7 +598,7 @@ waitFor(
             };
         }
     },
-    50, // 50 tentatives
-    100 // 100ms entre chaque tentative (max 5 secondes)
+    100, // 100 tentatives
+    150 // 150ms entre chaque tentative (max 15 secondes)
 );
 

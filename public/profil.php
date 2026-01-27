@@ -3507,62 +3507,100 @@ function decode_msg($row) {
     }
 })();
 
-/* Gestion des toggles pour toutes les sections - Version ultra-simplifiée */
-(function() {
-    'use strict';
+/* Gestion des toggles pour toutes les sections - Version ultra-simple et directe */
+window.addEventListener('load', function() {
+    console.log('🚀 Initialisation des toggles après chargement complet');
     
-    function setupSectionToggle(buttonId, panelId) {
-        var btn = document.getElementById(buttonId);
-        var panel = document.getElementById(panelId);
-        
-        if (!btn || !panel) {
-            console.warn('Éléments manquants pour', buttonId);
-            return;
-        }
-        
-        // Vérifier le hash dans l'URL au chargement
-        if (window.location.hash === '#' + panelId) {
-            panel.style.display = 'block';
-            btn.setAttribute('aria-expanded', 'true');
-            window.setTimeout(function() {
-                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 300);
-        }
-        
-        // Gestionnaire de clic
-        btn.onclick = function(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            var isVisible = panel.style.display !== 'none';
-            
-            if (isVisible) {
-                panel.style.display = 'none';
-                btn.setAttribute('aria-expanded', 'false');
-            } else {
-                panel.style.display = 'block';
-                btn.setAttribute('aria-expanded', 'true');
-                window.setTimeout(function() {
-                    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
+    // Toggle pour Historique des Imports
+    var btnImports = document.getElementById('toggleImportHistory');
+    var panelImports = document.getElementById('importHistoryPanel');
+    if (btnImports && panelImports) {
+        btnImports.onclick = function(e) {
+            e.preventDefault();
+            var isHidden = panelImports.style.display === 'none' || window.getComputedStyle(panelImports).display === 'none';
+            panelImports.style.display = isHidden ? 'block' : 'none';
+            btnImports.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+            if (isHidden) {
+                setTimeout(function() { panelImports.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
             }
         };
-    }
-    
-    function initToggles() {
-        setupSectionToggle('toggleImportHistory', 'importHistoryPanel');
-        setupSectionToggle('togglePayments', 'paymentsPanel');
-        setupSectionToggle('toggleFactures', 'facturesPanel');
-        setupSectionToggle('toggleSav', 'savPanel');
-    }
-    
-    // Attendre le chargement du DOM
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initToggles);
+        if (window.location.hash === '#importHistoryPanel') {
+            panelImports.style.display = 'block';
+            btnImports.setAttribute('aria-expanded', 'true');
+        }
+        console.log('✅ Toggle imports configuré');
     } else {
-        window.setTimeout(initToggles, 50);
+        console.warn('⚠️ Éléments imports non trouvés');
     }
-})();
+    
+    // Toggle pour Paiements
+    var btnPayments = document.getElementById('togglePayments');
+    var panelPayments = document.getElementById('paymentsPanel');
+    if (btnPayments && panelPayments) {
+        btnPayments.onclick = function(e) {
+            e.preventDefault();
+            var isHidden = panelPayments.style.display === 'none' || window.getComputedStyle(panelPayments).display === 'none';
+            panelPayments.style.display = isHidden ? 'block' : 'none';
+            btnPayments.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+            if (isHidden) {
+                setTimeout(function() { panelPayments.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
+            }
+        };
+        if (window.location.hash === '#paymentsPanel') {
+            panelPayments.style.display = 'block';
+            btnPayments.setAttribute('aria-expanded', 'true');
+        }
+        console.log('✅ Toggle payments configuré');
+    } else {
+        console.warn('⚠️ Éléments payments non trouvés');
+    }
+    
+    // Toggle pour Factures
+    var btnFactures = document.getElementById('toggleFactures');
+    var panelFactures = document.getElementById('facturesPanel');
+    if (btnFactures && panelFactures) {
+        btnFactures.onclick = function(e) {
+            e.preventDefault();
+            var isHidden = panelFactures.style.display === 'none' || window.getComputedStyle(panelFactures).display === 'none';
+            panelFactures.style.display = isHidden ? 'block' : 'none';
+            btnFactures.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+            if (isHidden) {
+                setTimeout(function() { panelFactures.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
+            }
+        };
+        if (window.location.hash === '#facturesPanel') {
+            panelFactures.style.display = 'block';
+            btnFactures.setAttribute('aria-expanded', 'true');
+        }
+        console.log('✅ Toggle factures configuré');
+    } else {
+        console.warn('⚠️ Éléments factures non trouvés');
+    }
+    
+    // Toggle pour SAV
+    var btnSav = document.getElementById('toggleSav');
+    var panelSav = document.getElementById('savPanel');
+    if (btnSav && panelSav) {
+        btnSav.onclick = function(e) {
+            e.preventDefault();
+            var isHidden = panelSav.style.display === 'none' || window.getComputedStyle(panelSav).display === 'none';
+            panelSav.style.display = isHidden ? 'block' : 'none';
+            btnSav.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+            if (isHidden) {
+                setTimeout(function() { panelSav.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
+            }
+        };
+        if (window.location.hash === '#savPanel') {
+            panelSav.style.display = 'block';
+            btnSav.setAttribute('aria-expanded', 'true');
+        }
+        console.log('✅ Toggle SAV configuré');
+    } else {
+        console.warn('⚠️ Éléments SAV non trouvés');
+    }
+    
+    console.log('🎉 Tous les toggles initialisés');
+});
 
 /* Gestion des boutons de nettoyage des recherches */
 (function() {
