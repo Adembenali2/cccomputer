@@ -3504,10 +3504,12 @@ function decode_msg($row) {
 
 /* Toggle historique des imports SFTP */
 (function() {
-    const toggleBtn = document.getElementById('toggleImportHistory');
-    const historyPanel = document.getElementById('importHistoryPanel');
-    
-    if (toggleBtn && historyPanel) {
+    function initImportHistoryToggle() {
+        const toggleBtn = document.getElementById('toggleImportHistory');
+        const historyPanel = document.getElementById('importHistoryPanel');
+        
+        if (!toggleBtn || !historyPanel) return;
+        
         // Si l'URL contient #importHistoryPanel, afficher automatiquement la section
         if (window.location.hash === '#importHistoryPanel') {
             historyPanel.style.display = 'block';
@@ -3517,11 +3519,15 @@ function decode_msg($row) {
             }, 100);
         }
         
-        toggleBtn.addEventListener('click', function() {
-            const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-            const isHidden = historyPanel.style.display === 'none';
+        toggleBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isCurrentlyVisible = historyPanel.style.display !== 'none' && historyPanel.style.display !== '';
             
-            if (isHidden || !isExpanded) {
+            if (isCurrentlyVisible) {
+                // Masquer la section
+                historyPanel.style.display = 'none';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            } else {
                 // Afficher la section
                 historyPanel.style.display = 'block';
                 toggleBtn.setAttribute('aria-expanded', 'true');
@@ -3530,21 +3536,25 @@ function decode_msg($row) {
                 setTimeout(function() {
                     historyPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 10);
-            } else {
-                // Masquer la section
-                historyPanel.style.display = 'none';
-                toggleBtn.setAttribute('aria-expanded', 'false');
             }
         });
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initImportHistoryToggle);
+    } else {
+        initImportHistoryToggle();
     }
 })();
 
 /* Toggle section Paiements */
 (function() {
-    const toggleBtn = document.getElementById('togglePayments');
-    const paymentsPanel = document.getElementById('paymentsPanel');
-    
-    if (toggleBtn && paymentsPanel) {
+    function initPaymentsToggle() {
+        const toggleBtn = document.getElementById('togglePayments');
+        const paymentsPanel = document.getElementById('paymentsPanel');
+        
+        if (!toggleBtn || !paymentsPanel) return;
+        
         // Si l'URL contient #paymentsPanel, afficher automatiquement la section
         if (window.location.hash === '#paymentsPanel') {
             paymentsPanel.style.display = 'block';
@@ -3554,11 +3564,15 @@ function decode_msg($row) {
             }, 100);
         }
         
-        toggleBtn.addEventListener('click', function() {
-            const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-            const isHidden = paymentsPanel.style.display === 'none';
+        toggleBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isCurrentlyVisible = paymentsPanel.style.display !== 'none' && paymentsPanel.style.display !== '';
             
-            if (isHidden || !isExpanded) {
+            if (isCurrentlyVisible) {
+                // Masquer la section
+                paymentsPanel.style.display = 'none';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            } else {
                 // Afficher la section
                 paymentsPanel.style.display = 'block';
                 toggleBtn.setAttribute('aria-expanded', 'true');
@@ -3567,21 +3581,25 @@ function decode_msg($row) {
                 setTimeout(function() {
                     paymentsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 10);
-            } else {
-                // Masquer la section
-                paymentsPanel.style.display = 'none';
-                toggleBtn.setAttribute('aria-expanded', 'false');
             }
         });
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPaymentsToggle);
+    } else {
+        initPaymentsToggle();
     }
 })();
 
 /* Toggle section Factures */
 (function() {
-    const toggleBtn = document.getElementById('toggleFactures');
-    const facturesPanel = document.getElementById('facturesPanel');
-    
-    if (toggleBtn && facturesPanel) {
+    function initFacturesToggle() {
+        const toggleBtn = document.getElementById('toggleFactures');
+        const facturesPanel = document.getElementById('facturesPanel');
+        
+        if (!toggleBtn || !facturesPanel) return;
+        
         // Si l'URL contient #facturesPanel, afficher automatiquement la section
         if (window.location.hash === '#facturesPanel') {
             facturesPanel.style.display = 'block';
@@ -3591,11 +3609,15 @@ function decode_msg($row) {
             }, 100);
         }
         
-        toggleBtn.addEventListener('click', function() {
-            const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-            const isHidden = facturesPanel.style.display === 'none';
+        toggleBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isCurrentlyVisible = facturesPanel.style.display !== 'none' && facturesPanel.style.display !== '';
             
-            if (isHidden || !isExpanded) {
+            if (isCurrentlyVisible) {
+                // Masquer la section
+                facturesPanel.style.display = 'none';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            } else {
                 // Afficher la section
                 facturesPanel.style.display = 'block';
                 toggleBtn.setAttribute('aria-expanded', 'true');
@@ -3604,21 +3626,25 @@ function decode_msg($row) {
                 setTimeout(function() {
                     facturesPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 10);
-            } else {
-                // Masquer la section
-                facturesPanel.style.display = 'none';
-                toggleBtn.setAttribute('aria-expanded', 'false');
             }
         });
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initFacturesToggle);
+    } else {
+        initFacturesToggle();
     }
 })();
 
 /* Toggle section SAV */
 (function() {
-    const toggleBtn = document.getElementById('toggleSav');
-    const savPanel = document.getElementById('savPanel');
-    
-    if (toggleBtn && savPanel) {
+    function initSavToggle() {
+        const toggleBtn = document.getElementById('toggleSav');
+        const savPanel = document.getElementById('savPanel');
+        
+        if (!toggleBtn || !savPanel) return;
+        
         // Si l'URL contient #savPanel, afficher automatiquement la section
         if (window.location.hash === '#savPanel') {
             savPanel.style.display = 'block';
@@ -3628,11 +3654,15 @@ function decode_msg($row) {
             }, 100);
         }
         
-        toggleBtn.addEventListener('click', function() {
-            const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-            const isHidden = savPanel.style.display === 'none';
+        toggleBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isCurrentlyVisible = savPanel.style.display !== 'none' && savPanel.style.display !== '';
             
-            if (isHidden || !isExpanded) {
+            if (isCurrentlyVisible) {
+                // Masquer la section
+                savPanel.style.display = 'none';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            } else {
                 // Afficher la section
                 savPanel.style.display = 'block';
                 toggleBtn.setAttribute('aria-expanded', 'true');
@@ -3641,12 +3671,14 @@ function decode_msg($row) {
                 setTimeout(function() {
                     savPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 10);
-            } else {
-                // Masquer la section
-                savPanel.style.display = 'none';
-                toggleBtn.setAttribute('aria-expanded', 'false');
             }
         });
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSavToggle);
+    } else {
+        initSavToggle();
     }
 })();
 

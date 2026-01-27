@@ -1132,7 +1132,12 @@ clientSearchInput.addEventListener('input', () => {
     
     // Annuler la recherche précédente si elle est en cours
     if (currentSearchAbortController) {
-        currentSearchAbortController.abort();
+        try {
+            currentSearchAbortController.abort();
+        } catch (e) {
+            // Ignorer les erreurs si le controller est déjà annulé
+            console.warn('Erreur lors de l\'annulation de la recherche:', e);
+        }
         currentSearchAbortController = null;
     }
     
@@ -1154,12 +1159,14 @@ clientSearchInput.addEventListener('input', () => {
     searchTimeout = setTimeout(async () => {
         // Créer un nouveau AbortController pour cette recherche
         currentSearchAbortController = new AbortController();
+        const abortController = currentSearchAbortController; // Garder une référence locale
         
         try {
             const results = await searchClients(q);
             
             // Vérifier que la recherche n'a pas été annulée
-            if (currentSearchAbortController.signal.aborted) {
+            // Vérifier aussi que currentSearchAbortController n'a pas été réinitialisé
+            if (!currentSearchAbortController || currentSearchAbortController !== abortController || currentSearchAbortController.signal.aborted) {
                 return;
             }
             
@@ -1214,14 +1221,20 @@ clientSearchInput.addEventListener('input', () => {
         } catch (err) {
             if (err.name !== 'AbortError') {
                 console.error('Erreur lors de la recherche:', err);
-                clientResultsEl.innerHTML = '';
-                const errorItem = document.createElement('div');
-                errorItem.className = 'client-result-item empty';
-                errorItem.textContent = 'Erreur lors de la recherche. Veuillez réessayer.';
-                clientResultsEl.appendChild(errorItem);
+                // Vérifier que currentSearchAbortController n'a pas été réinitialisé avant d'afficher l'erreur
+                if (currentSearchAbortController === abortController) {
+                    clientResultsEl.innerHTML = '';
+                    const errorItem = document.createElement('div');
+                    errorItem.className = 'client-result-item empty';
+                    errorItem.textContent = 'Erreur lors de la recherche. Veuillez réessayer.';
+                    clientResultsEl.appendChild(errorItem);
+                }
             }
         } finally {
-            currentSearchAbortController = null;
+            // Ne réinitialiser que si c'est toujours le même controller
+            if (currentSearchAbortController === abortController) {
+                currentSearchAbortController = null;
+            }
         }
     }, CONFIG.SEARCH_DEBOUNCE_MS);
 });
