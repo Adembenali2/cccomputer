@@ -627,6 +627,46 @@ $onlineUsers = count($onlineUsersList);
 $filtersActive = ($search !== '');
 
 // ========================================================================
+// RÉCUPÉRATION DES DONNÉES SAV, PAIEMENTS ET FACTURES
+// ========================================================================
+// Récupérer les SAV
+$savList = safeFetchAll($pdo, "
+    SELECT s.id, s.reference, s.description, s.date_ouverture, s.date_fermeture, 
+           s.statut, s.priorite, s.type_panne,
+           c.raison_sociale as client_nom,
+           u.nom as technicien_nom, u.prenom as technicien_prenom
+    FROM sav s
+    LEFT JOIN clients c ON s.id_client = c.id
+    LEFT JOIN utilisateurs u ON s.id_technicien = u.id
+    ORDER BY s.date_ouverture DESC
+    LIMIT 100
+", [], 'sav_list');
+
+// Récupérer les paiements
+$paiementsList = safeFetchAll($pdo, "
+    SELECT p.id, p.date_paiement, p.montant, p.mode_paiement, p.statut, 
+           p.reference, p.recu_path,
+           c.raison_sociale as client_nom,
+           f.numero as facture_numero
+    FROM paiements p
+    LEFT JOIN clients c ON p.id_client = c.id
+    LEFT JOIN factures f ON p.id_facture = f.id
+    ORDER BY p.date_paiement DESC
+    LIMIT 100
+", [], 'paiements_list');
+
+// Récupérer les factures
+$facturesList = safeFetchAll($pdo, "
+    SELECT f.id, f.numero, f.date_facture, f.montant_ht, f.tva, f.montant_ttc,
+           f.statut, f.type, f.pdf_path,
+           c.raison_sociale as client_nom
+    FROM factures f
+    LEFT JOIN clients c ON f.id_client = c.id
+    ORDER BY f.date_facture DESC
+    LIMIT 100
+", [], 'factures_list');
+
+// ========================================================================
 // GESTION DES PERMISSIONS (ACL)
 // ========================================================================
 // Liste des pages disponibles pour les permissions (organisées par catégories)
@@ -981,6 +1021,24 @@ function decode_msg($row) {
         /* Styles améliorés pour le tableau des paiements */
         .payments-panel {
             margin-top: 2rem;
+            padding: 1.5rem;
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            scroll-margin-top: 100px; /* Offset pour le scroll */
+        }
+
+        .payments-panel .panel-title {
+            margin-bottom: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .payments-panel .panel-subtitle {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.5;
         }
 
         /* Styles améliorés pour le tableau des factures */
@@ -990,6 +1048,7 @@ function decode_msg($row) {
             background: var(--bg-primary);
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-sm);
+            scroll-margin-top: 100px; /* Offset pour le scroll */
         }
 
         /* Styles améliorés pour le tableau des SAV */
@@ -999,6 +1058,7 @@ function decode_msg($row) {
             background: var(--bg-primary);
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-sm);
+            scroll-margin-top: 100px; /* Offset pour le scroll */
         }
 
         .sav-panel .panel-title {
@@ -1247,18 +1307,16 @@ function decode_msg($row) {
             white-space: nowrap;
         }
 
-        .factures-table thead th:nth-child(1) { width: 6%; } /* Date */
-        .factures-table thead th:nth-child(2) { width: 7%; } /* Numéro */
-        .factures-table thead th:nth-child(3) { width: 11%; } /* Client */
-        .factures-table thead th:nth-child(4) { width: 6%; } /* Type */
-        .factures-table thead th:nth-child(5) { width: 6%; } /* Montant HT */
-        .factures-table thead th:nth-child(6) { width: 5%; } /* TVA */
-        .factures-table thead th:nth-child(7) { width: 6%; } /* Total TTC */
-        .factures-table thead th:nth-child(8) { width: 8%; } /* Statut */
-        .factures-table thead th:nth-child(9) { width: 7%; } /* PDF */
-        .factures-table thead th:nth-child(10) { width: 8%; } /* Méthode paiement */
-        .factures-table thead th:nth-child(11) { width: 8%; } /* Justificatif */
-        .factures-table thead th:nth-child(12) { width: 22%; } /* Actions */
+        .factures-table thead th:nth-child(1) { width: 8%; } /* Date */
+        .factures-table thead th:nth-child(2) { width: 9%; } /* Numéro */
+        .factures-table thead th:nth-child(3) { width: 15%; } /* Client */
+        .factures-table thead th:nth-child(4) { width: 8%; } /* Type */
+        .factures-table thead th:nth-child(5) { width: 8%; } /* Montant HT */
+        .factures-table thead th:nth-child(6) { width: 6%; } /* TVA */
+        .factures-table thead th:nth-child(7) { width: 8%; } /* Total TTC */
+        .factures-table thead th:nth-child(8) { width: 10%; } /* Statut */
+        .factures-table thead th:nth-child(9) { width: 10%; } /* PDF */
+        .factures-table thead th:nth-child(10) { width: 18%; } /* Actions */
 
         .factures-table tbody tr {
             border-bottom: 1px solid var(--border-color);
@@ -1503,15 +1561,15 @@ function decode_msg($row) {
             white-space: nowrap;
         }
 
-        .payments-table thead th:nth-child(1) { width: 7%; } /* Date */
-        .payments-table thead th:nth-child(2) { width: 14%; } /* Client */
-        .payments-table thead th:nth-child(3) { width: 7%; } /* Facture */
-        .payments-table thead th:nth-child(4) { width: 7%; } /* Montant */
-        .payments-table thead th:nth-child(5) { width: 9%; } /* Mode */
-        .payments-table thead th:nth-child(6) { width: 9%; } /* Statut */
-        .payments-table thead th:nth-child(7) { width: 9%; } /* Référence */
-        .payments-table thead th:nth-child(8) { width: 9%; } /* Justificatif */
-        .payments-table thead th:nth-child(9) { width: 19%; } /* Actions */
+        .payments-table thead th:nth-child(1) { width: 8%; } /* Date */
+        .payments-table thead th:nth-child(2) { width: 15%; } /* Client */
+        .payments-table thead th:nth-child(3) { width: 8%; } /* Facture */
+        .payments-table thead th:nth-child(4) { width: 8%; } /* Montant */
+        .payments-table thead th:nth-child(5) { width: 10%; } /* Mode */
+        .payments-table thead th:nth-child(6) { width: 10%; } /* Statut */
+        .payments-table thead th:nth-child(7) { width: 12%; } /* Référence */
+        .payments-table thead th:nth-child(8) { width: 10%; } /* Reçu */
+        .payments-table thead th:nth-child(9) { width: 17%; } /* Actions */
 
         .payments-table tbody tr {
             border-bottom: 1px solid var(--border-color);
@@ -1777,19 +1835,19 @@ function decode_msg($row) {
     </header>
 
     <div class="quick-actions-bar">
-        <a href="/public/sav.php" class="quick-action-btn">
+        <a href="#sav" class="quick-action-btn" onclick="scrollToSection(event, 'sav')">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <span>SAV</span>
         </a>
-        <a href="/public/paiements.php" class="quick-action-btn">
+        <a href="#paiements" class="quick-action-btn" onclick="scrollToSection(event, 'paiements')">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             <span>Paiements</span>
         </a>
-        <a href="/public/paiements.php?view=factures" class="quick-action-btn">
+        <a href="#factures" class="quick-action-btn" onclick="scrollToSection(event, 'factures')">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -2226,6 +2284,196 @@ function decode_msg($row) {
             </form>
         </section>
     <?php endif; ?>
+
+    <!-- Section SAV -->
+    <section id="sav" class="sav-panel">
+        <h2 class="panel-title">SAV</h2>
+        <p class="panel-subtitle">Liste des tickets SAV</p>
+        <div class="table-responsive">
+            <table class="sav-table">
+                <thead>
+                    <tr>
+                        <th>Date ouverture</th>
+                        <th>Référence</th>
+                        <th>Client</th>
+                        <th>Description</th>
+                        <th>Type panne</th>
+                        <th>Priorité</th>
+                        <th>Date fermeture</th>
+                        <th>Technicien</th>
+                        <th>Statut</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($savList)): ?>
+                        <tr>
+                            <td colspan="10" class="aucun">Aucun ticket SAV trouvé.</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($savList as $sav): ?>
+                            <tr>
+                                <td><?= h($sav['date_ouverture'] ?? '') ?></td>
+                                <td><?= h($sav['reference'] ?? '') ?></td>
+                                <td><?= h($sav['client_nom'] ?? 'N/A') ?></td>
+                                <td><?= h(mb_substr($sav['description'] ?? '', 0, 50)) ?><?= mb_strlen($sav['description'] ?? '') > 50 ? '...' : '' ?></td>
+                                <td><?= h($sav['type_panne'] ?? '') ?></td>
+                                <td>
+                                    <span class="badge <?= $sav['priorite'] === 'urgente' ? 'error' : ($sav['priorite'] === 'haute' ? 'warning' : '') ?>">
+                                        <?= h($sav['priorite'] ?? '') ?>
+                                    </span>
+                                </td>
+                                <td><?= h($sav['date_fermeture'] ?? '') ?></td>
+                                <td><?= $sav['technicien_nom'] ? h($sav['technicien_prenom'] . ' ' . $sav['technicien_nom']) : 'N/A' ?></td>
+                                <td>
+                                    <span class="badge statut-<?= str_replace('_', '-', $sav['statut'] ?? '') ?>">
+                                        <?= h($sav['statut'] ?? '') ?>
+                                    </span>
+                                </td>
+                                <td class="actions">
+                                    <a href="/public/sav.php?ref=<?= urlencode($sav['reference'] ?? '') ?>" class="btn btn-primary btn-sm">Voir</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Section Paiements -->
+    <section id="paiements" class="payments-panel">
+        <h2 class="panel-title">Paiements</h2>
+        <p class="panel-subtitle">Liste des paiements</p>
+        <div class="table-responsive">
+            <table class="payments-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Client</th>
+                        <th>Facture</th>
+                        <th>Montant</th>
+                        <th>Mode</th>
+                        <th>Statut</th>
+                        <th>Référence</th>
+                        <th>Justificatif</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($paiementsList)): ?>
+                        <tr>
+                            <td colspan="9" class="aucun">Aucun paiement trouvé.</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($paiementsList as $paiement): ?>
+                            <tr>
+                                <td><?= h($paiement['date_paiement'] ?? '') ?></td>
+                                <td><?= h($paiement['client_nom'] ?? 'N/A') ?></td>
+                                <td><?= h($paiement['facture_numero'] ?? '') ?></td>
+                                <td><?= number_format((float)($paiement['montant'] ?? 0), 2, ',', ' ') ?> €</td>
+                                <td><?= h($paiement['mode_paiement'] ?? '') ?></td>
+                                <td>
+                                    <span class="badge <?= $paiement['statut'] === 'valide' ? 'success' : ($paiement['statut'] === 'en_attente' ? 'warning' : '') ?>">
+                                        <?= h($paiement['statut'] ?? '') ?>
+                                    </span>
+                                </td>
+                                <td><?= h($paiement['reference'] ?? '') ?></td>
+                                <td>
+                                    <?php if (!empty($paiement['recu_path'])): ?>
+                                        <a href="<?= h($paiement['recu_path']) ?>" target="_blank" class="btn-justificatif">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            Voir
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="text-muted">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="actions">
+                                    <a href="/public/paiements.php?id=<?= (int)($paiement['id'] ?? 0) ?>" class="btn btn-primary btn-sm">Voir</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Section Factures -->
+    <section id="factures" class="factures-panel">
+        <h2 class="panel-title">Factures</h2>
+        <p class="panel-subtitle">Liste des factures</p>
+        <div class="table-responsive">
+            <table class="factures-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Numéro</th>
+                        <th>Client</th>
+                        <th>Type</th>
+                        <th>Montant HT</th>
+                        <th>TVA</th>
+                        <th>Total TTC</th>
+                        <th>Statut</th>
+                        <th>PDF</th>
+                        <th>Méthode paiement</th>
+                        <th>Justificatif</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($facturesList)): ?>
+                        <tr>
+                            <td colspan="10" class="aucun">Aucune facture trouvée.</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($facturesList as $facture): ?>
+                            <tr>
+                                <td><?= h($facture['date_facture'] ?? '') ?></td>
+                                <td><?= h($facture['numero'] ?? '') ?></td>
+                                <td><?= h($facture['client_nom'] ?? 'N/A') ?></td>
+                                <td><?= h($facture['type'] ?? '') ?></td>
+                                <td><?= number_format((float)($facture['montant_ht'] ?? 0), 2, ',', ' ') ?> €</td>
+                                <td><?= number_format((float)($facture['tva'] ?? 0), 2, ',', ' ') ?> €</td>
+                                <td><?= number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') ?> €</td>
+                                <td>
+                                    <span class="badge statut-<?= str_replace('_', '-', $facture['statut'] ?? '') ?>">
+                                        <?= h($facture['statut'] ?? '') ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <?php if (!empty($facture['pdf_path'])): ?>
+                                        <a href="<?= h($facture['pdf_path']) ?>" target="_blank" class="btn-pdf-facture">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                            </svg>
+                                            PDF
+                                        </a>
+                                    <?php else: ?>
+                                        <a href="/API/generate_facture_pdf.php?id=<?= (int)($facture['id'] ?? 0) ?>" target="_blank" class="btn-pdf-facture">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                            </svg>
+                                            Générer
+                                        </a>
+                                    <?php endif; ?>
+                                </td>
+                                <td><span class="text-muted">—</span></td>
+                                <td><span class="text-muted">—</span></td>
+                                <td class="actions">
+                                    <a href="/public/paiements.php?facture=<?= (int)($facture['id'] ?? 0) ?>" class="btn btn-primary btn-sm">Voir</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
 </main>
 
 <?php if ($editing): ?>
@@ -2436,6 +2684,29 @@ function decode_msg($row) {
         });
     }
 })();
+
+/* Fonction pour le scroll smooth vers les sections */
+function scrollToSection(event, sectionId) {
+    event.preventDefault();
+    const section = document.getElementById(sectionId);
+    if (section) {
+        const headerOffset = 100; // Offset pour le header fixe si présent
+        const elementPosition = section.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+        window.scrollTo({
+            top: offsetPosition,
+            behavior: 'smooth'
+        });
+        
+        // Ajouter un highlight temporaire
+        section.style.transition = 'box-shadow 0.3s ease';
+        section.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.5)';
+        setTimeout(function() {
+            section.style.boxShadow = '';
+        }, 2000);
+    }
+}
 
 
 </script>
