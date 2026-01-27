@@ -1986,16 +1986,16 @@ function decode_msg($row) {
         
         <?php if ($isAdminOrDirigeant): ?>
         <div class="import-mini">
-            <button class="btn btn-secondary" id="toggleImportHistory" aria-expanded="false" aria-controls="importHistoryPanel">
+            <button type="button" class="btn btn-secondary" id="toggleImportHistory" aria-expanded="false" aria-controls="importHistoryPanel">
                 Historique des Imports
             </button>
-            <button class="btn btn-secondary" id="togglePayments" aria-expanded="false" aria-controls="paymentsPanel">
+            <button type="button" class="btn btn-secondary" id="togglePayments" aria-expanded="false" aria-controls="paymentsPanel">
                 Paiements
             </button>
-            <button class="btn btn-secondary" id="toggleFactures" aria-expanded="false" aria-controls="facturesPanel">
+            <button type="button" class="btn btn-secondary" id="toggleFactures" aria-expanded="false" aria-controls="facturesPanel">
                 Factures
             </button>
-            <button class="btn btn-secondary" id="toggleSav" aria-expanded="false" aria-controls="savPanel">
+            <button type="button" class="btn btn-secondary" id="toggleSav" aria-expanded="false" aria-controls="savPanel">
                 SAV Résolus
             </button>
         </div>
@@ -3502,228 +3502,96 @@ function decode_msg($row) {
     }
 })();
 
-/* Toggle historique des imports SFTP */
+/* Gestion des toggles pour toutes les sections - Version simplifiée et robuste */
 (function() {
-    function initImportHistoryToggle() {
-        const toggleBtn = document.getElementById('toggleImportHistory');
-        const historyPanel = document.getElementById('importHistoryPanel');
+    'use strict';
+    
+    // Configuration des toggles
+    const toggles = [
+        { buttonId: 'toggleImportHistory', panelId: 'importHistoryPanel' },
+        { buttonId: 'togglePayments', panelId: 'paymentsPanel' },
+        { buttonId: 'toggleFactures', panelId: 'facturesPanel' },
+        { buttonId: 'toggleSav', panelId: 'savPanel' }
+    ];
+    
+    function togglePanel(panel) {
+        if (!panel) return false;
         
-        if (!toggleBtn || !historyPanel) {
-            console.error('Éléments non trouvés: toggleImportHistory ou importHistoryPanel');
-            return;
-        }
+        const currentDisplay = panel.style.display || window.getComputedStyle(panel).display;
+        const isHidden = currentDisplay === 'none' || currentDisplay === '';
         
-        // Si l'URL contient #importHistoryPanel, afficher automatiquement la section
-        if (window.location.hash === '#importHistoryPanel') {
-            historyPanel.style.display = 'block';
-            toggleBtn.setAttribute('aria-expanded', 'true');
+        if (isHidden) {
+            // Afficher
+            panel.style.display = 'block';
+            panel.setAttribute('data-visible', 'true');
+            
+            // Scroll après un court délai
             setTimeout(function() {
-                historyPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
+            return true;
+        } else {
+            // Masquer
+            panel.style.display = 'none';
+            panel.setAttribute('data-visible', 'false');
+            return false;
+        }
+    }
+    
+    function initToggle(config) {
+        const btn = document.getElementById(config.buttonId);
+        const panel = document.getElementById(config.panelId);
+        
+        if (!btn || !panel) {
+            console.warn('Toggle non initialisé:', config.buttonId, 'ou', config.panelId, 'non trouvé');
+            return false;
         }
         
-        toggleBtn.addEventListener('click', function(e) {
+        // Vérifier le hash dans l'URL
+        if (window.location.hash === '#' + config.panelId) {
+            panel.style.display = 'block';
+            btn.setAttribute('aria-expanded', 'true');
+            setTimeout(function() {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 200);
+        }
+        
+        // Ajouter l'événement click
+        btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             
-            // Vérifier l'état actuel de manière plus fiable
-            const currentDisplay = window.getComputedStyle(historyPanel).display;
-            const isCurrentlyVisible = currentDisplay !== 'none';
-            
-            console.log('Toggle import history - isVisible:', isCurrentlyVisible, 'currentDisplay:', currentDisplay);
-            
-            if (isCurrentlyVisible) {
-                // Masquer la section
-                historyPanel.style.display = 'none';
-                toggleBtn.setAttribute('aria-expanded', 'false');
-            } else {
-                // Afficher la section
-                historyPanel.style.display = 'block';
-                toggleBtn.setAttribute('aria-expanded', 'true');
-                
-                // Scroll vers la section avec animation
-                setTimeout(function() {
-                    historyPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 50);
-            }
+            const isNowVisible = togglePanel(panel);
+            btn.setAttribute('aria-expanded', isNowVisible ? 'true' : 'false');
         });
+        
+        return true;
     }
     
-    // Attendre que le DOM soit complètement chargé
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initImportHistoryToggle);
-    } else {
-        // DOM déjà chargé, exécuter immédiatement
-        setTimeout(initImportHistoryToggle, 100);
-    }
-})();
-
-/* Toggle section Paiements */
-(function() {
-    function initPaymentsToggle() {
-        const toggleBtn = document.getElementById('togglePayments');
-        const paymentsPanel = document.getElementById('paymentsPanel');
+    function initAllToggles() {
+        console.log('Initialisation des toggles de sections...');
+        let successCount = 0;
         
-        if (!toggleBtn || !paymentsPanel) {
-            console.error('Éléments non trouvés: togglePayments ou paymentsPanel');
-            return;
-        }
-        
-        // Si l'URL contient #paymentsPanel, afficher automatiquement la section
-        if (window.location.hash === '#paymentsPanel') {
-            paymentsPanel.style.display = 'block';
-            toggleBtn.setAttribute('aria-expanded', 'true');
-            setTimeout(function() {
-                paymentsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-        }
-        
-        toggleBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Vérifier l'état actuel de manière plus fiable
-            const currentDisplay = window.getComputedStyle(paymentsPanel).display;
-            const isCurrentlyVisible = currentDisplay !== 'none';
-            
-            console.log('Toggle payments - isVisible:', isCurrentlyVisible, 'currentDisplay:', currentDisplay);
-            
-            if (isCurrentlyVisible) {
-                // Masquer la section
-                paymentsPanel.style.display = 'none';
-                toggleBtn.setAttribute('aria-expanded', 'false');
-            } else {
-                // Afficher la section
-                paymentsPanel.style.display = 'block';
-                toggleBtn.setAttribute('aria-expanded', 'true');
-                
-                // Scroll vers la section avec animation
-                setTimeout(function() {
-                    paymentsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 50);
+        toggles.forEach(function(config) {
+            if (initToggle(config)) {
+                successCount++;
             }
         });
+        
+        console.log('Toggles initialisés:', successCount + '/' + toggles.length);
     }
     
-    // Attendre que le DOM soit complètement chargé
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initPaymentsToggle);
-    } else {
-        // DOM déjà chargé, exécuter immédiatement
-        setTimeout(initPaymentsToggle, 100);
-    }
-})();
-
-/* Toggle section Factures */
-(function() {
-    function initFacturesToggle() {
-        const toggleBtn = document.getElementById('toggleFactures');
-        const facturesPanel = document.getElementById('facturesPanel');
-        
-        if (!toggleBtn || !facturesPanel) {
-            console.error('Éléments non trouvés: toggleFactures ou facturesPanel');
-            return;
+    // Initialisation
+    function start() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initAllToggles);
+        } else {
+            // DOM déjà chargé
+            initAllToggles();
         }
-        
-        // Si l'URL contient #facturesPanel, afficher automatiquement la section
-        if (window.location.hash === '#facturesPanel') {
-            facturesPanel.style.display = 'block';
-            toggleBtn.setAttribute('aria-expanded', 'true');
-            setTimeout(function() {
-                facturesPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-        }
-        
-        toggleBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Vérifier l'état actuel de manière plus fiable
-            const currentDisplay = window.getComputedStyle(facturesPanel).display;
-            const isCurrentlyVisible = currentDisplay !== 'none';
-            
-            console.log('Toggle factures - isVisible:', isCurrentlyVisible, 'currentDisplay:', currentDisplay);
-            
-            if (isCurrentlyVisible) {
-                // Masquer la section
-                facturesPanel.style.display = 'none';
-                toggleBtn.setAttribute('aria-expanded', 'false');
-            } else {
-                // Afficher la section
-                facturesPanel.style.display = 'block';
-                toggleBtn.setAttribute('aria-expanded', 'true');
-                
-                // Scroll vers la section avec animation
-                setTimeout(function() {
-                    facturesPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 50);
-            }
-        });
     }
     
-    // Attendre que le DOM soit complètement chargé
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initFacturesToggle);
-    } else {
-        // DOM déjà chargé, exécuter immédiatement
-        setTimeout(initFacturesToggle, 100);
-    }
-})();
-
-/* Toggle section SAV */
-(function() {
-    function initSavToggle() {
-        const toggleBtn = document.getElementById('toggleSav');
-        const savPanel = document.getElementById('savPanel');
-        
-        if (!toggleBtn || !savPanel) {
-            console.error('Éléments non trouvés: toggleSav ou savPanel');
-            return;
-        }
-        
-        // Si l'URL contient #savPanel, afficher automatiquement la section
-        if (window.location.hash === '#savPanel') {
-            savPanel.style.display = 'block';
-            toggleBtn.setAttribute('aria-expanded', 'true');
-            setTimeout(function() {
-                savPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-        }
-        
-        toggleBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Vérifier l'état actuel de manière plus fiable
-            const currentDisplay = window.getComputedStyle(savPanel).display;
-            const isCurrentlyVisible = currentDisplay !== 'none';
-            
-            console.log('Toggle SAV - isVisible:', isCurrentlyVisible, 'currentDisplay:', currentDisplay);
-            
-            if (isCurrentlyVisible) {
-                // Masquer la section
-                savPanel.style.display = 'none';
-                toggleBtn.setAttribute('aria-expanded', 'false');
-            } else {
-                // Afficher la section
-                savPanel.style.display = 'block';
-                toggleBtn.setAttribute('aria-expanded', 'true');
-                
-                // Scroll vers la section avec animation
-                setTimeout(function() {
-                    savPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 50);
-            }
-        });
-    }
-    
-    // Attendre que le DOM soit complètement chargé
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initSavToggle);
-    } else {
-        // DOM déjà chargé, exécuter immédiatement
-        setTimeout(initSavToggle, 100);
-    }
+    start();
 })();
 
 /* Gestion des boutons de nettoyage des recherches */

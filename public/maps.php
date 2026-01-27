@@ -51,6 +51,16 @@ try {
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
 <main class="page-container">
+    <!-- Bouton menu mobile -->
+    <button type="button" id="mobileMenuToggle" class="mobile-menu-toggle" aria-label="Ouvrir le menu">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <!-- Overlay pour mobile -->
+    <div id="mobileOverlay" class="mobile-overlay"></div>
+
     <header class="page-header">
         <h1 class="page-title">Carte & planification de tournée</h1>
         <p class="page-sub">
@@ -61,8 +71,11 @@ try {
 
     <section class="maps-layout">
         <!-- PANNEAU GAUCHE : PARAMÈTRES / CLIENTS -->
-        <aside class="maps-panel" aria-label="Panneau de planification de tournée">
-            <h2>Planifier un trajet</h2>
+        <aside class="maps-panel" id="mapsPanel" aria-label="Panneau de planification de tournée">
+            <div class="maps-panel-header">
+                <h2>Planifier un trajet</h2>
+                <button type="button" id="closeMobilePanel" class="close-mobile-panel" aria-label="Fermer le panneau">×</button>
+            </div>
             <small>1. Définissez un point de départ, 2. Sélectionnez les clients, 3. Calculez l’itinéraire.</small>
 
             <!-- 1. Point de départ -->
@@ -194,7 +207,10 @@ try {
         <section class="map-wrapper">
             <div class="map-toolbar">
                 <div class="map-toolbar-left">
-                    <strong>Carte clients</strong> – <?= h((string)$totalClients) ?> client(s) enregistré(s)
+                    <div class="map-toolbar-title">
+                        <strong>Carte clients</strong>
+                        <span class="map-toolbar-subtitle"><?= h((string)$totalClients) ?> client(s) enregistré(s)</span>
+                    </div>
                 </div>
                 <div class="map-toolbar-right">
                     <span class="badge" id="badgeClients">Clients chargés : 0</span>
@@ -1861,6 +1877,50 @@ if (clientSearchClear) {
 
 // Charger tous les clients au démarrage (après que toutes les fonctions soient définies)
 loadAllClients();
+
+// ==================
+// Gestion du menu mobile
+// ==================
+
+const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+const mapsPanel = document.getElementById('mapsPanel');
+const mobileOverlay = document.getElementById('mobileOverlay');
+const closeMobilePanel = document.getElementById('closeMobilePanel');
+
+function openMobilePanel() {
+    mapsPanel.classList.add('mobile-open');
+    mobileOverlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobilePanelFunc() {
+    mapsPanel.classList.remove('mobile-open');
+    mobileOverlay.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+if (mobileMenuToggle) {
+    mobileMenuToggle.addEventListener('click', openMobilePanel);
+}
+
+if (closeMobilePanel) {
+    closeMobilePanel.addEventListener('click', closeMobilePanelFunc);
+}
+
+if (mobileOverlay) {
+    mobileOverlay.addEventListener('click', closeMobilePanelFunc);
+}
+
+// Fermer le panneau lors du redimensionnement si on passe en desktop
+let resizeTimer;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        if (window.innerWidth > 1024) {
+            closeMobilePanelFunc();
+        }
+    }, 250);
+});
 
 // Initialiser le point de départ par défaut après un court délai
 // (pour laisser le temps à maps-enhancements.js de restaurer depuis localStorage)
