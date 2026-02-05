@@ -528,6 +528,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             border-radius: var(--radius-md);
             padding: 1rem;
             box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
         }
         
         .chart-container canvas {
@@ -541,6 +542,30 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             height: 450px;
             color: var(--text-secondary);
             font-size: 1rem;
+        }
+
+        .chart-summary {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.9rem;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.92);
+            color: #f9fafb;
+            font-size: 0.8rem;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(12px);
+        }
+
+        .chart-summary .label {
+            opacity: 0.75;
+        }
+
+        .chart-summary .value {
+            font-weight: 600;
         }
 
         @media (max-width: 768px) {
@@ -1418,6 +1443,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             <div class="chart-container">
                 <div class="chart-loading" id="chartLoading">Chargement des données...</div>
                 <canvas id="statsChart" style="display: none; width: 100% !important; height: 100% !important;"></canvas>
+                <div id="chartSummary" class="chart-summary"></div>
             </div>
         </div>
 
@@ -6167,9 +6193,13 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
         async function loadStatsData() {
             const loadingDiv = document.getElementById('chartLoading');
             const canvas = document.getElementById('statsChart');
+            const summaryDiv = document.getElementById('chartSummary');
             
             loadingDiv.style.display = 'flex';
             canvas.style.display = 'none';
+            if (summaryDiv) {
+                summaryDiv.style.display = 'none';
+            }
             
             const clientId = document.getElementById('filterClient').value;
             const mois = document.getElementById('filterMois').value;
@@ -6196,15 +6226,24 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                     } else {
                         loadingDiv.textContent = 'Aucune donnée disponible pour les filtres sélectionnés';
                         canvas.style.display = 'none';
+                        if (summaryDiv) {
+                            summaryDiv.style.display = 'none';
+                        }
                     }
                 } else {
                     const errorMsg = data.error || 'Erreur lors du chargement des données';
                     loadingDiv.textContent = errorMsg;
                     canvas.style.display = 'none';
+                    if (summaryDiv) {
+                        summaryDiv.style.display = 'none';
+                    }
                 }
             } catch (error) {
                 console.error('Erreur lors du chargement des statistiques:', error);
                 loadingDiv.textContent = 'Erreur lors du chargement des données';
+                if (summaryDiv) {
+                    summaryDiv.style.display = 'none';
+                }
             }
         }
 
@@ -6213,6 +6252,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
          */
         function updateChart(data) {
             const ctx = document.getElementById('statsChart').getContext('2d');
+            const summaryDiv = document.getElementById('chartSummary');
             
             // Détruire le graphique existant si présent
             if (statsChart) {
@@ -6224,8 +6264,38 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             const chartTitle = groupBy === 'month' 
                 ? 'Consommation mensuelle des clients' 
                 : 'Consommation quotidienne des clients';
+
+            // Calculer la consommation totale sur la période à partir des valeurs réelles
+            const totalNb = (data.noir_blanc || []).reduce((sum, v) => sum + (v || 0), 0);
+            const totalColor = (data.couleur || []).reduce((sum, v) => sum + (v || 0), 0);
+            const totalPages = (data.total_pages || []).reduce((sum, v) => sum + (v || 0), 0);
+
+            if (summaryDiv && data.labels && data.labels.length > 0) {
+                const periodLabel = groupBy === 'month' ? 'année' : 'période';
+                summaryDiv.innerHTML = `
+                    <span class="label">Total ${periodLabel}</span>
+                    <span class="value">${totalPages.toLocaleString('fr-FR')} pages</span>
+                `;
+                summaryDiv.style.display = 'flex';
+            }
+
+            // Dégradés modernes pour les barres
+            const canvas = ctx.canvas;
+            const gradientHeight = canvas ? (canvas.height || 400) : 400;
+
+            const gradientBw = ctx.createLinearGradient(0, 0, 0, gradientHeight);
+            gradientBw.addColorStop(0, 'rgba(15, 23, 42, 0.95)');
+            gradientBw.addColorStop(1, 'rgba(15, 23, 42, 0.4)');
+
+            const gradientColor = ctx.createLinearGradient(0, 0, 0, gradientHeight);
+            gradientColor.addColorStop(0, 'rgba(59, 130, 246, 0.95)');
+            gradientColor.addColorStop(1, 'rgba(59, 130, 246, 0.4)');
+
+            const gradientTotal = ctx.createLinearGradient(0, 0, 0, gradientHeight);
+            gradientTotal.addColorStop(0, 'rgba(16, 185, 129, 0.95)');
+            gradientTotal.addColorStop(1, 'rgba(16, 185, 129, 0.4)');
             
-            // Créer le nouveau graphique avec un style amélioré (barres)
+            // Créer le nouveau graphique avec un style moderne (barres avec dégradés)
             statsChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -6234,28 +6304,31 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
                         {
                             label: 'Noir et Blanc',
                             data: data.noir_blanc,
-                            backgroundColor: '#1f2937',
-                            borderColor: '#111827',
-                            borderWidth: 2,
-                            borderRadius: 4,
+                            backgroundColor: gradientBw,
+                            hoverBackgroundColor: '#111827',
+                            borderColor: '#030712',
+                            borderWidth: 1.5,
+                            borderRadius: 6,
                             borderSkipped: false,
                         },
                         {
                             label: 'Couleur',
                             data: data.couleur,
-                            backgroundColor: '#3b82f6',
-                            borderColor: '#2563eb',
-                            borderWidth: 2,
-                            borderRadius: 4,
+                            backgroundColor: gradientColor,
+                            hoverBackgroundColor: '#1d4ed8',
+                            borderColor: '#1d4ed8',
+                            borderWidth: 1.5,
+                            borderRadius: 6,
                             borderSkipped: false,
                         },
                         {
                             label: 'Total Pages',
                             data: data.total_pages,
-                            backgroundColor: '#10b981',
-                            borderColor: '#059669',
-                            borderWidth: 2,
-                            borderRadius: 4,
+                            backgroundColor: gradientTotal,
+                            hoverBackgroundColor: '#047857',
+                            borderColor: '#047857',
+                            borderWidth: 1.5,
+                            borderRadius: 6,
                             borderSkipped: false,
                         }
                     ]
