@@ -854,7 +854,7 @@ async function sendMessage() {
 // ============================================
 function adjustTextareaHeight() {
     messageInput.style.height = 'auto';
-    messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+    messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
 }
 
 // Debouncing amélioré pour les mentions
