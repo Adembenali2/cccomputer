@@ -539,6 +539,15 @@ function renderMessages(messages, append = false) {
     if (append) {
         let lastDate = null;
         messages.forEach(msg => {
+            if (!msg || typeof msg.id === 'undefined' || msg.id === null) {
+                return;
+            }
+
+            // Ne pas ajouter deux fois le même message (même ID)
+            if (messagesContainer.querySelector(`[data-message-id="${msg.id}"]`)) {
+                return;
+            }
+
             // Ajouter un séparateur de date si nécessaire
             const msgDate = new Date(msg.date_envoi);
             const msgDateStr = msgDate.toDateString();
