@@ -262,6 +262,7 @@ let refreshInterval = 2000; // Intervalle de rafraîchissement dynamique
 let consecutiveEmptyResponses = 0; // Compteur pour backoff exponentiel
 let connectionStatus = 'online'; // Statut de connexion
 let pendingMessageId = null; // ID du message en cours d'envoi (pour feedback visuel)
+let lastRenderedDateStr = null; // Dernière date de séparation rendue (pour éviter les doublons)
 
 // ============================================
 // Fonctions utilitaires
@@ -537,7 +538,6 @@ function renderMessages(messages, append = false) {
     const wasAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 100;
     
     if (append) {
-        let lastDate = null;
         messages.forEach(msg => {
             if (!msg || typeof msg.id === 'undefined' || msg.id === null) {
                 return;
@@ -551,10 +551,10 @@ function renderMessages(messages, append = false) {
             // Ajouter un séparateur de date si nécessaire
             const msgDate = new Date(msg.date_envoi);
             const msgDateStr = msgDate.toDateString();
-            if (lastDate !== msgDateStr) {
+            if (lastRenderedDateStr !== msgDateStr) {
                 const separator = addDateSeparator(msg.date_envoi);
                 messagesContainer.appendChild(separator);
-                lastDate = msgDateStr;
+                lastRenderedDateStr = msgDateStr;
             }
             
             const messageElement = document.createElement('div');
@@ -569,15 +569,15 @@ function renderMessages(messages, append = false) {
         if (wasAtBottom || autoScrollEnabled) scrollToBottom(true);
     } else {
         messagesContainer.innerHTML = '';
-        let lastDate = null;
+        lastRenderedDateStr = null;
         messages.forEach(msg => {
             // Ajouter un séparateur de date si nécessaire
             const msgDate = new Date(msg.date_envoi);
             const msgDateStr = msgDate.toDateString();
-            if (lastDate !== msgDateStr) {
+            if (lastRenderedDateStr !== msgDateStr) {
                 const separator = addDateSeparator(msg.date_envoi);
                 messagesContainer.appendChild(separator);
-                lastDate = msgDateStr;
+                lastRenderedDateStr = msgDateStr;
             }
             
             const messageElement = document.createElement('div');
