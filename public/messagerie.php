@@ -1219,7 +1219,7 @@ window.closeImageLightbox = closeImageLightbox;
 init();
 
 window.addEventListener('beforeunload', () => {
-    if (refreshIntervalId) clearInterval(refreshIntervalId);
+    if (refreshIntervalId) clearTimeout(refreshIntervalId);
 });
 </script>
 </body>
