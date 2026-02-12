@@ -619,7 +619,7 @@
     color: var(--text-primary);
     resize: none;
     max-height: 150px;
-    min-height: 32px;
+    min-height: 20px;
     line-height: 1.6;
     font-family: inherit;
     padding: 0.5rem 0;
