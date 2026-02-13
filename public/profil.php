@@ -2001,16 +2001,22 @@ function decode_msg($row) {
         </div>
     </form>
 
-    <div class="profil-two-cols">
-        <div class="profil-left-col">
     <?php if ($isAdminOrDirigeant): ?>
     <div class="panel-toggle-buttons">
-        <button type="button" class="panel-toggle-btn is-active" data-target="createUserPanel">Créer un utilisateur</button>
-        <button type="button" class="panel-toggle-btn" data-target="usersPanel">Utilisateurs</button>
+        <button type="button" class="panel-toggle-btn" data-target="createUserPanel">Créer un utilisateur</button>
+        <?php if ($editing): ?>
+        <a href="/public/profil.php" class="panel-toggle-btn is-active">Utilisateurs</a>
+        <?php else: ?>
+        <button type="button" class="panel-toggle-btn is-active" data-target="usersPanel">Utilisateurs</button>
+        <?php endif; ?>
     </div>
     <?php else: ?>
     <div class="panel-toggle-buttons">
+        <?php if ($editing): ?>
+        <a href="/public/profil.php" class="panel-toggle-btn is-active">Utilisateurs</a>
+        <?php else: ?>
         <button type="button" class="panel-toggle-btn is-active" data-target="usersPanel">Utilisateurs</button>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -2061,6 +2067,8 @@ function decode_msg($row) {
     <?php endif; ?>
 
     <div class="panel panel-toggle-target" id="usersPanel">
+        <!-- Liste des utilisateurs : visible quand on n'est pas en édition -->
+        <div class="users-panel-list <?= $editing ? 'is-hidden' : '' ?>">
             <h2 class="panel-title">Utilisateurs (<span id="usersCount"><?= count($users) ?></span>)</h2>
             <div class="table-responsive">
                 <table class="users-table" role="table" aria-label="Liste des utilisateurs">
@@ -2138,11 +2146,10 @@ function decode_msg($row) {
                     </tbody>
                 </table>
             </div>
-    </div>
+        </div><!-- .users-panel-list -->
 
-        </div><!-- .profil-left-col -->
-
-        <div class="profil-right-col <?= !$editing ? 'profil-right-col-hidden' : '' ?>">
+        <!-- Modifier + Gestion des permissions : visible à la place de la liste quand on a cliqué sur Modifier -->
+        <div class="users-panel-edit <?= !$editing ? 'is-hidden' : '' ?>">
     <?php if ($editing): ?>
         <section class="panel edit-panel" id="editPanel">
             <h2 class="panel-title">Modifier l'utilisateur #<?= (int)$editing['id'] ?></h2>
@@ -2324,8 +2331,8 @@ function decode_msg($row) {
         </section>
     <?php endif; ?>
 
-        </div><!-- .profil-right-col -->
-    </div><!-- .profil-two-cols -->
+        </div><!-- .users-panel-edit -->
+    </div><!-- #usersPanel -->
 
     <!-- Section SAV -->
     <section id="sav" class="sav-panel">
