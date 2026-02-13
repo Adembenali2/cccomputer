@@ -1855,7 +1855,7 @@ function decode_msg($row) {
 <main class="page-container page-profil">
     <header class="page-header">
         <h1 class="page-title">Gestion des utilisateurs</h1>
-        <p class="page-sub">Page réservée aux administrateurs (Admin), dirigeants, techniciens et livreurs pour créer, modifier et activer/désactiver des comptes.</p>
+        
         
     </header>
 
