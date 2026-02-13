@@ -823,6 +823,9 @@
   border-top: 2px solid var(--accent-primary);
   padding-top: 1.5rem;
 }
+.permissions-panel.permissions-panel-hidden {
+  display: none !important;
+}
 .panel-subtitle {
   font-size: 0.9rem;
   color: var(--text-secondary);
