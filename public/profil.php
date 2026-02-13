@@ -2002,7 +2002,18 @@ function decode_msg($row) {
     </form>
 
     <?php if ($isAdminOrDirigeant): ?>
-    <div class="panel">
+    <div class="panel-toggle-buttons">
+        <button type="button" class="panel-toggle-btn is-active" data-target="createUserPanel">Créer un utilisateur</button>
+        <button type="button" class="panel-toggle-btn" data-target="usersPanel">Utilisateurs</button>
+    </div>
+    <?php else: ?>
+    <div class="panel-toggle-buttons">
+        <button type="button" class="panel-toggle-btn is-active" data-target="usersPanel">Utilisateurs</button>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($isAdminOrDirigeant): ?>
+    <div class="panel panel-toggle-target" id="createUserPanel">
         <h2 class="panel-title">Créer un utilisateur</h2>
         <form class="standard-form" method="post" action="/public/profil.php" autocomplete="off" novalidate>
             <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
@@ -2047,7 +2058,7 @@ function decode_msg($row) {
     </div>
     <?php endif; ?>
 
-    <div class="panel">
+    <div class="panel panel-toggle-target" id="usersPanel">
             <h2 class="panel-title">Utilisateurs (<span id="usersCount"><?= count($users) ?></span>)</h2>
             <div class="table-responsive">
                 <table class="users-table" role="table" aria-label="Liste des utilisateurs">
@@ -2087,7 +2098,7 @@ function decode_msg($row) {
                                     <?php if ($hasRestrictions && (int)$u['id'] !== $currentUser['id']): ?>
                                         <span class="text-muted" aria-label="Action non autorisée">Non autorisé</span>
                                     <?php else: ?>
-                                        <a class="btn btn-primary" href="/public/profil.php?edit=<?= (int)$u['id'] ?>" 
+                                        <a class="btn btn-primary" href="/public/profil.php?edit=<?= (int)$u['id'] ?>&perm_user=<?= (int)$u['id'] ?>#permissionsPanel" 
                                            aria-label="Modifier l'utilisateur <?= h($u['nom'] . ' ' . $u['prenom']) ?>">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2565,7 +2576,7 @@ function decode_msg($row) {
             if (!canEdit) {
                 html += '<span class="text-muted" aria-label="Action non autorisée">Non autorisé</span>';
             } else {
-                html += '<a class="btn btn-primary" href="/public/profil.php?edit=' + u.id + '" aria-label="Modifier l\'utilisateur ' + escapeHtml(fullName.trim()) + '">Modifier</a>';
+                html += '<a class="btn btn-primary" href="/public/profil.php?edit=' + u.id + '&perm_user=' + u.id + '#permissionsPanel" aria-label="Modifier l\'utilisateur ' + escapeHtml(fullName.trim()) + '">Modifier</a>';
                 if (isAdminOrDirigeant) {
                     html += '<form method="post" action="/public/profil.php" class="inline">';
                     html += '<input type="hidden" name="csrf_token" value="' + escapeHtml(csrfToken) + '">';
@@ -2682,6 +2693,48 @@ function decode_msg($row) {
             clearTimeout(debounceTimer);
             performSearch(query);
         });
+    }
+})();
+
+/* Basculer entre les panneaux "Créer un utilisateur" et "Utilisateurs" */
+(function() {
+    const toggleButtons = document.querySelectorAll('.panel-toggle-btn');
+    const createPanel = document.getElementById('createUserPanel');
+    const usersPanel = document.getElementById('usersPanel');
+
+    if (!toggleButtons.length || !usersPanel) return;
+
+    function showPanel(targetId) {
+        const panels = [createPanel, usersPanel].filter(Boolean);
+        panels.forEach(function(panel) {
+            if (panel.id === targetId) {
+                panel.classList.remove('is-hidden');
+            } else {
+                panel.classList.add('is-hidden');
+            }
+        });
+
+        toggleButtons.forEach(function(btn) {
+            if (btn.dataset.target === targetId) {
+                btn.classList.add('is-active');
+            } else {
+                btn.classList.remove('is-active');
+            }
+        });
+    }
+
+    toggleButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const target = this.dataset.target;
+            if (target) {
+                showPanel(target);
+            }
+        });
+    });
+
+    // État initial : si on a le panneau de création, on affiche "Utilisateurs" par défaut
+    if (createPanel) {
+        showPanel('usersPanel');
     }
 })();
 
