@@ -518,6 +518,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Paramètres de recherche - barre de recherche unique avec filtrage intelligent
 $search = sanitizeSearch($_GET['q'] ?? '');
+// Recherche SAV par nom, prénom ou raison sociale du client
+$savSearch = trim((string)($_GET['q_sav'] ?? ''));
+$savSearch = mb_substr(preg_replace('/\s+/', ' ', $savSearch), 0, 120);
 
 // Construction de la requête SQL optimisée avec recherche partielle intelligente
 $params = [];
@@ -629,18 +632,26 @@ $filtersActive = ($search !== '');
 // ========================================================================
 // RÉCUPÉRATION DES DONNÉES SAV, PAIEMENTS ET FACTURES
 // ========================================================================
-// Récupérer les SAV
-$savList = safeFetchAll($pdo, "
+// Récupérer les SAV (filtrés par nom, prénom ou raison sociale du client si recherche)
+$savSql = "
     SELECT s.id, s.reference, s.description, s.date_ouverture, s.date_fermeture, 
            s.statut, s.priorite, s.type_panne,
            c.raison_sociale as client_nom,
+           c.nom_dirigeant as client_nom_dirigeant,
+           c.prenom_dirigeant as client_prenom_dirigeant,
            u.nom as technicien_nom, u.prenom as technicien_prenom
     FROM sav s
     LEFT JOIN clients c ON s.id_client = c.id
     LEFT JOIN utilisateurs u ON s.id_technicien = u.id
-    ORDER BY s.date_ouverture DESC
-    LIMIT 100
-", [], 'sav_list');
+";
+$savParams = [];
+if ($savSearch !== '') {
+    $savLike = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $savSearch) . '%';
+    $savSql .= " WHERE (c.raison_sociale LIKE ? OR c.nom_dirigeant LIKE ? OR c.prenom_dirigeant LIKE ?)";
+    $savParams = [$savLike, $savLike, $savLike];
+}
+$savSql .= " ORDER BY s.date_ouverture DESC LIMIT 100";
+$savList = safeFetchAll($pdo, $savSql, $savParams, 'sav_list');
 
 // Récupérer les paiements
 $paiementsList = safeFetchAll($pdo, "
@@ -2337,56 +2348,75 @@ function decode_msg($row) {
     <!-- Section SAV -->
     <section id="sav" class="sav-panel">
         <h2 class="panel-title">SAV</h2>
-        <p class="panel-subtitle">Liste des tickets SAV</p>
-        <div class="table-responsive">
-            <table class="sav-table">
-                <thead>
-                    <tr>
-                        <th>Date ouverture</th>
-                        <th>Référence</th>
-                        <th>Client</th>
-                        <th>Description</th>
-                        <th>Type panne</th>
-                        <th>Priorité</th>
-                        <th>Date fermeture</th>
-                        <th>Technicien</th>
-                        <th>Statut</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($savList)): ?>
+        <p class="panel-subtitle">Recherchez et consultez les tickets SAV par client (nom, prénom, raison sociale).</p>
+
+        <form method="get" action="/public/profil.php" class="sav-search-form" id="savSearchForm">
+            <?php if (!empty($_GET['edit'])): ?><input type="hidden" name="edit" value="<?= h($_GET['edit']) ?>"><?php endif; ?>
+            <?php if (!empty($_GET['perm_user'])): ?><input type="hidden" name="perm_user" value="<?= h($_GET['perm_user']) ?>"><?php endif; ?>
+            <div class="sav-search-bar">
+                <label for="q_sav" class="sr-only">Rechercher un SAV</label>
+                <svg class="sav-search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="search" id="q_sav" name="q_sav" value="<?= h($savSearch) ?>"
+                       placeholder="Nom, prénom ou raison sociale du client…"
+                       class="sav-search-input"
+                       aria-label="Rechercher un SAV par client">
+                <button type="submit" class="sav-search-btn">Rechercher</button>
+            </div>
+        </form>
+
+        <div class="sav-table-wrap">
+            <div class="table-responsive sav-table-responsive">
+                <table class="sav-table" role="table" aria-label="Tickets SAV">
+                    <thead>
                         <tr>
-                            <td colspan="10" class="aucun">Aucun ticket SAV trouvé.</td>
+                            <th scope="col">Date ouverture</th>
+                            <th scope="col">Référence</th>
+                            <th scope="col">Client</th>
+                            <th scope="col">Description</th>
+                            <th scope="col">Type panne</th>
+                            <th scope="col">Date fermeture</th>
+                            <th scope="col">Statut</th>
+                            <th scope="col">Technicien</th>
+                            <th scope="col">Actions</th>
                         </tr>
-                    <?php else: ?>
-                        <?php foreach ($savList as $sav): ?>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($savList)): ?>
                             <tr>
-                                <td><?= h($sav['date_ouverture'] ?? '') ?></td>
-                                <td><?= h($sav['reference'] ?? '') ?></td>
-                                <td><?= h($sav['client_nom'] ?? 'N/A') ?></td>
-                                <td><?= h(mb_substr($sav['description'] ?? '', 0, 50)) ?><?= mb_strlen($sav['description'] ?? '') > 50 ? '...' : '' ?></td>
-                                <td><?= h($sav['type_panne'] ?? '') ?></td>
-                                <td>
-                                    <span class="badge <?= $sav['priorite'] === 'urgente' ? 'error' : ($sav['priorite'] === 'haute' ? 'warning' : '') ?>">
-                                        <?= h($sav['priorite'] ?? '') ?>
-                                    </span>
-                                </td>
-                                <td><?= h($sav['date_fermeture'] ?? '') ?></td>
-                                <td><?= $sav['technicien_nom'] ? h($sav['technicien_prenom'] . ' ' . $sav['technicien_nom']) : 'N/A' ?></td>
-                                <td>
-                                    <span class="badge statut-<?= str_replace('_', '-', $sav['statut'] ?? '') ?>">
-                                        <?= h($sav['statut'] ?? '') ?>
-                                    </span>
-                                </td>
-                                <td class="actions">
-                                    <a href="/public/sav.php?ref=<?= urlencode($sav['reference'] ?? '') ?>" class="btn btn-primary btn-sm">Voir</a>
-                                </td>
+                                <td colspan="9" class="sav-aucun"><?= $savSearch !== '' ? 'Aucun ticket SAV ne correspond à votre recherche.' : 'Aucun ticket SAV trouvé.' ?></td>
                             </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+                        <?php else: ?>
+                            <?php foreach ($savList as $sav): 
+                                $clientLabel = $sav['client_nom'] ?? 'N/A';
+                                $dirigeant = trim(($sav['client_prenom_dirigeant'] ?? '') . ' ' . ($sav['client_nom_dirigeant'] ?? ''));
+                                if ($dirigeant !== '') {
+                                    $clientLabel .= ' (' . $dirigeant . ')';
+                                }
+                            ?>
+                                <tr>
+                                    <td data-label="Date ouverture"><span class="sav-cell-date"><?= h($sav['date_ouverture'] ?? '—') ?></span></td>
+                                    <td data-label="Référence"><span class="sav-cell-ref"><?= h($sav['reference'] ?? '—') ?></span></td>
+                                    <td data-label="Client"><span class="sav-cell-client"><?= h($clientLabel) ?></span></td>
+                                    <td data-label="Description"><span class="sav-cell-desc"><?= h(mb_substr($sav['description'] ?? '', 0, 60)) ?><?= mb_strlen($sav['description'] ?? '') > 60 ? '…' : '' ?></span></td>
+                                    <td data-label="Type panne"><span class="sav-cell-type"><?= h($sav['type_panne'] ?? '—') ?></span></td>
+                                    <td data-label="Date fermeture"><span class="sav-cell-date"><?= h($sav['date_fermeture'] ?? '—') ?></span></td>
+                                    <td data-label="Statut">
+                                        <span class="badge sav-badge-statut statut-<?= str_replace('_', '-', $sav['statut'] ?? '') ?>">
+                                            <?= h($sav['statut'] ?? '') ?>
+                                        </span>
+                                    </td>
+                                    <td data-label="Technicien"><span class="sav-cell-technicien"><?= $sav['technicien_nom'] ? h(($sav['technicien_prenom'] ?? '') . ' ' . $sav['technicien_nom']) : '—' ?></span></td>
+                                    <td data-label="Actions" class="sav-actions">
+                                        <a href="/public/sav.php?ref=<?= urlencode($sav['reference'] ?? '') ?>" class="btn btn-primary btn-sm">Voir</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 

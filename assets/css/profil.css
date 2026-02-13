@@ -958,3 +958,204 @@
   }
 }
 
+/* === Section SAV : barre de recherche et tableau stylé === */
+.sav-search-form {
+  margin-bottom: 1.5rem;
+}
+.sav-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg-primary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.5rem 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.sav-search-bar:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+.sav-search-icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+.sav-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  padding: 0.5rem 0;
+  outline: none;
+}
+.sav-search-input::placeholder {
+  color: var(--text-muted);
+}
+.sav-search-btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--accent-primary);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+.sav-search-btn:hover {
+  background: var(--accent-secondary);
+  transform: translateY(-1px);
+}
+
+.sav-table-wrap {
+  margin-top: 0.5rem;
+}
+.sav-table-responsive {
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+}
+.sav-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.sav-table thead {
+  background: linear-gradient(180deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+}
+.sav-table thead th {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  border-bottom: 2px solid var(--border-color);
+}
+.sav-table tbody tr {
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s ease;
+}
+.sav-table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+.sav-table tbody td {
+  padding: 0.85rem 1rem;
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+.sav-cell-date {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.sav-cell-ref {
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+.sav-cell-client {
+  font-weight: 500;
+}
+.sav-cell-desc {
+  color: var(--text-secondary);
+  max-width: 220px;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sav-cell-type {
+  color: var(--text-secondary);
+}
+.sav-cell-technicien {
+  color: var(--text-secondary);
+}
+.sav-badge-statut {
+  display: inline-flex;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.sav-table .statut-ouvert {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+.sav-table .statut-en-cours {
+  background: rgba(245, 158, 11, 0.2);
+  color: #d97706;
+}
+.sav-table .statut-resolu {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+.sav-table .statut-annule {
+  background: rgba(107, 114, 128, 0.2);
+  color: #6b7280;
+}
+.sav-actions .btn {
+  white-space: nowrap;
+}
+.sav-aucun {
+  text-align: center;
+  padding: 2.5rem 1rem !important;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .sav-search-bar {
+    flex-wrap: wrap;
+  }
+  .sav-search-btn {
+    width: 100%;
+  }
+  .sav-table thead {
+    display: none;
+  }
+  .sav-table,
+  .sav-table tbody,
+  .sav-table tr,
+  .sav-table td {
+    display: block;
+    width: 100%;
+  }
+  .sav-table tr {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    box-shadow: var(--shadow-sm);
+  }
+  .sav-table td {
+    border: none;
+    padding: 0.4rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .sav-table td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .sav-table td.sav-actions {
+    justify-content: flex-end;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border-color);
+    margin-top: 0.5rem;
+  }
+  .sav-cell-desc {
+    max-width: none;
+    white-space: normal;
+  }
+}
+
