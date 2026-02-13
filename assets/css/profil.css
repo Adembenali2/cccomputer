@@ -502,6 +502,15 @@
   color: var(--text-primary); 
   vertical-align: middle;
 }
+.users-table td.actions {
+  white-space: nowrap;
+}
+.users-table td.actions .btn {
+  margin-right: 0.5rem;
+}
+.users-table td.actions .btn:last-child {
+  margin-right: 0;
+}
 .users-table tr.is-editing {
   outline: 2px dashed var(--accent-primary);
   outline-offset: -2px;
