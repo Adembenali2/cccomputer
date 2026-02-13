@@ -2001,54 +2001,53 @@ function decode_msg($row) {
         </div>
     </form>
 
-    <section class="grid-2cols">
-        <?php if ($isAdminOrDirigeant): ?>
-        <div class="panel">
-            <h2 class="panel-title">Créer un utilisateur</h2>
-            <form class="standard-form" method="post" action="/public/profil.php" autocomplete="off" novalidate>
-                <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
-                <input type="hidden" name="action" value="create">
-                <label for="create-email">Email <span aria-label="requis">*</span>
-                    <input type="email" id="create-email" name="Email" required aria-required="true">
+    <?php if ($isAdminOrDirigeant): ?>
+    <div class="panel">
+        <h2 class="panel-title">Créer un utilisateur</h2>
+        <form class="standard-form" method="post" action="/public/profil.php" autocomplete="off" novalidate>
+            <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+            <input type="hidden" name="action" value="create">
+            <label for="create-email">Email <span aria-label="requis">*</span>
+                <input type="email" id="create-email" name="Email" required aria-required="true">
+            </label>
+            <label for="create-password">Mot de passe (min. 8) <span aria-label="requis">*</span>
+                <input type="password" id="create-password" name="password" minlength="8" required aria-required="true">
+            </label>
+            <div class="grid-2">
+                <label for="create-nom">Nom <span aria-label="requis">*</span>
+                    <input type="text" id="create-nom" name="nom" required aria-required="true">
                 </label>
-                <label for="create-password">Mot de passe (min. 8) <span aria-label="requis">*</span>
-                    <input type="password" id="create-password" name="password" minlength="8" required aria-required="true">
+                <label for="create-prenom">Prénom <span aria-label="requis">*</span>
+                    <input type="text" id="create-prenom" name="prenom" required aria-required="true">
                 </label>
-                <div class="grid-2">
-                    <label for="create-nom">Nom <span aria-label="requis">*</span>
-                        <input type="text" id="create-nom" name="nom" required aria-required="true">
-                    </label>
-                    <label for="create-prenom">Prénom <span aria-label="requis">*</span>
-                        <input type="text" id="create-prenom" name="prenom" required aria-required="true">
-                    </label>
-                </div>
-                <label for="create-telephone">Téléphone
-                    <input type="tel" id="create-telephone" name="telephone" pattern="[0-9+\-.\s]{6,}" inputmode="tel">
+            </div>
+            <label for="create-telephone">Téléphone
+                <input type="tel" id="create-telephone" name="telephone" pattern="[0-9+\-.\s]{6,}" inputmode="tel">
+            </label>
+            <div class="grid-2">
+                <label for="create-emploi">Rôle (Emploi) <span aria-label="requis">*</span>
+                    <select id="create-emploi" name="Emploi" required aria-required="true">
+                        <?php foreach ($ROLES as $r): ?>
+                            <option value="<?= h($r) ?>"><?= h($r) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </label>
-                <div class="grid-2">
-                    <label for="create-emploi">Rôle (Emploi) <span aria-label="requis">*</span>
-                        <select id="create-emploi" name="Emploi" required aria-required="true">
-                            <?php foreach ($ROLES as $r): ?>
-                                <option value="<?= h($r) ?>"><?= h($r) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </label>
-                    <label for="create-statut">Statut
-                        <select id="create-statut" name="statut">
-                            <option value="actif">Actif</option>
-                            <option value="inactif">Inactif</option>
-                        </select>
-                    </label>
-                </div>
-                <label for="create-date_debut">Date de début <span aria-label="requis">*</span>
-                    <input type="date" id="create-date_debut" name="date_debut" required aria-required="true">
+                <label for="create-statut">Statut
+                    <select id="create-statut" name="statut">
+                        <option value="actif">Actif</option>
+                        <option value="inactif">Inactif</option>
+                    </select>
                 </label>
-                <button class="fiche-action-btn" type="submit">Créer</button>
-            </form>
-        </div>
-        <?php endif; ?>
+            </div>
+            <label for="create-date_debut">Date de début <span aria-label="requis">*</span>
+                <input type="date" id="create-date_debut" name="date_debut" required aria-required="true">
+            </label>
+            <button class="fiche-action-btn" type="submit">Créer</button>
+        </form>
+    </div>
+    <?php endif; ?>
 
-        <div class="panel <?= !$isAdminOrDirigeant ? 'grid-full' : '' ?>">
+    <div class="panel">
             <h2 class="panel-title">Utilisateurs (<span id="usersCount"><?= count($users) ?></span>)</h2>
             <div class="table-responsive">
                 <table class="users-table" role="table" aria-label="Liste des utilisateurs">
@@ -2126,8 +2125,7 @@ function decode_msg($row) {
                     </tbody>
                 </table>
             </div>
-        </div>
-    </section>
+    </div>
 
     <?php if ($editing): ?>
         <section class="panel edit-panel" id="editPanel">
