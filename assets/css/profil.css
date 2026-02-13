@@ -401,6 +401,33 @@
 .grid-2cols { display:grid; grid-template-columns: 1fr 2fr; gap:1.25rem; margin-top: 1rem; }
 @media (max-width: 980px) { .grid-2cols { grid-template-columns: 1fr; } }
 
+/* Deux colonnes : gauche = Créer / Utilisateurs, droite = Modifier + Permissions (visible au clic Modifier) */
+.profil-two-cols {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 1.5rem;
+  margin-top: 0.5rem;
+  align-items: start;
+}
+.profil-left-col {
+  min-width: 0;
+}
+.profil-right-col {
+  position: sticky;
+  top: 1rem;
+}
+.profil-right-col.profil-right-col-hidden {
+  display: none !important;
+}
+@media (max-width: 1024px) {
+  .profil-two-cols {
+    grid-template-columns: 1fr;
+  }
+  .profil-right-col {
+    position: static;
+  }
+}
+
 .panel {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
@@ -822,9 +849,6 @@
   margin-top: 2rem;
   border-top: 2px solid var(--accent-primary);
   padding-top: 1.5rem;
-}
-.permissions-panel.permissions-panel-hidden {
-  display: none !important;
 }
 .panel-subtitle {
   font-size: 0.9rem;

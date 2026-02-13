@@ -2001,6 +2001,8 @@ function decode_msg($row) {
         </div>
     </form>
 
+    <div class="profil-two-cols">
+        <div class="profil-left-col">
     <?php if ($isAdminOrDirigeant): ?>
     <div class="panel-toggle-buttons">
         <button type="button" class="panel-toggle-btn is-active" data-target="createUserPanel">Créer un utilisateur</button>
@@ -2138,6 +2140,9 @@ function decode_msg($row) {
             </div>
     </div>
 
+        </div><!-- .profil-left-col -->
+
+        <div class="profil-right-col <?= !$editing ? 'profil-right-col-hidden' : '' ?>">
     <?php if ($editing): ?>
         <section class="panel edit-panel" id="editPanel">
             <h2 class="panel-title">Modifier l'utilisateur #<?= (int)$editing['id'] ?></h2>
@@ -2216,8 +2221,8 @@ function decode_msg($row) {
     <?php endif; ?>
     
     <?php if ($isAdminOrDirigeant): ?>
-        <!-- Section Gestion des Permissions (ACL) - masquée par défaut, affichée au clic sur Modifier -->
-        <section class="panel permissions-panel permissions-panel-hidden" id="permissionsPanel">
+        <!-- Section Gestion des Permissions (ACL) - à côté du bloc Modifier -->
+        <section class="panel permissions-panel" id="permissionsPanel">
             <h2 class="panel-title">Gestion des Permissions</h2>
             <p class="panel-subtitle">Contrôlez l'accès aux pages pour chaque utilisateur. Si aucune permission n'est définie, les rôles par défaut s'appliquent.</p>
             
@@ -2318,6 +2323,9 @@ function decode_msg($row) {
             </form>
         </section>
     <?php endif; ?>
+
+        </div><!-- .profil-right-col -->
+    </div><!-- .profil-two-cols -->
 
     <!-- Section SAV -->
     <section id="sav" class="sav-panel">
@@ -2523,18 +2531,6 @@ function decode_msg($row) {
 <?php endif; ?>
 
 <script>
-
-/* Afficher le bloc Gestion des permissions uniquement quand on arrive via le bouton Modifier */
-(function() {
-    var panel = document.getElementById('permissionsPanel');
-    if (!panel) return;
-    var hash = window.location.hash || '';
-    var search = window.location.search || '';
-    if (hash === '#permissionsPanel' || search.indexOf('perm_user=') !== -1) {
-        panel.classList.remove('permissions-panel-hidden');
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-})();
 
 /* Recherche intelligente en temps réel avec AJAX */
 (function() {
