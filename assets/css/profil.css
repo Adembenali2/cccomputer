@@ -476,7 +476,6 @@
   background: var(--bg-tertiary); 
   color: var(--text-primary); 
   text-align:left; 
-  font-size:.9rem; 
   font-weight: 600;
   padding:.75rem 1rem; 
   border-bottom:2px solid var(--border-color);
@@ -494,7 +493,7 @@
 }
 .users-table tbody tr:hover {
   background: rgba(59, 130, 246, 0.08);
-  transform: scale(1.01);
+  transform: translateY(-1px);
 }
 .users-table td { 
   font-size:.95rem; 
@@ -587,43 +586,27 @@
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 .btn-danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: #dc2626;
   color: #fff;
-  border-color: #ef4444;
+  border-color: #dc2626;
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 .btn-danger:hover {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  background: #b91c1c;
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 }
 .btn-success {
-  background: linear-gradient(135deg, #16a34a, #15803d);
+  background: #16a34a;
   color: #fff;
   border-color: #16a34a;
   box-shadow: 0 2px 8px rgba(22, 163, 74, 0.3);
 }
 .btn-success:hover {
-  background: linear-gradient(135deg, #15803d, #166534);
+  background: #15803d;
   box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);
 }
 
 /* Indicateurs d'état Activer/Désactiver - couleurs distinctes */
-.btn-success {
-  background: #16a34a !important;
-  color: #fff !important;
-  border-color: #16a34a !important;
-}
-.btn-success:hover {
-  background: #15803d !important;
-}
-.btn-danger {
-  background: #dc2626 !important;
-  color: #fff !important;
-  border-color: #dc2626 !important;
-}
-.btn-danger:hover {
-  background: #b91c1c !important;
-}
 
 /* === Responsive téléphone: tableau -> cartes === */
 @media (max-width: 768px){
