@@ -856,6 +856,40 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             gap: 0.75rem;
         }
 
+        /* Client autocomplete dropdown */
+        .client-autocomplete-wrap {
+            position: relative;
+        }
+        .client-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 2px;
+            max-height: 220px;
+            overflow-y: auto;
+            background: var(--bg-primary);
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+        }
+        .client-suggestions .client-suggestion-item {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .client-suggestions .client-suggestion-item:last-child {
+            border-bottom: none;
+        }
+        .client-suggestions .client-suggestion-item:hover,
+        .client-suggestions .client-suggestion-item.active {
+            background: var(--accent-primary);
+            color: white;
+        }
+
         .facture-lignes-container {
             margin-top: 1rem;
         }
@@ -1823,11 +1857,12 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         <div class="modal-body">
             <form id="factureForm" onsubmit="submitFactureForm(event)">
                 <div class="modal-form-row">
-                    <div class="modal-form-group">
-                        <label for="factureClient">Client <span style="color: #ef4444;">*</span></label>
-                        <select id="factureClient" name="factureClient" required onchange="onFactureClientChange()">
-                            <option value="">Chargement...</option>
-                        </select>
+                    <div class="modal-form-group client-autocomplete-wrap">
+                        <label for="client_search">Client <span style="color: #ef4444;">*</span></label>
+                        <input type="text" id="client_search" autocomplete="off" placeholder="Rechercher un client (ex: A, AB...)" aria-describedby="client_search_hint">
+                        <input type="hidden" name="factureClient" id="factureClient" value="">
+                        <div id="client_suggestions" class="client-suggestions" role="listbox" aria-label="Suggestions clients" style="display: none;"></div>
+                        <div id="client_search_hint" class="input-hint">Tapez pour rechercher par nom (préfixe)</div>
                     </div>
                     <div class="modal-form-group">
                         <label for="factureDate">Date de facture <span style="color: #ef4444;">*</span></label>
@@ -2542,29 +2577,121 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         }
 
         /**
-         * Charge la liste des clients pour le select
+         * Réinitialise le champ client (autocomplete) à l'ouverture du modal
          */
-        async function loadClientsForFacture() {
-            try {
-                const response = await fetch('/API/messagerie_get_first_clients.php?limit=1000', {
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                
-                if (data.ok && data.clients) {
-                    const clientSelect = document.getElementById('factureClient');
-                    clientSelect.innerHTML = '<option value="">Sélectionner un client</option>';
-                    data.clients.forEach(client => {
-                        const option = document.createElement('option');
-                        option.value = client.id;
-                        option.textContent = `${client.name} (${client.code})`;
-                        clientSelect.appendChild(option);
-                    });
-                }
-            } catch (error) {
-                console.error('Erreur lors du chargement des clients:', error);
-            }
+        function loadClientsForFacture() {
+            const searchInput = document.getElementById('client_search');
+            const hiddenInput = document.getElementById('factureClient');
+            const suggestions = document.getElementById('client_suggestions');
+            if (searchInput) searchInput.value = '';
+            if (hiddenInput) hiddenInput.value = '';
+            if (suggestions) { suggestions.innerHTML = ''; suggestions.style.display = 'none'; }
         }
+
+        /**
+         * Autocomplete client - debounce, AbortController, clavier
+         */
+        (function initClientAutocomplete() {
+            const DEBOUNCE_MS = 200;
+            const searchInput = document.getElementById('client_search');
+            const hiddenInput = document.getElementById('factureClient');
+            const suggestionsEl = document.getElementById('client_suggestions');
+            if (!searchInput || !hiddenInput || !suggestionsEl) return;
+
+            let debounceTimer = null;
+            let abortController = null;
+            let currentResults = [];
+            let highlightedIndex = -1;
+
+            function hideSuggestions() {
+                suggestionsEl.innerHTML = '';
+                suggestionsEl.style.display = 'none';
+                highlightedIndex = -1;
+            }
+
+            function showSuggestions(results) {
+                currentResults = results;
+                highlightedIndex = -1;
+                suggestionsEl.innerHTML = '';
+                if (results.length === 0) {
+                    suggestionsEl.style.display = 'none';
+                    return;
+                }
+                results.forEach((r, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'client-suggestion-item';
+                    div.setAttribute('role', 'option');
+                    div.setAttribute('data-id', r.id);
+                    div.setAttribute('data-nom', r.nom);
+                    div.textContent = r.nom;
+                    div.addEventListener('click', () => selectClient(r.id, r.nom));
+                    suggestionsEl.appendChild(div);
+                });
+                suggestionsEl.style.display = 'block';
+            }
+
+            function selectClient(id, nom) {
+                hiddenInput.value = String(id);
+                searchInput.value = nom;
+                hideSuggestions();
+                onFactureClientChange();
+            }
+
+            function updateHighlight() {
+                const items = suggestionsEl.querySelectorAll('.client-suggestion-item');
+                items.forEach((el, i) => el.classList.toggle('active', i === highlightedIndex));
+            }
+
+            searchInput.addEventListener('input', () => {
+                hiddenInput.value = '';
+                const q = searchInput.value.trim();
+                if (q.length < 1) {
+                    hideSuggestions();
+                    return;
+                }
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    if (abortController) abortController.abort();
+                    abortController = new AbortController();
+                    fetch('/API/clients_search.php?q=' + encodeURIComponent(q), {
+                        credentials: 'include',
+                        signal: abortController.signal
+                    })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.ok && data.results) showSuggestions(data.results);
+                            else hideSuggestions();
+                        })
+                        .catch(err => { if (err.name !== 'AbortError') hideSuggestions(); });
+                }, DEBOUNCE_MS);
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+                const items = suggestionsEl.querySelectorAll('.client-suggestion-item');
+                if (items.length === 0) return;
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+                    updateHighlight();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    highlightedIndex = Math.max(highlightedIndex - 1, -1);
+                    updateHighlight();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (highlightedIndex >= 0 && currentResults[highlightedIndex]) {
+                        selectClient(currentResults[highlightedIndex].id, currentResults[highlightedIndex].nom);
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    hideSuggestions();
+                }
+            });
+
+            searchInput.addEventListener('blur', () => {
+                setTimeout(hideSuggestions, 150);
+            });
+        })();
 
         /**
          * Gère le changement de client
@@ -3410,7 +3537,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             
             // Validation
             if (!data.factureClient) {
-                alert('Veuillez sélectionner un client');
+                alert('Veuillez sélectionner un client dans la liste (tapez pour rechercher, puis cliquez ou appuyez sur Entrée)');
                 return;
             }
             

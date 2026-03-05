@@ -35,9 +35,14 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
             jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
         }
 
+        $clientId = (int)$data['factureClient'];
+        if ($clientId <= 0) {
+            jsonResponse(['ok' => false, 'error' => 'Veuillez sélectionner un client valide dans la liste.'], 400);
+        }
+
         // Client
         $stmt = $pdo->prepare("SELECT * FROM clients WHERE id = :id LIMIT 1");
-        $stmt->execute([':id' => (int)$data['factureClient']]);
+        $stmt->execute([':id' => $clientId]);
         $client = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$client) jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
 
@@ -107,7 +112,7 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
             // Insertion Facture
             $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, 'brouillon', :created_by)");
             $stmt->execute([
-                ':id_client' => (int)$data['factureClient'],
+                ':id_client' => $clientId,
                 ':numero' => $numeroFacture,
                 ':date_facture' => $data['factureDate'],
                 ':type' => $factureType,
