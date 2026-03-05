@@ -10,6 +10,24 @@ $pdo = getPdoOrFail();
 
 require_once __DIR__ . '/../includes/historique.php';
 
+/**
+ * Valide une valeur : soit dans la liste autorisée, soit valeur custom (non vide, maxLen).
+ */
+function validateField(string $value, array $allowed, string $fieldName, bool $allowCustom = true, int $maxLen = 100): string {
+    $value = trim($value);
+    if ($value === '') {
+        throw new RuntimeException("Le champ {$fieldName} est obligatoire.");
+    }
+    if (in_array($value, $allowed, true)) {
+        return $value;
+    }
+    if ($allowCustom && strlen($value) <= $maxLen) {
+        return $value;
+    }
+    $allowedStr = implode(', ', array_filter($allowed, fn($v) => $v !== '' && $v !== 'Autre'));
+    throw new RuntimeException("Valeur invalide pour {$fieldName}. Valeurs attendues : {$allowedStr} ou une valeur personnalisée.");
+}
+
 // Fonction helper pour enregistrer dans l'historique
 function logStockAction(PDO $pdo, string $action, string $details): void {
     try {
@@ -22,7 +40,7 @@ function logStockAction(PDO $pdo, string $action, string $details): void {
 
 /**
  * Génère un QR Code pour un produit et le sauvegarde
- * Contenu : TYPE:<type>;ID:<id>;BARCODE:<barcode>
+ * Contenu : URL interne pour lookup (get_product_by_barcode?barcode=XXX) ou fallback TYPE;ID;BARCODE
  * Dossier : /uploads/qrcodes/<type>/<id>.png (nom safe, id numérique uniquement)
  *
  * @param string $barcode Code-barres du produit
@@ -36,7 +54,14 @@ function generateQRCode(string $barcode, int $productId, string $type): ?string 
         return null;
     }
 
-    $qrData = sprintf('TYPE:%s;ID:%d;BARCODE:%s', $type, $productId, $barcode);
+    if ($barcode !== '') {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $baseUrl = $scheme . '://' . $host;
+        $qrData = $baseUrl . '/API/get_product_by_barcode.php?barcode=' . urlencode($barcode);
+    } else {
+        $qrData = sprintf('TYPE:%s;ID:%d', $type, $productId);
+    }
     $baseDir = dirname(__DIR__);
     $qrDir = $baseDir . '/uploads/qrcodes/' . $type;
     $filename = (string) $productId . '.png';
@@ -223,12 +248,12 @@ try {
         case 'papier':
             $marque = trim($payload['marque'] ?? '');
             $modele = trim($payload['modele'] ?? '');
-            $poids  = trim($payload['poids']  ?? '');
+            $poids  = validateField($payload['poids'] ?? '', ['70', '80', '90', '100'], 'poids', true, 20);
             $qty    = (int)($payload['qty_delta'] ?? 0);
             $ref    = trim($payload['reference'] ?? '');
 
-            if ($marque === '' || $modele === '' || $poids === '' || $qty === 0) {
-                throw new RuntimeException('Champs obligatoires manquants (marque, modèle, poids, quantité).');
+            if ($marque === '' || $modele === '' || $qty <= 0) {
+                throw new RuntimeException('Champs obligatoires manquants (marque, modèle, quantité).');
             }
 
             $reason = 'achat';
@@ -308,30 +333,11 @@ try {
         case 'toner':
             $marque  = trim($payload['marque']  ?? '');
             $modele  = trim($payload['modele']  ?? '');
-            $couleurRaw = trim($payload['couleur'] ?? '');
-            $couleurAutre = trim($payload['couleur_autre'] ?? '');
+            $couleur = validateField($payload['couleur'] ?? '', ['Noir', 'Cyan', 'Magenta', 'Jaune'], 'couleur', true, 50);
             $qty     = (int)($payload['qty_delta'] ?? 0);
             $ref     = trim($payload['reference'] ?? '');
 
-            $allowedCouleurs = ['Noir', 'Cyan', 'Magenta', 'Jaune'];
-            if ($couleurRaw === 'Autre') {
-                if ($couleurAutre === '') {
-                    throw new RuntimeException('Veuillez préciser la couleur lorsque vous sélectionnez "Autre".');
-                }
-                $couleur = $couleurAutre;
-            } elseif (in_array($couleurRaw, $allowedCouleurs, true)) {
-                $couleur = $couleurRaw;
-            } elseif ($couleurRaw !== '') {
-                $couleur = $couleurRaw;
-            } else {
-                throw new RuntimeException('Veuillez sélectionner une couleur (Noir, Cyan, Magenta, Jaune ou Autre).');
-            }
-
-            if (strlen($couleur) > 50) {
-                throw new RuntimeException('La couleur ne doit pas dépasser 50 caractères.');
-            }
-
-            if ($marque === '' || $modele === '' || $couleur === '' || $qty === 0) {
+            if ($marque === '' || $modele === '' || $qty <= 0) {
                 throw new RuntimeException('Champs obligatoires manquants (marque, modèle, couleur, quantité).');
             }
 
@@ -412,18 +418,18 @@ try {
         case 'lcd':
             $marque     = trim($payload['marque']     ?? '');
             $reference  = trim($payload['reference']  ?? '');
-            $etat       = strtoupper(trim($payload['etat'] ?? 'A'));
+            $etat       = validateField(strtoupper(trim($payload['etat'] ?? '')), ['A', 'B', 'C'], 'état', false);
             $modele     = trim($payload['modele']     ?? '');
             $taille     = (int)($payload['taille']    ?? 0);
-            $resolution = trim($payload['resolution'] ?? '');
-            $connectique= trim($payload['connectique']?? '');
+            $resolution = validateField($payload['resolution'] ?? '', ['1920x1080', '2560x1440', '3840x2160', '1366x768', '1680x1050'], 'résolution', true, 20);
+            $connectique= validateField($payload['connectique'] ?? '', ['HDMI', 'DisplayPort', 'VGA', 'DVI', 'USB-C', 'HDMI+VGA'], 'connectique', true, 100);
             $prix       = $payload['prix'] === '' ? null : (float)$payload['prix'];
             $qty        = (int)($payload['qty_delta'] ?? 0);
             $refMove    = trim($payload['reference_move'] ?? '');
             $ref        = $refMove !== '' ? $refMove : $reference;
 
-            if ($marque === '' || $reference === '' || $modele === '' || !$taille || $resolution === '' || $connectique === '' || $qty === 0) {
-                throw new RuntimeException('Champs obligatoires manquants (marque, réf., modèle, taille, résolution, connectique, quantité).');
+            if ($marque === '' || $reference === '' || $modele === '' || $taille < 10 || $qty <= 0) {
+                throw new RuntimeException('Champs obligatoires manquants (marque, réf., modèle, taille ≥ 10, résolution, connectique, quantité).');
             }
 
             $reason = 'achat';
@@ -526,14 +532,14 @@ try {
 
         /* ===================== PC ===================== */
         case 'pc':
-            $etat     = strtoupper(trim($payload['etat'] ?? 'A'));
+            $etat     = validateField(strtoupper(trim($payload['etat'] ?? '')), ['A', 'B', 'C'], 'état', false);
             $reference= trim($payload['reference'] ?? '');
             $marque   = trim($payload['marque']    ?? '');
             $modele   = trim($payload['modele']    ?? '');
             $cpu      = trim($payload['cpu']       ?? '');
-            $ram      = trim($payload['ram']       ?? '');
-            $stockage = trim($payload['stockage']  ?? '');
-            $os       = trim($payload['os']        ?? '');
+            $ram      = validateField($payload['ram'] ?? '', ['4 GB', '8 GB', '16 GB', '32 GB', '64 GB'], 'RAM', true, 50);
+            $stockage = validateField($payload['stockage'] ?? '', ['128 GB SSD', '256 GB SSD', '512 GB SSD', '1 TB SSD', '1 TB HDD', '2 TB HDD'], 'stockage', true, 100);
+            $os       = validateField($payload['os'] ?? '', ['Windows 10', 'Windows 11', 'Linux', 'macOS', 'Sans OS'], 'OS', true, 100);
             $gpu      = trim($payload['gpu']       ?? '');
             $reseau   = trim($payload['reseau']    ?? '');
             $ports    = trim($payload['ports']     ?? '');
@@ -542,7 +548,7 @@ try {
             $refMove  = trim($payload['reference_move'] ?? '');
             $ref      = $refMove !== '' ? $refMove : $reference;
 
-            if ($reference === '' || $marque === '' || $modele === '' || $cpu === '' || $ram === '' || $stockage === '' || $os === '' || $qty === 0) {
+            if ($reference === '' || $marque === '' || $modele === '' || $cpu === '' || $qty <= 0) {
                 throw new RuntimeException('Champs obligatoires manquants (réf., marque, modèle, CPU, RAM, stockage, OS, quantité).');
             }
 

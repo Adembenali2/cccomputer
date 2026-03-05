@@ -70,18 +70,20 @@ try {
     die('Erreur de base de données');
 }
 
-// Si pas de QR Code disponible, utiliser le barcode pour générer via API
+// Priorité : qr_code_path (image locale) > fallback barcode via API externe
 if (empty($qrCodePath) && !empty($barcode)) {
     $qrCodePath = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . urlencode($barcode);
 } elseif (empty($qrCodePath)) {
     die('Code-barres ou QR Code non disponible');
 }
 
-// Si le chemin est relatif, le convertir en absolu
-if (strpos($qrCodePath, 'http') !== 0 && strpos($qrCodePath, '/') === 0) {
-    $qrCodePath = $qrCodePath; // Déjà relatif depuis la racine
-} elseif (strpos($qrCodePath, 'http') !== 0) {
-    $qrCodePath = '/assets/qr_codes/' . basename($qrCodePath);
+// Chemins : /uploads/qrcodes/<type>/<id>.png (nouveau) ou /assets/qr_codes/ (legacy) ou URL http
+if (strpos($qrCodePath, 'http') === 0) {
+    // Déjà une URL complète
+} elseif (strpos($qrCodePath, '/') === 0) {
+    // Chemin absolu depuis la racine (uploads/qrcodes ou assets/qr_codes)
+} else {
+    $qrCodePath = '/uploads/qrcodes/' . ($type === 'toners' ? 'toner' : $type) . '/' . basename($qrCodePath);
 }
 ?>
 <!DOCTYPE html>

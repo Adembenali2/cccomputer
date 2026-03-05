@@ -1869,52 +1869,121 @@ $sectionImages = [
 
         let currentType = null;
 
-        const TONER_COULEURS = [
-            {value: '', label: '-- Choisir une couleur --'},
-            {value: 'Noir', label: 'Noir'},
-            {value: 'Cyan', label: 'Cyan'},
-            {value: 'Magenta', label: 'Magenta'},
-            {value: 'Jaune', label: 'Jaune'},
-            {value: 'Autre', label: 'Autre'}
-        ];
+        const SELECT_OPTIONS = {
+            toner_couleur: [
+                {value: '', label: '-- Choisir --'},
+                {value: 'Noir', label: 'Noir'},
+                {value: 'Cyan', label: 'Cyan'},
+                {value: 'Magenta', label: 'Magenta'},
+                {value: 'Jaune', label: 'Jaune'},
+                {value: 'Autre', label: 'Autre'}
+            ],
+            papier_poids: [
+                {value: '', label: '-- Choisir --'},
+                {value: '70', label: '70 g'},
+                {value: '80', label: '80 g'},
+                {value: '90', label: '90 g'},
+                {value: '100', label: '100 g'},
+                {value: 'Autre', label: 'Autre'}
+            ],
+            etat_abc: [
+                {value: '', label: '-- Choisir --'},
+                {value: 'A', label: 'A (excellent)'},
+                {value: 'B', label: 'B (bon)'},
+                {value: 'C', label: 'C (correct)'}
+            ],
+            lcd_resolution: [
+                {value: '', label: '-- Choisir --'},
+                {value: '1920x1080', label: '1920×1080 (Full HD)'},
+                {value: '2560x1440', label: '2560×1440 (QHD)'},
+                {value: '3840x2160', label: '3840×2160 (4K)'},
+                {value: '1366x768', label: '1366×768'},
+                {value: '1680x1050', label: '1680×1050'},
+                {value: 'Autre', label: 'Autre'}
+            ],
+            lcd_connectique: [
+                {value: '', label: '-- Choisir --'},
+                {value: 'HDMI', label: 'HDMI'},
+                {value: 'DisplayPort', label: 'DisplayPort'},
+                {value: 'VGA', label: 'VGA'},
+                {value: 'DVI', label: 'DVI'},
+                {value: 'USB-C', label: 'USB-C'},
+                {value: 'HDMI+VGA', label: 'HDMI + VGA'},
+                {value: 'Autre', label: 'Autre'}
+            ],
+            pc_os: [
+                {value: '', label: '-- Choisir --'},
+                {value: 'Windows 10', label: 'Windows 10'},
+                {value: 'Windows 11', label: 'Windows 11'},
+                {value: 'Linux', label: 'Linux'},
+                {value: 'macOS', label: 'macOS'},
+                {value: 'Sans OS', label: 'Sans OS'},
+                {value: 'Autre', label: 'Autre'}
+            ],
+            pc_ram: [
+                {value: '', label: '-- Choisir --'},
+                {value: '4 GB', label: '4 GB'},
+                {value: '8 GB', label: '8 GB'},
+                {value: '16 GB', label: '16 GB'},
+                {value: '32 GB', label: '32 GB'},
+                {value: '64 GB', label: '64 GB'},
+                {value: 'Autre', label: 'Autre'}
+            ],
+            pc_stockage: [
+                {value: '', label: '-- Choisir --'},
+                {value: '128 GB SSD', label: '128 GB SSD'},
+                {value: '256 GB SSD', label: '256 GB SSD'},
+                {value: '512 GB SSD', label: '512 GB SSD'},
+                {value: '1 TB SSD', label: '1 TB SSD'},
+                {value: '1 TB HDD', label: '1 TB HDD'},
+                {value: '2 TB HDD', label: '2 TB HDD'},
+                {value: 'Autre', label: 'Autre'}
+            ]
+        };
 
         const FORM_SCHEMAS = {
-            toner: [
-                {name: 'marque', label: 'Marque', type: 'text', required: true},
-                {name: 'modele', label: 'Modèle', type: 'text', required: true},
-                {name: 'couleur', label: 'Couleur', type: 'select', required: true, options: TONER_COULEURS},
-                {name: 'couleur_autre', label: 'Précisez la couleur', type: 'text', required: false, showWhen: 'couleur', showWhenValue: 'Autre'},
-                {name: 'qty_delta', label: 'Quantité', type: 'number', required: true, min: 1},
-                {name: 'reference', label: 'Référence (BL, facture…)', type: 'text'}
-            ],
             papier: [
                 {name: 'marque', label: 'Marque', type: 'text', required: true},
                 {name: 'modele', label: 'Modèle', type: 'text', required: true},
-                {name: 'poids', label: 'Poids', type: 'text', required: true},
+                {name: 'poids', label: 'Poids (g/m²)', type: 'select', required: true, options: SELECT_OPTIONS.papier_poids},
+                {name: 'poids_autre', label: 'Précisez le poids', type: 'text', required: false, showWhen: 'poids', showWhenValue: 'Autre'},
+                {name: 'qty_delta', label: 'Quantité', type: 'number', required: true, min: 1},
+                {name: 'reference', label: 'Référence (BL, facture…)', type: 'text'}
+            ],
+            toner: [
+                {name: 'marque', label: 'Marque', type: 'text', required: true},
+                {name: 'modele', label: 'Modèle', type: 'text', required: true},
+                {name: 'couleur', label: 'Couleur', type: 'select', required: true, options: SELECT_OPTIONS.toner_couleur},
+                {name: 'couleur_autre', label: 'Précisez la couleur', type: 'text', required: false, showWhen: 'couleur', showWhenValue: 'Autre'},
                 {name: 'qty_delta', label: 'Quantité', type: 'number', required: true, min: 1},
                 {name: 'reference', label: 'Référence (BL, facture…)', type: 'text'}
             ],
             lcd: [
                 {name: 'marque', label: 'Marque', type: 'text', required: true},
                 {name: 'reference', label: 'Référence', type: 'text', required: true},
-                {name: 'etat', label: 'État (A/B/C)', type: 'text', required: true, maxLength: 1},
+                {name: 'etat', label: 'État', type: 'select', required: true, options: SELECT_OPTIONS.etat_abc},
                 {name: 'modele', label: 'Modèle', type: 'text', required: true},
                 {name: 'taille', label: 'Taille (pouces)', type: 'number', required: true, min: 10},
-                {name: 'resolution', label: 'Résolution', type: 'text', required: true},
-                {name: 'connectique', label: 'Connectique', type: 'text', required: true},
+                {name: 'resolution', label: 'Résolution', type: 'select', required: true, options: SELECT_OPTIONS.lcd_resolution},
+                {name: 'resolution_autre', label: 'Précisez la résolution', type: 'text', required: false, showWhen: 'resolution', showWhenValue: 'Autre'},
+                {name: 'connectique', label: 'Connectique', type: 'select', required: true, options: SELECT_OPTIONS.lcd_connectique},
+                {name: 'connectique_autre', label: 'Précisez la connectique', type: 'text', required: false, showWhen: 'connectique', showWhenValue: 'Autre'},
                 {name: 'prix', label: 'Prix (EUR)', type: 'number', step: '0.01'},
                 {name: 'qty_delta', label: 'Quantité', type: 'number', required: true, min: 1},
                 {name: 'reference_move', label: 'Référence mouvement (BL, facture…)', type: 'text'}
             ],
             pc: [
-                {name: 'etat', label: 'État (A/B/C)', type: 'text', required: true, maxLength: 1},
+                {name: 'etat', label: 'État', type: 'select', required: true, options: SELECT_OPTIONS.etat_abc},
                 {name: 'reference', label: 'Référence', type: 'text', required: true},
                 {name: 'marque', label: 'Marque', type: 'text', required: true},
                 {name: 'modele', label: 'Modèle', type: 'text', required: true},
                 {name: 'cpu', label: 'CPU', type: 'text', required: true},
-                {name: 'ram', label: 'RAM', type: 'text', required: true},
-                {name: 'stockage', label: 'Stockage', type: 'text', required: true},
-                {name: 'os', label: 'OS', type: 'text', required: true},
+                {name: 'ram', label: 'RAM', type: 'select', required: true, options: SELECT_OPTIONS.pc_ram},
+                {name: 'ram_autre', label: 'Précisez la RAM', type: 'text', required: false, showWhen: 'ram', showWhenValue: 'Autre'},
+                {name: 'stockage', label: 'Stockage', type: 'select', required: true, options: SELECT_OPTIONS.pc_stockage},
+                {name: 'stockage_autre', label: 'Précisez le stockage', type: 'text', required: false, showWhen: 'stockage', showWhenValue: 'Autre'},
+                {name: 'os', label: 'OS', type: 'select', required: true, options: SELECT_OPTIONS.pc_os},
+                {name: 'os_autre', label: 'Précisez l\'OS', type: 'text', required: false, showWhen: 'os', showWhenValue: 'Autre'},
                 {name: 'gpu', label: 'GPU', type: 'text'},
                 {name: 'reseau', label: 'Réseau', type: 'text'},
                 {name: 'ports', label: 'Ports', type: 'text'},
@@ -1999,21 +2068,21 @@ $sectionImages = [
                 fieldsContainer.appendChild(wrapper);
             });
 
-            // Gestion conditionnelle couleur_autre (toner)
-            const couleurSelect = document.getElementById('add_couleur');
-            const couleurAutreWrapper = fieldsContainer.querySelector('[data-show-when="couleur"]');
-            if (couleurSelect && couleurAutreWrapper) {
-                function toggleCouleurAutre() {
-                    const isAutre = couleurSelect.value === 'Autre';
-                    couleurAutreWrapper.style.display = isAutre ? '' : 'none';
-                    const autreInput = document.getElementById('add_couleur_autre');
-                    if (autreInput) {
-                        autreInput.required = isAutre;
-                    }
+            // Gestion conditionnelle des champs *_autre (générique)
+            fieldsContainer.querySelectorAll('[data-show-when]').forEach(function(wrapper) {
+                const triggerName = wrapper.dataset.showWhen;
+                const triggerValue = wrapper.dataset.showWhenValue || 'Autre';
+                const triggerEl = document.getElementById('add_' + triggerName);
+                const autreInput = wrapper.querySelector('input, select');
+                if (!triggerEl || !autreInput) return;
+                function toggle() {
+                    const show = triggerEl.value === triggerValue;
+                    wrapper.style.display = show ? '' : 'none';
+                    autreInput.required = show;
                 }
-                couleurSelect.addEventListener('change', toggleCouleurAutre);
-                toggleCouleurAutre();
-            }
+                triggerEl.addEventListener('change', toggle);
+                toggle();
+            });
         }
 
         function openModal(type) {
@@ -2151,13 +2220,20 @@ $sectionImages = [
                         payload[k] = v;
                     });
 
-                    // Toner : si couleur = "Autre", utiliser couleur_autre
-                    if (currentType === 'toner' && payload.couleur === 'Autre') {
-                        payload.couleur = (payload.couleur_autre || '').trim();
-                        delete payload.couleur_autre;
-                    } else if (currentType === 'toner') {
-                        delete payload.couleur_autre;
-                    }
+                    // Normalisation des champs "Autre" -> valeur *_autre
+                    const autreMappings = {
+                        toner: [['couleur', 'couleur_autre']],
+                        papier: [['poids', 'poids_autre']],
+                        lcd: [['resolution', 'resolution_autre'], ['connectique', 'connectique_autre']],
+                        pc: [['ram', 'ram_autre'], ['stockage', 'stockage_autre'], ['os', 'os_autre']]
+                    };
+                    (autreMappings[currentType] || []).forEach(function(pair) {
+                        const [mainField, autreField] = pair;
+                        if (payload[mainField] === 'Autre') {
+                            payload[mainField] = (payload[autreField] || '').trim();
+                        }
+                        delete payload[autreField];
+                    });
 
                     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
                     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
