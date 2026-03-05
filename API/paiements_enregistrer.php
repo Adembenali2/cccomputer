@@ -1,6 +1,13 @@
 <?php
 /**
  * API pour enregistrer un nouveau paiement
+ *
+ * Accepte :
+ * - FormData (multipart/form-data) : csrf_token dans le body
+ * - JSON (Content-Type: application/json) : csrf_token dans le body OU header X-CSRF-Token
+ *
+ * La session doit contenir csrf_token (via ensureCsrfToken sur la page paiements).
+ * Sinon : 403 Token CSRF invalide.
  */
 
 require_once __DIR__ . '/../includes/auth.php';
@@ -11,10 +18,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
 
-// Vérification CSRF (accepte token via POST ou header X-CSRF-Token pour fetch)
-$csrfToken = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-$csrfSession = $_SESSION['csrf_token'] ?? '';
-if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrfToken)) {
+// Support FormData (multipart) et JSON (application/json)
+// Pour JSON : csrf_token dans le body OU header X-CSRF-Token obligatoire
+$inputData = $_POST;
+$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+if (str_contains($contentType, 'application/json')) {
+    $raw = file_get_contents('php://input') ?: '{}';
+    $decoded = json_decode($raw, true);
+    $inputData = is_array($decoded) ? $decoded : [];
+}
+
+$csrfToken = (string)($inputData['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+$csrfSession = (string)($_SESSION['csrf_token'] ?? '');
+if ($csrfSession === '' || $csrfToken === '' || !hash_equals($csrfSession, $csrfToken)) {
     jsonResponse(['ok' => false, 'error' => 'Token CSRF invalide'], 403);
 }
 
@@ -22,13 +38,13 @@ try {
     $pdo = getPdo();
     $userId = currentUserId();
     
-    // Récupération des données
-    $factureId = !empty($_POST['facture_id']) ? (int)$_POST['facture_id'] : null;
-    $montant = !empty($_POST['montant']) ? (float)$_POST['montant'] : 0;
-    $datePaiement = !empty($_POST['date_paiement']) ? trim($_POST['date_paiement']) : date('Y-m-d');
-    $modePaiement = !empty($_POST['mode_paiement']) ? trim($_POST['mode_paiement']) : '';
-    $reference = !empty($_POST['reference']) ? trim($_POST['reference']) : null;
-    $commentaire = !empty($_POST['commentaire']) ? trim($_POST['commentaire']) : null;
+    // Récupération des données (FormData ou JSON)
+    $factureId = !empty($inputData['facture_id']) ? (int)$inputData['facture_id'] : null;
+    $montant = !empty($inputData['montant']) ? (float)$inputData['montant'] : 0;
+    $datePaiement = !empty($inputData['date_paiement']) ? trim((string)$inputData['date_paiement']) : date('Y-m-d');
+    $modePaiement = !empty($inputData['mode_paiement']) ? trim((string)$inputData['mode_paiement']) : '';
+    $reference = !empty($inputData['reference']) ? trim((string)$inputData['reference']) : null;
+    $commentaire = !empty($inputData['commentaire']) ? trim((string)$inputData['commentaire']) : null;
     
     // Validation
     if (!$factureId) {

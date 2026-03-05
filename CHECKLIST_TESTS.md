@@ -1,5 +1,11 @@
 # Checklist tests manuels + logs
 
+## API paiements_enregistrer
+
+- **FormData** : `csrf_token` dans le body (input hidden du formulaire).
+- **JSON** : `Content-Type: application/json`, `csrf_token` dans le body OU header `X-CSRF-Token`.
+- Session doit contenir `csrf_token` (via `ensureCsrfToken` sur la page paiements) ; sinon 403.
+
 ## Pages / flows à tester
 
 | Page / flow | Actions | Résultat attendu |

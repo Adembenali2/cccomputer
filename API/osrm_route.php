@@ -1,5 +1,11 @@
 <?php
-// Proxy pour les requêtes OSRM (évite les problèmes CORS)
+/**
+ * Proxy pour les requêtes OSRM (évite les problèmes CORS).
+ * Requiert authentification (session).
+ *
+ * NOTE: maps.php appelle OSRM directement (router.project-osrm.org), pas ce proxy.
+ * Aucun JS/HTML du dépôt n'utilise cet endpoint.
+ */
 ob_start();
 
 error_reporting(E_ALL);

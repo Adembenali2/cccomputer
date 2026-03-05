@@ -69,9 +69,12 @@ try {
             $testPath = $baseFactures . '/' . $relativePath;
             $realPath = realpath($testPath);
             $realBase = realpath($baseFactures);
+            // Garde : ne jamais appeler str_starts_with si realpath a échoué
+            if ($realPath === false || $realBase === false) {
+                continue;
+            }
             // Vérifier : fichier existe, résolu sous uploads/factures/, extension .pdf
-            if ($realPath !== false && $realBase !== false
-                && str_starts_with($realPath, $realBase)
+            if (str_starts_with($realPath, $realBase)
                 && is_file($realPath)
                 && strtolower(pathinfo($realPath, PATHINFO_EXTENSION)) === 'pdf') {
                 $pdfPath = $realPath;
@@ -139,9 +142,11 @@ try {
                 $testPath = $baseFactures . '/' . $relativePathNew;
                 $realPath = realpath($testPath);
                 $realBase = realpath($baseFactures);
-                if ($realPath !== false && $realBase !== false
-                    && str_starts_with($realPath, $realBase)
-                    && is_file($realPath)) {
+                if ($realPath === false || $realBase === false) {
+                    continue;
+                }
+                if (str_starts_with($realPath, $realBase) && is_file($realPath)
+                    && strtolower(pathinfo($realPath, PATHINFO_EXTENSION)) === 'pdf') {
                     $pdfPath = $realPath;
                     break;
                 }
