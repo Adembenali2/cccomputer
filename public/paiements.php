@@ -2071,12 +2071,12 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 <!-- Card principale -->
                 <div class="facture-mail-card">
                     <form id="factureMailForm" onsubmit="submitFactureMailForm(event)">
-                        <div class="modal-form-group">
-                            <label for="factureMailFacture">Facture <span class="required">*</span></label>
-                            <select id="factureMailFacture" name="facture_id" required>
-                                <option value="">Chargement des factures...</option>
-                            </select>
-                            <div class="input-hint">Sélectionnez la facture à envoyer</div>
+                        <div class="modal-form-group client-autocomplete-wrap">
+                            <label for="facture_search">Facture <span class="required">*</span></label>
+                            <input type="text" id="facture_search" autocomplete="off" placeholder="Rechercher une facture…" aria-describedby="facture_search_hint">
+                            <input type="hidden" name="facture_id" id="facture_id" value="">
+                            <div id="facture_suggestions" class="client-suggestions" role="listbox" aria-label="Suggestions factures" style="display: none;"></div>
+                            <div id="facture_search_hint" class="input-hint">Tapez pour rechercher par numéro ou nom client</div>
                             <!-- Badge de statut -->
                             <div id="factureMailStatusBadge" class="status-badge" style="display: none;">
                                 <span class="status-badge-icon"></span>
@@ -4684,8 +4684,20 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 btnRenvoyer.style.display = 'none';
             }
             
-            // Charger les factures
-            loadFacturesForMail();
+            // Réinitialiser la recherche facture
+            resetFactureSearch();
+        }
+
+        /**
+         * Réinitialise le champ recherche facture
+         */
+        function resetFactureSearch() {
+            const searchInput = document.getElementById('facture_search');
+            const hiddenInput = document.getElementById('facture_id');
+            const suggestions = document.getElementById('facture_suggestions');
+            if (searchInput) searchInput.value = '';
+            if (hiddenInput) hiddenInput.value = '';
+            if (suggestions) { suggestions.innerHTML = ''; suggestions.style.display = 'none'; }
         }
 
         /**
@@ -4701,6 +4713,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 if (form) {
                     form.reset();
                 }
+                resetFactureSearch();
             }
         }
 
@@ -4711,88 +4724,136 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         };
 
         /**
-         * Charge les factures pour l'envoi par email
+         * Autocomplete facture - debounce, AbortController, clavier
          */
-        async function loadFacturesForMail() {
-            try {
-                const response = await fetch('/API/factures_liste.php', {
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                
-                if (data.ok && data.factures) {
-                    const factureSelect = document.getElementById('factureMailFacture');
-                    factureSelect.innerHTML = '<option value="">Sélectionner une facture</option>';
-                    
-                    // Filtrer les factures qui ont un PDF
-                    const facturesAvecPDF = data.factures.filter(f => f.pdf_path);
-                    
-                    facturesAvecPDF.forEach(facture => {
-                        const option = document.createElement('option');
-                        option.value = facture.id;
-                        option.textContent = `${facture.numero} - ${facture.client_nom} - ${facture.montant_ttc.toFixed(2)} € TTC`;
-                        option.setAttribute('data-email', facture.client_email || '');
-                        option.setAttribute('data-numero', facture.numero);
-                        option.setAttribute('data-email-envoye', facture.email_envoye || '0');
-                        option.setAttribute('data-date-envoi', facture.date_envoi_email || '');
-                        factureSelect.appendChild(option);
-                    });
-                    
-                    // Écouter le changement pour pré-remplir l'email, le sujet et afficher le statut
-                    factureSelect.addEventListener('change', function() {
-                        const selectedOption = this.options[this.selectedIndex];
-                        if (selectedOption && selectedOption.value) {
-                            const email = selectedOption.getAttribute('data-email') || '';
-                            const numero = selectedOption.getAttribute('data-numero') || '';
-                            const emailEnvoye = selectedOption.getAttribute('data-email-envoye') || '0';
-                            const dateEnvoi = selectedOption.getAttribute('data-date-envoi') || '';
-                            
-                            factureMailState.selectedFacture = {
-                                id: selectedOption.value,
-                                numero: numero,
-                                emailEnvoye: parseInt(emailEnvoye),
-                                dateEnvoi: dateEnvoi
-                            };
-                            
-                            const emailInput = document.getElementById('factureMailEmail');
-                            if (emailInput) {
-                                emailInput.value = email;
-                            }
-                            
-                            const sujetInput = document.getElementById('factureMailSujet');
-                            if (sujetInput) {
-                                sujetInput.value = `Facture ${numero} - CC Computer`;
-                            }
-                            
-                            // Afficher le badge de statut
-                            updateFactureMailStatus(emailEnvoye, dateEnvoi);
-                            
-                            // Gérer le bouton Renvoyer
-                            const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
-                            if (btnRenvoyer) {
-                                if (emailEnvoye === '1') {
-                                    btnRenvoyer.style.display = 'inline-block';
-                                    btnRenvoyer.disabled = false;
-                                } else {
-                                    btnRenvoyer.style.display = 'none';
-                                    btnRenvoyer.disabled = true;
-                                }
-                            }
-                        } else {
-                            factureMailState.selectedFacture = null;
-                            hideFactureMailStatus();
-                            const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
-                            if (btnRenvoyer) {
-                                btnRenvoyer.style.display = 'none';
-                            }
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error('Erreur lors du chargement des factures:', error);
-                showToast('Erreur lors du chargement des factures', 'error');
+        (function initFactureAutocomplete() {
+            const DEBOUNCE_MS = 200;
+            const searchInput = document.getElementById('facture_search');
+            const hiddenInput = document.getElementById('facture_id');
+            const suggestionsEl = document.getElementById('facture_suggestions');
+            if (!searchInput || !hiddenInput || !suggestionsEl) return;
+
+            let debounceTimer = null;
+            let abortController = null;
+            let currentResults = [];
+            let highlightedIndex = -1;
+
+            function hideSuggestions() {
+                suggestionsEl.innerHTML = '';
+                suggestionsEl.style.display = 'none';
+                highlightedIndex = -1;
             }
-        }
+
+            function formatDisplayText(r) {
+                return `N°${r.numero} — ${r.client_nom} — ${r.date_emission}`;
+            }
+
+            function selectFacture(r) {
+                hiddenInput.value = String(r.id);
+                searchInput.value = formatDisplayText(r);
+                hideSuggestions();
+                factureMailState.selectedFacture = {
+                    id: String(r.id),
+                    numero: r.numero,
+                    emailEnvoye: r.email_envoye || 0,
+                    dateEnvoi: r.date_envoi_email || ''
+                };
+                const emailInput = document.getElementById('factureMailEmail');
+                if (emailInput) emailInput.value = r.client_email || '';
+                const sujetInput = document.getElementById('factureMailSujet');
+                if (sujetInput) sujetInput.value = `Facture ${r.numero} - CC Computer`;
+                updateFactureMailStatus(String(r.email_envoye || 0), r.date_envoi_email || '');
+                const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
+                if (btnRenvoyer) {
+                    if (r.email_envoye === 1) {
+                        btnRenvoyer.style.display = 'inline-block';
+                        btnRenvoyer.disabled = false;
+                    } else {
+                        btnRenvoyer.style.display = 'none';
+                        btnRenvoyer.disabled = true;
+                    }
+                }
+            }
+
+            function showSuggestions(results) {
+                currentResults = results;
+                highlightedIndex = -1;
+                suggestionsEl.innerHTML = '';
+                if (results.length === 0) {
+                    suggestionsEl.style.display = 'none';
+                    return;
+                }
+                results.forEach((r, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'client-suggestion-item';
+                    div.setAttribute('role', 'option');
+                    div.setAttribute('data-id', r.id);
+                    div.textContent = formatDisplayText(r);
+                    div.addEventListener('click', () => selectFacture(r));
+                    suggestionsEl.appendChild(div);
+                });
+                suggestionsEl.style.display = 'block';
+            }
+
+            function updateHighlight() {
+                const items = suggestionsEl.querySelectorAll('.client-suggestion-item');
+                items.forEach((el, i) => el.classList.toggle('active', i === highlightedIndex));
+            }
+
+            searchInput.addEventListener('input', () => {
+                hiddenInput.value = '';
+                factureMailState.selectedFacture = null;
+                hideFactureMailStatus();
+                const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
+                if (btnRenvoyer) btnRenvoyer.style.display = 'none';
+                const q = searchInput.value.trim();
+                if (q.length < 1) {
+                    hideSuggestions();
+                    return;
+                }
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    if (abortController) abortController.abort();
+                    abortController = new AbortController();
+                    fetch('/API/factures_search.php?q=' + encodeURIComponent(q), {
+                        credentials: 'include',
+                        signal: abortController.signal
+                    })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.ok && data.results) showSuggestions(data.results);
+                            else hideSuggestions();
+                        })
+                        .catch(err => { if (err.name !== 'AbortError') hideSuggestions(); });
+                }, DEBOUNCE_MS);
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+                const items = suggestionsEl.querySelectorAll('.client-suggestion-item');
+                if (items.length === 0) return;
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+                    updateHighlight();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    highlightedIndex = Math.max(highlightedIndex - 1, -1);
+                    updateHighlight();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (highlightedIndex >= 0 && currentResults[highlightedIndex]) {
+                        selectFacture(currentResults[highlightedIndex]);
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    hideSuggestions();
+                }
+            });
+
+            searchInput.addEventListener('blur', () => {
+                setTimeout(hideSuggestions, 150);
+            });
+        })();
 
         /**
          * Met à jour le badge de statut de la facture
@@ -4892,9 +4953,9 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     showFactureMailSuccess(result);
                     showToast('Email envoyé avec succès !', 'success');
                     
-                    // Recharger les factures pour mettre à jour le statut
+                    // Réinitialiser pour permettre un nouvel envoi
                     setTimeout(() => {
-                        loadFacturesForMail();
+                        resetFactureSearch();
                     }, 1000);
                 } else {
                     // Erreur

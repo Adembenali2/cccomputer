@@ -40,10 +40,10 @@ try {
         jsonResponse(['ok' => false, 'error' => 'facture_id requis'], 400);
     }
     
-    $factureId = (int)$data['facture_id'];
-    
-    if ($factureId <= 0) {
-        jsonResponse(['ok' => false, 'error' => 'facture_id invalide'], 400);
+    $factureIdRaw = $data['facture_id'];
+    $factureId = filter_var($factureIdRaw, FILTER_VALIDATE_INT);
+    if ($factureId === false || $factureId <= 0) {
+        jsonResponse(['ok' => false, 'error' => 'facture_id invalide (doit être un entier positif)'], 400);
     }
     
     // Charger la configuration
