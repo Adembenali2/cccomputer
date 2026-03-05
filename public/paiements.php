@@ -6568,7 +6568,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         }
 
         /**
-         * Met à jour le graphique (Total pages + Estimation intégrée en mode mensuel)
+         * Met à jour le graphique (Total + N&B + Couleur + Estimation sur Total en mensuel)
          */
         function updateChart(data) {
             const ctx = document.getElementById('statsChart').getContext('2d');
@@ -6579,8 +6579,24 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             const chartTitle = isMonthly ? 'Consommation mensuelle' : 'Consommation quotidienne';
             const datesFull = data.dates_full || [];
             const labels = [...(data.labels || [])];
-            const totalData = [...(data.total_pages || [])];
             const fmt = (n) => new Intl.NumberFormat('fr-FR').format(n);
+
+            const n = labels.length;
+            let totalData = (data.total_pages || []).map(v => Number(v) || 0);
+            let nbData = (data.noir_blanc || []).map(v => Number(v) || 0);
+            let couleurData = (data.couleur || []).map(v => Number(v) || 0);
+
+            const len = Math.min(n, totalData.length, nbData.length, couleurData.length);
+            totalData = totalData.slice(0, len);
+            nbData = nbData.slice(0, len);
+            couleurData = couleurData.slice(0, len);
+            const labelsTrimmed = labels.slice(0, len);
+
+            for (let i = 0; i < len; i++) {
+                if (totalData[i] === 0 && (nbData[i] > 0 || couleurData[i] > 0)) {
+                    totalData[i] = nbData[i] + couleurData[i];
+                }
+            }
 
             const moisNoms = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
             let estimateValue = isMonthly ? computeEstimate(totalData) : null;
@@ -6594,36 +6610,61 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             if (titleEl) titleEl.textContent = chartTitle;
             if (subtitleEl) subtitleEl.textContent = chartSubtitle;
 
-            let projectionLabel = null;
+            let finalLabels = [...labelsTrimmed];
             let estimationData = null;
 
             if (isMonthly && estimateValue !== null) {
                 const annee = parseInt(document.getElementById('filterAnnee')?.value || new Date().getFullYear());
                 const nextMois = 1;
                 const nextY = annee + 1;
-                projectionLabel = moisNoms[nextMois] + ' ' + nextY + ' (est.)';
-                labels.push(projectionLabel);
+                finalLabels.push(moisNoms[nextMois] + ' ' + nextY + ' (est.)');
                 const lastReal = totalData[totalData.length - 1] ?? 0;
-                estimationData = totalData.map((v, i) => (i === totalData.length - 1 ? v : null)).concat([estimateValue]);
+                estimationData = Array(len - 1).fill(null).concat([lastReal, estimateValue]);
             }
 
-            const mainData = estimationData ? [...totalData, null] : totalData;
+            const mainTotalData = estimationData ? [...totalData, null] : totalData;
+            const mainNbData = estimationData ? [...nbData, null] : nbData;
+            const mainCouleurData = estimationData ? [...couleurData, null] : couleurData;
 
             const datasets = [
                 {
                     type: 'line',
                     label: 'Total',
-                    data: mainData,
+                    data: mainTotalData,
                     borderColor: 'rgba(16, 185, 129, 0.9)',
                     backgroundColor: 'rgba(16, 185, 129, 0.08)',
                     borderWidth: 2,
                     fill: true,
                     tension: 0.35,
-                    pointRadius: mainData.map((_, i) => 2),
+                    pointRadius: 2,
                     pointHoverRadius: 4,
                     pointBackgroundColor: '#fff',
                     pointBorderColor: 'rgba(16, 185, 129, 0.9)',
                     pointBorderWidth: 2
+                },
+                {
+                    type: 'line',
+                    label: 'N&B',
+                    data: mainNbData,
+                    borderColor: 'rgba(30, 41, 59, 0.85)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.35,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                },
+                {
+                    type: 'line',
+                    label: 'Couleur',
+                    data: mainCouleurData,
+                    borderColor: 'rgba(59, 130, 246, 0.85)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.35,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
                 }
             ];
 
@@ -6647,9 +6688,15 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 });
             }
 
+            const chartLabels = finalLabels;
+            const chartTotalData = totalData;
+            const chartNbData = nbData;
+            const chartCouleurData = couleurData;
+            const chartDatesFull = datesFull.length >= len ? datesFull.slice(0, len) : [];
+
             statsChart = new Chart(ctx, {
                 type: 'line',
-                data: { labels, datasets },
+                data: { labels: chartLabels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -6730,17 +6777,21 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                                 label: function(ctx) {
                                     const v = ctx.parsed.y;
                                     if (v == null) return '';
-                                    const isEst = ctx.dataset.label === 'Estimation' && ctx.dataIndex === ctx.dataset.data.length - 1;
-                                    const suffix = isEst ? ' (estimation)' : '';
-                                    return (ctx.dataset.label || '') + ': ' + fmt(v) + ' pages' + suffix;
+                                    const isEstPoint = ctx.dataset.label === 'Estimation' && ctx.dataIndex === ctx.dataset.data.length - 1;
+                                    if (isEstPoint) return 'Total estimé: ' + fmt(v) + ' pages';
+                                    if (ctx.dataset.label === 'Estimation') return '';
+                                    if (ctx.dataset.label === 'Total') return 'Total: ' + fmt(v) + ' pages';
+                                    if (ctx.dataset.label === 'N&B') return 'N&B: ' + fmt(v);
+                                    if (ctx.dataset.label === 'Couleur') return 'Couleur: ' + fmt(v);
+                                    return (ctx.dataset.label || '') + ': ' + fmt(v);
+                                },
+                                afterBody: function(ctx) {
+                                    const isEst = ctx[0]?.dataset?.label === 'Estimation' && ctx[0]?.dataIndex === chartLabels.length - 1;
+                                    return isEst ? '(estimation)' : '';
                                 },
                                 title: function(ctx) {
                                     const i = ctx[0]?.dataIndex;
-                                    const raw = ctx[0]?.raw;
-                                    const tot = totalData[i] ?? raw ?? 0;
-                                    const title = datesFull[i] || labels[i] || '';
-                                    const isEst = ctx[0]?.dataset?.label === 'Estimation' && i === labels.length - 1;
-                                    return title + ' : ' + fmt(tot) + ' pages' + (isEst ? ' (estimation)' : '');
+                                    return chartDatesFull[i] || chartLabels[i] || '';
                                 }
                             }
                         }
