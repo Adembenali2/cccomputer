@@ -746,6 +746,115 @@ $sectionImages = [
             padding: 0.75rem 1.5rem;
         }
         
+        /* Bloc Mouvement dans modale détail */
+        .detail-moves-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .moves-section-title {
+            margin: 0 0 0.75rem 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .move-form {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+        .move-form-row {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .move-form-row label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        .move-qty-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .move-qty-group input {
+            width: 80px;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+        }
+        .move-quick-btns {
+            display: flex;
+            gap: 0.25rem;
+        }
+        .btn-quick {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-quick:hover {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+        .move-form-row select,
+        .move-form-row input[type="text"] {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+        }
+        .move-form-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .move-form-actions .btn-success { background: #10b981; color: white; border-color: #10b981; }
+        .move-form-actions .btn-success:hover { background: #059669; }
+        .move-form-actions .btn-danger { background: #ef4444; color: white; border-color: #ef4444; }
+        .move-form-actions .btn-danger:hover { background: #dc2626; }
+        .form-warning {
+            color: #f59e0b;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        .move-history {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+        }
+        .move-history-item {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem;
+            display: grid;
+            grid-template-columns: 1fr auto auto 1fr;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .move-history-item:last-child { border-bottom: none; }
+        .move-history-item .qty-in { color: #10b981; font-weight: 600; }
+        .move-history-item .qty-out { color: #ef4444; font-weight: 600; }
+        .move-history-empty {
+            padding: 1rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            text-align: center;
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
             .stock-header {
@@ -1213,6 +1322,42 @@ $sectionImages = [
     </div>
     <div class="modal-body">
         <div class="detail-grid" id="detailGrid"></div>
+        <div id="detailMovesSection" class="detail-moves-section" style="display:none;">
+            <h4 class="moves-section-title">Mouvement de stock</h4>
+            <form id="moveForm" class="move-form">
+                <div class="move-form-row">
+                    <label for="moveQty">Quantité</label>
+                    <div class="move-qty-group">
+                        <input type="number" id="moveQty" name="moveQty" min="1" value="1" required aria-label="Quantité">
+                        <div class="move-quick-btns">
+                            <button type="button" class="btn-quick" data-delta="-1" aria-label="Moins 1">−1</button>
+                            <button type="button" class="btn-quick" data-delta="1" aria-label="Plus 1">+1</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="move-form-row">
+                    <label for="moveReason">Raison</label>
+                    <select id="moveReason" name="moveReason" aria-label="Raison du mouvement">
+                        <option value="ajustement">Ajustement</option>
+                        <option value="achat">Achat</option>
+                        <option value="retour">Retour</option>
+                        <option value="correction">Correction</option>
+                    </select>
+                </div>
+                <div class="move-form-row">
+                    <label for="moveRef">Référence</label>
+                    <input type="text" id="moveRef" name="moveRef" placeholder="ex: BL-123" aria-label="Référence">
+                </div>
+                <div class="move-form-actions">
+                    <button type="button" id="moveBtnEntry" class="btn btn-success">Entrée</button>
+                    <button type="button" id="moveBtnExit" class="btn btn-danger">Sortie</button>
+                </div>
+                <div id="moveError" class="form-error" role="alert" aria-live="assertive" style="display:none;"></div>
+                <div id="moveWarning" class="form-warning" role="alert" aria-live="polite" style="display:none;"></div>
+            </form>
+            <h4 class="moves-section-title">Historique (20 derniers)</h4>
+            <div id="moveHistory" class="move-history"></div>
+        </div>
     </div>
     <div class="modal-footer" style="padding: 1rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 0.5rem;">
         <button type="button" id="modalCloseFooter" class="btn btn-secondary">Fermer</button>
@@ -1576,12 +1721,24 @@ $sectionImages = [
         const grid = document.getElementById('detailGrid');
         const titleEl = document.getElementById('modalTitle');
 
+        const movesSection = document.getElementById('detailMovesSection');
+        const moveForm = document.getElementById('moveForm');
+        const moveQty = document.getElementById('moveQty');
+        const moveReason = document.getElementById('moveReason');
+        const moveRef = document.getElementById('moveRef');
+        const moveHistory = document.getElementById('moveHistory');
+        const moveError = document.getElementById('moveError');
+        const moveWarning = document.getElementById('moveWarning');
+        const moveBtnEntry = document.getElementById('moveBtnEntry');
+        const moveBtnExit = document.getElementById('moveBtnExit');
+
         if (!overlay || !modal || !close || !grid || !titleEl) {
             console.error('Éléments de la modale de détails manquants');
             return;
         }
 
         let lastFocused = null;
+        let currentMoveProduct = null;
         
         function focusFirst() {
             const f = modal.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
@@ -1638,6 +1795,96 @@ $sectionImages = [
                 lastFocused.focus();
             }
         }
+
+        function loadMoves(apiType, productId) {
+            if (!moveHistory) return;
+            moveHistory.innerHTML = '<div class="move-history-empty">Chargement…</div>';
+            fetch('/API/stock_move.php?type=' + encodeURIComponent(apiType) + '&id=' + encodeURIComponent(productId), {
+                credentials: 'same-origin'
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.ok || !Array.isArray(data.moves)) {
+                    moveHistory.innerHTML = '<div class="move-history-empty">Erreur de chargement</div>';
+                    return;
+                }
+                if (data.moves.length === 0) {
+                    moveHistory.innerHTML = '<div class="move-history-empty">Aucun mouvement</div>';
+                    return;
+                }
+                let html = '';
+                data.moves.forEach(function(m) {
+                    const qty = parseInt(m.qty_delta, 10);
+                    const qtyClass = qty >= 0 ? 'qty-in' : 'qty-out';
+                    const qtyStr = (qty >= 0 ? '+' : '') + qty;
+                    const date = (m.created_at || '').replace(' ', ' à ');
+                    html += '<div class="move-history-item">';
+                    html += '<span class="' + qtyClass + '">' + escapeText(qtyStr) + '</span>';
+                    html += '<span>' + escapeText(m.reason || '—') + '</span>';
+                    html += '<span>' + escapeText(m.reference || '') + '</span>';
+                    html += '<span>' + escapeText(m.user_name || '—') + ' — ' + escapeText(date) + '</span>';
+                    html += '</div>';
+                });
+                moveHistory.innerHTML = html;
+            })
+            .catch(function() {
+                moveHistory.innerHTML = '<div class="move-history-empty">Erreur réseau</div>';
+            });
+        }
+
+        function submitMove(qtyDelta) {
+            if (!currentMoveProduct || !moveForm || !moveQty || !moveReason) return;
+            const qty = Math.abs(parseInt(moveQty.value, 10) || 1);
+            const delta = qtyDelta === 'entry' ? qty : -qty;
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+            if (moveError) { moveError.style.display = 'none'; moveError.textContent = ''; }
+            if (moveWarning) { moveWarning.style.display = 'none'; moveWarning.textContent = ''; }
+
+            fetch('/API/stock_move.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: currentMoveProduct.apiType,
+                    product_id: currentMoveProduct.productId,
+                    qty_delta: delta,
+                    reason: moveReason.value || 'ajustement',
+                    reference: (moveRef && moveRef.value) ? moveRef.value.trim() : '',
+                    csrf_token: csrfToken
+                })
+            })
+            .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, status: r.status, json: j }; }); })
+            .then(function(res) {
+                if (res.json.ok) {
+                    loadMoves(currentMoveProduct.apiType, currentMoveProduct.productId);
+                    var cards = grid.querySelectorAll('.field-card');
+                    for (var i = 0; i < cards.length; i++) {
+                        var lbl = cards[i].querySelector('.lbl');
+                        if (lbl && lbl.textContent === 'Quantité') {
+                            var val = cards[i].querySelector('.val');
+                            if (val) val.textContent = res.json.new_stock;
+                            break;
+                        }
+                    }
+                    if (res.json.warning && moveWarning) {
+                        moveWarning.textContent = res.json.warning;
+                        moveWarning.style.display = 'block';
+                    }
+                } else {
+                    if (moveError) {
+                        moveError.textContent = res.json.error || 'Erreur';
+                        moveError.style.display = 'block';
+                    }
+                }
+            })
+            .catch(function() {
+                if (moveError) {
+                    moveError.textContent = 'Erreur réseau';
+                    moveError.style.display = 'block';
+                }
+            });
+        }
         
         // Exposer open globalement pour être accessible depuis handleRowClick
         detailModalOpen = open;
@@ -1651,6 +1898,25 @@ $sectionImages = [
         }
         if (overlay) {
             overlay.addEventListener('click', closeFn);
+        }
+
+        if (moveBtnEntry) moveBtnEntry.addEventListener('click', function() { submitMove('entry'); });
+        if (moveBtnExit) moveBtnExit.addEventListener('click', function() { submitMove('exit'); });
+        var quickBtns = modal.querySelectorAll('.btn-quick[data-delta]');
+        quickBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (!moveQty) return;
+                var v = parseInt(moveQty.value, 10) || 1;
+                var d = parseInt(btn.getAttribute('data-delta'), 10);
+                v = Math.max(1, v + d);
+                moveQty.value = String(v);
+            });
+        });
+        if (moveForm) {
+            moveForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                submitMove('entry');
+            });
         }
 
         function renderDetails(type, row) {
@@ -1718,6 +1984,22 @@ $sectionImages = [
                 addField(grid, 'Quantité', row.qty_stock ?? row.qty ?? 0);
             }
             
+            // Bloc Mouvement (papier, toners, lcd, pc uniquement)
+            const movableTypes = ['papier', 'toners', 'lcd', 'pc'];
+            if (movesSection && movableTypes.indexOf(type) >= 0) {
+                movesSection.style.display = 'block';
+                const apiType = type === 'toners' ? 'toner' : type;
+                const productId = type === 'papier' ? (row.paper_id ?? row.id) : row.id;
+                currentMoveProduct = { apiType: apiType, productId: productId, displayType: type };
+                loadMoves(apiType, productId);
+                if (moveQty) moveQty.value = '1';
+                if (moveError) { moveError.style.display = 'none'; moveError.textContent = ''; }
+                if (moveWarning) { moveWarning.style.display = 'none'; moveWarning.textContent = ''; }
+            } else if (movesSection) {
+                movesSection.style.display = 'none';
+                currentMoveProduct = null;
+            }
+
             // Ajouter le bouton d'impression d'étiquettes
             if (row.id && type !== 'copiers') {
                 const printBtnWrapper = document.createElement('div');
