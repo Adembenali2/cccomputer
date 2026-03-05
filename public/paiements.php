@@ -2076,7 +2076,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             <input type="text" id="facture_search" autocomplete="off" placeholder="Rechercher une facture…" aria-describedby="facture_search_hint">
                             <input type="hidden" name="facture_id" id="facture_id" value="">
                             <div id="facture_suggestions" class="client-suggestions" role="listbox" aria-label="Suggestions factures" style="display: none;"></div>
-                            <div id="facture_search_hint" class="input-hint">Tapez pour rechercher par numéro ou nom client</div>
+                            <div id="facture_search_hint" class="input-hint">Tapez le nom du client pour rechercher ses factures</div>
                             <!-- Badge de statut -->
                             <div id="factureMailStatusBadge" class="status-badge" style="display: none;">
                                 <span class="status-badge-icon"></span>
@@ -4744,6 +4744,10 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 highlightedIndex = -1;
             }
 
+            function formatSuggestionText(r) {
+                return `${r.client_nom} — ${r.numero} — ${r.date_emission}`;
+            }
+
             function formatDisplayText(r) {
                 return `N°${r.numero} — ${r.client_nom} — ${r.date_emission}`;
             }
@@ -4788,7 +4792,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     div.className = 'client-suggestion-item';
                     div.setAttribute('role', 'option');
                     div.setAttribute('data-id', r.id);
-                    div.textContent = formatDisplayText(r);
+                    div.textContent = formatSuggestionText(r);
                     div.addEventListener('click', () => selectFacture(r));
                     suggestionsEl.appendChild(div);
                 });

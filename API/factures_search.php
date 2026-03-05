@@ -1,9 +1,9 @@
 <?php
 /**
- * API recherche factures par numéro ou nom client (autocomplétion)
+ * API recherche factures par nom client (raison_sociale) uniquement
  * GET ?q=terme (1-50 caractères)
  * Retourne : { ok: true, results: [{ id, numero, client_nom, date_emission, client_email, email_envoye, date_envoi_email }] }
- * Uniquement les factures avec PDF généré.
+ * Uniquement les factures avec PDF généré, des clients dont raison_sociale correspond à q.
  */
 
 require_once __DIR__ . '/../includes/auth.php';
@@ -23,7 +23,7 @@ if ($query === '') {
 try {
     $pdo = getPdo();
     $limit = min((int)($_GET['limit'] ?? 15), 25);
-    $searchTerm = '%' . $query . '%';
+    $clientPrefix = $query . '%';
 
     $stmt = $pdo->prepare("
         SELECT 
@@ -35,13 +35,13 @@ try {
             c.raison_sociale as client_nom,
             c.email as client_email
         FROM factures f
-        LEFT JOIN clients c ON f.id_client = c.id
+        JOIN clients c ON c.id = f.id_client
         WHERE f.pdf_path IS NOT NULL
-          AND (f.numero LIKE :q OR c.raison_sociale LIKE :q)
-        ORDER BY f.date_facture DESC, f.id DESC
+          AND c.raison_sociale LIKE :clientPrefix
+        ORDER BY c.raison_sociale ASC, f.date_facture DESC
         LIMIT :limit
     ");
-    $stmt->bindValue(':q', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':clientPrefix', $clientPrefix, PDO::PARAM_STR);
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
 
