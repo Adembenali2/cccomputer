@@ -82,14 +82,15 @@ try {
             with_prev AS (
                 SELECT mac_norm, annee, mois,
                        tp, tb, tc,
-                       LAG(tp) OVER (PARTITION BY mac_norm ORDER BY annee, mois) AS prev_tp,
+                       COALESCE(tp, tb + tc) AS tp_safe,
+                       LAG(COALESCE(tp, tb + tc)) OVER (PARTITION BY mac_norm ORDER BY annee, mois) AS prev_tp,
                        LAG(tb) OVER (PARTITION BY mac_norm ORDER BY annee, mois) AS prev_tb,
                        LAG(tc) OVER (PARTITION BY mac_norm ORDER BY annee, mois) AS prev_tc
                 FROM one_per_month
             ),
             deltas AS (
                 SELECT annee, mois,
-                       COALESCE(SUM(CASE WHEN prev_tp IS NULL THEN 0 ELSE GREATEST(0, tp - prev_tp) END), 0) AS total_pages,
+                       COALESCE(SUM(CASE WHEN prev_tp IS NULL THEN 0 ELSE GREATEST(0, tp_safe - prev_tp) END), 0) AS total_pages,
                        COALESCE(SUM(CASE WHEN prev_tb IS NULL THEN 0 ELSE GREATEST(0, tb - prev_tb) END), 0) AS total_noir_blanc,
                        COALESCE(SUM(CASE WHEN prev_tc IS NULL THEN 0 ELSE GREATEST(0, tc - prev_tc) END), 0) AS total_couleur
                 FROM with_prev
@@ -136,14 +137,15 @@ try {
             with_prev AS (
                 SELECT mac_norm, date_jour, annee, mois, jour,
                        tp, tb, tc,
-                       LAG(tp) OVER (PARTITION BY mac_norm ORDER BY date_jour) AS prev_tp,
+                       COALESCE(tp, tb + tc) AS tp_safe,
+                       LAG(COALESCE(tp, tb + tc)) OVER (PARTITION BY mac_norm ORDER BY date_jour) AS prev_tp,
                        LAG(tb) OVER (PARTITION BY mac_norm ORDER BY date_jour) AS prev_tb,
                        LAG(tc) OVER (PARTITION BY mac_norm ORDER BY date_jour) AS prev_tc
                 FROM one_per_day
             ),
             deltas AS (
                 SELECT date_jour, annee, mois, jour,
-                       COALESCE(SUM(CASE WHEN prev_tp IS NULL THEN 0 ELSE GREATEST(0, tp - prev_tp) END), 0) AS total_pages,
+                       COALESCE(SUM(CASE WHEN prev_tp IS NULL THEN 0 ELSE GREATEST(0, tp_safe - prev_tp) END), 0) AS total_pages,
                        COALESCE(SUM(CASE WHEN prev_tb IS NULL THEN 0 ELSE GREATEST(0, tb - prev_tb) END), 0) AS total_noir_blanc,
                        COALESCE(SUM(CASE WHEN prev_tc IS NULL THEN 0 ELSE GREATEST(0, tc - prev_tc) END), 0) AS total_couleur
                 FROM with_prev
@@ -167,6 +169,8 @@ try {
     $stmt->execute($params);
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    $debug = !empty($_GET['debug']) && $_GET['debug'] === '1';
+
     $data = [
         'labels' => [],
         'noir_blanc' => [],
@@ -179,12 +183,20 @@ try {
     $moisNomsCourts = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
     if ($groupByMonth) {
+        $data['dates_full'] = [];
         foreach ($results as $row) {
+            $nb = (int)$row['total_noir_blanc'];
+            $col = (int)$row['total_couleur'];
+            $tp = (int)$row['total_pages'];
+            if ($tp === 0 && ($nb > 0 || $col > 0)) {
+                $tp = $nb + $col;
+            }
             $moisNom = $moisNoms[(int)$row['mois']] ?? '';
             $data['labels'][] = $moisNom . ' ' . $row['annee'];
-            $data['noir_blanc'][] = (int)$row['total_noir_blanc'];
-            $data['couleur'][] = (int)$row['total_couleur'];
-            $data['total_pages'][] = (int)$row['total_pages'];
+            $data['dates_full'][] = $moisNom . ' ' . $row['annee'];
+            $data['noir_blanc'][] = $nb;
+            $data['couleur'][] = $col;
+            $data['total_pages'][] = $tp;
         }
     } else {
         if ($mois !== null && $mois > 0 && $annee !== null && $annee > 0) {
@@ -193,11 +205,13 @@ try {
             foreach ($results as $row) {
                 $j = (int)($row['jour'] ?? 0);
                 if ($j >= 1 && $j <= 31) {
-                    $byDay[$j] = [
-                        'nb' => (int)$row['total_noir_blanc'],
-                        'couleur' => (int)$row['total_couleur'],
-                        'total' => (int)$row['total_pages']
-                    ];
+                    $nb = (int)$row['total_noir_blanc'];
+                    $col = (int)$row['total_couleur'];
+                    $tp = (int)$row['total_pages'];
+                    if ($tp === 0 && ($nb > 0 || $col > 0)) {
+                        $tp = $nb + $col;
+                    }
+                    $byDay[$j] = ['nb' => $nb, 'couleur' => $col, 'total' => $tp];
                 }
             }
             $data['dates_full'] = [];
@@ -212,13 +226,19 @@ try {
             }
         } else {
             foreach ($results as $row) {
+                $nb = (int)$row['total_noir_blanc'];
+                $col = (int)$row['total_couleur'];
+                $tp = (int)$row['total_pages'];
+                if ($tp === 0 && ($nb > 0 || $col > 0)) {
+                    $tp = $nb + $col;
+                }
                 $moisNom = $moisNomsCourts[(int)$row['mois']] ?? '';
                 $jour = isset($row['jour']) ? str_pad((string)$row['jour'], 2, '0', STR_PAD_LEFT) : '';
                 $data['labels'][] = $jour . ' ' . $moisNom;
                 $data['dates_full'][] = ($row['date_jour'] ?? '') ? date('d/m/Y', strtotime($row['date_jour'])) : '';
-                $data['noir_blanc'][] = (int)$row['total_noir_blanc'];
-                $data['couleur'][] = (int)$row['total_couleur'];
-                $data['total_pages'][] = (int)$row['total_pages'];
+                $data['noir_blanc'][] = $nb;
+                $data['couleur'][] = $col;
+                $data['total_pages'][] = $tp;
             }
         }
     }
@@ -230,7 +250,18 @@ try {
         $clientInfo = $stmtClient->fetch(PDO::FETCH_ASSOC);
     }
 
-    jsonResponse([
+    $debugInfo = null;
+    if ($debug) {
+        $debugInfo = [
+            'count_raw_results' => count($results),
+            'labels_sample' => array_slice($data['labels'], 0, 3),
+            'noir_blanc_sample' => array_slice($data['noir_blanc'], 0, 3),
+            'couleur_sample' => array_slice($data['couleur'], 0, 3),
+            'total_pages_sample' => array_slice($data['total_pages'], 0, 3),
+        ];
+    }
+
+    $response = [
         'ok' => true,
         'data' => $data,
         'client' => $clientInfo,
@@ -239,7 +270,11 @@ try {
             'mois' => $mois,
             'annee' => $annee
         ]
-    ]);
+    ];
+    if ($debugInfo !== null) {
+        $response['_debug'] = $debugInfo;
+    }
+    jsonResponse($response);
 
 } catch (PDOException $e) {
     error_log('paiements_get_stats.php SQL error: ' . $e->getMessage());
