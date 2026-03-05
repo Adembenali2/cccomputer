@@ -1234,9 +1234,13 @@ $sectionImages = [
             <div id="addFields" class="detail-grid"></div>
             <div class="modal-actions" style="margin-top:1rem; display:flex; gap:.5rem; justify-content:flex-end;">
                 <button type="button" id="addCancel" class="btn btn-secondary">Annuler</button>
-                <button type="submit" class="btn btn-primary">Enregistrer</button>
+                <button type="submit" id="addSubmit" class="btn btn-primary">
+                    <span class="btn-text">Enregistrer</span>
+                    <span class="btn-spinner" aria-hidden="true" role="status" style="display:none;"></span>
+                </button>
             </div>
-            <div id="addError" class="form-error" style="color:#c00; margin-top:.5rem; display:none;" role="alert"></div>
+            <div id="addError" class="form-error" role="alert" aria-live="assertive"></div>
+            <div id="addSuccess" class="form-success" aria-live="polite" hidden></div>
         </form>
     </div>
 </div>
@@ -1852,6 +1856,7 @@ $sectionImages = [
         const form = document.getElementById('addForm');
         const fieldsContainer = document.getElementById('addFields');
         const errorBox = document.getElementById('addError');
+        const successBox = document.getElementById('addSuccess');
 
         let currentType = null;
 
@@ -1907,6 +1912,11 @@ $sectionImages = [
             if (errorBox) {
                 errorBox.style.display = 'none';
                 errorBox.textContent = '';
+                errorBox.className = 'form-error';
+            }
+            if (successBox) {
+                successBox.textContent = '';
+                successBox.hidden = true;
             }
         }
 
@@ -2032,23 +2042,61 @@ $sectionImages = [
         });
 
         if (form) {
+            const submitBtn = document.getElementById('addSubmit');
+            let isSubmitting = false;
+
+            function setLoading(loading) {
+                if (!submitBtn) return;
+                const btnText = submitBtn.querySelector('.btn-text');
+                const btnSpinner = submitBtn.querySelector('.btn-spinner');
+                submitBtn.disabled = loading;
+                if (btnText) btnText.style.display = loading ? 'none' : '';
+                if (btnSpinner) {
+                    btnSpinner.style.display = loading ? 'inline-block' : 'none';
+                    btnSpinner.setAttribute('aria-hidden', loading ? 'false' : 'true');
+                }
+            }
+
+            function clearMessages() {
+                if (errorBox) {
+                    errorBox.textContent = '';
+                    errorBox.className = 'form-error';
+                    errorBox.style.display = 'none';
+                }
+                if (successBox) {
+                    successBox.textContent = '';
+                    successBox.hidden = true;
+                }
+            }
+
+            function showError(msg) {
+                if (errorBox) {
+                    errorBox.textContent = msg;
+                    errorBox.className = 'form-error form-error--visible';
+                    errorBox.setAttribute('tabindex', '-1');
+                    errorBox.focus();
+                }
+            }
+
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
-                if (!currentType) {
-                    return;
-                }
+                if (!currentType) return;
+                if (isSubmitting) return;
 
-                const formData = new FormData(form);
-                const payload = {};
-                formData.forEach(function(v, k) {
-                    payload[k] = v;
-                });
-
-                // Récupérer le token CSRF depuis le meta tag
-                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+                isSubmitting = true;
+                clearMessages();
+                setLoading(true);
 
                 try {
+                    const formData = new FormData(form);
+                    const payload = {};
+                    formData.forEach(function(v, k) {
+                        payload[k] = v;
+                    });
+
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
                     const res = await fetch('/API/stock_add.php', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
@@ -2063,31 +2111,29 @@ $sectionImages = [
                     let json;
                     try {
                         json = JSON.parse(text);
-                    } catch (e) {
+                    } catch (parseErr) {
                         console.error('Réponse non JSON de /API/stock_add.php :', text);
-                        throw new Error('Réponse invalide du serveur (pas du JSON).');
+                        showError('Réponse invalide du serveur (pas du JSON).');
+                        return;
                     }
 
                     if (!res.ok || !json.ok) {
                         console.error('Erreur API :', json);
-                        if (errorBox) {
-                            errorBox.textContent = json.error || "Erreur lors de l'enregistrement.";
-                            errorBox.style.display = 'block';
-                        }
+                        showError(json.error || "Erreur lors de l'enregistrement.");
                         return;
                     }
 
-                    // Succès : afficher message et recharger
+                    // Succès : fermer et recharger avec message flash
                     closeModal();
                     const url = new URL(window.location.href);
                     url.searchParams.set('added', currentType);
                     window.location.href = url.toString();
                 } catch (err) {
                     console.error('Erreur fetch :', err);
-                    if (errorBox) {
-                        errorBox.textContent = 'Erreur réseau ou serveur.';
-                        errorBox.style.display = 'block';
-                    }
+                    showError('Erreur réseau ou serveur. Réessayez.');
+                } finally {
+                    isSubmitting = false;
+                    setLoading(false);
                 }
             });
         }

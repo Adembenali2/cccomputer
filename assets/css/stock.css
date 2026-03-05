@@ -814,6 +814,46 @@ html, body { max-width: 100%; overflow-x: hidden; }
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
+/* Bouton submit avec spinner (modale ajout stock) */
+.btn-spinner {
+  display: none;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spinner-rotate 0.6s linear infinite;
+  vertical-align: middle;
+  margin-left: 0.35em;
+}
+@keyframes btn-spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+/* Messages formulaire modale ajout */
+.form-error {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: #c00;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: var(--radius-md);
+  display: none;
+}
+.form-error--visible {
+  display: block;
+}
+.form-success {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: #059669;
+  background: rgba(5, 150, 105, 0.08);
+  border: 1px solid rgba(5, 150, 105, 0.3);
+  border-radius: var(--radius-md);
+}
+
 /* Optimisations de performance */
 .card-section,
 .meta-card {
