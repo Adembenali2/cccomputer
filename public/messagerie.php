@@ -728,6 +728,7 @@ async function sendMessage() {
             try {
                 const formData = new FormData();
                 formData.append('image', originalImage);
+                formData.append('csrf_token', CONFIG.csrfToken);
                 
                 const uploadResponse = await fetch('/API/chatroom_upload_image.php', {
                     method: 'POST',
