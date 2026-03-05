@@ -440,21 +440,20 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             border-color: #d97706;
         }
 
-        /* ====== Graphique Section ====== */
+        /* ====== Graphique Section (Stats impression) ====== */
         .stats-section {
-            background: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            padding: 2rem;
+            --stats-card-radius: 14px;
+            --stats-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            --stats-card-border: 1px solid var(--border-color);
+            --stats-spacing: 1.25rem;
             margin-bottom: 2rem;
-            box-shadow: var(--shadow-md);
         }
 
         .stats-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1.5rem;
+            margin-bottom: var(--stats-spacing);
             flex-wrap: wrap;
             gap: 1rem;
         }
@@ -464,41 +463,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             font-weight: 600;
             color: var(--text-primary);
             margin: 0;
-        }
-
-        .stats-filters {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .stats-filter-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-
-        .stats-filter-group label {
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-
-        .stats-filter-group select {
-            padding: 0.5rem 0.75rem;
-            border: 2px solid var(--border-color);
-            border-radius: var(--radius-md);
-            font-size: 0.95rem;
-            color: var(--text-primary);
-            background-color: var(--bg-secondary);
-            min-width: 150px;
-        }
-
-        .stats-filter-group select:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         .btn-export {
@@ -520,18 +484,131 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             box-shadow: var(--shadow-md);
         }
 
+        .btn-export:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35);
+        }
+
+        .stats-filters-card {
+            background: var(--bg-primary);
+            border: var(--stats-card-border);
+            border-radius: var(--stats-card-radius);
+            padding: 1.25rem 1.5rem;
+            margin-bottom: var(--stats-spacing);
+            box-shadow: var(--stats-card-shadow);
+        }
+
+        .stats-filters {
+            display: flex;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .stats-filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .stats-filter-group label {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .stats-filter-group select {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.9375rem;
+            color: var(--text-primary);
+            background-color: var(--bg-primary);
+            min-width: 160px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .stats-filter-group select:hover {
+            border-color: var(--text-muted);
+        }
+
+        .stats-filter-group select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        }
+
+        .stats-kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: var(--stats-spacing);
+        }
+
+        .stats-kpi-card {
+            background: var(--bg-primary);
+            border: var(--stats-card-border);
+            border-radius: var(--stats-card-radius);
+            padding: 1rem 1.25rem;
+            box-shadow: var(--stats-card-shadow);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .stats-kpi-card:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .stats-kpi-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin-bottom: 0.25rem;
+        }
+
+        .stats-kpi-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stats-chart-card {
+            background: var(--bg-primary);
+            border: var(--stats-card-border);
+            border-radius: var(--stats-card-radius);
+            padding: 1.5rem;
+            box-shadow: var(--stats-card-shadow);
+        }
+
+        .stats-chart-header {
+            margin-bottom: 1rem;
+        }
+
+        .stats-chart-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 0.25rem;
+        }
+
+        .stats-chart-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
         .chart-container {
             position: relative;
-            height: 450px;
-            margin-top: 1.5rem;
+            height: 420px;
             width: 100%;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.05) 100%);
+            background: var(--bg-secondary);
             border-radius: var(--radius-md);
             padding: 1rem;
-            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
             overflow: hidden;
         }
-        
+
         .chart-container canvas {
             max-height: 100% !important;
         }
@@ -540,56 +617,33 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 450px;
+            height: 420px;
             color: var(--text-secondary);
-            font-size: 1rem;
-        }
-
-        .chart-summary {
-            position: absolute;
-            top: 1.25rem;
-            right: 1.25rem;
-            display: none;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.35rem 0.9rem;
-            border-radius: 999px;
-            background: rgba(15, 23, 42, 0.92);
-            color: #f9fafb;
-            font-size: 0.8rem;
-            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
-            backdrop-filter: blur(12px);
-        }
-
-        .chart-summary .label {
-            opacity: 0.75;
-        }
-
-        .chart-summary .value {
-            font-weight: 600;
+            font-size: 0.9375rem;
         }
 
         @media (max-width: 768px) {
-            .stats-section {
-                padding: 1.5rem;
-            }
-
             .stats-header {
                 flex-direction: column;
                 align-items: flex-start;
             }
 
             .stats-filters {
+                flex-direction: column;
                 width: 100%;
             }
 
-            .stats-filter-group {
-                flex: 1;
-                min-width: 120px;
+            .stats-filter-group select {
+                min-width: 100%;
             }
 
-            .chart-container {
-                height: 300px;
+            .stats-kpi-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .chart-container,
+            .chart-loading {
+                height: 320px;
             }
         }
 
@@ -1430,55 +1484,79 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         <div class="stats-section">
             <div class="stats-header">
                 <h2 class="stats-title">Statistiques d'impression</h2>
-                <div style="display: flex; gap: 1rem; align-items: center;">
-                    <button class="btn-export" id="btnExportExcel">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        Exporter Excel
-                    </button>
+                <button class="btn-export" id="btnExportExcel">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Exporter Excel
+                </button>
+            </div>
+
+            <div class="stats-filters-card">
+                <div class="stats-filters">
+                    <div class="stats-filter-group">
+                        <label for="filterClient">Client</label>
+                        <select id="filterClient">
+                            <option value="">Tous les clients</option>
+                        </select>
+                    </div>
+                    <div class="stats-filter-group">
+                        <label for="filterMois">Mois</label>
+                        <select id="filterMois">
+                            <option value="">Tous les mois</option>
+                            <option value="1">Janvier</option>
+                            <option value="2">Février</option>
+                            <option value="3">Mars</option>
+                            <option value="4">Avril</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Juin</option>
+                            <option value="7">Juillet</option>
+                            <option value="8">Août</option>
+                            <option value="9">Septembre</option>
+                            <option value="10">Octobre</option>
+                            <option value="11">Novembre</option>
+                            <option value="12">Décembre</option>
+                        </select>
+                    </div>
+                    <div class="stats-filter-group">
+                        <label for="filterAnnee">Année</label>
+                        <select id="filterAnnee">
+                            <option value="">Toutes les années</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            <div class="stats-filters">
-                <div class="stats-filter-group">
-                    <label for="filterClient">Client</label>
-                    <select id="filterClient">
-                        <option value="">Tous les clients</option>
-                    </select>
+            <div class="stats-kpi-row" id="statsKpiRow">
+                <div class="stats-kpi-card" id="kpiTotalPeriode">
+                    <span class="stats-kpi-label">Total période</span>
+                    <span class="stats-kpi-value" id="kpiTotalValue">—</span>
                 </div>
-                <div class="stats-filter-group">
-                    <label for="filterMois">Mois</label>
-                    <select id="filterMois">
-                        <option value="">Tous les mois</option>
-                        <option value="1">Janvier</option>
-                        <option value="2">Février</option>
-                        <option value="3">Mars</option>
-                        <option value="4">Avril</option>
-                        <option value="5">Mai</option>
-                        <option value="6">Juin</option>
-                        <option value="7">Juillet</option>
-                        <option value="8">Août</option>
-                        <option value="9">Septembre</option>
-                        <option value="10">Octobre</option>
-                        <option value="11">Novembre</option>
-                        <option value="12">Décembre</option>
-                    </select>
+                <div class="stats-kpi-card" id="kpiNb">
+                    <span class="stats-kpi-label">N&B</span>
+                    <span class="stats-kpi-value" id="kpiNbValue">—</span>
                 </div>
-                <div class="stats-filter-group">
-                    <label for="filterAnnee">Année</label>
-                    <select id="filterAnnee">
-                        <option value="">Toutes les années</option>
-                    </select>
+                <div class="stats-kpi-card" id="kpiCouleur">
+                    <span class="stats-kpi-label">Couleur</span>
+                    <span class="stats-kpi-value" id="kpiCouleurValue">—</span>
+                </div>
+                <div class="stats-kpi-card" id="kpiTotal">
+                    <span class="stats-kpi-label">Total pages</span>
+                    <span class="stats-kpi-value" id="kpiTotalPagesValue">—</span>
                 </div>
             </div>
 
-            <div class="chart-container">
-                <div class="chart-loading" id="chartLoading">Chargement des données...</div>
-                <canvas id="statsChart" style="display: none; width: 100% !important; height: 100% !important;"></canvas>
-                <div id="chartSummary" class="chart-summary"></div>
+            <div class="stats-chart-card">
+                <div class="stats-chart-header">
+                    <h3 class="stats-chart-title" id="statsChartTitle">Consommation</h3>
+                    <p class="stats-chart-subtitle" id="statsChartSubtitle">Pages imprimées par période</p>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-loading" id="chartLoading">Chargement des données...</div>
+                    <canvas id="statsChart" style="display: none; width: 100% !important; height: 100% !important;"></canvas>
+                </div>
             </div>
         </div>
 
@@ -6387,13 +6465,10 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         async function loadStatsData() {
             const loadingDiv = document.getElementById('chartLoading');
             const canvas = document.getElementById('statsChart');
-            const summaryDiv = document.getElementById('chartSummary');
             
             loadingDiv.style.display = 'flex';
             canvas.style.display = 'none';
-            if (summaryDiv) {
-                summaryDiv.style.display = 'none';
-            }
+            updateStatsKpis(null);
             
             const clientId = document.getElementById('filterClient').value;
             const mois = document.getElementById('filterMois').value;
@@ -6415,161 +6490,144 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     // Vérifier qu'on a des données
                     if (data.data.labels && data.data.labels.length > 0) {
                         updateChart(data.data);
+                        updateStatsKpis(data.data);
                         loadingDiv.style.display = 'none';
                         canvas.style.display = 'block';
                     } else {
                         loadingDiv.textContent = 'Aucune donnée disponible pour les filtres sélectionnés';
                         canvas.style.display = 'none';
-                        if (summaryDiv) {
-                            summaryDiv.style.display = 'none';
-                        }
                     }
                 } else {
                     const errorMsg = data.error || 'Erreur lors du chargement des données';
                     loadingDiv.textContent = errorMsg;
                     canvas.style.display = 'none';
-                    if (summaryDiv) {
-                        summaryDiv.style.display = 'none';
-                    }
                 }
             } catch (error) {
                 console.error('Erreur lors du chargement des statistiques:', error);
                 loadingDiv.textContent = 'Erreur lors du chargement des données';
-                if (summaryDiv) {
-                    summaryDiv.style.display = 'none';
-                }
             }
         }
 
         /**
-         * Met à jour le graphique
+         * Met à jour les KPI cards
+         */
+        function updateStatsKpis(data) {
+            const elTotal = document.getElementById('kpiTotalValue');
+            const elNb = document.getElementById('kpiNbValue');
+            const elCouleur = document.getElementById('kpiCouleurValue');
+            const elTotalPages = document.getElementById('kpiTotalPagesValue');
+            const formatNum = (n) => (n ?? 0).toLocaleString('fr-FR');
+            if (!data || !data.labels || data.labels.length === 0) {
+                if (elTotal) elTotal.textContent = '—';
+                if (elNb) elNb.textContent = '—';
+                if (elCouleur) elCouleur.textContent = '—';
+                if (elTotalPages) elTotalPages.textContent = '—';
+                return;
+            }
+            const totalNb = (data.noir_blanc || []).reduce((s, v) => s + (v || 0), 0);
+            const totalColor = (data.couleur || []).reduce((s, v) => s + (v || 0), 0);
+            const totalPages = (data.total_pages || []).reduce((s, v) => s + (v || 0), 0);
+            if (elTotal) elTotal.textContent = formatNum(totalPages) + ' p.';
+            if (elNb) elNb.textContent = formatNum(totalNb);
+            if (elCouleur) elCouleur.textContent = formatNum(totalColor);
+            if (elTotalPages) elTotalPages.textContent = formatNum(totalPages);
+        }
+
+        /**
+         * Met à jour le graphique (barres groupées NB + Couleur, ligne Total)
          */
         function updateChart(data) {
             const ctx = document.getElementById('statsChart').getContext('2d');
-            const summaryDiv = document.getElementById('chartSummary');
-            
-            // Détruire le graphique existant si présent
-            if (statsChart) {
-                statsChart.destroy();
-            }
-            
-            // Déterminer le titre selon le type de regroupement
+            if (statsChart) statsChart.destroy();
+
             const groupBy = data.group_by || 'day';
-            const chartTitle = groupBy === 'month' 
-                ? 'Consommation mensuelle des clients' 
-                : 'Consommation quotidienne des clients';
+            const chartTitle = groupBy === 'month' ? 'Consommation mensuelle' : 'Consommation quotidienne';
+            const chartSubtitle = groupBy === 'month' ? 'Pages par mois' : 'Pages par jour';
 
-            // Calculer la consommation totale sur la période à partir des valeurs réelles
-            const totalNb = (data.noir_blanc || []).reduce((sum, v) => sum + (v || 0), 0);
-            const totalColor = (data.couleur || []).reduce((sum, v) => sum + (v || 0), 0);
-            const totalPages = (data.total_pages || []).reduce((sum, v) => sum + (v || 0), 0);
+            const titleEl = document.getElementById('statsChartTitle');
+            const subtitleEl = document.getElementById('statsChartSubtitle');
+            if (titleEl) titleEl.textContent = chartTitle;
+            if (subtitleEl) subtitleEl.textContent = chartSubtitle;
 
-            if (summaryDiv && data.labels && data.labels.length > 0) {
-                const periodLabel = groupBy === 'month' ? 'année' : 'période';
-                summaryDiv.innerHTML = `
-                    <span class="label">Total ${periodLabel}</span>
-                    <span class="value">${totalPages.toLocaleString('fr-FR')} pages</span>
-                `;
-                summaryDiv.style.display = 'flex';
-            }
-
-            // Dégradés modernes pour les barres
             const canvas = ctx.canvas;
-            const gradientHeight = canvas ? (canvas.height || 400) : 400;
+            const h = canvas ? (canvas.height || 400) : 400;
+            const gradBw = ctx.createLinearGradient(0, 0, 0, h);
+            gradBw.addColorStop(0, 'rgba(30, 41, 59, 0.9)');
+            gradBw.addColorStop(1, 'rgba(30, 41, 59, 0.5)');
+            const gradColor = ctx.createLinearGradient(0, 0, 0, h);
+            gradColor.addColorStop(0, 'rgba(59, 130, 246, 0.9)');
+            gradColor.addColorStop(1, 'rgba(59, 130, 246, 0.5)');
 
-            const gradientBw = ctx.createLinearGradient(0, 0, 0, gradientHeight);
-            gradientBw.addColorStop(0, 'rgba(15, 23, 42, 0.95)');
-            gradientBw.addColorStop(1, 'rgba(15, 23, 42, 0.4)');
-
-            const gradientColor = ctx.createLinearGradient(0, 0, 0, gradientHeight);
-            gradientColor.addColorStop(0, 'rgba(59, 130, 246, 0.95)');
-            gradientColor.addColorStop(1, 'rgba(59, 130, 246, 0.4)');
-
-            const gradientTotal = ctx.createLinearGradient(0, 0, 0, gradientHeight);
-            gradientTotal.addColorStop(0, 'rgba(16, 185, 129, 0.95)');
-            gradientTotal.addColorStop(1, 'rgba(16, 185, 129, 0.4)');
-            
-            // Créer le nouveau graphique avec un style moderne (barres avec dégradés)
             statsChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: data.labels,
                     datasets: [
                         {
-                            label: 'Noir et Blanc',
+                            type: 'bar',
+                            label: 'N&B',
                             data: data.noir_blanc,
-                            backgroundColor: gradientBw,
-                            hoverBackgroundColor: '#111827',
-                            borderColor: '#030712',
-                            borderWidth: 1.5,
+                            backgroundColor: gradBw,
+                            hoverBackgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            borderColor: 'rgba(30, 41, 59, 0.6)',
+                            borderWidth: 1,
                             borderRadius: 6,
                             borderSkipped: false,
+                            barThickness: 24,
+                            order: 2
                         },
                         {
+                            type: 'bar',
                             label: 'Couleur',
                             data: data.couleur,
-                            backgroundColor: gradientColor,
-                            hoverBackgroundColor: '#1d4ed8',
-                            borderColor: '#1d4ed8',
-                            borderWidth: 1.5,
+                            backgroundColor: gradColor,
+                            hoverBackgroundColor: 'rgba(37, 99, 235, 0.95)',
+                            borderColor: 'rgba(59, 130, 246, 0.6)',
+                            borderWidth: 1,
                             borderRadius: 6,
                             borderSkipped: false,
+                            barThickness: 24,
+                            order: 1
                         },
                         {
-                            label: 'Total Pages',
+                            type: 'line',
+                            label: 'Total',
                             data: data.total_pages,
-                            backgroundColor: gradientTotal,
-                            hoverBackgroundColor: '#047857',
-                            borderColor: '#047857',
-                            borderWidth: 1.5,
-                            borderRadius: 6,
-                            borderSkipped: false,
+                            borderColor: 'rgba(16, 185, 129, 0.9)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2.5,
+                            fill: false,
+                            tension: 0.2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: 'rgba(16, 185, 129, 0.9)',
+                            pointBorderWidth: 2,
+                            order: 0
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    animation: {
-                        duration: 1000,
-                        easing: 'easeOutQuart'
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    },
+                    animation: { duration: 600, easing: 'easeOutQuart' },
+                    interaction: { intersect: false, mode: 'index' },
                     scales: {
                         x: {
                             stacked: false,
                             grid: {
                                 display: true,
-                                color: 'rgba(0, 0, 0, 0.05)',
+                                color: 'rgba(0, 0, 0, 0.04)',
                                 lineWidth: 1,
-                                drawBorder: true,
-                                borderColor: 'rgba(0, 0, 0, 0.1)'
+                                drawBorder: false
                             },
                             ticks: {
                                 maxRotation: groupBy === 'month' ? 0 : 45,
                                 minRotation: groupBy === 'month' ? 0 : 45,
-                                font: {
-                                    size: 11,
-                                    weight: '400'
-                                },
+                                maxTicksLimit: 12,
+                                font: { size: 11, weight: '400' },
                                 color: 'var(--text-secondary)',
-                                padding: 8
-                            },
-                            title: {
-                                display: true,
-                                text: groupBy === 'month' ? 'Mois' : 'Date',
-                                font: {
-                                    size: 13,
-                                    weight: '600'
-                                },
-                                color: 'var(--text-primary)',
-                                padding: {
-                                    top: 10,
-                                    bottom: 5
-                                }
+                                padding: 10
                             }
                         },
                         y: {
@@ -6577,33 +6635,17 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             stacked: false,
                             grid: {
                                 display: true,
-                                color: 'rgba(0, 0, 0, 0.05)',
+                                color: 'rgba(0, 0, 0, 0.04)',
                                 lineWidth: 1,
-                                drawBorder: true,
-                                borderColor: 'rgba(0, 0, 0, 0.1)'
+                                drawBorder: false
                             },
                             ticks: {
-                                font: {
-                                    size: 11,
-                                    weight: '400'
-                                },
+                                maxTicksLimit: 8,
+                                font: { size: 11, weight: '400' },
                                 color: 'var(--text-secondary)',
-                                padding: 8,
-                                callback: function(value) {
-                                    return new Intl.NumberFormat('fr-FR').format(value);
-                                }
-                            },
-                            title: {
-                                display: true,
-                                text: 'Nombre de pages',
-                                font: {
-                                    size: 13,
-                                    weight: '600'
-                                },
-                                color: 'var(--text-primary)',
-                                padding: {
-                                    top: 5,
-                                    bottom: 10
+                                padding: 10,
+                                callback: function(v) {
+                                    return new Intl.NumberFormat('fr-FR').format(v);
                                 }
                             }
                         }
@@ -6611,75 +6653,44 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     plugins: {
                         legend: {
                             position: 'top',
-                            align: 'end',
+                            align: 'center',
                             labels: {
-                                usePointStyle: false,
-                                padding: 15,
-                                font: {
-                                    size: 13,
-                                    weight: '500',
-                                    family: 'system-ui, -apple-system, sans-serif'
-                                },
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                padding: 16,
+                                font: { size: 12, weight: '500' },
                                 color: 'var(--text-primary)',
-                                boxWidth: 20,
+                                boxWidth: 12,
                                 boxHeight: 12
                             },
-                            onClick: (e, legendItem, legend) => {
-                                const index = legendItem.datasetIndex;
+                            onClick: function(e, legendItem, legend) {
+                                const idx = legendItem.datasetIndex;
                                 const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(index);
-                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                                const meta = chart.getDatasetMeta(idx);
+                                meta.hidden = meta.hidden === null ? !chart.data.datasets[idx].hidden : null;
                                 chart.update();
                             }
                         },
-                        title: {
-                            display: true,
-                            text: chartTitle,
-                            font: {
-                                size: 18,
-                                weight: '600',
-                                family: 'system-ui, -apple-system, sans-serif'
-                            },
-                            color: 'var(--text-primary)',
-                            padding: {
-                                top: 10,
-                                bottom: 20
-                            }
-                        },
                         tooltip: {
-                            enabled: true,
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            titleColor: '#ffffff',
-                            bodyColor: '#ffffff',
-                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                            titleColor: '#fff',
+                            bodyColor: '#e2e8f0',
+                            borderColor: 'rgba(255,255,255,0.08)',
                             borderWidth: 1,
                             padding: 12,
-                            titleFont: {
-                                size: 14,
-                                weight: '600'
-                            },
-                            bodyFont: {
-                                size: 13,
-                                weight: '400'
-                            },
                             cornerRadius: 8,
                             displayColors: true,
                             boxPadding: 6,
                             usePointStyle: true,
+                            titleFont: { size: 13, weight: '600' },
+                            bodyFont: { size: 12, weight: '400' },
                             callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += new Intl.NumberFormat('fr-FR').format(context.parsed.y) + ' pages';
-                                    }
-                                    return label;
+                                label: function(ctx) {
+                                    const v = ctx.parsed.y;
+                                    return (ctx.dataset.label || '') + ': ' + new Intl.NumberFormat('fr-FR').format(v) + ' pages';
                                 },
-                                title: function(context) {
-                                    const titleLabel = groupBy === 'month' ? 'Mois' : 'Date';
-                                    return titleLabel + ': ' + context[0].label;
+                                title: function(ctx) {
+                                    return (groupBy === 'month' ? 'Mois' : 'Date') + ': ' + ctx[0].label;
                                 }
                             }
                         }
