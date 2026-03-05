@@ -1,0 +1,9 @@
+# Désactiver l'exécution de scripts PHP (sécurité)
+<FilesMatch "\.php$">
+    Require all denied
+</FilesMatch>
+
+# Autoriser uniquement les images PNG
+<FilesMatch "\.(png)$">
+    Require all granted
+</FilesMatch>

@@ -34,6 +34,7 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
 // Message de succès depuis paramètre GET (validation stricte)
+$flashWarning = null;
 $allowedTypes = ['papier', 'toner', 'lcd', 'pc'];
 if (isset($_GET['added']) && in_array($_GET['added'], $allowedTypes, true)) {
     $typeNames = [
@@ -47,6 +48,9 @@ if (isset($_GET['added']) && in_array($_GET['added'], $allowedTypes, true)) {
         'type' => 'success',
         'msg' => ucfirst($typeName) . ' ajouté avec succès dans le stock.'
     ];
+    if (!empty($_GET['warning'])) {
+        $flashWarning = 'Impossible de générer le QR code. L\'étiquette utilisera le code-barres.';
+    }
 }
 
 // ====================================================================
@@ -788,6 +792,11 @@ $sectionImages = [
     <?php if ($flash && isset($flash['type'])): ?>
         <div class="flash <?= h($flash['type']) ?>" role="alert">
             <?= h($flash['msg'] ?? '') ?>
+        </div>
+    <?php endif; ?>
+    <?php if ($flashWarning): ?>
+        <div class="flash flash-warning" role="status">
+            <?= h($flashWarning) ?>
         </div>
     <?php endif; ?>
 
@@ -2183,6 +2192,9 @@ $sectionImages = [
                     closeModal();
                     const url = new URL(window.location.href);
                     url.searchParams.set('added', currentType);
+                    if (json.warning) {
+                        url.searchParams.set('warning', '1');
+                    }
                     window.location.href = url.toString();
                 } catch (err) {
                     console.error('Erreur fetch :', err);

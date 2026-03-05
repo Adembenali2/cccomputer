@@ -22,44 +22,78 @@ function logStockAction(PDO $pdo, string $action, string $details): void {
 
 /**
  * Génère un QR Code pour un produit et le sauvegarde
- * 
+ * Contenu : TYPE:<type>;ID:<id>;BARCODE:<barcode>
+ * Dossier : /uploads/qrcodes/<type>/<id>.png (nom safe, id numérique uniquement)
+ *
  * @param string $barcode Code-barres du produit
  * @param int $productId ID du produit
  * @param string $type Type de produit (papier, toner, lcd, pc)
  * @return string|null Chemin vers l'image QR Code ou null en cas d'erreur
  */
 function generateQRCode(string $barcode, int $productId, string $type): ?string {
+    $allowedTypes = ['papier', 'toner', 'lcd', 'pc'];
+    if (!in_array($type, $allowedTypes, true) || $productId <= 0) {
+        return null;
+    }
+
+    $qrData = sprintf('TYPE:%s;ID:%d;BARCODE:%s', $type, $productId, $barcode);
+    $baseDir = dirname(__DIR__);
+    $qrDir = $baseDir . '/uploads/qrcodes/' . $type;
+    $filename = (string) $productId . '.png';
+    $filepath = $qrDir . '/' . $filename;
+
     try {
-        // Créer le répertoire de stockage des QR codes s'il n'existe pas
-        $qrDir = __DIR__ . '/../assets/qr_codes';
         if (!is_dir($qrDir)) {
-            @mkdir($qrDir, 0755, true);
+            if (!@mkdir($qrDir, 0755, true)) {
+                error_log('Erreur génération QR Code: impossible de créer le dossier ' . $qrDir);
+                return null;
+            }
         }
-        
-        // Nom du fichier : TYPE_ID_BARCODE.png
-        $filename = strtoupper(substr($type, 0, 3)) . '_' . $productId . '_' . preg_replace('/[^A-Z0-9-]/i', '', $barcode) . '.png';
-        $filepath = $qrDir . '/' . $filename;
-        
-        // Générer le QR Code via une API externe (qr-server.com - gratuit)
-        $qrSize = 300;
-        $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=' . $qrSize . 'x' . $qrSize . '&data=' . urlencode($barcode);
-        
-        // Télécharger l'image
-        $qrImage = @file_get_contents($qrUrl);
-        if ($qrImage === false) {
-            error_log('Erreur génération QR Code: impossible de télécharger depuis l\'API');
+
+        if (!is_writable($qrDir)) {
+            error_log('Erreur génération QR Code: dossier non accessible en écriture ' . $qrDir);
             return null;
         }
-        
-        // Sauvegarder l'image
+
+        $qrImage = null;
+
+        if (class_exists(\Endroid\QrCode\Builder\Builder::class)) {
+            try {
+                $builder = new \Endroid\QrCode\Builder\Builder(
+                    writer: new \Endroid\QrCode\Writer\PngWriter(),
+                    writerOptions: [],
+                    data: $qrData,
+                    size: 300,
+                    margin: 10
+                );
+                $result = $builder->build();
+                $qrImage = $result->getString();
+            } catch (Throwable $e) {
+                error_log('Erreur endroid/qr-code: ' . $e->getMessage());
+            }
+        }
+
+        if ($qrImage === null || $qrImage === '') {
+            $qrSize = 300;
+            $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=' . $qrSize . 'x' . $qrSize . '&data=' . urlencode($qrData);
+            $ctx = stream_context_create([
+                'http' => ['timeout' => 10],
+                'ssl' => ['verify_peer' => true]
+            ]);
+            $qrImage = @file_get_contents($qrUrl, false, $ctx);
+        }
+
+        if ($qrImage === false || $qrImage === '' || $qrImage === null) {
+            error_log('Erreur génération QR Code: impossible de générer l\'image');
+            return null;
+        }
+
         if (@file_put_contents($filepath, $qrImage) === false) {
-            error_log('Erreur sauvegarde QR Code: impossible d\'écrire le fichier');
+            error_log('Erreur génération QR Code: impossible d\'écrire le fichier ' . $filepath);
             return null;
         }
-        
-        // Retourner le chemin relatif
-        return '/assets/qr_codes/' . $filename;
-        
+
+        return '/uploads/qrcodes/' . $type . '/' . $filename;
     } catch (Throwable $e) {
         error_log('Erreur génération QR Code: ' . $e->getMessage());
         return null;
@@ -178,6 +212,8 @@ if (!is_array($data)) {
 $type    = $data['type'] ?? '';
 $payload = $data['data'] ?? [];
 
+$apiResponse = ['ok' => true];
+
 try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -212,6 +248,7 @@ try {
                 ':poids'  => $poids,
             ]);
             $paperId = $stmt->fetchColumn();
+            $qrPath = null;
 
             if (!$paperId) {
                 // Générer un code-barres unique
@@ -234,7 +271,14 @@ try {
                 if ($qrPath) {
                     $stmt = $pdo->prepare("UPDATE paper_catalog SET qr_code_path = :qr_path WHERE id = :id");
                     $stmt->execute([':qr_path' => $qrPath, ':id' => $paperId]);
+                } else {
+                    $apiResponse['warning'] = 'Impossible de générer le QR code. L\'étiquette utilisera le code-barres.';
                 }
+            }
+
+            $apiResponse['id'] = (int) $paperId;
+            if ($qrPath !== null) {
+                $apiResponse['qr_code_path'] = $qrPath;
             }
 
             // 2) insérer le mouvement
@@ -308,6 +352,7 @@ try {
                 ':couleur' => $couleur,
             ]);
             $tonerId = $stmt->fetchColumn();
+            $qrPath = null;
 
             if (!$tonerId) {
                 // Générer un code-barres unique
@@ -330,7 +375,14 @@ try {
                 if ($qrPath) {
                     $stmt = $pdo->prepare("UPDATE toner_catalog SET qr_code_path = :qr_path WHERE id = :id");
                     $stmt->execute([':qr_path' => $qrPath, ':id' => $tonerId]);
+                } else {
+                    $apiResponse['warning'] = 'Impossible de générer le QR code. L\'étiquette utilisera le code-barres.';
                 }
+            }
+
+            $apiResponse['id'] = (int) $tonerId;
+            if ($qrPath !== null) {
+                $apiResponse['qr_code_path'] = $qrPath;
             }
 
             // 2) mouvement
@@ -390,6 +442,7 @@ try {
                 ':reference' => $reference,
             ]);
             $lcdId = $stmt->fetchColumn();
+            $qrPath = null;
 
             if ($lcdId) {
                 // mise à jour des métadonnées
@@ -438,7 +491,14 @@ try {
                 if ($qrPath) {
                     $stmt = $pdo->prepare("UPDATE lcd_catalog SET qr_code_path = :qr_path WHERE id = :id");
                     $stmt->execute([':qr_path' => $qrPath, ':id' => $lcdId]);
+                } else {
+                    $apiResponse['warning'] = 'Impossible de générer le QR code. L\'étiquette utilisera le code-barres.';
                 }
+            }
+
+            $apiResponse['id'] = (int) $lcdId;
+            if ($qrPath !== null) {
+                $apiResponse['qr_code_path'] = $qrPath;
             }
 
             // 2) mouvement
@@ -499,6 +559,7 @@ try {
             ");
             $stmt->execute([':reference' => $reference]);
             $pcId = $stmt->fetchColumn();
+            $qrPath = null;
 
             if ($pcId) {
                 $stmt = $pdo->prepare("
@@ -560,7 +621,14 @@ try {
                 if ($qrPath) {
                     $stmt = $pdo->prepare("UPDATE pc_catalog SET qr_code_path = :qr_path WHERE id = :id");
                     $stmt->execute([':qr_path' => $qrPath, ':id' => $pcId]);
+                } else {
+                    $apiResponse['warning'] = 'Impossible de générer le QR code. L\'étiquette utilisera le code-barres.';
                 }
+            }
+
+            $apiResponse['id'] = (int) $pcId;
+            if ($qrPath !== null) {
+                $apiResponse['qr_code_path'] = $qrPath;
             }
 
             // 2) mouvement
@@ -590,7 +658,7 @@ try {
             throw new RuntimeException('Type inconnu.');
     }
 
-    jsonResponse(['ok' => true], 200);
+    jsonResponse($apiResponse, 200);
 } catch (PDOException $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
