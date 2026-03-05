@@ -29,8 +29,8 @@ function jsonResponse(array $data, int $statusCode = 200) {
 try {
     require_once __DIR__ . '/../includes/session_config.php';
     require_once __DIR__ . '/../includes/auth_role.php';
-    require_once __DIR__ . '/../includes/db.php';
     require_once __DIR__ . '/../includes/helpers.php';
+    $pdo = getPdo();
 } catch (Throwable $e) {
     error_log('profil_search_users.php require error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur d\'initialisation'], 500);
