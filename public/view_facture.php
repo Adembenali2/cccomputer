@@ -37,31 +37,44 @@ try {
     $pdfWebPath = $facture['pdf_path'];
     $pdfPath = null;
     
+    // Chemins de base possibles (compatible Railway) - défini une fois pour tout le script
+    $possibleBaseDirs = [];
+    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+    if ($docRoot !== '' && is_dir($docRoot)) {
+        $possibleBaseDirs[] = $docRoot;
+    }
+    $projectDir = dirname(__DIR__);
+    if (is_dir($projectDir)) {
+        $possibleBaseDirs[] = $projectDir;
+    }
+    if (is_dir('/app')) {
+        $possibleBaseDirs[] = '/app';
+    }
+    if (is_dir('/var/www/html')) {
+        $possibleBaseDirs[] = '/var/www/html';
+    }
+    
     // Si un chemin PDF existe, essayer de le trouver
     if (!empty($pdfWebPath)) {
         $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
-        
-        // Tester plusieurs chemins possibles (compatible Railway)
-        $possibleBaseDirs = [];
-        $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
-        if ($docRoot !== '' && is_dir($docRoot)) {
-            $possibleBaseDirs[] = $docRoot;
-        }
-        $projectDir = dirname(__DIR__);
-        if (is_dir($projectDir)) {
-            $possibleBaseDirs[] = $projectDir;
-        }
-        if (is_dir('/app')) {
-            $possibleBaseDirs[] = '/app';
-        }
-        if (is_dir('/var/www/html')) {
-            $possibleBaseDirs[] = '/var/www/html';
+        // Bloquer path traversal (../ ou ..\)
+        $relativePath = str_replace(['../', '..\\'], '', $relativePath);
+        // Vérifier extension .pdf obligatoire
+        if (strtolower(pathinfo($relativePath, PATHINFO_EXTENSION)) !== 'pdf') {
+            $relativePath = '';
         }
         
         foreach ($possibleBaseDirs as $baseDir) {
-            $testPath = $baseDir . '/uploads/factures/' . $relativePath;
-            if (file_exists($testPath) && is_file($testPath)) {
-                $pdfPath = $testPath;
+            $baseFactures = $baseDir . '/uploads/factures';
+            $testPath = $baseFactures . '/' . $relativePath;
+            $realPath = realpath($testPath);
+            $realBase = realpath($baseFactures);
+            // Vérifier : fichier existe, résolu sous uploads/factures/, extension .pdf
+            if ($realPath !== false && $realBase !== false
+                && str_starts_with($realPath, $realBase)
+                && is_file($realPath)
+                && strtolower(pathinfo($realPath, PATHINFO_EXTENSION)) === 'pdf') {
+                $pdfPath = $realPath;
                 break;
             }
         }
@@ -117,13 +130,21 @@ try {
         $stmt = $pdo->prepare("UPDATE factures SET pdf_path = ? WHERE id = ?");
         $stmt->execute([$newPdfPath, $factureId]);
         
-        // Retrouver le fichier régénéré
-        $relativePath = preg_replace('#^/uploads/factures/#', '', $newPdfPath);
-        foreach ($possibleBaseDirs as $baseDir) {
-            $testPath = $baseDir . '/uploads/factures/' . $relativePath;
-            if (file_exists($testPath) && is_file($testPath)) {
-                $pdfPath = $testPath;
-                break;
+        // Retrouver le fichier régénéré (même validation path traversal + extension)
+        $relativePathNew = preg_replace('#^/uploads/factures/#', '', $newPdfPath);
+        $relativePathNew = str_replace(['../', '..\\'], '', $relativePathNew);
+        if (strtolower(pathinfo($relativePathNew, PATHINFO_EXTENSION)) === 'pdf') {
+            foreach ($possibleBaseDirs as $baseDir) {
+                $baseFactures = $baseDir . '/uploads/factures';
+                $testPath = $baseFactures . '/' . $relativePathNew;
+                $realPath = realpath($testPath);
+                $realBase = realpath($baseFactures);
+                if ($realPath !== false && $realBase !== false
+                    && str_starts_with($realPath, $realBase)
+                    && is_file($realPath)) {
+                    $pdfPath = $realPath;
+                    break;
+                }
             }
         }
         
