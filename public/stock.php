@@ -1860,11 +1860,21 @@ $sectionImages = [
 
         let currentType = null;
 
+        const TONER_COULEURS = [
+            {value: '', label: '-- Choisir une couleur --'},
+            {value: 'Noir', label: 'Noir'},
+            {value: 'Cyan', label: 'Cyan'},
+            {value: 'Magenta', label: 'Magenta'},
+            {value: 'Jaune', label: 'Jaune'},
+            {value: 'Autre', label: 'Autre'}
+        ];
+
         const FORM_SCHEMAS = {
             toner: [
                 {name: 'marque', label: 'Marque', type: 'text', required: true},
                 {name: 'modele', label: 'Modèle', type: 'text', required: true},
-                {name: 'couleur', label: 'Couleur', type: 'text', required: true},
+                {name: 'couleur', label: 'Couleur', type: 'select', required: true, options: TONER_COULEURS},
+                {name: 'couleur_autre', label: 'Précisez la couleur', type: 'text', required: false, showWhen: 'couleur', showWhenValue: 'Autre'},
                 {name: 'qty_delta', label: 'Quantité', type: 'number', required: true, min: 1},
                 {name: 'reference', label: 'Référence (BL, facture…)', type: 'text'}
             ],
@@ -1929,34 +1939,72 @@ $sectionImages = [
             schema.forEach(function(f) {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'field-card';
+                if (f.showWhen) {
+                    wrapper.dataset.showWhen = f.showWhen;
+                    wrapper.dataset.showWhenValue = f.showWhenValue || '';
+                    wrapper.style.display = 'none';
+                }
 
                 const lbl = document.createElement('label');
                 lbl.className = 'lbl';
                 lbl.textContent = f.label;
                 lbl.htmlFor = 'add_' + f.name;
 
-                const input = document.createElement('input');
-                input.className = 'val';
-                input.id = 'add_' + f.name;
-                input.name = f.name;
-                input.type = f.type || 'text';
-                if (f.required) {
-                    input.required = true;
-                }
-                if (f.min != null) {
-                    input.min = f.min;
-                }
-                if (f.step != null) {
-                    input.step = f.step;
-                }
-                if (f.maxLength != null) {
-                    input.maxLength = f.maxLength;
+                let control;
+                if (f.type === 'select') {
+                    control = document.createElement('select');
+                    control.className = 'val';
+                    control.id = 'add_' + f.name;
+                    control.name = f.name;
+                    (f.options || []).forEach(function(opt) {
+                        const option = document.createElement('option');
+                        option.value = opt.value;
+                        option.textContent = opt.label;
+                        control.appendChild(option);
+                    });
+                    if (f.required) {
+                        control.required = true;
+                    }
+                } else {
+                    control = document.createElement('input');
+                    control.className = 'val';
+                    control.id = 'add_' + f.name;
+                    control.name = f.name;
+                    control.type = f.type || 'text';
+                    if (f.required) {
+                        control.required = true;
+                    }
+                    if (f.min != null) {
+                        control.min = f.min;
+                    }
+                    if (f.step != null) {
+                        control.step = f.step;
+                    }
+                    if (f.maxLength != null) {
+                        control.maxLength = f.maxLength;
+                    }
                 }
 
                 wrapper.appendChild(lbl);
-                wrapper.appendChild(input);
+                wrapper.appendChild(control);
                 fieldsContainer.appendChild(wrapper);
             });
+
+            // Gestion conditionnelle couleur_autre (toner)
+            const couleurSelect = document.getElementById('add_couleur');
+            const couleurAutreWrapper = fieldsContainer.querySelector('[data-show-when="couleur"]');
+            if (couleurSelect && couleurAutreWrapper) {
+                function toggleCouleurAutre() {
+                    const isAutre = couleurSelect.value === 'Autre';
+                    couleurAutreWrapper.style.display = isAutre ? '' : 'none';
+                    const autreInput = document.getElementById('add_couleur_autre');
+                    if (autreInput) {
+                        autreInput.required = isAutre;
+                    }
+                }
+                couleurSelect.addEventListener('change', toggleCouleurAutre);
+                toggleCouleurAutre();
+            }
         }
 
         function openModal(type) {
@@ -2093,6 +2141,14 @@ $sectionImages = [
                     formData.forEach(function(v, k) {
                         payload[k] = v;
                     });
+
+                    // Toner : si couleur = "Autre", utiliser couleur_autre
+                    if (currentType === 'toner' && payload.couleur === 'Autre') {
+                        payload.couleur = (payload.couleur_autre || '').trim();
+                        delete payload.couleur_autre;
+                    } else if (currentType === 'toner') {
+                        delete payload.couleur_autre;
+                    }
 
                     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
                     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';

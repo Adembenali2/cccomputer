@@ -264,9 +264,28 @@ try {
         case 'toner':
             $marque  = trim($payload['marque']  ?? '');
             $modele  = trim($payload['modele']  ?? '');
-            $couleur = trim($payload['couleur'] ?? '');
+            $couleurRaw = trim($payload['couleur'] ?? '');
+            $couleurAutre = trim($payload['couleur_autre'] ?? '');
             $qty     = (int)($payload['qty_delta'] ?? 0);
             $ref     = trim($payload['reference'] ?? '');
+
+            $allowedCouleurs = ['Noir', 'Cyan', 'Magenta', 'Jaune'];
+            if ($couleurRaw === 'Autre') {
+                if ($couleurAutre === '') {
+                    throw new RuntimeException('Veuillez préciser la couleur lorsque vous sélectionnez "Autre".');
+                }
+                $couleur = $couleurAutre;
+            } elseif (in_array($couleurRaw, $allowedCouleurs, true)) {
+                $couleur = $couleurRaw;
+            } elseif ($couleurRaw !== '') {
+                $couleur = $couleurRaw;
+            } else {
+                throw new RuntimeException('Veuillez sélectionner une couleur (Noir, Cyan, Magenta, Jaune ou Autre).');
+            }
+
+            if (strlen($couleur) > 50) {
+                throw new RuntimeException('La couleur ne doit pas dépasser 50 caractères.');
+            }
 
             if ($marque === '' || $modele === '' || $couleur === '' || $qty === 0) {
                 throw new RuntimeException('Champs obligatoires manquants (marque, modèle, couleur, quantité).');
