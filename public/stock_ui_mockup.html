@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock UI Mockup — Tabs + Drawer + Toasts</title>
+  <link rel="stylesheet" href="/assets/css/main.css" />
+  <link rel="stylesheet" href="/assets/css/stock.css" />
+  <link rel="stylesheet" href="/assets/css/stock-ui-pro.css" />
+</head>
+<body>
+  <div class="page-container stock-page">
+    <!-- A) Header sticky -->
+    <header class="stock-header">
+      <h1 class="stock-header-title">Stock</h1>
+      <div class="stock-header-search">
+        <input type="search" id="search-input" placeholder="Rechercher..." aria-label="Rechercher dans le stock" />
+      </div>
+      <div class="stock-header-actions">
+        <button type="button" class="btn btn-primary">+ Ajouter</button>
+        <button type="button" class="btn btn-secondary">Export</button>
+        <button type="button" class="btn btn-secondary">Scan</button>
+      </div>
+    </header>
+
+    <!-- B) Tabs -->
+    <div class="stock-tabs">
+      <div role="tablist" aria-label="Types de stock">
+        <button role="tab" id="tab-photocopieurs" aria-selected="false" aria-controls="panel-photocopieurs">
+          Photocopieurs
+        </button>
+        <button role="tab" id="tab-papier" aria-selected="true" aria-controls="panel-papier">
+          Papier
+        </button>
+        <button role="tab" id="tab-toners" aria-selected="false" aria-controls="panel-toners">
+          Toners
+        </button>
+        <button role="tab" id="tab-lcd" aria-selected="false" aria-controls="panel-lcd">
+          LCD
+        </button>
+        <button role="tab" id="tab-pc" aria-selected="false" aria-controls="panel-pc">
+          PC
+        </button>
+      </div>
+    </div>
+
+    <!-- C) Contenu tab -->
+    <div class="stock-tabpanels">
+      <!-- Panel Papier (actif pour démo) -->
+      <div role="tabpanel" id="panel-papier" data-active="true" aria-labelledby="tab-papier">
+        <div class="stock-kpi-row">
+          <div class="stock-kpi-card">
+            <span class="stock-kpi-card__label">Stock total</span>
+            <span class="stock-kpi-card__value">142</span>
+          </div>
+          <div class="stock-kpi-card" data-warning="true">
+            <span class="stock-kpi-card__label">Stock faible</span>
+            <span class="stock-kpi-card__value">3</span>
+          </div>
+          <div class="stock-kpi-card">
+            <span class="stock-kpi-card__label">Entrées 30j</span>
+            <span class="stock-kpi-card__value">28</span>
+          </div>
+          <div class="stock-kpi-card">
+            <span class="stock-kpi-card__label">Sorties 30j</span>
+            <span class="stock-kpi-card__value">15</span>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="tbl-stock" role="table">
+            <thead>
+              <tr>
+                <th scope="col" class="col-number">Qté</th>
+                <th scope="col" class="col-text">Modèle</th>
+                <th scope="col" class="col-text">Poids</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-type="papier" data-id="1" role="button" tabindex="0" class="clickable-row">
+                <td class="col-number"><span class="stock-badge stock-badge--ok">24</span></td>
+                <td class="col-text">Xerox Premier A4</td>
+                <td class="col-text">80 g/m²</td>
+              </tr>
+              <tr data-type="papier" data-id="2" role="button" tabindex="0" class="clickable-row">
+                <td class="col-number"><span class="stock-badge stock-badge--low">4</span></td>
+                <td class="col-text">Canon Red Label</td>
+                <td class="col-text">90 g/m²</td>
+              </tr>
+              <tr data-type="papier" data-id="3" role="button" tabindex="0" class="clickable-row">
+                <td class="col-number"><span class="stock-badge stock-badge--zero">0</span></td>
+                <td class="col-text">HP Multipurpose</td>
+                <td class="col-text">75 g/m²</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Autres panels (masqués) -->
+      <div role="tabpanel" id="panel-photocopieurs" data-active="false" aria-labelledby="tab-photocopieurs" hidden>
+        <p>Contenu Photocopieurs (vide pour la maquette)</p>
+      </div>
+      <div role="tabpanel" id="panel-toners" data-active="false" aria-labelledby="tab-toners" hidden>
+        <p>Contenu Toners (vide pour la maquette)</p>
+      </div>
+      <div role="tabpanel" id="panel-lcd" data-active="false" aria-labelledby="tab-lcd" hidden>
+        <p>Contenu LCD (vide pour la maquette)</p>
+      </div>
+      <div role="tabpanel" id="panel-pc" data-active="false" aria-labelledby="tab-pc" hidden>
+        <p>Contenu PC (vide pour la maquette)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drawer (side panel) -->
+  <div class="stock-drawer" id="stockDrawer" aria-modal="true" aria-labelledby="drawerTitle">
+    <div class="stock-drawer-backdrop" id="drawerBackdrop"></div>
+    <div class="stock-drawer-panel">
+      <div class="stock-drawer-header">
+        <h2 id="drawerTitle">Xerox Premier A4 — Papier</h2>
+        <button type="button" class="stock-drawer-close" id="drawerClose" aria-label="Fermer">
+          ×
+        </button>
+      </div>
+      <div class="stock-drawer-tabs">
+        <button role="tab" id="drawer-tab-details" aria-selected="true" aria-controls="drawer-panel-details">
+          Détails
+        </button>
+        <button role="tab" id="drawer-tab-mouvements" aria-selected="false" aria-controls="drawer-panel-mouvements">
+          Mouvements
+        </button>
+        <button role="tab" id="drawer-tab-actions" aria-selected="false" aria-controls="drawer-panel-actions">
+          Actions
+        </button>
+        <button role="tab" id="drawer-tab-etiquettes" aria-selected="false" aria-controls="drawer-panel-etiquettes">
+          Étiquettes
+        </button>
+      </div>
+      <div class="stock-drawer-content">
+        <div role="tabpanel" id="drawer-panel-details" data-active="true">
+          <dl class="detail-grid">
+            <dt>Marque</dt><dd>Xerox</dd>
+            <dt>Modèle</dt><dd>Premier A4</dd>
+            <dt>Poids</dt><dd>80 g/m²</dd>
+            <dt>Quantité</dt><dd><strong>24</strong></dd>
+          </dl>
+        </div>
+        <div role="tabpanel" id="drawer-panel-mouvements" data-active="false">
+          <p>Derniers 20 mouvements (à brancher sur API)</p>
+          <ul style="list-style:none; padding:0;">
+            <li style="padding:0.5rem 0; border-bottom:1px solid var(--border-color);">+10 — achat — 02/03/2025</li>
+            <li style="padding:0.5rem 0; border-bottom:1px solid var(--border-color);">-5 — sortie — 01/03/2025</li>
+          </ul>
+        </div>
+        <div role="tabpanel" id="drawer-panel-actions" data-active="false">
+          <p>Formulaire Entrée/Sortie/Ajustement (paper_move.php)</p>
+          <form id="moveForm" style="display:flex; flex-direction:column; gap:0.75rem;">
+            <label>Type <select><option>Entrée</option><option>Sortie</option><option>Ajustement</option></select></label>
+            <label>Quantité <input type="number" min="1" value="1" /></label>
+            <label>Référence <input type="text" placeholder="BL, facture..." /></label>
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+          </form>
+        </div>
+        <div role="tabpanel" id="drawer-panel-etiquettes" data-active="false">
+          <button type="button" class="btn btn-primary">🖨️ Imprimer étiquettes (24)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container"></div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    // ===== Tabs principaux =====
+    const tabIds = ['photocopieurs', 'papier', 'toners', 'lcd', 'pc'];
+    tabIds.forEach(function(id) {
+      const tab = document.getElementById('tab-' + id);
+      const panel = document.getElementById('panel-' + id);
+      if (!tab || !panel) return;
+
+      tab.addEventListener('click', function() {
+        tabIds.forEach(function(otherId) {
+          const t = document.getElementById('tab-' + otherId);
+          const p = document.getElementById('panel-' + otherId);
+          if (t) { t.setAttribute('aria-selected', 'false'); }
+          if (p) { p.setAttribute('data-active', 'false'); p.hidden = true; }
+        });
+        tab.setAttribute('aria-selected', 'true');
+        panel.setAttribute('data-active', 'true');
+        panel.hidden = false;
+      });
+    });
+
+    // ===== Drawer =====
+    const drawer = document.getElementById('stockDrawer');
+    const drawerBackdrop = document.getElementById('drawerBackdrop');
+    const drawerClose = document.getElementById('drawerClose');
+
+    function openDrawer() {
+      drawer.classList.add('is-open');
+      drawerClose.focus();
+    }
+
+    function closeDrawer() {
+      drawer.classList.remove('is-open');
+    }
+
+    drawerBackdrop.addEventListener('click', closeDrawer);
+    drawerClose.addEventListener('click', closeDrawer);
+
+    document.querySelectorAll('.clickable-row').forEach(function(row) {
+      row.addEventListener('click', openDrawer);
+      row.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDrawer(); }
+      });
+    });
+
+    // ===== Tabs drawer =====
+    const drawerTabIds = ['details', 'mouvements', 'actions', 'etiquettes'];
+    drawerTabIds.forEach(function(id) {
+      const tab = document.getElementById('drawer-tab-' + id);
+      const panel = document.getElementById('drawer-panel-' + id);
+      if (!tab || !panel) return;
+
+      tab.addEventListener('click', function() {
+        drawerTabIds.forEach(function(otherId) {
+          const t = document.getElementById('drawer-tab-' + otherId);
+          const p = document.getElementById('drawer-panel-' + otherId);
+          if (t) t.setAttribute('aria-selected', 'false');
+          if (p) p.setAttribute('data-active', 'false');
+        });
+        tab.setAttribute('aria-selected', 'true');
+        panel.setAttribute('data-active', 'true');
+      });
+    });
+
+    // ===== Toasts =====
+    function showToast(message, type) {
+      type = type || 'info';
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'stock-toast stock-toast--' + type;
+      toast.setAttribute('role', 'status');
+      toast.setAttribute('aria-live', 'polite');
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(function() {
+        toast.classList.add('is-exiting');
+        setTimeout(function() {
+          toast.remove();
+        }, 250);
+      }, 4000);
+    }
+
+    // Démo : boutons pour tester les toasts
+    document.querySelector('.stock-header-actions .btn-primary').addEventListener('click', function() {
+      showToast('Produit ajouté avec succès', 'success');
+    });
+    document.querySelector('.stock-header-actions .btn-secondary').addEventListener('click', function() {
+      showToast('Export en cours...', 'info');
+    });
+
+    document.getElementById('moveForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      showToast('Mouvement enregistré', 'success');
+    });
+  })();
+  </script>
+</body>
+</html>
