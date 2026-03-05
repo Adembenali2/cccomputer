@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('paiements', []); // Accessible à tous les utilisateurs connectés
+ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire paiement)
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -2347,6 +2348,7 @@ authorize_page('paiements', []); // Accessible à tous les utilisateurs connect�
             </div>
             <div class="modal-body">
                 <form id="payerForm" onsubmit="submitPayerForm(event)">
+                    <input type="hidden" name="csrf_token" value="<?= h($_SESSION['csrf_token'] ?? '') ?>">
                     <div class="modal-form-group">
                         <label for="payerFacture">Facture <span style="color: #ef4444;">*</span></label>
                         <select id="payerFacture" name="facture_id" required>

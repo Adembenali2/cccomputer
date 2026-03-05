@@ -11,6 +11,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
 
+// Vérification CSRF (accepte token via POST ou header X-CSRF-Token pour fetch)
+$csrfToken = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+$csrfSession = $_SESSION['csrf_token'] ?? '';
+if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrfToken)) {
+    jsonResponse(['ok' => false, 'error' => 'Token CSRF invalide'], 403);
+}
+
 try {
     $pdo = getPdo();
     $userId = currentUserId();
