@@ -198,6 +198,98 @@ try {
             $data['couleur'][] = $col;
             $data['total_pages'][] = $tp;
         }
+
+        $currentYear = (int)date('Y');
+        $currentMonth = (int)date('n');
+        if ($annee === $currentYear && $currentMonth >= 1 && $currentMonth <= 12) {
+            $dateStartCur = sprintf('%04d-%02d-01', $currentYear, $currentMonth);
+            $prevMonth = $currentMonth - 1;
+            $prevYear = $currentYear;
+            if ($prevMonth < 1) {
+                $prevMonth = 12;
+                $prevYear--;
+            }
+            $dateStartCurExtended = sprintf('%04d-%02d-01', $prevYear, $prevMonth);
+            $today = date('Y-m-d');
+            $daysInMonth = (int)date('t', mktime(0, 0, 0, $currentMonth, 1, $currentYear));
+            $daysElapsed = (int)date('j');
+
+            $sqlCur = "
+                WITH raw AS (
+                    SELECT r.Timestamp, r.mac_norm, r.TotalPages, r.TotalBW, r.TotalColor
+                    FROM compteur_relevee r
+                    INNER JOIN photocopieurs_clients pc ON r.mac_norm = pc.mac_norm
+                    WHERE r.mac_norm IS NOT NULL AND r.mac_norm != ''
+                      AND r.Timestamp >= :date_extended AND r.Timestamp <= :date_end_cur
+                      " . $clientFilter . "
+                    UNION ALL
+                    SELECT r.Timestamp, r.mac_norm, r.TotalPages, r.TotalBW, r.TotalColor
+                    FROM compteur_relevee_ancien r
+                    INNER JOIN photocopieurs_clients pc ON r.mac_norm = pc.mac_norm
+                    WHERE r.mac_norm IS NOT NULL AND r.mac_norm != ''
+                      AND r.Timestamp >= :date_extended2 AND r.Timestamp <= :date_end_cur2
+                      " . str_replace(':id_client', ':id_client_cur', $clientFilter) . "
+                ),
+                last_per_day AS (
+                    SELECT mac_norm, DATE(Timestamp) AS date_jour,
+                           TotalPages, TotalBW, TotalColor,
+                           ROW_NUMBER() OVER (PARTITION BY mac_norm, DATE(Timestamp) ORDER BY Timestamp DESC) AS rn
+                    FROM raw
+                ),
+                one_per_day AS (
+                    SELECT mac_norm, date_jour, TotalPages AS tp, TotalBW AS tb, TotalColor AS tc
+                    FROM last_per_day WHERE rn = 1
+                ),
+                with_prev AS (
+                    SELECT mac_norm, date_jour, tp, tb, tc,
+                           COALESCE(tp, tb + tc) AS tp_safe,
+                           LAG(COALESCE(tp, tb + tc)) OVER (PARTITION BY mac_norm ORDER BY date_jour) AS prev_tp,
+                           LAG(tb) OVER (PARTITION BY mac_norm ORDER BY date_jour) AS prev_tb,
+                           LAG(tc) OVER (PARTITION BY mac_norm ORDER BY date_jour) AS prev_tc
+                    FROM one_per_day
+                ),
+                deltas AS (
+                    SELECT date_jour,
+                           COALESCE(SUM(CASE WHEN prev_tp IS NULL THEN 0 ELSE GREATEST(0, tp_safe - prev_tp) END), 0) AS total_pages,
+                           COALESCE(SUM(CASE WHEN prev_tb IS NULL THEN 0 ELSE GREATEST(0, tb - prev_tb) END), 0) AS total_noir_blanc,
+                           COALESCE(SUM(CASE WHEN prev_tc IS NULL THEN 0 ELSE GREATEST(0, tc - prev_tc) END), 0) AS total_couleur
+                    FROM with_prev
+                    GROUP BY date_jour
+                )
+                SELECT SUM(total_pages) AS total, SUM(total_noir_blanc) AS nb, SUM(total_couleur) AS couleur
+                FROM deltas
+                WHERE date_jour >= :date_start_cur AND date_jour <= :today
+            ";
+            $paramsCur = [
+                ':date_extended' => $dateStartCurExtended,
+                ':date_extended2' => $dateStartCurExtended,
+                ':date_start_cur' => $dateStartCur,
+                ':date_end_cur' => $today . ' 23:59:59',
+                ':date_end_cur2' => $today . ' 23:59:59',
+                ':today' => $today
+            ];
+            if ($idClient !== null && $idClient > 0) {
+                $paramsCur[':id_client'] = $idClient;
+                $paramsCur[':id_client_cur'] = $idClient;
+            }
+            $stmtCur = $pdo->prepare($sqlCur);
+            $stmtCur->execute($paramsCur);
+            $rowCur = $stmtCur->fetch(PDO::FETCH_ASSOC);
+            $totalSoFar = (int)($rowCur['total'] ?? 0);
+            $nbSoFar = (int)($rowCur['nb'] ?? 0);
+            $couleurSoFar = (int)($rowCur['couleur'] ?? 0);
+            if ($totalSoFar === 0 && ($nbSoFar > 0 || $couleurSoFar > 0)) {
+                $totalSoFar = $nbSoFar + $couleurSoFar;
+            }
+            $data['current_month_so_far'] = [
+                'total' => $totalSoFar,
+                'nb' => $nbSoFar,
+                'couleur' => $couleurSoFar,
+                'days_elapsed' => $daysElapsed,
+                'days_in_month' => $daysInMonth,
+                'as_of_date' => date('d/m/Y', strtotime($today))
+            ];
+        }
     } else {
         if ($mois !== null && $mois > 0 && $annee !== null && $annee > 0) {
             $lastDay = (int)date('t', mktime(0, 0, 0, (int)$mois, 1, (int)$annee));

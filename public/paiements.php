@@ -6557,18 +6557,25 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         }
 
         /**
-         * Calcule l'estimation mois prochain (moyenne mobile 3 derniers mois non nuls)
+         * Calcule l'estimation mois prochain (moyenne mobile 3 derniers mois complets non nuls)
+         * @param {number[]} totals - données mensuelles
+         * @param {number} excludeFromIndex - exclure les mois à partir de cet index (ex: mois courant)
+         * @param {number|null} currentMonthEstimate - estimation fin mois courant pour pondération
          */
-        function computeEstimate(totals) {
-            if (!totals || totals.length === 0) return null;
-            const nonZero = totals.filter(v => v > 0);
+        function computeNextMonthEstimate(totals, excludeFromIndex = totals.length, currentMonthEstimate = null) {
+            const slice = totals.slice(0, excludeFromIndex);
+            const nonZero = slice.filter(v => v > 0);
             if (nonZero.length < 2) return null;
             const last3 = nonZero.slice(-3);
-            return Math.round(last3.reduce((a, b) => a + b, 0) / last3.length);
+            const avg = last3.reduce((a, b) => a + b, 0) / last3.length;
+            if (currentMonthEstimate !== null && currentMonthEstimate > 0) {
+                return Math.round(0.7 * avg + 0.3 * currentMonthEstimate);
+            }
+            return Math.round(avg);
         }
 
         /**
-         * Met à jour le graphique (Total + N&B + Couleur + Estimation sur Total en mensuel)
+         * Met à jour le graphique (Total + N&B + Couleur + Est. fin mois + Est. mois prochain)
          */
         function updateChart(data) {
             const ctx = document.getElementById('statsChart').getContext('2d');
@@ -6599,9 +6606,40 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             }
 
             const moisNoms = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-            let estimateValue = isMonthly ? computeEstimate(totalData) : null;
+            const anneeFilter = parseInt(document.getElementById('filterAnnee')?.value || new Date().getFullYear());
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth() + 1;
+
             let chartSubtitle = isMonthly ? 'Pages par mois' : 'Pages par jour';
-            if (isMonthly && estimateValue === null && totalData.length > 0) {
+            let finalLabels = [...labelsTrimmed];
+            let estFinMoisData = null;
+            let estMoisProchainData = null;
+            let estimateEndOfMonth = null;
+            let estimateNextMonth = null;
+            let idxCurrentMonth = currentMonth - 1;
+            let currentMonthSoFar = data.current_month_so_far || null;
+
+            if (isMonthly && anneeFilter === currentYear && idxCurrentMonth < len) {
+                if (currentMonthSoFar && currentMonthSoFar.days_elapsed >= 7 && currentMonthSoFar.total > 0) {
+                    const runRate = currentMonthSoFar.total / currentMonthSoFar.days_elapsed;
+                    estimateEndOfMonth = Math.round(runRate * currentMonthSoFar.days_in_month);
+                    estimateEndOfMonth = Math.max(estimateEndOfMonth, currentMonthSoFar.total);
+                    estFinMoisData = Array(len).fill(null);
+                    estFinMoisData[idxCurrentMonth] = estimateEndOfMonth;
+                }
+            }
+
+            const excludeIdx = (anneeFilter === currentYear && idxCurrentMonth < len) ? idxCurrentMonth : len;
+            estimateNextMonth = computeNextMonthEstimate(totalData, excludeIdx, estimateEndOfMonth);
+
+            if (estimateNextMonth !== null) {
+                finalLabels.push(moisNoms[1] + ' ' + (anneeFilter + 1) + ' (est.)');
+                const lastRealOrEst = estimateEndOfMonth ?? totalData[totalData.length - 1] ?? 0;
+                estMoisProchainData = Array(len - 1).fill(null).concat([lastRealOrEst, estimateNextMonth]);
+            }
+
+            if (isMonthly && !estFinMoisData && estimateNextMonth === null && totalData.length > 0) {
                 chartSubtitle = 'Pages par mois (estimation indisponible)';
             }
 
@@ -6610,21 +6648,10 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             if (titleEl) titleEl.textContent = chartTitle;
             if (subtitleEl) subtitleEl.textContent = chartSubtitle;
 
-            let finalLabels = [...labelsTrimmed];
-            let estimationData = null;
-
-            if (isMonthly && estimateValue !== null) {
-                const annee = parseInt(document.getElementById('filterAnnee')?.value || new Date().getFullYear());
-                const nextMois = 1;
-                const nextY = annee + 1;
-                finalLabels.push(moisNoms[nextMois] + ' ' + nextY + ' (est.)');
-                const lastReal = totalData[totalData.length - 1] ?? 0;
-                estimationData = Array(len - 1).fill(null).concat([lastReal, estimateValue]);
-            }
-
-            const mainTotalData = estimationData ? [...totalData, null] : totalData;
-            const mainNbData = estimationData ? [...nbData, null] : nbData;
-            const mainCouleurData = estimationData ? [...couleurData, null] : couleurData;
+            const hasNextMonthLabel = estMoisProchainData !== null;
+            const mainTotalData = hasNextMonthLabel ? [...totalData, null] : totalData;
+            const mainNbData = hasNextMonthLabel ? [...nbData, null] : nbData;
+            const mainCouleurData = hasNextMonthLabel ? [...couleurData, null] : couleurData;
 
             const datasets = [
                 {
@@ -6668,22 +6695,42 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 }
             ];
 
-            if (estimationData) {
+            if (estFinMoisData) {
+                const moisLabel = moisNoms[currentMonth] + ' ' + currentYear;
                 datasets.push({
                     type: 'line',
-                    label: 'Estimation',
-                    data: estimationData,
+                    label: 'Est. fin mois (' + moisLabel + ')',
+                    data: estFinMoisData,
                     borderColor: 'rgba(245, 158, 11, 0.9)',
                     backgroundColor: 'transparent',
                     borderWidth: 2,
                     borderDash: [6, 4],
                     fill: false,
-                    tension: 0.35,
-                    pointRadius: estimationData.map((_, i) => i === estimationData.length - 1 ? 4 : 0),
-                    pointHoverRadius: 4,
+                    tension: 0,
+                    pointRadius: estFinMoisData.map((_, i) => i === idxCurrentMonth ? 5 : 0),
+                    pointHoverRadius: 5,
                     pointStyle: 'triangle',
                     pointBackgroundColor: 'rgba(245, 158, 11, 0.9)',
                     pointBorderColor: 'rgba(245, 158, 11, 0.9)',
+                    pointBorderWidth: 2
+                });
+            }
+            if (estMoisProchainData) {
+                datasets.push({
+                    type: 'line',
+                    label: 'Est. mois prochain',
+                    data: estMoisProchainData,
+                    borderColor: 'rgba(168, 85, 247, 0.9)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    fill: false,
+                    tension: 0.35,
+                    pointRadius: estMoisProchainData.map((_, i) => i === estMoisProchainData.length - 1 ? 5 : 0),
+                    pointHoverRadius: 5,
+                    pointStyle: 'star',
+                    pointBackgroundColor: 'rgba(168, 85, 247, 0.9)',
+                    pointBorderColor: 'rgba(168, 85, 247, 0.9)',
                     pointBorderWidth: 2
                 });
             }
@@ -6777,20 +6824,31 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                                 label: function(ctx) {
                                     const v = ctx.parsed.y;
                                     if (v == null) return '';
-                                    const isEstPoint = ctx.dataset.label === 'Estimation' && ctx.dataIndex === ctx.dataset.data.length - 1;
-                                    if (isEstPoint) return 'Total estimé: ' + fmt(v) + ' pages';
-                                    if (ctx.dataset.label === 'Estimation') return '';
+                                    const lbl = ctx.dataset.label || '';
+                                    if (lbl.startsWith('Est. fin mois')) return 'Total estimé: ' + fmt(v) + ' pages';
+                                    if (lbl.startsWith('Est. mois prochain') && ctx.dataIndex === ctx.dataset.data.length - 1) return 'Total estimé: ' + fmt(v) + ' pages';
+                                    if (lbl.startsWith('Est.')) return '';
                                     if (ctx.dataset.label === 'Total') return 'Total: ' + fmt(v) + ' pages';
                                     if (ctx.dataset.label === 'N&B') return 'N&B: ' + fmt(v);
                                     if (ctx.dataset.label === 'Couleur') return 'Couleur: ' + fmt(v);
-                                    return (ctx.dataset.label || '') + ': ' + fmt(v);
+                                    return lbl + ': ' + fmt(v);
                                 },
                                 afterBody: function(ctx) {
-                                    const isEst = ctx[0]?.dataset?.label === 'Estimation' && ctx[0]?.dataIndex === chartLabels.length - 1;
-                                    return isEst ? '(estimation)' : '';
+                                    const lbl = ctx[0]?.dataset?.label || '';
+                                    const i = ctx[0]?.dataIndex;
+                                    if (lbl.startsWith('Est. fin mois') && currentMonthSoFar) {
+                                        return 'au ' + currentMonthSoFar.as_of_date + ' - projection fin de mois';
+                                    }
+                                    if (lbl.startsWith('Est. mois prochain') && i === chartLabels.length - 1) {
+                                        return '(estimation)';
+                                    }
+                                    return '';
                                 },
                                 title: function(ctx) {
                                     const i = ctx[0]?.dataIndex;
+                                    const lbl = ctx[0]?.dataset?.label || '';
+                                    if (lbl.startsWith('Est. fin mois')) return (chartDatesFull[idxCurrentMonth] || chartLabels[idxCurrentMonth] || '') + ' (est. fin de mois)';
+                                    if (lbl.startsWith('Est. mois prochain') && i === chartLabels.length - 1) return chartLabels[i] || '';
                                     return chartDatesFull[i] || chartLabels[i] || '';
                                 }
                             }
