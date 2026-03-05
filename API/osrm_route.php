@@ -6,6 +6,11 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('html_errors', 0);
 
+// Authentification requise pour éviter l'abus du proxy
+require_once __DIR__ . '/../includes/api_helpers.php';
+initApi();
+requireApiAuth();
+
 if (!headers_sent()) {
     header('Content-Type: application/json; charset=utf-8');
     // Autoriser CORS pour le domaine de production
