@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../includes/api_helpers.php';
 initApi();
 requireApiAuth();
+$pdo = getPdoOrFail();
 
 $query = trim($_GET['q'] ?? '');
 $limit = min((int)($_GET['limit'] ?? 10), 20);
