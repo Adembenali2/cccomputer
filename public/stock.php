@@ -148,25 +148,31 @@ try {
 }
 
 // ====================================================================
-// RÉCUPÉRATION DU PAPIER
+// RÉCUPÉRATION DU PAPIER (avec barcode pour recherche)
 // ====================================================================
 $papers = safeFetchAll(
     $pdo,
-    "SELECT paper_id, marque, modele, poids, qty_stock 
-     FROM v_paper_stock 
-     ORDER BY marque, modele, poids",
+    "SELECT c.id AS paper_id, c.marque, c.modele, c.poids, c.barcode,
+            COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+     FROM paper_catalog c
+     LEFT JOIN paper_moves m ON m.paper_id = c.id
+     GROUP BY c.id, c.marque, c.modele, c.poids, c.barcode
+     ORDER BY c.marque, c.modele, c.poids",
     [],
     'stock_papier'
 );
 
 // ====================================================================
-// RÉCUPÉRATION DES TONERS
+// RÉCUPÉRATION DES TONERS (avec barcode pour recherche)
 // ====================================================================
 $tonersRaw = safeFetchAll(
     $pdo,
-    "SELECT toner_id, marque, modele, couleur, qty_stock 
-     FROM v_toner_stock 
-     ORDER BY marque, modele, couleur",
+    "SELECT t.id AS toner_id, t.marque, t.modele, t.couleur, t.barcode,
+            COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+     FROM toner_catalog t
+     LEFT JOIN toner_moves m ON m.toner_id = t.id
+     GROUP BY t.id, t.marque, t.modele, t.couleur, t.barcode
+     ORDER BY t.marque, t.modele, t.couleur",
     [],
     'stock_toner'
 );
@@ -178,18 +184,22 @@ foreach ($tonersRaw as $r) {
         'marque' => $r['marque'] ?? '',
         'modele' => $r['modele'] ?? '',
         'couleur' => $r['couleur'] ?? '',
+        'barcode' => $r['barcode'] ?? '',
         'qty' => (int)($r['qty_stock'] ?? 0),
     ];
 }
 
 // ====================================================================
-// RÉCUPÉRATION DES LCD
+// RÉCUPÉRATION DES LCD (avec barcode pour recherche)
 // ====================================================================
 $lcdRaw = safeFetchAll(
     $pdo,
-    "SELECT lcd_id, marque, reference, etat, modele, taille, resolution, connectique, prix, qty_stock 
-     FROM v_lcd_stock 
-     ORDER BY marque, modele, taille",
+    "SELECT l.id AS lcd_id, l.marque, l.reference, l.etat, l.modele, l.taille, l.resolution, l.connectique, l.prix, l.barcode,
+            COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+     FROM lcd_catalog l
+     LEFT JOIN lcd_moves m ON m.lcd_id = l.id
+     GROUP BY l.id, l.marque, l.reference, l.etat, l.modele, l.taille, l.resolution, l.connectique, l.prix, l.barcode
+     ORDER BY l.marque, l.modele, l.taille",
     [],
     'stock_lcd'
 );
@@ -206,18 +216,22 @@ foreach ($lcdRaw as $r) {
         'resolution' => $r['resolution'] ?? '',
         'connectique' => $r['connectique'] ?? '',
         'prix' => isset($r['prix']) && $r['prix'] !== null ? (float)$r['prix'] : null,
+        'barcode' => $r['barcode'] ?? '',
         'qty' => (int)($r['qty_stock'] ?? 0),
     ];
 }
 
 // ====================================================================
-// RÉCUPÉRATION DES PC
+// RÉCUPÉRATION DES PC (avec barcode pour recherche)
 // ====================================================================
 $pcRaw = safeFetchAll(
     $pdo,
-    "SELECT pc_id, etat, reference, marque, modele, cpu, ram, stockage, os, gpu, reseau, ports, prix, qty_stock 
-     FROM v_pc_stock 
-     ORDER BY marque, modele, reference",
+    "SELECT p.id AS pc_id, p.etat, p.reference, p.marque, p.modele, p.cpu, p.ram, p.stockage, p.os, p.gpu, p.reseau, p.ports, p.prix, p.barcode,
+            COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+     FROM pc_catalog p
+     LEFT JOIN pc_moves m ON m.pc_id = p.id
+     GROUP BY p.id, p.etat, p.reference, p.marque, p.modele, p.cpu, p.ram, p.stockage, p.os, p.gpu, p.reseau, p.ports, p.prix, p.barcode
+     ORDER BY p.marque, p.modele, p.reference",
     [],
     'stock_pc'
 );
@@ -238,6 +252,7 @@ foreach ($pcRaw as $r) {
         'reseau' => $r['reseau'] ?? '',
         'ports' => $r['ports'] ?? '',
         'prix' => isset($r['prix']) && $r['prix'] !== null ? (float)$r['prix'] : null,
+        'barcode' => $r['barcode'] ?? '',
         'qty' => (int)($r['qty_stock'] ?? 0),
     ];
 }
@@ -296,6 +311,7 @@ foreach ($papers as $p) {
         'marque' => $p['marque'] ?? '',
         'modele' => $p['modele'] ?? '',
         'poids' => $p['poids'] ?? '',
+        'barcode' => $p['barcode'] ?? '',
         'qty' => (int)($p['qty_stock'] ?? 0),
         'qty_stock' => (int)($p['qty_stock'] ?? 0),
     ];
@@ -909,36 +925,27 @@ $sectionImages = [
         </div>
     <?php endif; ?>
 
-    <!-- Statistiques globales -->
-    <section class="stock-meta" aria-label="Statistiques du stock">
-        <div class="meta-card" data-type="papier">
-            <div class="meta-card-icon">📄</div>
-            <span class="meta-card-label">Total Papier</span>
-            <strong class="meta-card-value"><?= h((string)$totalPapier) ?></strong>
+    <!-- Mini dashboard (2 cards) -->
+    <?php $totalStock = $totalPapier + $totalToners + $totalLCD + $totalPC; ?>
+    <section class="stock-dashboard-mini" aria-label="Vue d'ensemble du stock">
+        <div class="dashboard-card dashboard-card-total">
+            <span class="dashboard-card-label">Stock total</span>
+            <strong class="dashboard-card-value"><?= h((string)$totalStock) ?></strong>
         </div>
-        <div class="meta-card" data-type="toners">
-            <div class="meta-card-icon">🖨️</div>
-            <span class="meta-card-label">Total Toners</span>
-            <strong class="meta-card-value"><?= h((string)$totalToners) ?></strong>
+        <div class="dashboard-card dashboard-card-low <?= $nbStockFaible > 0 ? 'has-low' : '' ?>">
+            <span class="dashboard-card-label">Articles en stock faible</span>
+            <strong class="dashboard-card-value"><?= h((string)$nbStockFaible) ?></strong>
         </div>
-        <div class="meta-card" data-type="lcd">
-            <div class="meta-card-icon">🖥️</div>
-            <span class="meta-card-label">Total LCD</span>
-            <strong class="meta-card-value"><?= h((string)$totalLCD) ?></strong>
-        </div>
-        <div class="meta-card" data-type="pc">
-            <div class="meta-card-icon">💻</div>
-            <span class="meta-card-label">Total PC</span>
-            <strong class="meta-card-value"><?= h((string)$totalPC) ?></strong>
-        </div>
-        <?php if ($nbStockFaible > 0): ?>
-            <div class="meta-card meta-warning" data-type="warning">
-                <div class="meta-card-icon">⚠️</div>
-                <span class="meta-card-label">Stock faible</span>
-                <strong class="meta-card-value"><?= h((string)$nbStockFaible) ?></strong>
-            </div>
-        <?php endif; ?>
     </section>
+
+    <!-- Onglets -->
+    <div class="stock-tabs" role="tablist" aria-label="Types de produits">
+        <button type="button" class="stock-tab" role="tab" aria-selected="false" data-tab="copiers" id="tab-copiers">Photocopieurs</button>
+        <button type="button" class="stock-tab" role="tab" aria-selected="false" data-tab="papier" id="tab-papier">Papier</button>
+        <button type="button" class="stock-tab" role="tab" aria-selected="false" data-tab="toners" id="tab-toners">Toners</button>
+        <button type="button" class="stock-tab" role="tab" aria-selected="false" data-tab="lcd" id="tab-lcd">LCD</button>
+        <button type="button" class="stock-tab" role="tab" aria-selected="false" data-tab="pc" id="tab-pc">PC</button>
+    </div>
 
     <!-- Barre de recherche - Pleine largeur -->
     <div class="search-bar-full">
@@ -946,7 +953,7 @@ $sectionImages = [
             type="text" 
             id="q" 
             class="search-input-full"
-            placeholder="Rechercher dans le stock (référence, modèle, SN, MAC, CPU…)" 
+            placeholder="Rechercher (marque, modèle, référence, code-barres…)" 
             aria-label="Filtrer le stock"
             autocomplete="off" />
         <span class="search-results-count" id="searchResultsCount" style="display: none; color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;" aria-live="polite"></span>
@@ -1034,6 +1041,60 @@ $sectionImages = [
             <!-- Grille Masonry 2 colonnes -->
             <div id="stockMasonry" class="stock-masonry">
         
+        <!-- Section Photocopieurs -->
+        <section class="card-section" data-section="copiers" aria-labelledby="section-copiers-title">
+            <div class="section-head">
+                <div class="head-left">
+                    <img 
+                        src="<?= h($sectionImages['photocopieurs']) ?>" 
+                        class="section-icon" 
+                        alt="Photocopieurs" 
+                        loading="lazy" 
+                        onerror="this.style.display='none'">
+                    <h2 id="section-copiers-title" class="section-title">Photocopieurs non attribués</h2>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="tbl-stock click-rows" data-section="copiers" role="table" aria-label="Liste des photocopieurs">
+                    <colgroup>
+                        <col class="col-text">
+                        <col class="col-text">
+                        <col class="col-text">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="col-text">Modèle</th>
+                            <th scope="col" class="col-text">N° Série</th>
+                            <th scope="col" class="col-text">Statut</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($copiers)): ?>
+                            <tr>
+                                <td colspan="3" class="col-empty">
+                                    <em>Aucun photocopieur non attribué</em>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($copiers as $c): ?>
+                                <tr 
+                                    data-type="copiers" 
+                                    data-id="<?= h((string)$c['id']) ?>"
+                                    data-search="<?= h(strtolower(($c['marque'] ?? '') . ' ' . ($c['modele'] ?? '') . ' ' . ($c['sn'] ?? '') . ' ' . ($c['mac'] ?? ''))) ?>"
+                                    role="button"
+                                    tabindex="0"
+                                    aria-label="Voir les détails du photocopieur <?= h($c['modele'] ?? '') ?>">
+                                    <td class="col-text" title="<?= h($c['modele'] ?? '') ?>"><?= h($c['modele'] ?? '—') ?></td>
+                                    <td class="col-text" title="<?= h($c['sn'] ?? '') ?>"><?= h($c['sn'] ?? '—') ?></td>
+                                    <td class="col-text"><?= h($c['statut'] ?? '—') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- Section Toners -->
         <section class="card-section" data-section="toners" aria-labelledby="section-toners-title">
             <div class="section-head">
@@ -1079,16 +1140,21 @@ $sectionImages = [
                             </tr>
                         <?php else: ?>
                             <?php foreach ($toners as $t): ?>
+                                <?php 
+                                $tQty = (int)($t['qty'] ?? 0);
+                                $tBadge = $tQty === 0 ? 'stock-out' : ($tQty <= 3 ? 'stock-low' : 'stock-ok');
+                                $tSearch = strtolower(($t['marque'] ?? '') . ' ' . ($t['modele'] ?? '') . ' ' . ($t['couleur'] ?? '') . ' ' . ($t['barcode'] ?? ''));
+                                ?>
                                 <tr 
                                     data-type="toners" 
                                     data-id="<?= h((string)$t['id']) ?>"
-                                    data-search="<?= h(strtolower($t['marque'] . ' ' . $t['modele'] . ' ' . $t['couleur'])) ?>"
+                                    data-search="<?= h($tSearch) ?>"
                                     role="button"
                                     tabindex="0"
                                     aria-label="Voir les détails du toner <?= h($t['modele']) ?>">
                                     <td class="col-text" title="<?= h($t['couleur']) ?>"><?= h($t['couleur']) ?></td>
                                     <td class="col-text" title="<?= h($t['modele']) ?>"><?= h($t['modele']) ?></td>
-                                    <td class="col-number td-metric <?= (int)$t['qty'] === 0 ? 'is-zero' : '' ?>"><?= (int)$t['qty'] ?></td>
+                                    <td class="col-number td-metric stock-badge <?= h($tBadge) ?>"><?= $tQty ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -1145,15 +1211,19 @@ $sectionImages = [
                             </tr>
                         <?php else: ?>
                             <?php foreach ($papers as $p): ?>
-                                <?php if (!empty($p['paper_id'])): ?>
+                                <?php if (!empty($p['paper_id'])): 
+                                $pQty = (int)($p['qty_stock'] ?? 0);
+                                $pBadge = $pQty === 0 ? 'stock-out' : ($pQty <= 5 ? 'stock-low' : 'stock-ok');
+                                $pSearch = strtolower(($p['marque'] ?? '') . ' ' . ($p['modele'] ?? '') . ' ' . ($p['poids'] ?? '') . ' ' . ($p['barcode'] ?? ''));
+                                ?>
                                 <tr 
                                     data-type="papier" 
                                     data-id="<?= h((string)$p['paper_id']) ?>"
-                                    data-search="<?= h(strtolower(($p['marque'] ?? '') . ' ' . ($p['modele'] ?? '') . ' ' . ($p['poids'] ?? ''))) ?>"
+                                    data-search="<?= h($pSearch) ?>"
                                     role="button"
                                     tabindex="0"
                                     aria-label="Voir les détails du papier <?= h($p['modele'] ?? '') ?>">
-                                    <td class="col-number td-metric"><?= (int)($p['qty_stock'] ?? 0) ?></td>
+                                    <td class="col-number td-metric stock-badge <?= h($pBadge) ?>"><?= $pQty ?></td>
                                     <td class="col-text" title="<?= h($p['modele'] ?? '—') ?>"><?= h($p['modele'] ?? '—') ?></td>
                                     <td class="col-text" title="<?= h($p['poids'] ?? '—') ?>"><?= h($p['poids'] ?? '—') ?></td>
                                 </tr>
@@ -1213,16 +1283,21 @@ $sectionImages = [
                             </tr>
                         <?php else: ?>
                             <?php foreach ($lcd as $row): ?>
+                                <?php 
+                                $lQty = (int)($row['qty'] ?? 0);
+                                $lBadge = $lQty === 0 ? 'stock-out' : ($lQty <= 2 ? 'stock-low' : 'stock-ok');
+                                $lSearch = strtolower(($row['modele'] ?? '') . ' ' . ($row['reference'] ?? '') . ' ' . ($row['marque'] ?? '') . ' ' . ($row['resolution'] ?? '') . ' ' . ($row['connectique'] ?? '') . ' ' . ($row['etat'] ?? '') . ' ' . ($row['barcode'] ?? ''));
+                                ?>
                                 <tr
                                     data-type="lcd" 
                                     data-id="<?= h((string)$row['id']) ?>"
-                                    data-search="<?= h(strtolower($row['modele'] . ' ' . $row['reference'] . ' ' . $row['marque'] . ' ' . $row['resolution'] . ' ' . $row['connectique'])) ?>"
+                                    data-search="<?= h($lSearch) ?>"
                                     role="button"
                                     tabindex="0"
                                     aria-label="Voir les détails de l'écran LCD <?= h($row['modele']) ?>">
                                     <td class="col-state"><?= stateBadge($row['etat']) ?></td>
                                     <td class="col-text" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
-                                    <td class="col-number td-metric"><?= (int)$row['qty'] ?></td>
+                                    <td class="col-number td-metric stock-badge <?= h($lBadge) ?>"><?= $lQty ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -1279,16 +1354,21 @@ $sectionImages = [
                             </tr>
                         <?php else: ?>
                             <?php foreach ($pc as $row): ?>
+                                <?php 
+                                $pcQty = (int)($row['qty'] ?? 0);
+                                $pcBadge = $pcQty === 0 ? 'stock-out' : ($pcQty <= 2 ? 'stock-low' : 'stock-ok');
+                                $pcSearch = strtolower(($row['modele'] ?? '') . ' ' . ($row['reference'] ?? '') . ' ' . ($row['marque'] ?? '') . ' ' . ($row['cpu'] ?? '') . ' ' . ($row['os'] ?? '') . ' ' . ($row['ram'] ?? '') . ' ' . ($row['stockage'] ?? '') . ' ' . ($row['barcode'] ?? ''));
+                                ?>
                                 <tr
                                     data-type="pc" 
                                     data-id="<?= h((string)$row['id']) ?>"
-                                    data-search="<?= h(strtolower($row['modele'] . ' ' . $row['reference'] . ' ' . $row['marque'] . ' ' . $row['cpu'] . ' ' . $row['os'] . ' ' . $row['ram'] . ' ' . $row['stockage'])) ?>"
+                                    data-search="<?= h($pcSearch) ?>"
                                     role="button"
                                     tabindex="0"
                                     aria-label="Voir les détails du PC <?= h($row['modele']) ?>">
                                     <td class="col-state"><?= stateBadge($row['etat']) ?></td>
                                     <td class="col-text" title="<?= h($row['modele']) ?>"><strong><?= h($row['modele']) ?></strong></td>
-                                    <td class="col-number td-metric"><?= (int)$row['qty'] ?></td>
+                                    <td class="col-number td-metric stock-badge <?= h($pcBadge) ?>"><?= $pcQty ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -1539,7 +1619,10 @@ $sectionImages = [
     // Référence globale pour la fonction open de la modale détails
     let detailModalOpen = null;
     
+    let activeTab = 'toners';
+
     function initStockScripts() {
+        initTabs();
         initFilter();
         initDetailModal();
         initAddModal();
@@ -1555,127 +1638,105 @@ $sectionImages = [
         setTimeout(initStockScripts, 100);
     }
 
-    /* ===== Filtre + réordonnancement ===== */
+    /* ===== Onglets ===== */
+    function initTabs() {
+        const tabs = document.querySelectorAll('.stock-tab');
+        const sections = document.querySelectorAll('.card-section[data-section]');
+        const STORAGE_KEY = 'stock_active_tab';
+
+        function setActiveTab(tabId) {
+            activeTab = tabId;
+            try {
+                localStorage.setItem(STORAGE_KEY, tabId);
+            } catch (e) {}
+            tabs.forEach(function(t) {
+                t.setAttribute('aria-selected', t.getAttribute('data-tab') === tabId ? 'true' : 'false');
+            });
+            sections.forEach(function(s) {
+                const sectionId = s.getAttribute('data-section');
+                s.style.display = sectionId === tabId ? '' : 'none';
+            });
+        }
+
+        if (tabs.length && sections.length) {
+            const saved = (function() {
+                try {
+                    return localStorage.getItem(STORAGE_KEY);
+                } catch (e) {
+                    return null;
+                }
+            })();
+            const valid = ['copiers', 'papier', 'toners', 'lcd', 'pc'];
+            const initial = (saved && valid.indexOf(saved) >= 0) ? saved : 'toners';
+            setActiveTab(initial);
+
+            tabs.forEach(function(t) {
+                t.addEventListener('click', function() {
+                    setActiveTab(t.getAttribute('data-tab'));
+                });
+            });
+        }
+        window.setActiveTabStock = setActiveTab;
+    }
+
+    /* ===== Filtre (uniquement sur l'onglet actif) ===== */
     function initFilter() {
         const q = document.getElementById('q');
         const mason = document.getElementById('stockMasonry');
         const resultsCount = document.getElementById('searchResultsCount');
-        const allRows = Array.from(document.querySelectorAll('.tbl-stock tbody tr'));
 
-        function visibleRowCount(section) {
-            const rows = section.querySelectorAll('tbody tr');
-            let n = 0;
-            rows.forEach(function(r) {
-                if (r.style.display !== 'none') {
-                    n++;
-                }
-            });
-            return n;
+        function getActiveSection() {
+            return document.querySelector('.card-section[data-section="' + activeTab + '"]');
         }
-        
-        function getTotalVisibleRows() {
-            return allRows.filter(function(tr) {
+
+        function getActiveRows() {
+            const sec = getActiveSection();
+            return sec ? Array.from(sec.querySelectorAll('.tbl-stock tbody tr[data-type][data-id]')) : [];
+        }
+
+        function updateResultsCount() {
+            if (!resultsCount || !q) return;
+            const rows = getActiveRows();
+            const visible = rows.filter(function(tr) {
                 return tr.style.display !== 'none';
             }).length;
-        }
-        
-        function updateResultsCount() {
-            if (!resultsCount) {
-                return;
-            }
-            const visible = getTotalVisibleRows();
-            const total = allRows.length;
-            if (q && q.value.trim()) {
+            const total = rows.length;
+            if (q.value.trim()) {
                 resultsCount.textContent = visible + ' / ' + total + ' résultats';
                 resultsCount.style.display = 'inline-block';
             } else {
                 resultsCount.style.display = 'none';
             }
         }
-        
-        function reorderSections() {
-            if (!mason) {
-                return;
-            }
-            const sections = Array.from(mason.querySelectorAll('.card-section'));
-            const scored = sections.map(function(s, i) {
-                return {
-                    el: s,
-                    score: visibleRowCount(s),
-                    idx: i
-                };
-            });
-            scored.sort(function(a, b) {
-                return (b.score - a.score) || (a.idx - b.idx);
-            });
-            scored.forEach(function(x) {
-                mason.appendChild(x.el);
-            });
-        }
-        
+
         function norm(s) {
             return (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         }
-        
+
         let filterTimeout = null;
         function applyFilter() {
-            if (!q) {
-                return;
-            }
+            if (!q) return;
             const v = norm(q.value || '');
-            document.querySelectorAll('.tbl-stock tbody tr').forEach(function(tr) {
+            const rows = getActiveRows();
+            rows.forEach(function(tr) {
                 const t = norm(tr.getAttribute('data-search') || '');
-                const isVisible = !v || t.includes(v);
-                tr.style.display = isVisible ? '' : 'none';
+                tr.style.display = (!v || t.includes(v)) ? '' : 'none';
             });
-            reorderSections();
             updateResultsCount();
-            
-            // Masquer les sections vides avec animation
-            document.querySelectorAll('.card-section').forEach(function(section) {
-                const hasVisible = section.querySelectorAll('tbody tr[style=""]').length > 0;
-                if (!hasVisible && v) {
-                    section.style.opacity = '0.5';
-                    section.style.transform = 'scale(0.98)';
-                } else {
-                    section.style.opacity = '1';
-                    section.style.transform = 'scale(1)';
-                }
-            });
         }
-        
-        // Tri automatique à chaque frappe (debounce pour performance)
+
         if (q) {
             q.addEventListener('input', function() {
                 clearTimeout(filterTimeout);
-                // Appliquer le filtre immédiatement (pas de délai pour réactivité)
                 filterTimeout = setTimeout(applyFilter, 100);
             });
-            
-            // Quand on supprime le contenu, le filtre se réinitialise automatiquement
             q.addEventListener('keydown', function(e) {
-                // Si on appuie sur Suppr ou Backspace et que le champ est vide, réinitialiser
                 if ((e.key === 'Delete' || e.key === 'Backspace') && q.value.length <= 1) {
                     setTimeout(applyFilter, 50);
                 }
             });
         }
-        
-        // Le tri se fait automatiquement via l'événement 'input' ci-dessus
-        // Quand on supprime le contenu, le filtre se réinitialise automatiquement
-        
-        // Initialisation
-        reorderSections();
         updateResultsCount();
-        
-        if ('ResizeObserver' in window) {
-            const ro = new ResizeObserver(function() {
-                reorderSections();
-            });
-            mason.querySelectorAll('.card-section').forEach(function(sec) {
-                ro.observe(sec);
-            });
-        }
     }
 
     /* ===== Datasets popup ===== */
@@ -1888,6 +1949,37 @@ $sectionImages = [
         
         // Exposer open globalement pour être accessible depuis handleRowClick
         detailModalOpen = open;
+
+        // Exposer pour le scanner : ouvrir modale détail + focus mouvement
+        window.openProductFromBarcode = function(apiType, product) {
+            const displayType = apiType === 'toner' ? 'toners' : apiType;
+            const rows = DATASETS[displayType] || [];
+            const productId = String(product.id || '').trim();
+            const row = rows.find(function(r) {
+                if (displayType === 'papier') {
+                    return String(r.paper_id || r.id || '').trim() === productId;
+                }
+                return String(r.id || '').trim() === productId;
+            });
+            if (row) {
+                renderDetails(displayType, row);
+                if (typeof window.setActiveTabStock === 'function') {
+                    window.setActiveTabStock(displayType);
+                }
+                open();
+                var qEl = document.getElementById('q');
+                if (qEl) {
+                    qEl.value = '';
+                    qEl.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                var scanRes = document.getElementById('scanResult');
+                if (scanRes) scanRes.style.display = 'none';
+                setTimeout(function() {
+                    var mq = document.getElementById('moveQty');
+                    if (mq) mq.focus();
+                }, 150);
+            }
+        };
         
         if (close) {
             close.addEventListener('click', closeFn);
@@ -2973,29 +3065,31 @@ $sectionImages = [
         // Fonction pour traiter le code-barres scanné (recherche produit)
         async function processBarcode(barcode) {
             hideError();
+            hideResult();
             
             try {
                 const response = await fetch(`/API/get_product_by_barcode.php?barcode=${encodeURIComponent(barcode)}`, {
                     method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
+                    credentials: 'same-origin'
                 });
                 
                 const data = await response.json();
                 
-                if (!response.ok || !data.ok) {
-                    // Si produit non trouvé, on garde juste le code-barres dans la recherche
-                    // Produit non trouvé pour le code-barres
-                    return;
+                if (response.ok && data.ok && data.product && data.type) {
+                    // Produit trouvé : ouvrir modale détail + focus mouvement
+                    if (typeof window.openProductFromBarcode === 'function') {
+                        window.openProductFromBarcode(data.type, data.product);
+                    } else {
+                        showResult('✓ Produit trouvé : ' + (data.product.nom || barcode) + ' (Stock: ' + (data.product.qty_stock || 0) + ')');
+                    }
+                } else {
+                    // Produit non trouvé
+                    showError(data.error || 'Produit non trouvé');
                 }
-                
-                // Produit trouvé : on peut afficher un message ou ouvrir la modal de détails
-                showResult('✓ Produit trouvé : ' + (data.product.nom || barcode) + ' (Stock: ' + (data.product.qty_stock || 0) + ')');
                 
             } catch (err) {
                 console.error('Erreur récupération produit:', err);
-                // On ignore l'erreur, le code-barres est déjà dans la recherche
+                showError('Erreur réseau');
             }
         }
         

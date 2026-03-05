@@ -35,6 +35,114 @@ html, body { max-width: 100%; overflow-x: hidden; }
   font-size: 0.95rem;
 }
 
+/* ===== Mini dashboard (2 cards) ===== */
+.stock-dashboard-mini {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  min-width: 180px;
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-card-label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.dashboard-card-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.dashboard-card-low.has-low .dashboard-card-value {
+  color: #d97706;
+}
+
+/* ===== Onglets ===== */
+.stock-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.stock-tab {
+  padding: 0.6rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all 0.2s;
+}
+
+.stock-tab:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.stock-tab[aria-selected="true"] {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.stock-tab[aria-selected="true"]:hover {
+  background: var(--accent-secondary, var(--accent-primary));
+  color: white;
+}
+
+/* ===== Badges stock (vert/orange/rouge) ===== */
+.stock-badge.stock-ok {
+  color: #059669;
+  font-weight: 700;
+}
+
+.stock-badge.stock-low {
+  color: #d97706;
+  font-weight: 700;
+}
+
+.stock-badge.stock-out {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.stock-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 2rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.stock-badge.stock-ok {
+  background: rgba(5, 150, 105, 0.12);
+}
+
+.stock-badge.stock-low {
+  background: rgba(217, 119, 6, 0.12);
+}
+
+.stock-badge.stock-out {
+  background: rgba(220, 38, 38, 0.12);
+}
+
 /* ===== Statistiques améliorées ===== */
 .stock-meta {
   display: grid;
