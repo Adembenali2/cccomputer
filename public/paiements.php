@@ -465,6 +465,61 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             margin: 0;
         }
 
+        .stats-header-actions {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .btn-estimate {
+            padding: 0.5rem 0.875rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-estimate:hover:not(:disabled) {
+            border-color: var(--accent-primary);
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .btn-estimate:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .stats-view-mode {
+            display: inline-flex;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 2px;
+            margin-bottom: var(--stats-spacing);
+        }
+
+        .stats-segment {
+            padding: 0.35rem 0.75rem;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .stats-segment.active {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
+        }
+
         .btn-export {
             padding: 0.5rem 1rem;
             background: linear-gradient(135deg, #10b981, #059669);
@@ -615,17 +670,50 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
 
         .chart-loading {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
+            gap: 1rem;
             height: 420px;
             color: var(--text-secondary);
             font-size: 0.9375rem;
+        }
+
+        .chart-skeleton {
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .skeleton-line {
+            height: 12px;
+            background: linear-gradient(90deg, var(--border-color) 25%, var(--bg-tertiary) 50%, var(--border-color) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.2s ease-in-out infinite;
+            border-radius: 6px;
+        }
+
+        .skeleton-line:nth-child(1) { width: 95%; }
+        .skeleton-line:nth-child(2) { width: 80%; }
+        .skeleton-line:nth-child(3) { width: 70%; }
+        .skeleton-line:nth-child(4) { width: 85%; }
+        .skeleton-line:nth-child(5) { width: 60%; }
+
+        @keyframes skeleton-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
 
         @media (max-width: 768px) {
             .stats-header {
                 flex-direction: column;
                 align-items: flex-start;
+            }
+
+            .stats-header-actions {
+                flex-wrap: wrap;
             }
 
             .stats-filters {
@@ -1484,14 +1572,25 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         <div class="stats-section">
             <div class="stats-header">
                 <h2 class="stats-title">Statistiques d'impression</h2>
-                <button class="btn-export" id="btnExportExcel">
+                <div class="stats-header-actions">
+                    <button class="btn-estimate" id="btnEstimate" type="button" title="Estimer le mois prochain (vue mensuelle)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                        Estimer mois prochain
+                    </button>
+                    <button class="btn-export" id="btnExportExcel">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
                         <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
-                    Exporter Excel
-                </button>
+                        Exporter Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="stats-view-mode" id="statsViewMode">
+                <span class="stats-segment" data-mode="monthly" id="segmentMonthly">Mensuel</span>
+                <span class="stats-segment" data-mode="daily" id="segmentDaily">Journalier</span>
             </div>
 
             <div class="stats-filters-card">
@@ -1530,21 +1629,21 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             </div>
 
             <div class="stats-kpi-row" id="statsKpiRow">
-                <div class="stats-kpi-card" id="kpiTotalPeriode">
+                <div class="stats-kpi-card">
                     <span class="stats-kpi-label">Total période</span>
                     <span class="stats-kpi-value" id="kpiTotalValue">—</span>
                 </div>
-                <div class="stats-kpi-card" id="kpiNb">
-                    <span class="stats-kpi-label">N&B</span>
-                    <span class="stats-kpi-value" id="kpiNbValue">—</span>
+                <div class="stats-kpi-card">
+                    <span class="stats-kpi-label">Moyenne</span>
+                    <span class="stats-kpi-value" id="kpiMoyenneValue">—</span>
                 </div>
-                <div class="stats-kpi-card" id="kpiCouleur">
-                    <span class="stats-kpi-label">Couleur</span>
-                    <span class="stats-kpi-value" id="kpiCouleurValue">—</span>
+                <div class="stats-kpi-card">
+                    <span class="stats-kpi-label">Pic (max)</span>
+                    <span class="stats-kpi-value" id="kpiPicValue">—</span>
                 </div>
-                <div class="stats-kpi-card" id="kpiTotal">
-                    <span class="stats-kpi-label">Total pages</span>
-                    <span class="stats-kpi-value" id="kpiTotalPagesValue">—</span>
+                <div class="stats-kpi-card" id="kpiEstimationCard">
+                    <span class="stats-kpi-label">Estimation mois prochain</span>
+                    <span class="stats-kpi-value" id="kpiEstimationValue">—</span>
                 </div>
             </div>
 
@@ -1554,7 +1653,16 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     <p class="stats-chart-subtitle" id="statsChartSubtitle">Pages imprimées par période</p>
                 </div>
                 <div class="chart-container">
-                    <div class="chart-loading" id="chartLoading">Chargement des données...</div>
+                    <div class="chart-loading" id="chartLoading">
+                        <div class="chart-skeleton" id="chartSkeleton">
+                            <div class="skeleton-line"></div>
+                            <div class="skeleton-line"></div>
+                            <div class="skeleton-line"></div>
+                            <div class="skeleton-line"></div>
+                            <div class="skeleton-line"></div>
+                        </div>
+                        <span class="chart-loading-text">Chargement des données...</span>
+                    </div>
                     <canvas id="statsChart" style="display: none; width: 100% !important; height: 100% !important;"></canvas>
                 </div>
             </div>
@@ -2523,6 +2631,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         // Variables globales pour le graphique
         let statsChart = null;
         let currentData = null;
+        let estimateValue = null;
 
         // ============================================
         // FONCTIONS GLOBALES - Doivent être définies en premier
@@ -6428,11 +6537,14 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             
             // Écouter les changements de filtres
             document.getElementById('filterClient').addEventListener('change', loadStatsData);
-            document.getElementById('filterMois').addEventListener('change', loadStatsData);
+            document.getElementById('filterMois').addEventListener('change', () => { updateViewModeSegments(); updateEstimateButton(); loadStatsData(); });
             document.getElementById('filterAnnee').addEventListener('change', loadStatsData);
             
             // Bouton export Excel
             document.getElementById('btnExportExcel').addEventListener('click', exportToExcel);
+            
+            // Bouton estimation
+            document.getElementById('btnEstimate').addEventListener('click', showEstimate);
         }
 
         /**
@@ -6465,10 +6577,17 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         async function loadStatsData() {
             const loadingDiv = document.getElementById('chartLoading');
             const canvas = document.getElementById('statsChart');
+            const skeleton = document.getElementById('chartSkeleton');
+            const loadingText = loadingDiv?.querySelector('.chart-loading-text');
             
             loadingDiv.style.display = 'flex';
+            if (skeleton) { skeleton.style.display = 'flex'; }
+            if (loadingText) { loadingText.style.display = 'block'; loadingText.textContent = 'Chargement des données...'; }
             canvas.style.display = 'none';
+            estimateValue = null;
             updateStatsKpis(null);
+            updateViewModeSegments();
+            updateEstimateButton();
             
             const clientId = document.getElementById('filterClient').value;
             const mois = document.getElementById('filterMois').value;
@@ -6487,126 +6606,191 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 
                 if (data.ok && data.data) {
                     currentData = data.data;
-                    // Vérifier qu'on a des données
                     if (data.data.labels && data.data.labels.length > 0) {
                         updateChart(data.data);
                         updateStatsKpis(data.data);
                         loadingDiv.style.display = 'none';
                         canvas.style.display = 'block';
                     } else {
-                        loadingDiv.textContent = 'Aucune donnée disponible pour les filtres sélectionnés';
+                        if (skeleton) skeleton.style.display = 'none';
+                        if (loadingText) loadingText.textContent = 'Aucune donnée disponible pour les filtres sélectionnés';
                         canvas.style.display = 'none';
                     }
                 } else {
-                    const errorMsg = data.error || 'Erreur lors du chargement des données';
-                    loadingDiv.textContent = errorMsg;
+                    if (skeleton) skeleton.style.display = 'none';
+                    if (loadingText) loadingText.textContent = data.error || 'Erreur lors du chargement des données';
                     canvas.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Erreur lors du chargement des statistiques:', error);
-                loadingDiv.textContent = 'Erreur lors du chargement des données';
+                if (skeleton) skeleton.style.display = 'none';
+                if (loadingText) loadingText.textContent = 'Erreur lors du chargement des données';
+                canvas.style.display = 'none';
+            }
+        }
+
+        function updateViewModeSegments() {
+            const mois = document.getElementById('filterMois')?.value || '';
+            const segM = document.getElementById('segmentMonthly');
+            const segD = document.getElementById('segmentDaily');
+            const isMonthly = !mois || mois === '';
+            if (segM) segM.classList.toggle('active', isMonthly);
+            if (segD) segD.classList.toggle('active', !isMonthly);
+        }
+
+        function updateEstimateButton() {
+            const btn = document.getElementById('btnEstimate');
+            const mois = document.getElementById('filterMois')?.value || '';
+            const isMonthly = !mois || mois === '';
+            if (btn) {
+                btn.disabled = !isMonthly;
+                btn.title = isMonthly ? 'Estimer le mois prochain (moyenne mobile 3 mois)' : 'Retour en vue mensuelle pour estimer';
             }
         }
 
         /**
-         * Met à jour les KPI cards
+         * Calcule l'estimation mois prochain (moyenne mobile 3 derniers mois non nuls)
+         */
+        function computeEstimate() {
+            if (!currentData || currentData.group_by !== 'month') return null;
+            const totals = currentData.total_pages || [];
+            const nonZero = totals.filter(v => v > 0);
+            if (nonZero.length < 2) return null;
+            const last3 = nonZero.slice(-3);
+            const avg = Math.round(last3.reduce((a, b) => a + b, 0) / last3.length);
+            return avg;
+        }
+
+        function showEstimate() {
+            const val = computeEstimate();
+            estimateValue = val !== null ? val : (currentData?.group_by === 'month' ? 'insufficient' : null);
+            updateStatsKpis(currentData);
+            updateChart(currentData);
+        }
+
+        /**
+         * Met à jour les KPI cards (Total, Moyenne, Pic, Estimation)
          */
         function updateStatsKpis(data) {
-            const elTotal = document.getElementById('kpiTotalValue');
-            const elNb = document.getElementById('kpiNbValue');
-            const elCouleur = document.getElementById('kpiCouleurValue');
-            const elTotalPages = document.getElementById('kpiTotalPagesValue');
             const formatNum = (n) => (n ?? 0).toLocaleString('fr-FR');
+            const elTotal = document.getElementById('kpiTotalValue');
+            const elMoyenne = document.getElementById('kpiMoyenneValue');
+            const elPic = document.getElementById('kpiPicValue');
+            const elEstimation = document.getElementById('kpiEstimationValue');
             if (!data || !data.labels || data.labels.length === 0) {
                 if (elTotal) elTotal.textContent = '—';
-                if (elNb) elNb.textContent = '—';
-                if (elCouleur) elCouleur.textContent = '—';
-                if (elTotalPages) elTotalPages.textContent = '—';
+                if (elMoyenne) elMoyenne.textContent = '—';
+                if (elPic) elPic.textContent = '—';
+                if (elEstimation) elEstimation.textContent = '—';
                 return;
             }
-            const totalNb = (data.noir_blanc || []).reduce((s, v) => s + (v || 0), 0);
-            const totalColor = (data.couleur || []).reduce((s, v) => s + (v || 0), 0);
-            const totalPages = (data.total_pages || []).reduce((s, v) => s + (v || 0), 0);
-            if (elTotal) elTotal.textContent = formatNum(totalPages) + ' p.';
-            if (elNb) elNb.textContent = formatNum(totalNb);
-            if (elCouleur) elCouleur.textContent = formatNum(totalColor);
-            if (elTotalPages) elTotalPages.textContent = formatNum(totalPages);
+            const totals = data.total_pages || [];
+            const sum = totals.reduce((s, v) => s + (v || 0), 0);
+            const max = totals.length ? Math.max(...totals.map(v => v || 0)) : 0;
+            const avg = totals.length ? Math.round(sum / totals.length) : 0;
+            if (elTotal) elTotal.textContent = formatNum(sum) + ' p.';
+            if (elMoyenne) elMoyenne.textContent = formatNum(avg) + ' p.';
+            if (elPic) elPic.textContent = formatNum(max) + ' p.';
+            if (elEstimation) {
+                if (estimateValue !== null && estimateValue !== 'insufficient') {
+                    elEstimation.textContent = formatNum(estimateValue) + ' p. (est.)';
+                } else if (estimateValue === 'insufficient') {
+                    elEstimation.textContent = 'Données insuffisantes';
+                } else {
+                    elEstimation.textContent = '—';
+                }
+            }
         }
 
         /**
-         * Met à jour le graphique (barres groupées NB + Couleur, ligne Total)
+         * Met à jour le graphique (line chart, Total + NB + Couleur)
          */
         function updateChart(data) {
             const ctx = document.getElementById('statsChart').getContext('2d');
             if (statsChart) statsChart.destroy();
 
             const groupBy = data.group_by || 'day';
-            const chartTitle = groupBy === 'month' ? 'Consommation mensuelle' : 'Consommation quotidienne';
-            const chartSubtitle = groupBy === 'month' ? 'Pages par mois' : 'Pages par jour';
+            const isMonthly = groupBy === 'month';
+            const chartTitle = isMonthly ? 'Consommation mensuelle' : 'Consommation quotidienne';
+            const chartSubtitle = isMonthly ? 'Pages par mois' : 'Pages par jour';
 
             const titleEl = document.getElementById('statsChartTitle');
             const subtitleEl = document.getElementById('statsChartSubtitle');
             if (titleEl) titleEl.textContent = chartTitle;
             if (subtitleEl) subtitleEl.textContent = chartSubtitle;
 
-            const canvas = ctx.canvas;
-            const h = canvas ? (canvas.height || 400) : 400;
-            const gradBw = ctx.createLinearGradient(0, 0, 0, h);
-            gradBw.addColorStop(0, 'rgba(30, 41, 59, 0.9)');
-            gradBw.addColorStop(1, 'rgba(30, 41, 59, 0.5)');
-            const gradColor = ctx.createLinearGradient(0, 0, 0, h);
-            gradColor.addColorStop(0, 'rgba(59, 130, 246, 0.9)');
-            gradColor.addColorStop(1, 'rgba(59, 130, 246, 0.5)');
+            const datesFull = data.dates_full || [];
+            const labels = [...(data.labels || [])];
+            const totalData = [...(data.total_pages || [])];
+            const nbData = data.noir_blanc || [];
+            const colorData = data.couleur || [];
+
+            let projectionLabel = null;
+            let projectionValue = null;
+            const moisNoms = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+            if (isMonthly && typeof estimateValue === 'number') {
+                const annee = parseInt(document.getElementById('filterAnnee')?.value || new Date().getFullYear());
+                const lastLabel = labels[labels.length - 1] || '';
+                const lastMois = 12;
+                const nextMois = 1;
+                const nextY = annee + 1;
+                projectionLabel = moisNoms[nextMois] + ' ' + nextY + ' (est.)';
+                projectionValue = estimateValue;
+                labels.push(projectionLabel);
+                totalData.push(projectionValue);
+            }
+
+            const totalLen = totalData.length;
+            const hasProjection = projectionLabel && totalLen >= 2;
+
+            const datasets = [
+                {
+                    type: 'line',
+                    label: 'Total',
+                    data: totalData,
+                    borderColor: 'rgba(16, 185, 129, 0.9)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: totalData.map((_, i) => (hasProjection && i === totalLen - 1) ? 4 : 2),
+                    pointHoverRadius: 4,
+                    pointBackgroundColor: '#fff',
+                    pointBorderColor: 'rgba(16, 185, 129, 0.9)',
+                    pointBorderWidth: 2,
+                    segment: hasProjection ? {
+                        borderDash: (ctx) => (ctx.p1DataIndex === totalLen - 1 ? [6, 4] : undefined)
+                    } : undefined
+                },
+                {
+                    type: 'line',
+                    label: 'N&B',
+                    data: projectionLabel ? [...nbData, null] : nbData,
+                    borderColor: 'rgba(30, 41, 59, 0.8)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.35,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                },
+                {
+                    type: 'line',
+                    label: 'Couleur',
+                    data: projectionLabel ? [...colorData, null] : colorData,
+                    borderColor: 'rgba(59, 130, 246, 0.8)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.35,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                }
+            ];
 
             statsChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.labels,
-                    datasets: [
-                        {
-                            type: 'bar',
-                            label: 'N&B',
-                            data: data.noir_blanc,
-                            backgroundColor: gradBw,
-                            hoverBackgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            borderColor: 'rgba(30, 41, 59, 0.6)',
-                            borderWidth: 1,
-                            borderRadius: 6,
-                            borderSkipped: false,
-                            barThickness: 24,
-                            order: 2
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Couleur',
-                            data: data.couleur,
-                            backgroundColor: gradColor,
-                            hoverBackgroundColor: 'rgba(37, 99, 235, 0.95)',
-                            borderColor: 'rgba(59, 130, 246, 0.6)',
-                            borderWidth: 1,
-                            borderRadius: 6,
-                            borderSkipped: false,
-                            barThickness: 24,
-                            order: 1
-                        },
-                        {
-                            type: 'line',
-                            label: 'Total',
-                            data: data.total_pages,
-                            borderColor: 'rgba(16, 185, 129, 0.9)',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            borderWidth: 2.5,
-                            fill: false,
-                            tension: 0.2,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            pointBackgroundColor: '#fff',
-                            pointBorderColor: 'rgba(16, 185, 129, 0.9)',
-                            pointBorderWidth: 2,
-                            order: 0
-                        }
-                    ]
-                },
+                type: 'line',
+                data: { labels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -6614,7 +6798,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     interaction: { intersect: false, mode: 'index' },
                     scales: {
                         x: {
-                            stacked: false,
                             grid: {
                                 display: true,
                                 color: 'rgba(0, 0, 0, 0.04)',
@@ -6622,9 +6805,10 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                                 drawBorder: false
                             },
                             ticks: {
-                                maxRotation: groupBy === 'month' ? 0 : 45,
-                                minRotation: groupBy === 'month' ? 0 : 45,
+                                maxRotation: isMonthly ? 0 : 45,
+                                minRotation: isMonthly ? 0 : 45,
                                 maxTicksLimit: 12,
+                                autoSkip: true,
                                 font: { size: 11, weight: '400' },
                                 color: 'var(--text-secondary)',
                                 padding: 10
@@ -6632,7 +6816,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         },
                         y: {
                             beginAtZero: true,
-                            stacked: false,
                             grid: {
                                 display: true,
                                 color: 'rgba(0, 0, 0, 0.04)',
@@ -6687,10 +6870,19 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             callbacks: {
                                 label: function(ctx) {
                                     const v = ctx.parsed.y;
+                                    if (v == null) return '';
                                     return (ctx.dataset.label || '') + ': ' + new Intl.NumberFormat('fr-FR').format(v) + ' pages';
                                 },
                                 title: function(ctx) {
-                                    return (groupBy === 'month' ? 'Mois' : 'Date') + ': ' + ctx[0].label;
+                                    const i = ctx[0]?.dataIndex;
+                                    const nb = nbData[i] ?? 0;
+                                    const col = colorData[i] ?? 0;
+                                    const tot = totalData[i] ?? 0;
+                                    const fmt = (n) => new Intl.NumberFormat('fr-FR').format(n);
+                                    if (datesFull && datesFull[i]) {
+                                        return datesFull[i] + ' : ' + fmt(tot) + ' pages (NB ' + fmt(nb) + ' / Couleur ' + fmt(col) + ')';
+                                    }
+                                    return (labels[i] || '') + ' : ' + fmt(tot) + ' pages (NB ' + fmt(nb) + ' / Couleur ' + fmt(col) + ')';
                                 }
                             }
                         }

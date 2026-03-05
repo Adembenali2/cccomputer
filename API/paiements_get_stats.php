@@ -189,22 +189,52 @@ try {
     $moisNoms = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
     $moisNomsCourts = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
     
-    foreach ($results as $row) {
-        if ($groupByMonth) {
-            // Format de label : "Janvier 2025" pour afficher le mois
+    if ($groupByMonth) {
+        foreach ($results as $row) {
             $moisNom = $moisNoms[(int)$row['mois']] ?? '';
-            $label = $moisNom . ' ' . $row['annee'];
-        } else {
-            // Format de label : "01 Jan" pour afficher le jour
-            $moisNom = $moisNomsCourts[(int)$row['mois']] ?? '';
-            $jour = isset($row['jour']) ? str_pad((string)$row['jour'], 2, '0', STR_PAD_LEFT) : '';
-            $label = $jour . ' ' . $moisNom;
+            $data['labels'][] = $moisNom . ' ' . $row['annee'];
+            $data['noir_blanc'][] = (int)$row['total_noir_blanc'];
+            $data['couleur'][] = (int)$row['total_couleur'];
+            $data['total_pages'][] = (int)$row['total_pages'];
         }
-        
-        $data['labels'][] = $label;
-        $data['noir_blanc'][] = (int)$row['total_noir_blanc'];
-        $data['couleur'][] = (int)$row['total_couleur'];
-        $data['total_pages'][] = (int)$row['total_pages'];
+    } else {
+        // Mode journalier
+        if ($mois !== null && $mois > 0 && $annee !== null && $annee > 0) {
+            // Mois spécifique : remplir les jours manquants (1..lastDay) pour courbe lisse
+            $lastDay = (int)date('t', mktime(0, 0, 0, (int)$mois, 1, (int)$annee));
+            $byDay = [];
+            foreach ($results as $row) {
+                $j = (int)($row['jour'] ?? 0);
+                if ($j >= 1 && $j <= 31) {
+                    $byDay[$j] = [
+                        'nb' => (int)$row['total_noir_blanc'],
+                        'couleur' => (int)$row['total_couleur'],
+                        'total' => (int)$row['total_pages']
+                    ];
+                }
+            }
+            $data['dates_full'] = [];
+            for ($j = 1; $j <= $lastDay; $j++) {
+                $dateObj = new DateTime(sprintf('%04d-%02d-%02d', (int)$annee, (int)$mois, $j));
+                $data['labels'][] = str_pad((string)$j, 2, '0', STR_PAD_LEFT) . '/' . str_pad((string)$mois, 2, '0', STR_PAD_LEFT);
+                $data['dates_full'][] = $dateObj->format('d/m/Y');
+                $v = $byDay[$j] ?? ['nb' => 0, 'couleur' => 0, 'total' => 0];
+                $data['noir_blanc'][] = $v['nb'];
+                $data['couleur'][] = $v['couleur'];
+                $data['total_pages'][] = $v['total'];
+            }
+        } else {
+            // 90 derniers jours : données brutes
+            foreach ($results as $row) {
+                $moisNom = $moisNomsCourts[(int)$row['mois']] ?? '';
+                $jour = isset($row['jour']) ? str_pad((string)$row['jour'], 2, '0', STR_PAD_LEFT) : '';
+                $data['labels'][] = $jour . ' ' . $moisNom;
+                $data['dates_full'][] = ($row['date_jour'] ?? '') ? date('d/m/Y', strtotime($row['date_jour'])) : '';
+                $data['noir_blanc'][] = (int)$row['total_noir_blanc'];
+                $data['couleur'][] = (int)$row['total_couleur'];
+                $data['total_pages'][] = (int)$row['total_pages'];
+            }
+        }
     }
     
     // Récupération des informations du client si spécifié
