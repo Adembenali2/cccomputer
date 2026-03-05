@@ -578,7 +578,27 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         }
 
         .stats-chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
             margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .stats-chart-header-left {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .stats-estimate-pill {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 0.35rem 0.75rem;
+            white-space: nowrap;
         }
 
         .stats-chart-title {
@@ -1562,8 +1582,11 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
 
             <div class="stats-chart-card">
                 <div class="stats-chart-header">
-                    <h3 class="stats-chart-title" id="statsChartTitle">Consommation</h3>
-                    <p class="stats-chart-subtitle" id="statsChartSubtitle">Pages imprimées par période</p>
+                    <div class="stats-chart-header-left">
+                        <h3 class="stats-chart-title" id="statsChartTitle">Consommation</h3>
+                        <p class="stats-chart-subtitle" id="statsChartSubtitle">Pages imprimées par période</p>
+                    </div>
+                    <div id="statsEstimateText" class="stats-estimate-pill"></div>
                 </div>
                 <div class="chart-container">
                     <div class="chart-loading" id="chartLoading">
@@ -6506,6 +6529,8 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             if (skeleton) { skeleton.style.display = 'flex'; }
             if (loadingText) { loadingText.style.display = 'block'; loadingText.textContent = 'Chargement des données...'; }
             canvas.style.display = 'none';
+            const estimatePill = document.getElementById('statsEstimateText');
+            if (estimatePill) { estimatePill.textContent = ''; estimatePill.style.display = 'none'; }
             updateViewModeSegments();
             
             const clientId = document.getElementById('filterClient').value;
@@ -6533,17 +6558,21 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         if (skeleton) skeleton.style.display = 'none';
                         if (loadingText) loadingText.textContent = 'Aucune donnée disponible pour les filtres sélectionnés';
                         canvas.style.display = 'none';
+                        if (estimatePill) { estimatePill.textContent = ''; estimatePill.style.display = 'none'; }
                     }
                 } else {
                     if (skeleton) skeleton.style.display = 'none';
                     if (loadingText) loadingText.textContent = data.error || 'Erreur lors du chargement des données';
                     canvas.style.display = 'none';
+                    if (estimatePill) { estimatePill.textContent = ''; estimatePill.style.display = 'none'; }
                 }
             } catch (error) {
                 console.error('Erreur lors du chargement des statistiques:', error);
                 if (skeleton) skeleton.style.display = 'none';
                 if (loadingText) loadingText.textContent = 'Erreur lors du chargement des données';
                 canvas.style.display = 'none';
+                const ep = document.getElementById('statsEstimateText');
+                if (ep) { ep.textContent = ''; ep.style.display = 'none'; }
             }
         }
 
@@ -6575,7 +6604,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         }
 
         /**
-         * Met à jour le graphique (Total + N&B + Couleur + Est. fin mois + Est. mois prochain)
+         * Met à jour le graphique (Total + N&B + Couleur) et la pill d'estimation en texte
          */
         function updateChart(data) {
             const ctx = document.getElementById('statsChart').getContext('2d');
@@ -6605,16 +6634,12 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 }
             }
 
-            const moisNoms = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
             const anneeFilter = parseInt(document.getElementById('filterAnnee')?.value || new Date().getFullYear());
             const now = new Date();
             const currentYear = now.getFullYear();
             const currentMonth = now.getMonth() + 1;
 
             let chartSubtitle = isMonthly ? 'Pages par mois' : 'Pages par jour';
-            let finalLabels = [...labelsTrimmed];
-            let estFinMoisData = null;
-            let estMoisProchainData = null;
             let estimateEndOfMonth = null;
             let estimateNextMonth = null;
             let idxCurrentMonth = currentMonth - 1;
@@ -6625,22 +6650,30 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     const runRate = currentMonthSoFar.total / currentMonthSoFar.days_elapsed;
                     estimateEndOfMonth = Math.round(runRate * currentMonthSoFar.days_in_month);
                     estimateEndOfMonth = Math.max(estimateEndOfMonth, currentMonthSoFar.total);
-                    estFinMoisData = Array(len).fill(null);
-                    estFinMoisData[idxCurrentMonth] = estimateEndOfMonth;
                 }
             }
 
             const excludeIdx = (anneeFilter === currentYear && idxCurrentMonth < len) ? idxCurrentMonth : len;
             estimateNextMonth = computeNextMonthEstimate(totalData, excludeIdx, estimateEndOfMonth);
 
-            if (estimateNextMonth !== null) {
-                finalLabels.push(moisNoms[1] + ' ' + (anneeFilter + 1) + ' (est.)');
-                const lastRealOrEst = estimateEndOfMonth ?? totalData[totalData.length - 1] ?? 0;
-                estMoisProchainData = Array(len - 1).fill(null).concat([lastRealOrEst, estimateNextMonth]);
-            }
-
-            if (isMonthly && !estFinMoisData && estimateNextMonth === null && totalData.length > 0) {
-                chartSubtitle = 'Pages par mois (estimation indisponible)';
+            const estimatePill = document.getElementById('statsEstimateText');
+            if (estimatePill) {
+                if (isMonthly) {
+                    const parts = [];
+                    if (estimateEndOfMonth !== null) {
+                        parts.push('Est. mois en cours: ~' + fmt(estimateEndOfMonth) + ' pages');
+                    } else if (anneeFilter === currentYear && currentMonthSoFar && currentMonthSoFar.days_elapsed < 7) {
+                        parts.push('Est. mois en cours: indisponible');
+                    }
+                    if (estimateNextMonth !== null) {
+                        parts.push('Est. mois prochain: ~' + fmt(estimateNextMonth) + ' pages');
+                    }
+                    estimatePill.textContent = parts.join(' • ');
+                    estimatePill.style.display = parts.length ? 'block' : 'none';
+                } else {
+                    estimatePill.textContent = '';
+                    estimatePill.style.display = 'none';
+                }
             }
 
             const titleEl = document.getElementById('statsChartTitle');
@@ -6648,16 +6681,11 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             if (titleEl) titleEl.textContent = chartTitle;
             if (subtitleEl) subtitleEl.textContent = chartSubtitle;
 
-            const hasNextMonthLabel = estMoisProchainData !== null;
-            const mainTotalData = hasNextMonthLabel ? [...totalData, null] : totalData;
-            const mainNbData = hasNextMonthLabel ? [...nbData, null] : nbData;
-            const mainCouleurData = hasNextMonthLabel ? [...couleurData, null] : couleurData;
-
             const datasets = [
                 {
                     type: 'line',
                     label: 'Total',
-                    data: mainTotalData,
+                    data: totalData,
                     borderColor: 'rgba(16, 185, 129, 0.9)',
                     backgroundColor: 'rgba(16, 185, 129, 0.08)',
                     borderWidth: 2,
@@ -6672,7 +6700,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 {
                     type: 'line',
                     label: 'N&B',
-                    data: mainNbData,
+                    data: nbData,
                     borderColor: 'rgba(30, 41, 59, 0.85)',
                     backgroundColor: 'transparent',
                     borderWidth: 2,
@@ -6684,7 +6712,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 {
                     type: 'line',
                     label: 'Couleur',
-                    data: mainCouleurData,
+                    data: couleurData,
                     borderColor: 'rgba(59, 130, 246, 0.85)',
                     backgroundColor: 'transparent',
                     borderWidth: 2,
@@ -6695,47 +6723,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 }
             ];
 
-            if (estFinMoisData) {
-                const moisLabel = moisNoms[currentMonth] + ' ' + currentYear;
-                datasets.push({
-                    type: 'line',
-                    label: 'Est. fin mois (' + moisLabel + ')',
-                    data: estFinMoisData,
-                    borderColor: 'rgba(245, 158, 11, 0.9)',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    borderDash: [6, 4],
-                    fill: false,
-                    tension: 0,
-                    pointRadius: estFinMoisData.map((_, i) => i === idxCurrentMonth ? 5 : 0),
-                    pointHoverRadius: 5,
-                    pointStyle: 'triangle',
-                    pointBackgroundColor: 'rgba(245, 158, 11, 0.9)',
-                    pointBorderColor: 'rgba(245, 158, 11, 0.9)',
-                    pointBorderWidth: 2
-                });
-            }
-            if (estMoisProchainData) {
-                datasets.push({
-                    type: 'line',
-                    label: 'Est. mois prochain',
-                    data: estMoisProchainData,
-                    borderColor: 'rgba(168, 85, 247, 0.9)',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    borderDash: [6, 4],
-                    fill: false,
-                    tension: 0.35,
-                    pointRadius: estMoisProchainData.map((_, i) => i === estMoisProchainData.length - 1 ? 5 : 0),
-                    pointHoverRadius: 5,
-                    pointStyle: 'star',
-                    pointBackgroundColor: 'rgba(168, 85, 247, 0.9)',
-                    pointBorderColor: 'rgba(168, 85, 247, 0.9)',
-                    pointBorderWidth: 2
-                });
-            }
-
-            const chartLabels = finalLabels;
+            const chartLabels = labelsTrimmed;
             const chartTotalData = totalData;
             const chartNbData = nbData;
             const chartCouleurData = couleurData;
@@ -6825,30 +6813,13 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                                     const v = ctx.parsed.y;
                                     if (v == null) return '';
                                     const lbl = ctx.dataset.label || '';
-                                    if (lbl.startsWith('Est. fin mois')) return 'Total estimé: ' + fmt(v) + ' pages';
-                                    if (lbl.startsWith('Est. mois prochain') && ctx.dataIndex === ctx.dataset.data.length - 1) return 'Total estimé: ' + fmt(v) + ' pages';
-                                    if (lbl.startsWith('Est.')) return '';
-                                    if (ctx.dataset.label === 'Total') return 'Total: ' + fmt(v) + ' pages';
-                                    if (ctx.dataset.label === 'N&B') return 'N&B: ' + fmt(v);
-                                    if (ctx.dataset.label === 'Couleur') return 'Couleur: ' + fmt(v);
+                                    if (lbl === 'Total') return 'Total: ' + fmt(v) + ' pages';
+                                    if (lbl === 'N&B') return 'N&B: ' + fmt(v);
+                                    if (lbl === 'Couleur') return 'Couleur: ' + fmt(v);
                                     return lbl + ': ' + fmt(v);
-                                },
-                                afterBody: function(ctx) {
-                                    const lbl = ctx[0]?.dataset?.label || '';
-                                    const i = ctx[0]?.dataIndex;
-                                    if (lbl.startsWith('Est. fin mois') && currentMonthSoFar) {
-                                        return 'au ' + currentMonthSoFar.as_of_date + ' - projection fin de mois';
-                                    }
-                                    if (lbl.startsWith('Est. mois prochain') && i === chartLabels.length - 1) {
-                                        return '(estimation)';
-                                    }
-                                    return '';
                                 },
                                 title: function(ctx) {
                                     const i = ctx[0]?.dataIndex;
-                                    const lbl = ctx[0]?.dataset?.label || '';
-                                    if (lbl.startsWith('Est. fin mois')) return (chartDatesFull[idxCurrentMonth] || chartLabels[idxCurrentMonth] || '') + ' (est. fin de mois)';
-                                    if (lbl.startsWith('Est. mois prochain') && i === chartLabels.length - 1) return chartLabels[i] || '';
                                     return chartDatesFull[i] || chartLabels[i] || '';
                                 }
                             }
