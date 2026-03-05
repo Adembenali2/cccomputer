@@ -471,31 +471,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             align-items: center;
         }
 
-        .btn-estimate {
-            padding: 0.5rem 0.875rem;
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-md);
-            font-size: 0.875rem;
-            font-weight: 500;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            transition: all 0.2s ease;
-        }
-
-        .btn-estimate:hover:not(:disabled) {
-            border-color: var(--accent-primary);
-            background: rgba(59, 130, 246, 0.08);
-        }
-
-        .btn-estimate:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
         .stats-view-mode {
             display: inline-flex;
             background: var(--bg-secondary);
@@ -512,6 +487,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             color: var(--text-secondary);
             border-radius: 6px;
             transition: all 0.2s ease;
+            cursor: pointer;
         }
 
         .stats-segment.active {
@@ -591,42 +567,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             outline: none;
             border-color: var(--accent-primary);
             box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
-        }
-
-        .stats-kpi-row {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: var(--stats-spacing);
-        }
-
-        .stats-kpi-card {
-            background: var(--bg-primary);
-            border: var(--stats-card-border);
-            border-radius: var(--stats-card-radius);
-            padding: 1rem 1.25rem;
-            box-shadow: var(--stats-card-shadow);
-            transition: box-shadow 0.2s ease;
-        }
-
-        .stats-kpi-card:hover {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-
-        .stats-kpi-label {
-            display: block;
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-            margin-bottom: 0.25rem;
-        }
-
-        .stats-kpi-value {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--text-primary);
         }
 
         .stats-chart-card {
@@ -723,10 +663,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
 
             .stats-filter-group select {
                 min-width: 100%;
-            }
-
-            .stats-kpi-row {
-                grid-template-columns: repeat(2, 1fr);
             }
 
             .chart-container,
@@ -1573,10 +1509,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             <div class="stats-header">
                 <h2 class="stats-title">Statistiques d'impression</h2>
                 <div class="stats-header-actions">
-                    <button class="btn-estimate" id="btnEstimate" type="button" title="Estimer le mois prochain (vue mensuelle)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-                        Estimer mois prochain
-                    </button>
                     <button class="btn-export" id="btnExportExcel">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1625,25 +1557,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             <option value="">Toutes les années</option>
                         </select>
                     </div>
-                </div>
-            </div>
-
-            <div class="stats-kpi-row" id="statsKpiRow">
-                <div class="stats-kpi-card">
-                    <span class="stats-kpi-label">Total période</span>
-                    <span class="stats-kpi-value" id="kpiTotalValue">—</span>
-                </div>
-                <div class="stats-kpi-card">
-                    <span class="stats-kpi-label">Moyenne</span>
-                    <span class="stats-kpi-value" id="kpiMoyenneValue">—</span>
-                </div>
-                <div class="stats-kpi-card">
-                    <span class="stats-kpi-label">Pic (max)</span>
-                    <span class="stats-kpi-value" id="kpiPicValue">—</span>
-                </div>
-                <div class="stats-kpi-card" id="kpiEstimationCard">
-                    <span class="stats-kpi-label">Estimation mois prochain</span>
-                    <span class="stats-kpi-value" id="kpiEstimationValue">—</span>
                 </div>
             </div>
 
@@ -2631,7 +2544,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         // Variables globales pour le graphique
         let statsChart = null;
         let currentData = null;
-        let estimateValue = null;
 
         // ============================================
         // FONCTIONS GLOBALES - Doivent être définies en premier
@@ -6537,14 +6449,24 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             
             // Écouter les changements de filtres
             document.getElementById('filterClient').addEventListener('change', loadStatsData);
-            document.getElementById('filterMois').addEventListener('change', () => { updateViewModeSegments(); updateEstimateButton(); loadStatsData(); });
+            document.getElementById('filterMois').addEventListener('change', () => { updateViewModeSegments(); loadStatsData(); });
             document.getElementById('filterAnnee').addEventListener('change', loadStatsData);
+
+            // Switch Mensuel/Journalier cliquable
+            document.getElementById('segmentMonthly')?.addEventListener('click', () => {
+                document.getElementById('filterMois').value = '';
+                updateViewModeSegments();
+                loadStatsData();
+            });
+            document.getElementById('segmentDaily')?.addEventListener('click', () => {
+                const m = new Date().getMonth() + 1;
+                document.getElementById('filterMois').value = String(m);
+                updateViewModeSegments();
+                loadStatsData();
+            });
             
             // Bouton export Excel
             document.getElementById('btnExportExcel').addEventListener('click', exportToExcel);
-            
-            // Bouton estimation
-            document.getElementById('btnEstimate').addEventListener('click', showEstimate);
         }
 
         /**
@@ -6584,10 +6506,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             if (skeleton) { skeleton.style.display = 'flex'; }
             if (loadingText) { loadingText.style.display = 'block'; loadingText.textContent = 'Chargement des données...'; }
             canvas.style.display = 'none';
-            estimateValue = null;
-            updateStatsKpis(null);
             updateViewModeSegments();
-            updateEstimateButton();
             
             const clientId = document.getElementById('filterClient').value;
             const mois = document.getElementById('filterMois').value;
@@ -6608,7 +6527,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     currentData = data.data;
                     if (data.data.labels && data.data.labels.length > 0) {
                         updateChart(data.data);
-                        updateStatsKpis(data.data);
                         loadingDiv.style.display = 'none';
                         canvas.style.display = 'block';
                     } else {
@@ -6638,72 +6556,19 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             if (segD) segD.classList.toggle('active', !isMonthly);
         }
 
-        function updateEstimateButton() {
-            const btn = document.getElementById('btnEstimate');
-            const mois = document.getElementById('filterMois')?.value || '';
-            const isMonthly = !mois || mois === '';
-            if (btn) {
-                btn.disabled = !isMonthly;
-                btn.title = isMonthly ? 'Estimer le mois prochain (moyenne mobile 3 mois)' : 'Retour en vue mensuelle pour estimer';
-            }
-        }
-
         /**
          * Calcule l'estimation mois prochain (moyenne mobile 3 derniers mois non nuls)
          */
-        function computeEstimate() {
-            if (!currentData || currentData.group_by !== 'month') return null;
-            const totals = currentData.total_pages || [];
+        function computeEstimate(totals) {
+            if (!totals || totals.length === 0) return null;
             const nonZero = totals.filter(v => v > 0);
             if (nonZero.length < 2) return null;
             const last3 = nonZero.slice(-3);
-            const avg = Math.round(last3.reduce((a, b) => a + b, 0) / last3.length);
-            return avg;
-        }
-
-        function showEstimate() {
-            const val = computeEstimate();
-            estimateValue = val !== null ? val : (currentData?.group_by === 'month' ? 'insufficient' : null);
-            updateStatsKpis(currentData);
-            updateChart(currentData);
+            return Math.round(last3.reduce((a, b) => a + b, 0) / last3.length);
         }
 
         /**
-         * Met à jour les KPI cards (Total, Moyenne, Pic, Estimation)
-         */
-        function updateStatsKpis(data) {
-            const formatNum = (n) => (n ?? 0).toLocaleString('fr-FR');
-            const elTotal = document.getElementById('kpiTotalValue');
-            const elMoyenne = document.getElementById('kpiMoyenneValue');
-            const elPic = document.getElementById('kpiPicValue');
-            const elEstimation = document.getElementById('kpiEstimationValue');
-            if (!data || !data.labels || data.labels.length === 0) {
-                if (elTotal) elTotal.textContent = '—';
-                if (elMoyenne) elMoyenne.textContent = '—';
-                if (elPic) elPic.textContent = '—';
-                if (elEstimation) elEstimation.textContent = '—';
-                return;
-            }
-            const totals = data.total_pages || [];
-            const sum = totals.reduce((s, v) => s + (v || 0), 0);
-            const max = totals.length ? Math.max(...totals.map(v => v || 0)) : 0;
-            const avg = totals.length ? Math.round(sum / totals.length) : 0;
-            if (elTotal) elTotal.textContent = formatNum(sum) + ' p.';
-            if (elMoyenne) elMoyenne.textContent = formatNum(avg) + ' p.';
-            if (elPic) elPic.textContent = formatNum(max) + ' p.';
-            if (elEstimation) {
-                if (estimateValue !== null && estimateValue !== 'insufficient') {
-                    elEstimation.textContent = formatNum(estimateValue) + ' p. (est.)';
-                } else if (estimateValue === 'insufficient') {
-                    elEstimation.textContent = 'Données insuffisantes';
-                } else {
-                    elEstimation.textContent = '—';
-                }
-            }
-        }
-
-        /**
-         * Met à jour le graphique (line chart, Total + NB + Couleur)
+         * Met à jour le graphique (Total pages + Estimation intégrée en mode mensuel)
          */
         function updateChart(data) {
             const ctx = document.getElementById('statsChart').getContext('2d');
@@ -6712,81 +6577,75 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             const groupBy = data.group_by || 'day';
             const isMonthly = groupBy === 'month';
             const chartTitle = isMonthly ? 'Consommation mensuelle' : 'Consommation quotidienne';
-            const chartSubtitle = isMonthly ? 'Pages par mois' : 'Pages par jour';
+            const datesFull = data.dates_full || [];
+            const labels = [...(data.labels || [])];
+            const totalData = [...(data.total_pages || [])];
+            const fmt = (n) => new Intl.NumberFormat('fr-FR').format(n);
+
+            const moisNoms = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+            let estimateValue = isMonthly ? computeEstimate(totalData) : null;
+            let chartSubtitle = isMonthly ? 'Pages par mois' : 'Pages par jour';
+            if (isMonthly && estimateValue === null && totalData.length > 0) {
+                chartSubtitle = 'Pages par mois (estimation indisponible)';
+            }
 
             const titleEl = document.getElementById('statsChartTitle');
             const subtitleEl = document.getElementById('statsChartSubtitle');
             if (titleEl) titleEl.textContent = chartTitle;
             if (subtitleEl) subtitleEl.textContent = chartSubtitle;
 
-            const datesFull = data.dates_full || [];
-            const labels = [...(data.labels || [])];
-            const totalData = [...(data.total_pages || [])];
-            const nbData = data.noir_blanc || [];
-            const colorData = data.couleur || [];
-
             let projectionLabel = null;
-            let projectionValue = null;
-            const moisNoms = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-            if (isMonthly && typeof estimateValue === 'number') {
+            let estimationData = null;
+
+            if (isMonthly && estimateValue !== null) {
                 const annee = parseInt(document.getElementById('filterAnnee')?.value || new Date().getFullYear());
-                const lastLabel = labels[labels.length - 1] || '';
-                const lastMois = 12;
                 const nextMois = 1;
                 const nextY = annee + 1;
                 projectionLabel = moisNoms[nextMois] + ' ' + nextY + ' (est.)';
-                projectionValue = estimateValue;
                 labels.push(projectionLabel);
-                totalData.push(projectionValue);
+                const lastReal = totalData[totalData.length - 1] ?? 0;
+                estimationData = totalData.map((v, i) => (i === totalData.length - 1 ? v : null)).concat([estimateValue]);
             }
 
-            const totalLen = totalData.length;
-            const hasProjection = projectionLabel && totalLen >= 2;
+            const mainData = estimationData ? [...totalData, null] : totalData;
 
             const datasets = [
                 {
                     type: 'line',
                     label: 'Total',
-                    data: totalData,
+                    data: mainData,
                     borderColor: 'rgba(16, 185, 129, 0.9)',
                     backgroundColor: 'rgba(16, 185, 129, 0.08)',
                     borderWidth: 2,
                     fill: true,
                     tension: 0.35,
-                    pointRadius: totalData.map((_, i) => (hasProjection && i === totalLen - 1) ? 4 : 2),
+                    pointRadius: mainData.map((_, i) => 2),
                     pointHoverRadius: 4,
                     pointBackgroundColor: '#fff',
                     pointBorderColor: 'rgba(16, 185, 129, 0.9)',
-                    pointBorderWidth: 2,
-                    segment: hasProjection ? {
-                        borderDash: (ctx) => (ctx.p1DataIndex === totalLen - 1 ? [6, 4] : undefined)
-                    } : undefined
-                },
-                {
-                    type: 'line',
-                    label: 'N&B',
-                    data: projectionLabel ? [...nbData, null] : nbData,
-                    borderColor: 'rgba(30, 41, 59, 0.8)',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.35,
-                    pointRadius: 2,
-                    pointHoverRadius: 4
-                },
-                {
-                    type: 'line',
-                    label: 'Couleur',
-                    data: projectionLabel ? [...colorData, null] : colorData,
-                    borderColor: 'rgba(59, 130, 246, 0.8)',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.35,
-                    pointRadius: 2,
-                    pointHoverRadius: 4
+                    pointBorderWidth: 2
                 }
             ];
+
+            if (estimationData) {
+                datasets.push({
+                    type: 'line',
+                    label: 'Estimation',
+                    data: estimationData,
+                    borderColor: 'rgba(245, 158, 11, 0.9)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    fill: false,
+                    tension: 0.35,
+                    pointRadius: estimationData.map((_, i) => i === estimationData.length - 1 ? 4 : 0),
+                    pointHoverRadius: 4,
+                    pointStyle: 'triangle',
+                    pointBackgroundColor: 'rgba(245, 158, 11, 0.9)',
+                    pointBorderColor: 'rgba(245, 158, 11, 0.9)',
+                    pointBorderWidth: 2
+                });
+            }
 
             statsChart = new Chart(ctx, {
                 type: 'line',
@@ -6871,18 +6730,17 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                                 label: function(ctx) {
                                     const v = ctx.parsed.y;
                                     if (v == null) return '';
-                                    return (ctx.dataset.label || '') + ': ' + new Intl.NumberFormat('fr-FR').format(v) + ' pages';
+                                    const isEst = ctx.dataset.label === 'Estimation' && ctx.dataIndex === ctx.dataset.data.length - 1;
+                                    const suffix = isEst ? ' (estimation)' : '';
+                                    return (ctx.dataset.label || '') + ': ' + fmt(v) + ' pages' + suffix;
                                 },
                                 title: function(ctx) {
                                     const i = ctx[0]?.dataIndex;
-                                    const nb = nbData[i] ?? 0;
-                                    const col = colorData[i] ?? 0;
-                                    const tot = totalData[i] ?? 0;
-                                    const fmt = (n) => new Intl.NumberFormat('fr-FR').format(n);
-                                    if (datesFull && datesFull[i]) {
-                                        return datesFull[i] + ' : ' + fmt(tot) + ' pages (NB ' + fmt(nb) + ' / Couleur ' + fmt(col) + ')';
-                                    }
-                                    return (labels[i] || '') + ' : ' + fmt(tot) + ' pages (NB ' + fmt(nb) + ' / Couleur ' + fmt(col) + ')';
+                                    const raw = ctx[0]?.raw;
+                                    const tot = totalData[i] ?? raw ?? 0;
+                                    const title = datesFull[i] || labels[i] || '';
+                                    const isEst = ctx[0]?.dataset?.label === 'Estimation' && i === labels.length - 1;
+                                    return title + ' : ' + fmt(tot) + ' pages' + (isEst ? ' (estimation)' : '');
                                 }
                             }
                         }
