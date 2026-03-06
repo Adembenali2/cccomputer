@@ -132,7 +132,7 @@ cache/roles_enum.json                # Cache des rôles (généré par getAvaila
 
 ---
 
-## 4. Éléments DOM importants
+## 4. Éléments DOM 
 
 | id / classe | Rôle | Événements | Impact métier |
 |-------------|------|------------|---------------|
