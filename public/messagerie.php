@@ -144,6 +144,17 @@ if ($tableExists) {
             </div>
         </div>
 
+        <!-- Barre des utilisateurs connectés -->
+        <div class="online-users-bar" id="onlineUsersBar" aria-label="Utilisateurs en ligne">
+            <span class="online-users-label">
+                <span class="online-users-dot"></span>
+                En ligne
+            </span>
+            <div class="online-users-list" id="onlineUsersList" role="list">
+                <!-- Rempli dynamiquement par JS -->
+            </div>
+        </div>
+
         <!-- Zone de messages (scrollable) -->
         <div class="chatroom-messages" id="chatroomMessages" role="log" aria-live="polite" aria-label="Messages de la messagerie">
             <div class="chatroom-loading" id="loadingIndicator">
@@ -245,6 +256,8 @@ const onlineIndicator = document.getElementById('onlineIndicator');
 const notificationsInfo = document.getElementById('notificationsInfo');
 const notificationsCount = document.getElementById('notificationsCount');
 const chatroomContainer = document.querySelector('.chatroom-container');
+const onlineUsersBar = document.getElementById('onlineUsersBar');
+const onlineUsersList = document.getElementById('onlineUsersList');
 
 // ============================================
 // Variables d'état
@@ -1157,6 +1170,39 @@ async function loadNotificationsCount() {
     }
 }
 
+// ============================================
+// Utilisateurs en ligne
+// ============================================
+async function loadOnlineUsers() {
+    if (!onlineUsersList) return;
+    try {
+        const response = await fetch('/API/chatroom_get_online_users.php', {
+            credentials: 'include',
+            cache: 'no-cache'
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.ok || !Array.isArray(data.users)) return;
+
+        onlineUsersList.innerHTML = '';
+        data.users.forEach((u) => {
+            const item = document.createElement('div');
+            item.className = 'online-user-item' + (u.is_me ? ' is-me' : '');
+            item.setAttribute('role', 'listitem');
+            const initials = getInitials(u.prenom, u.nom);
+            const name = escapeHtml(u.display_name || 'Utilisateur');
+            const title = u.emploi ? `${name} – ${escapeHtml(u.emploi)}` : name;
+            item.innerHTML = `
+                <span class="online-user-avatar" title="${title}">${initials}</span>
+                <span class="online-user-name">${name}</span>
+            `;
+            onlineUsersList.appendChild(item);
+        });
+    } catch (error) {
+        // Erreur silencieuse
+    }
+}
+
 async function markNotificationsAsRead() {
     try {
         const response = await fetch('/API/chatroom_mark_notifications_read.php', {
@@ -1195,7 +1241,8 @@ async function init() {
     await markNotificationsAsRead();
     
     await loadMessages(false);
-    
+    await loadOnlineUsers();
+
     // Utiliser l'intervalle dynamique pour le polling
     function scheduleNextRefresh() {
         // Nettoyer l'ancien timeout s'il existe
@@ -1229,6 +1276,8 @@ async function init() {
     
     // Mettre à jour le compteur de notifications périodiquement
     setInterval(loadNotificationsCount, 30000); // Toutes les 30 secondes
+    // Mettre à jour la liste des utilisateurs en ligne
+    setInterval(loadOnlineUsers, 20000); // Toutes les 20 secondes
 }
 
 // ============================================
