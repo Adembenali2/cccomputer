@@ -244,6 +244,7 @@ const statusText = document.getElementById('statusText');
 const onlineIndicator = document.getElementById('onlineIndicator');
 const notificationsInfo = document.getElementById('notificationsInfo');
 const notificationsCount = document.getElementById('notificationsCount');
+const chatroomContainer = document.querySelector('.chatroom-container');
 
 // ============================================
 // Variables d'état
@@ -716,7 +717,10 @@ async function sendMessage() {
     const mentionNames = detectMentions(messageText);
     const mentionIds = await extractMentionIds(mentionNames);
     
-    // Réinitialiser l'interface
+    // Réinitialiser l'interface (libérer l'URL blob pour éviter fuite mémoire)
+    if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview.src);
+    }
     messageInput.value = '';
     selectedImage = null;
     imagePreviewContainer.style.display = 'none';
@@ -1026,24 +1030,39 @@ removeImagePreview.addEventListener('click', () => {
 
 // Coller une image depuis le presse-papier (capture d'écran)
 document.addEventListener('paste', (e) => {
+    // Ne traiter que si l'utilisateur est dans la zone de chat (évite interception dans le header)
+    if (chatroomContainer) {
+        const target = e.target;
+        const activeEl = document.activeElement;
+        const inChatArea = chatroomContainer.contains(target) || (activeEl && chatroomContainer.contains(activeEl));
+        if (!inChatArea) return;
+    }
     const items = e.clipboardData?.items;
     if (!items) return;
-    for (const item of items) {
-        if (item.type.startsWith('image/')) {
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
             e.preventDefault();
             const file = item.getAsFile();
-            if (file && file instanceof File) {
-                if (file.size > 5 * 1024 * 1024) {
-                    showErrorNotification('L\'image collée est trop volumineuse (max 5MB)');
-                    return;
-                }
-                if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(imagePreview.src);
-                }
-                selectedImage = file;
-                imagePreview.src = URL.createObjectURL(file);
-                imagePreviewContainer.style.display = 'flex';
+            if (!file || !(file instanceof File)) {
+                showErrorNotification('Impossible de récupérer l\'image du presse-papiers');
+                return;
             }
+            if (file.size === 0) {
+                showErrorNotification('L\'image collée est vide');
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                showErrorNotification('L\'image collée est trop volumineuse (max 5MB)');
+                return;
+            }
+            if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
+                URL.revokeObjectURL(imagePreview.src);
+            }
+            selectedImage = file;
+            imagePreview.src = URL.createObjectURL(file);
+            imagePreviewContainer.style.display = 'flex';
+            messageInput.focus();
             break;
         }
     }
