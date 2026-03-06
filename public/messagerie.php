@@ -60,12 +60,12 @@ if ($tableExists) {
     <header class="page-header">
         <h1 class="page-title">Messagerie</h1>
         <div class="messagerie-tabs" role="tablist">
-            <button type="button" class="messagerie-tab active" data-mode="general" role="tab" aria-selected="true" id="tabGeneral">
+            <button type="button" class="messagerie-tab active" data-mode="private" role="tab" aria-selected="true" id="tabPrivate">
+                Messages privés
+            </button>
+            <button type="button" class="messagerie-tab" data-mode="general" role="tab" aria-selected="false" id="tabGeneral">
                 Chat général
                 <span class="messagerie-tab-badge" id="generalBadge" style="display: none;">0</span>
-            </button>
-            <button type="button" class="messagerie-tab" data-mode="private" role="tab" aria-selected="false" id="tabPrivate">
-                Messages privés
             </button>
         </div>
     </header>
@@ -78,10 +78,11 @@ if ($tableExists) {
     <?php endif; ?>
 
     <div class="chatroom-container">
-        <!-- Panneau Chat général -->
-        <div class="general-chat-panel" id="generalChatPanel">
+        <!-- Panneau Chat général (visible uniquement quand onglet Chat général actif) -->
+        <div class="general-chat-panel" id="generalChatPanel" style="display: none;">
             <div class="chatroom-header general-chat-header">
                 <h2>Chat général</h2>
+                <span class="general-chat-warning" aria-live="polite">Visible par tous</span>
                 <div class="general-chat-actions">
                     <button type="button" class="btn-refresh" id="btnRefresh" title="Actualiser les messages" aria-label="Actualiser">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -110,8 +111,8 @@ if ($tableExists) {
             </div>
         </div>
 
-        <!-- Panneau Messages privés -->
-        <div class="private-messaging-layout" id="privatePanel" style="display: none;">
+        <!-- Panneau Messages privés (visible par défaut) -->
+        <div class="private-messaging-layout" id="privatePanel">
         <!-- Sidebar : liste des utilisateurs -->
         <aside class="private-sidebar" id="usersSidebar">
             <div class="private-sidebar-header">
@@ -220,7 +221,7 @@ let selectedImage = null;
 let refreshIntervalId = null;
 let lastRenderedDateStr = null;
 
-let currentMode = 'general';
+let currentMode = 'private';
 let generalLastMessageId = 0;
 let generalLastRenderedDateStr = null;
 let generalIsLoading = false;
@@ -416,6 +417,7 @@ function updateGeneralBadge() {
 }
 
 async function sendGeneralMessage() {
+    if (currentMode !== 'general') return;
     const text = generalMessageInput.value.trim();
     const hasImage = generalSelectedImage && generalSelectedImage instanceof File;
     if (!text && !hasImage) return;
@@ -790,7 +792,7 @@ window.closeImageLightbox = closeImageLightbox;
 
 async function init() {
     await loadUsers();
-    setMode('general');
+    setMode('private');
 }
 init();
 window.addEventListener('beforeunload', () => {

@@ -105,6 +105,14 @@
     font-weight: 600;
 }
 
+.general-chat-warning {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    padding: 0.2rem 0.5rem;
+    background: rgba(234, 179, 8, 0.15);
+    border-radius: var(--radius-md);
+}
+
 .general-chat-actions {
     display: flex;
     gap: 0.5rem;
