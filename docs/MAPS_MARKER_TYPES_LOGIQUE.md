@@ -6,7 +6,7 @@ Une **source de vérité unique** pour les types de marqueurs et leurs couleurs 
 
 ---
 
-## Logique appliquée
+## Logique 
 
 | Type     | Condition                    | Couleur | Label              |
 |----------|------------------------------|---------|--------------------|
