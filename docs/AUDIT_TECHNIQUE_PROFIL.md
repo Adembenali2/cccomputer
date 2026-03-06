@@ -163,7 +163,7 @@ cache/roles_enum.json                # Cache des rôles (généré par getAvaila
 
 ## 5. Données et sécurité
 
-### Données modifiables
+### Données
 
 - **Utilisateurs** : Email, nom, prénom, téléphone, Emploi, statut, date_debut, password
 - **Permissions** : user_permissions (page, allowed) par utilisateur

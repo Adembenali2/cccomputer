@@ -2007,7 +2007,7 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                     <tbody id="usersTableBody">
                     <?php if (empty($users)): ?>
                         <tr>
-                            <td colspan="7" class="aucun" role="cell">Aucun utilisateur trouvé.</td>
+                            <td colspan="7" class="aucun" role="cell"><?= $search !== '' ? 'Aucun utilisateur ne correspond à « ' . h($search) . ' ».' : 'Aucun utilisateur enregistré.' ?></td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($users as $u): ?>
@@ -2515,7 +2515,7 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         if (!users || users.length === 0) {
             const msg = hasQuery
                 ? 'Aucun utilisateur ne correspond à « ' + escapeHtml(query) + ' ».'
-                : 'Aucun utilisateur trouvé.';
+                : 'Aucun utilisateur enregistré.';
             usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun aucun-resultat" role="cell">' + msg + '</td></tr>';
             usersCount.textContent = '0';
             updateSearchStatus(hasQuery ? 'Aucun résultat' : '', hasQuery);
