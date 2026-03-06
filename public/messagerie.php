@@ -274,7 +274,9 @@ function escapeHtml(text) {
 }
 
 function formatTime(dateString) {
+    if (!dateString) return '';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
     const now = new Date();
     const diff = now - date;
     
@@ -421,9 +423,9 @@ function formatMessageContent(message, mentions = []) {
     // Cette regex détecte @ suivi d'un ou plusieurs caractères (pas d'espaces ni @)
     const mentionRegex = /@([^\s@]+)/g;
     
-    // Remplacer toutes les mentions par des spans stylisés (sans le @, juste le nom)
+    // Remplacer toutes les mentions par des spans stylisés (échappement XSS obligatoire)
     content = content.replace(mentionRegex, (match, mentionName) => {
-        return `<span class="mention">${mentionName}</span>`;
+        return `<span class="mention">${escapeHtml(mentionName)}</span>`;
     });
     
     return content;
@@ -474,7 +476,7 @@ function renderMessage(message) {
     let imageContent = '';
     if (message.image_path) {
         imageContent = `<div class="message-image-wrapper">
-            <img src="${escapeHtml(message.image_path)}" alt="Image du message" class="message-image" loading="lazy" onclick="openImageLightbox('${escapeHtml(message.image_path)}')" onerror="this.onerror=null; this.src='/assets/images/image-error.png'; this.style.opacity='0.5';">
+            <img src="${escapeHtml(message.image_path)}" alt="Image du message" class="message-image" loading="lazy" onclick="openImageLightbox('${escapeHtml(message.image_path)}')" onerror="this.onerror=null; this.style.opacity='0.5'; this.alt='Image non disponible';">
         </div>`;
     }
     
@@ -1116,7 +1118,7 @@ async function markNotificationsAsRead() {
         const response = await fetch('/API/chatroom_mark_notifications_read.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ mark_all: true }),
+            body: JSON.stringify({ mark_all: true, csrf_token: CONFIG.csrfToken }),
             credentials: 'include'
         });
         

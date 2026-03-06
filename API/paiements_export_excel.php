@@ -18,11 +18,11 @@ requireApiAuth();
 
 try {
     $pdo = getPdoOrFail();
-
+    
     $idClient = isset($_GET['client_id']) ? (int)$_GET['client_id'] : null;
     $mois = isset($_GET['mois']) ? (int)$_GET['mois'] : null;
     $annee = isset($_GET['annee']) ? (int)$_GET['annee'] : null;
-
+    
     $groupByMonth = ($annee !== null && $annee > 0 && ($mois === null || $mois <= 0));
 
     if ($groupByMonth) {
@@ -52,7 +52,7 @@ try {
         $clientFilter = " AND pc.id_client = :id_client";
         $params[':id_client'] = $idClient;
     }
-
+    
     $moisNoms = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
     if ($groupByMonth) {
@@ -64,7 +64,7 @@ try {
                 WHERE r.mac_norm IS NOT NULL AND r.mac_norm != ''
                   AND r.Timestamp >= :date_start AND r.Timestamp <= :date_end
                   " . $clientFilter . "
-                UNION ALL
+                        UNION ALL
                 SELECT r.Timestamp, r.mac_norm, r.TotalPages, r.TotalBW, r.TotalColor
                 FROM compteur_relevee_ancien r
                 INNER JOIN photocopieurs_clients pc ON r.mac_norm = pc.mac_norm
@@ -106,7 +106,7 @@ try {
         $params[':date_start2'] = $dateStartExtended;
         $params[':date_end2'] = $dateEnd;
         $params[':annee_filter'] = $annee;
-    } else {
+        } else {
         $sqlWithPrev = "
             WITH raw AS (
                 SELECT r.Timestamp, r.mac_norm, r.TotalPages, r.TotalBW, r.TotalColor
@@ -381,7 +381,7 @@ try {
     $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
     $writer->save('php://output');
     exit;
-
+    
 } catch (PDOException $e) {
     error_log('paiements_export_excel.php SQL error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur de base de données: ' . $e->getMessage()], 500);

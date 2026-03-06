@@ -19,7 +19,9 @@ $currentUserId = (int)$_SESSION['user_id'];
 try {
 
     $query = trim($_GET['q'] ?? '');
-    $limit = min((int)($_GET['limit'] ?? 10), 20);
+    // Limite : 500 max pour requête vide (liste complète pour mentions), 50 max pour recherche
+    $limitDefault = empty($query) ? 500 : 50;
+    $limit = max(1, min((int)($_GET['limit'] ?? 10), $limitDefault));
 
     // Si la query est vide, retourner tous les utilisateurs actifs
     if (empty($query) || strlen($query) < 1) {

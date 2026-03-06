@@ -200,6 +200,8 @@ try {
     }
 
     // Formater les messages
+    $config = require __DIR__ . '/../config/app.php';
+    $mysqlTz = $config['mysql_timezone'] ?? 'UTC';
     $formattedMessages = [];
     foreach ($messages as $msg) {
         // Parser les mentions
@@ -212,7 +214,7 @@ try {
             'id' => (int)$msg['id'],
             'id_user' => (int)$msg['id_user'],
             'message' => $msg['message'],
-            'date_envoi' => $msg['date_envoi'],
+            'date_envoi' => formatDatetimeForJson($msg['date_envoi'] ?? '', $mysqlTz),
             'user_nom' => $msg['nom'],
             'user_prenom' => $msg['prenom'],
             'user_emploi' => $msg['Emploi'],

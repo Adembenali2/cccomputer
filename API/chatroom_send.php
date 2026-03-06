@@ -339,12 +339,14 @@ try {
         $mentionsArray = json_decode($messageData['mentions'], true) ?: [];
     }
     
+    $config = require __DIR__ . '/../config/app.php';
+    $mysqlTz = $config['mysql_timezone'] ?? 'UTC';
     // Formater la réponse
     $responseMessage = [
         'id' => (int)$messageData['id'],
         'id_user' => (int)$messageData['id_user'],
         'message' => $messageData['message'],
-        'date_envoi' => $messageData['date_envoi'],
+        'date_envoi' => formatDatetimeForJson($messageData['date_envoi'] ?? '', $mysqlTz),
         'user_nom' => $messageData['nom'],
         'user_prenom' => $messageData['prenom'],
         'user_emploi' => $messageData['Emploi'],

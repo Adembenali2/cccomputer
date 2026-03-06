@@ -285,6 +285,30 @@ function setCache(string $key, array $data): bool {
 }
 
 /**
+ * Convertit un datetime MySQL en ISO 8601 UTC pour le frontend JavaScript.
+ * MySQL (Railway) stocke en UTC. Le format "YYYY-MM-DD HH:mm:ss" est ambigu pour JS.
+ * En renvoyant "YYYY-MM-DDTHH:mm:ssZ", JS parse correctement et affiche dans le fuseau local.
+ *
+ * @param string $mysqlDatetime Format MySQL : "Y-m-d H:i:s" ou "Y-m-d H:i:s.u"
+ * @param string $sourceTz Fuseau source (défaut: UTC, correspond à Railway)
+ * @return string ISO 8601 avec Z (UTC)
+ */
+function formatDatetimeForJson(string $mysqlDatetime, string $sourceTz = 'UTC'): string {
+    if (empty($mysqlDatetime)) {
+        return $mysqlDatetime;
+    }
+    $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $mysqlDatetime, new \DateTimeZone($sourceTz));
+    if (!$dt) {
+        $dt = \DateTime::createFromFormat('Y-m-d H:i:s.u', substr($mysqlDatetime, 0, 26), new \DateTimeZone($sourceTz));
+    }
+    if (!$dt) {
+        $dt = new \DateTime($mysqlDatetime, new \DateTimeZone($sourceTz));
+    }
+    $dt->setTimezone(new \DateTimeZone('UTC'));
+    return $dt->format('Y-m-d\TH:i:s\Z');
+}
+
+/**
  * Vérifie si une colonne existe dans une table (avec cache pour éviter les requêtes répétées)
  */
 function columnExists(PDO $pdo, string $table, string $column): bool {

@@ -30,6 +30,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
 
+// Récupérer les paramètres JSON (php://input ne peut être lu qu'une fois)
+$rawInput = $GLOBALS['RAW_BODY'] ?? file_get_contents('php://input');
+$data = json_decode($rawInput, true) ?: [];
+
+// Vérification CSRF
+$csrfToken = $data['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+try {
+    requireCsrfToken($csrfToken);
+} catch (Throwable $e) {
+    error_log('chatroom_mark_notifications_read.php - Erreur CSRF: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Token CSRF invalide'], 403);
+}
+
 $currentUserId = (int)$_SESSION['user_id'];
 
 try {
@@ -48,8 +61,6 @@ try {
     }
 
     // Récupérer les paramètres (optionnel : marquer une notification spécifique ou toutes)
-    $input = file_get_contents('php://input');
-    $data = json_decode($input, true) ?: [];
     
     $notificationId = isset($data['notification_id']) ? (int)$data['notification_id'] : null;
     $markAll = isset($data['mark_all']) && $data['mark_all'] === true;

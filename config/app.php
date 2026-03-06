@@ -6,6 +6,8 @@ declare(strict_types=1);
  * Remplace les valeurs magiques dispersées dans le code
  */
 return [
+    // Fuseau horaire MySQL (UTC par défaut sur Railway). Les dates sont converties en ISO 8601 UTC pour le frontend.
+    'mysql_timezone' => $_ENV['MYSQL_TIMEZONE'] ?? 'UTC',
     'limits' => [
         'clients_per_page' => 500,
         'users_per_page' => 300,
