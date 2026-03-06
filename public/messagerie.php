@@ -1,6 +1,7 @@
 <?php
 // /public/messagerie.php
-// Messagerie privée utilisateur à utilisateur - Messages conservés 24h puis suppression automatique
+// Messagerie privée utilisateur à utilisateur - UNIQUEMENT flux privé (private_messages)
+// Aucun chat général sur cette page - messages visibles uniquement entre expéditeur et destinataire
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
@@ -58,16 +59,7 @@ if ($tableExists) {
 
 <main class="page-container">
     <header class="page-header">
-        <h1 class="page-title">Messagerie</h1>
-        <div class="messagerie-tabs" role="tablist">
-            <button type="button" class="messagerie-tab active" data-mode="private" role="tab" aria-selected="true" id="tabPrivate">
-                Messages privés
-            </button>
-            <button type="button" class="messagerie-tab" data-mode="general" role="tab" aria-selected="false" id="tabGeneral">
-                Chat général
-                <span class="messagerie-tab-badge" id="generalBadge" style="display: none;">0</span>
-            </button>
-        </div>
+        <h1 class="page-title">Messagerie privée</h1>
     </header>
 
     <?php if (!$tableExists): ?>
@@ -78,93 +70,52 @@ if ($tableExists) {
     <?php endif; ?>
 
     <div class="chatroom-container">
-        <!-- Panneau Chat général (visible uniquement quand onglet Chat général actif) -->
-        <div class="general-chat-panel" id="generalChatPanel" style="display: none;">
-            <div class="chatroom-header general-chat-header">
-                <h2>Chat général</h2>
-                <span class="general-chat-warning" aria-live="polite">Visible par tous</span>
-                <div class="general-chat-actions">
-                    <button type="button" class="btn-refresh" id="btnRefresh" title="Actualiser les messages" aria-label="Actualiser">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                        Actualiser
-                    </button>
-                </div>
-            </div>
-            <div class="chatroom-messages" id="generalMessages" role="log" aria-live="polite">
-                <div class="chatroom-loading" id="generalLoading">Chargement...</div>
-            </div>
-            <div class="chatroom-input-container">
-                <button type="button" class="image-upload-btn" id="generalImageBtn" title="Ajouter une image" aria-label="Ajouter une image">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                </button>
-                <input type="file" id="generalImageInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
-                <div class="chatroom-input-wrapper">
-                    <div id="generalImagePreview" class="image-preview-container" style="display: none;">
-                        <img id="generalImageImg" class="image-preview" alt="Aperçu">
-                        <button type="button" id="generalImageRemove" class="image-preview-remove">✕</button>
-                    </div>
-                    <textarea id="generalMessageInput" class="chatroom-input" placeholder="Message au chat général..." rows="1" maxlength="5000" aria-label="Message"></textarea>
-                </div>
-                <button type="button" class="chatroom-send-btn" id="generalSendBtn" title="Envoyer" aria-label="Envoyer">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                </button>
-            </div>
-        </div>
-
-        <!-- Panneau Messages privés (visible par défaut) -->
         <div class="private-messaging-layout" id="privatePanel">
-        <!-- Sidebar : liste des utilisateurs -->
-        <aside class="private-sidebar" id="usersSidebar">
-            <div class="private-sidebar-header">
-                <h3>Conversations</h3>
-                <input type="text" id="userSearch" class="private-search" placeholder="Rechercher un utilisateur..." aria-label="Rechercher">
-            </div>
-            <div class="private-users-list" id="usersList">
-                <div class="chatroom-loading" id="usersLoading">Chargement...</div>
-            </div>
-        </aside>
+            <aside class="private-sidebar" id="usersSidebar">
+                <div class="private-sidebar-header">
+                    <h3>Conversations</h3>
+                    <input type="text" id="userSearch" class="private-search" placeholder="Rechercher un utilisateur..." aria-label="Rechercher">
+                </div>
+                <div class="private-users-list" id="usersList">
+                    <div class="chatroom-loading" id="usersLoading">Chargement...</div>
+                </div>
+            </aside>
 
-        <!-- Zone principale : conversation -->
-        <div class="private-main">
-            <div class="private-conversation-placeholder" id="conversationPlaceholder">
-                <p>Sélectionnez un utilisateur pour démarrer une conversation.</p>
-                <small>Les messages sont conservés 24 heures.</small>
-            </div>
-            <div class="private-conversation-panel" id="conversationPanel" style="display: none;">
-                <div class="chatroom-header private-conversation-header">
-                    <h2 id="conversationTitle">Conversation</h2>
-                    <span id="conversationStatus" class="conversation-status" aria-live="polite">
-                        <span class="status-dot" id="statusDot"></span>
-                        <span id="statusText">—</span>
-                    </span>
+            <div class="private-main">
+                <div class="private-conversation-placeholder" id="conversationPlaceholder">
+                    <p>Sélectionnez un utilisateur pour démarrer une conversation privée.</p>
+                    <small>Les messages sont visibles uniquement entre vous et le destinataire. Conservés 24 heures.</small>
                 </div>
-                <div class="chatroom-messages" id="chatroomMessages" role="log" aria-live="polite">
-                    <div class="chatroom-loading" id="loadingIndicator">Chargement...</div>
-                </div>
-                <div class="chatroom-input-container" id="inputContainer">
-                    <button type="button" id="imageUploadButton" class="image-upload-btn" title="Ajouter une image" aria-label="Ajouter une image">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    </button>
-                    <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
-                    <div class="chatroom-input-wrapper">
-                        <div id="imagePreviewContainer" class="image-preview-container" style="display: none;">
-                            <img id="imagePreview" class="image-preview" alt="Aperçu">
-                            <button type="button" id="removeImagePreview" class="image-preview-remove">✕</button>
-                        </div>
-                        <textarea id="messageInput" class="chatroom-input" placeholder="Tapez votre message..." rows="1" maxlength="5000" aria-label="Message"></textarea>
+                <div class="private-conversation-panel" id="conversationPanel" style="display: none;">
+                    <div class="chatroom-header private-conversation-header">
+                        <h2 id="conversationTitle">Conversation</h2>
+                        <span id="conversationStatus" class="conversation-status" aria-live="polite">
+                            <span class="status-dot" id="statusDot"></span>
+                            <span id="statusText">—</span>
+                        </span>
                     </div>
-                    <button type="button" id="sendButton" class="chatroom-send-btn" title="Envoyer" aria-label="Envoyer">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                    </button>
+                    <div class="chatroom-messages" id="privateMessages" role="log" aria-live="polite">
+                        <div class="chatroom-loading" id="loadingIndicator">Chargement...</div>
+                    </div>
+                    <div class="chatroom-input-container" id="inputContainer">
+                        <button type="button" id="imageUploadButton" class="image-upload-btn" title="Ajouter une image" aria-label="Ajouter une image">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        </button>
+                        <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
+                        <div class="chatroom-input-wrapper">
+                            <div id="imagePreviewContainer" class="image-preview-container" style="display: none;">
+                                <img id="imagePreview" class="image-preview" alt="Aperçu">
+                                <button type="button" id="removeImagePreview" class="image-preview-remove">✕</button>
+                            </div>
+                            <textarea id="messageInput" class="chatroom-input" placeholder="Tapez votre message..." rows="1" maxlength="5000" aria-label="Message"></textarea>
+                        </div>
+                        <button type="button" id="sendButton" class="chatroom-send-btn" title="Envoyer" aria-label="Envoyer">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
-        </div>
-    </div>
-
-    <!-- Toast notification nouveaux messages -->
-    <div id="newMessageToast" class="messagerie-toast" role="status" aria-live="polite" style="display: none;">
-        Nouveau message reçu
     </div>
 </main>
 
@@ -176,7 +127,7 @@ const CONFIG = {
     maxMessageLength: 5000
 };
 
-const messagesContainer = document.getElementById('chatroomMessages');
+const privateMessagesContainer = document.getElementById('privateMessages');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const loadingIndicator = document.getElementById('loadingIndicator');
@@ -193,24 +144,6 @@ const conversationTitle = document.getElementById('conversationTitle');
 const conversationStatus = document.getElementById('conversationStatus');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
-const inputContainer = document.getElementById('inputContainer');
-
-const generalMessagesContainer = document.getElementById('generalMessages');
-const generalLoading = document.getElementById('generalLoading');
-const generalMessageInput = document.getElementById('generalMessageInput');
-const generalSendBtn = document.getElementById('generalSendBtn');
-const generalImageBtn = document.getElementById('generalImageBtn');
-const generalImageInput = document.getElementById('generalImageInput');
-const generalImagePreview = document.getElementById('generalImagePreview');
-const generalImageImg = document.getElementById('generalImageImg');
-const generalImageRemove = document.getElementById('generalImageRemove');
-const generalChatPanel = document.getElementById('generalChatPanel');
-const privatePanel = document.getElementById('privatePanel');
-const tabGeneral = document.getElementById('tabGeneral');
-const tabPrivate = document.getElementById('tabPrivate');
-const btnRefresh = document.getElementById('btnRefresh');
-const generalBadge = document.getElementById('generalBadge');
-const newMessageToast = document.getElementById('newMessageToast');
 
 let selectedUserId = null;
 let selectedUserName = '';
@@ -220,15 +153,6 @@ let isSending = false;
 let selectedImage = null;
 let refreshIntervalId = null;
 let lastRenderedDateStr = null;
-
-let currentMode = 'private';
-let generalLastMessageId = 0;
-let generalLastRenderedDateStr = null;
-let generalIsLoading = false;
-let generalIsSending = false;
-let generalSelectedImage = null;
-let generalPollIntervalId = null;
-let generalUnreadCount = 0;
 let onlineStatusIntervalId = null;
 
 function escapeHtml(text) {
@@ -302,10 +226,9 @@ function addDateSeparator(dateString) {
     return sep;
 }
 
-function renderMessages(messages, append, container, loadingEl, state) {
-    const c = container || messagesContainer;
-    const le = loadingEl || loadingIndicator;
-    const st = state || { lastId: lastMessageId, lastDate: lastRenderedDateStr };
+function renderPrivateMessages(messages, append) {
+    const c = privateMessagesContainer;
+    const le = loadingIndicator;
     if (!messages || messages.length === 0) {
         if (!append && le) { le.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>'; le.style.display = 'block'; }
         return;
@@ -317,200 +240,32 @@ function renderMessages(messages, append, container, loadingEl, state) {
             if (!msg || msg.id === undefined) return;
             if (c.querySelector(`[data-message-id="${msg.id}"]`)) return;
             const msgDateStr = new Date(msg.date_envoi).toDateString();
-            if (st.lastDate !== msgDateStr) {
+            if (lastRenderedDateStr !== msgDateStr) {
                 c.appendChild(addDateSeparator(msg.date_envoi));
-                st.lastDate = msgDateStr;
+                lastRenderedDateStr = msgDateStr;
             }
             const div = document.createElement('div');
             div.innerHTML = renderMessage(msg);
             div.firstElementChild.classList.add('message-new');
             c.appendChild(div.firstElementChild);
         });
-        st.lastId = Math.max(st.lastId, ...messages.map(m => m.id || 0));
+        lastMessageId = Math.max(lastMessageId, ...messages.map(m => m.id || 0));
         if (wasAtBottom) c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' });
     } else {
         c.innerHTML = '';
-        st.lastDate = null;
+        lastRenderedDateStr = null;
         messages.forEach(msg => {
             const msgDateStr = new Date(msg.date_envoi).toDateString();
-            if (st.lastDate !== msgDateStr) {
+            if (lastRenderedDateStr !== msgDateStr) {
                 c.appendChild(addDateSeparator(msg.date_envoi));
-                st.lastDate = msgDateStr;
+                lastRenderedDateStr = msgDateStr;
             }
             const div = document.createElement('div');
             div.innerHTML = renderMessage(msg);
             c.appendChild(div.firstElementChild);
         });
-        st.lastId = messages.length ? Math.max(...messages.map(m => m.id)) : 0;
+        lastMessageId = messages.length ? Math.max(...messages.map(m => m.id)) : 0;
         c.scrollTo({ top: c.scrollHeight, behavior: 'auto' });
-    }
-    if (!state) {
-        lastMessageId = st.lastId;
-        lastRenderedDateStr = st.lastDate;
-    }
-}
-
-const generalState = { lastId: 0, lastDate: null };
-
-async function loadGeneralMessages(append) {
-    if (generalIsLoading) return;
-    generalIsLoading = true;
-    try {
-        const sinceId = append && generalState.lastId > 0 ? generalState.lastId : 0;
-        const url = sinceId > 0
-            ? `/API/chatroom_get.php?since_id=${sinceId}&limit=50`
-            : `/API/chatroom_get.php?limit=50`;
-        const res = await fetch(url, { credentials: 'include' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-        if (data.ok && data.messages) {
-            const isViewingGeneral = currentMode === 'general';
-            const fromOthers = data.messages.filter(m => !m.is_me).length;
-            renderMessages(data.messages, append, generalMessagesContainer, generalLoading, generalState);
-            if (append && fromOthers > 0 && isViewingGeneral) {
-                showToast();
-            } else if (append && fromOthers > 0 && !isViewingGeneral) {
-                generalUnreadCount += fromOthers;
-                updateGeneralBadge();
-            }
-            if (!append && generalLoading) generalLoading.style.display = 'none';
-        } else if (!append) {
-            generalMessagesContainer.innerHTML = '';
-            if (generalLoading) {
-                generalLoading.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
-                generalLoading.style.display = 'block';
-                generalLoading.className = 'chatroom-loading';
-                generalMessagesContainer.appendChild(generalLoading);
-            }
-        }
-    } catch (e) {
-        generalMessagesContainer.innerHTML = '';
-        if (generalLoading) {
-            generalLoading.innerHTML = 'Erreur de chargement';
-            generalLoading.style.display = 'block';
-            generalLoading.className = 'chatroom-loading';
-            generalMessagesContainer.appendChild(generalLoading);
-        }
-    } finally {
-        generalIsLoading = false;
-    }
-}
-
-function showToast() {
-    if (!newMessageToast) return;
-    newMessageToast.style.display = 'flex';
-    newMessageToast.classList.add('messagerie-toast-visible');
-    setTimeout(() => {
-        newMessageToast.classList.remove('messagerie-toast-visible');
-        setTimeout(() => { newMessageToast.style.display = 'none'; }, 300);
-    }, 2500);
-}
-
-function updateGeneralBadge() {
-    if (!generalBadge) return;
-    if (generalUnreadCount <= 0) {
-        generalBadge.style.display = 'none';
-        return;
-    }
-    generalBadge.textContent = generalUnreadCount > 99 ? '99+' : String(generalUnreadCount);
-    generalBadge.style.display = 'inline-flex';
-}
-
-async function sendGeneralMessage() {
-    if (currentMode !== 'general') return;
-    const text = generalMessageInput.value.trim();
-    const hasImage = generalSelectedImage && generalSelectedImage instanceof File;
-    if (!text && !hasImage) return;
-    if (text && text.length > CONFIG.maxMessageLength) return;
-    if (generalIsSending) return;
-
-    generalIsSending = true;
-    generalSendBtn.disabled = true;
-    const originalMessage = text;
-    const originalImage = hasImage ? generalSelectedImage : null;
-
-    const tempMsg = { id: 'temp_' + Date.now(), message: text || '(image)', date_envoi: new Date().toISOString(), is_me: true, sending: true, image_path: hasImage ? URL.createObjectURL(originalImage) : null };
-    renderMessages([tempMsg], true, generalMessagesContainer, generalLoading, generalState);
-
-    if (generalImageImg?.src?.startsWith('blob:')) URL.revokeObjectURL(generalImageImg.src);
-    generalMessageInput.value = '';
-    generalSelectedImage = null;
-    if (generalImagePreview) generalImagePreview.style.display = 'none';
-
-    try {
-        let imagePath = null;
-        if (hasImage && originalImage instanceof File) {
-            const formData = new FormData();
-            formData.append('image', originalImage);
-            formData.append('csrf_token', CONFIG.csrfToken);
-            const upRes = await fetch('/API/chatroom_upload_image.php', { method: 'POST', body: formData, credentials: 'include' });
-            if (!upRes.ok) {
-                const err = await upRes.json();
-                throw new Error(err.error || 'Erreur upload');
-            }
-            const upData = await upRes.json();
-            if (upData.ok && upData.image_path) imagePath = upData.image_path;
-        }
-
-        const res = await fetch('/API/chatroom_send.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ csrf_token: CONFIG.csrfToken, message: originalMessage || '', mentions: [], image_path: imagePath || null }),
-            credentials: 'include'
-        });
-        const data = await res.json();
-
-        const tempEl = generalMessagesContainer.querySelector(`[data-message-id="${tempMsg.id}"]`);
-        if (tempEl) tempEl.remove();
-
-        if (res.ok && data.ok && data.message) {
-            renderMessages([data.message], true, generalMessagesContainer, generalLoading, generalState);
-        } else {
-            throw new Error(data.error || 'Erreur envoi');
-        }
-    } catch (e) {
-        const tempEl = generalMessagesContainer.querySelector(`[data-message-id="${tempMsg.id}"]`);
-        if (tempEl) tempEl.remove();
-        alert('Erreur : ' + e.message);
-        generalMessageInput.value = originalMessage;
-        if (originalImage) {
-            generalSelectedImage = originalImage;
-            generalImageImg.src = URL.createObjectURL(originalImage);
-            generalImagePreview.style.display = 'flex';
-        }
-    } finally {
-        generalIsSending = false;
-        generalSendBtn.disabled = false;
-        generalMessageInput.focus();
-    }
-}
-
-function setMode(mode) {
-    currentMode = mode;
-    tabGeneral.classList.toggle('active', mode === 'general');
-    tabGeneral.setAttribute('aria-selected', mode === 'general');
-    tabPrivate.classList.toggle('active', mode === 'private');
-    tabPrivate.setAttribute('aria-selected', mode === 'private');
-    generalChatPanel.style.display = mode === 'general' ? 'flex' : 'none';
-    privatePanel.style.display = mode === 'private' ? 'flex' : 'none';
-
-    if (mode === 'general') {
-        generalUnreadCount = 0;
-        updateGeneralBadge();
-        loadGeneralMessages(false);
-        clearInterval(generalPollIntervalId);
-        generalPollIntervalId = setInterval(() => { if (!generalIsLoading) loadGeneralMessages(true); }, 2000);
-    } else {
-        clearInterval(generalPollIntervalId);
-        generalPollIntervalId = null;
-    }
-
-    if (mode === 'private') {
-        if (selectedUserId) { loadMessages(false); startOnlineStatusPolling(); }
-        if (!refreshIntervalId) refreshIntervalId = setInterval(() => { if (selectedUserId && !isLoading) loadMessages(true); }, 3000);
-    } else {
-        stopOnlineStatusPolling();
-        if (refreshIntervalId) { clearInterval(refreshIntervalId); refreshIntervalId = null; }
     }
 }
 
@@ -550,7 +305,7 @@ function selectUser(userId, userName, online) {
     conversationTitle.textContent = userName;
     updateConversationStatus(online);
     lastMessageId = 0;
-    loadMessages(false);
+    loadPrivateMessages(false);
     messageInput.focus();
     messageInput.placeholder = 'Message privé à ' + userName + '...';
     startOnlineStatusPolling();
@@ -582,7 +337,7 @@ function startOnlineStatusPolling() {
     fetchOnlineStatus(selectedUserId);
     heartbeatPresence();
     onlineStatusIntervalId = setInterval(() => {
-        if (selectedUserId && currentMode === 'private') {
+        if (selectedUserId) {
             fetchOnlineStatus(selectedUserId);
             heartbeatPresence();
         }
@@ -594,7 +349,7 @@ function stopOnlineStatusPolling() {
     onlineStatusIntervalId = null;
 }
 
-async function loadMessages(append) {
+async function loadPrivateMessages(append) {
     if (!selectedUserId || isLoading) return;
     isLoading = true;
     try {
@@ -605,7 +360,7 @@ async function loadMessages(append) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
         if (data.ok && data.messages) {
-            if (data.messages.length > 0) renderMessages(data.messages, append);
+            if (data.messages.length > 0) renderPrivateMessages(data.messages, append);
             else if (!append) {
                 loadingIndicator.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
                 loadingIndicator.style.display = 'block';
@@ -618,8 +373,7 @@ async function loadMessages(append) {
     }
 }
 
-async function sendMessage() {
-    if (currentMode !== 'private') return;
+async function sendPrivateMessage() {
     const text = messageInput.value.trim();
     const hasImage = selectedImage && selectedImage instanceof File;
     if (!text && !hasImage) return;
@@ -632,7 +386,7 @@ async function sendMessage() {
     const originalImage = hasImage ? selectedImage : null;
 
     const tempMsg = { id: 'temp_' + Date.now(), message: text || '(image)', date_envoi: new Date().toISOString(), is_me: true, sending: true, image_path: hasImage ? URL.createObjectURL(originalImage) : null };
-    renderMessages([tempMsg], true);
+    renderPrivateMessages([tempMsg], true);
 
     if (imagePreview.src && imagePreview.src.startsWith('blob:')) URL.revokeObjectURL(imagePreview.src);
     messageInput.value = '';
@@ -662,17 +416,17 @@ async function sendMessage() {
         });
         const data = await res.json();
 
-        const tempEl = messagesContainer.querySelector(`[data-message-id="${tempMsg.id}"]`);
+        const tempEl = privateMessagesContainer.querySelector(`[data-message-id="${tempMsg.id}"]`);
         if (tempEl) tempEl.remove();
 
         if (res.ok && data.ok && data.message) {
-            renderMessages([data.message], true);
+            renderPrivateMessages([data.message], true);
             lastMessageId = Math.max(lastMessageId, data.message.id);
         } else {
             throw new Error(data.error || 'Erreur envoi');
         }
     } catch (e) {
-        const tempEl = messagesContainer.querySelector(`[data-message-id="${tempMsg.id}"]`);
+        const tempEl = privateMessagesContainer.querySelector(`[data-message-id="${tempMsg.id}"]`);
         if (tempEl) tempEl.remove();
         alert('Erreur : ' + e.message);
         messageInput.value = originalMessage;
@@ -692,39 +446,6 @@ function adjustTextareaHeight() {
     messageInput.style.height = 'auto';
     messageInput.style.height = Math.min(messageInput.scrollHeight, 80) + 'px';
 }
-
-tabGeneral.addEventListener('click', () => setMode('general'));
-tabPrivate.addEventListener('click', () => setMode('private'));
-
-btnRefresh.addEventListener('click', () => {
-    if (currentMode === 'general') loadGeneralMessages(false);
-});
-
-generalSendBtn.addEventListener('click', sendGeneralMessage);
-generalMessageInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendGeneralMessage(); }
-});
-generalMessageInput.addEventListener('input', () => {
-    generalMessageInput.style.height = 'auto';
-    generalMessageInput.style.height = Math.min(generalMessageInput.scrollHeight, 80) + 'px';
-});
-generalImageBtn.addEventListener('click', () => generalImageInput.click());
-generalImageInput.addEventListener('change', (e) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-        if (file.size > 5 * 1024 * 1024) { alert('Image trop volumineuse (max 5MB)'); return; }
-        generalSelectedImage = file;
-        generalImageImg.src = URL.createObjectURL(file);
-        generalImagePreview.style.display = 'flex';
-    }
-    e.target.value = '';
-});
-generalImageRemove.addEventListener('click', () => {
-    if (generalImageImg?.src?.startsWith('blob:')) URL.revokeObjectURL(generalImageImg.src);
-    generalSelectedImage = null;
-    generalImagePreview.style.display = 'none';
-    generalImageInput.value = '';
-});
 
 userSearch.addEventListener('input', () => loadUsers(userSearch.value.trim()));
 imageUploadButton.addEventListener('click', () => imageInput.click());
@@ -748,21 +469,14 @@ removeImagePreview.addEventListener('click', () => {
 document.addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    const isGeneralFocused = document.activeElement === generalMessageInput;
     for (let i = 0; i < items.length; i++) {
         if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
             e.preventDefault();
             const file = items[i].getAsFile();
             if (file && file.size > 0 && file.size <= 5 * 1024 * 1024) {
-                if (isGeneralFocused) {
-                    generalSelectedImage = file;
-                    generalImageImg.src = URL.createObjectURL(file);
-                    generalImagePreview.style.display = 'flex';
-                } else {
-                    selectedImage = file;
-                    imagePreview.src = URL.createObjectURL(file);
-                    imagePreviewContainer.style.display = 'flex';
-                }
+                selectedImage = file;
+                imagePreview.src = URL.createObjectURL(file);
+                imagePreviewContainer.style.display = 'flex';
             }
             break;
         }
@@ -771,9 +485,9 @@ document.addEventListener('paste', (e) => {
 
 messageInput.addEventListener('input', adjustTextareaHeight);
 messageInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPrivateMessage(); }
 });
-sendButton.addEventListener('click', sendMessage);
+sendButton.addEventListener('click', sendPrivateMessage);
 
 function openImageLightbox(src) {
     const lb = document.createElement('div');
@@ -792,12 +506,13 @@ window.closeImageLightbox = closeImageLightbox;
 
 async function init() {
     await loadUsers();
-    setMode('private');
+    refreshIntervalId = setInterval(() => {
+        if (selectedUserId && !isLoading) loadPrivateMessages(true);
+    }, 3000);
 }
 init();
 window.addEventListener('beforeunload', () => {
     clearInterval(refreshIntervalId);
-    clearInterval(generalPollIntervalId);
     stopOnlineStatusPolling();
 });
 </script>
