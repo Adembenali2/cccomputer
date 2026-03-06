@@ -1,6 +1,5 @@
 <?php
 // /public/agenda.php
-// Agenda affichant les SAV et livraisons prévus par jour pour chaque utilisateur
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
