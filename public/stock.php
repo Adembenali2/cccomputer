@@ -335,12 +335,15 @@ $datasets = [
     'papier' => $papersNormalized
 ];
 
+// Images des sections : créer assets/img/stock/ avec photocopieurs.jpg, lcd.jpg, pc.jpg, toners.jpg, papier.jpg
+// En attendant, fallback sur le logo pour éviter les images cassées
+$logoFallback = '/assets/logos/logo.png';
 $sectionImages = [
-    'photocopieurs' => '/assets/img/stock/photocopieurs.jpg',
-    'lcd' => '/assets/img/stock/lcd.jpg',
-    'pc' => '/assets/img/stock/pc.jpg',
-    'toners' => '/assets/img/stock/toners.jpg',
-    'papier' => '/assets/img/stock/papier.jpg',
+    'photocopieurs' => file_exists(__DIR__ . '/../assets/img/stock/photocopieurs.jpg') ? '/assets/img/stock/photocopieurs.jpg' : $logoFallback,
+    'lcd' => file_exists(__DIR__ . '/../assets/img/stock/lcd.jpg') ? '/assets/img/stock/lcd.jpg' : $logoFallback,
+    'pc' => file_exists(__DIR__ . '/../assets/img/stock/pc.jpg') ? '/assets/img/stock/pc.jpg' : $logoFallback,
+    'toners' => file_exists(__DIR__ . '/../assets/img/stock/toners.jpg') ? '/assets/img/stock/toners.jpg' : $logoFallback,
+    'papier' => file_exists(__DIR__ . '/../assets/img/stock/papier.jpg') ? '/assets/img/stock/papier.jpg' : $logoFallback,
 ];
 ?>
 <!DOCTYPE html>
