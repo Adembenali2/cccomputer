@@ -1899,20 +1899,26 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                        placeholder="Rechercher par nom, prénom ou email…" 
                        aria-label="Rechercher un utilisateur" 
                        autocomplete="off" />
-                <span class="search-loading" id="searchLoading" style="display: none;" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18" class="spinner">
+                <span class="search-loading" id="searchLoading" style="display: none;" aria-live="polite" aria-busy="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18" class="spinner" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
+                    <span class="search-loading-text">Recherche…</span>
                 </span>
-                <button type="button" class="input-clear" id="clearSearch" aria-label="Effacer la recherche" style="<?= $search === '' ? 'display: none;' : '' ?>">
+                <button type="button" class="input-clear" id="clearSearch" aria-label="Effacer la recherche" title="Effacer" style="<?= $search === '' ? 'display: none;' : 'display: flex;' ?>">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
             </div>
-        <div class="filter-hint">
-            <small>💡 Recherche en temps réel - tapez un nom, prénom, email ou rôle</small>
+        <div class="filter-hint" id="filterHint">
+            <small id="filterHintDefault" <?= $search !== '' ? 'style="display: none;"' : '' ?>>
+                💡 Recherche en temps réel - tapez un nom, prénom, email ou rôle
+            </small>
+            <span id="searchStatus" class="search-status" aria-live="polite" <?= $search !== '' ? 'style="display: inline;"' : 'style="display: none;"' ?>>
+                <?= $search !== '' ? (empty($users) ? 'Aucun résultat' : (count($users) . ' résultat' . (count($users) !== 1 ? 's' : ''))) : '' ?>
+            </span>
         </div>
     </form>
 
@@ -1983,8 +1989,8 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
 
     <div class="panel panel-toggle-target" id="usersPanel">
         <!-- Liste des utilisateurs : visible quand on n'est pas en édition -->
-        <div class="users-panel-list <?= $editing ? 'is-hidden' : '' ?>">
-            <h2 class="panel-title">Utilisateurs (<span id="usersCount"><?= count($users) ?></span>)</h2>
+        <div class="users-panel-list <?= $editing ? 'is-hidden' : '' ?> <?= $search !== '' ? 'is-filtered' : '' ?>">
+            <h2 class="panel-title">Utilisateurs (<span id="usersCount" class="users-count-badge"><?= count($users) ?></span>)</h2>
             <div class="table-responsive">
                 <table class="users-table" role="table" aria-label="Liste des utilisateurs">
                     <thead>
@@ -2481,6 +2487,9 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
     const usersCount = document.getElementById('usersCount');
     const searchLoading = document.getElementById('searchLoading');
     const clearSearchBtn = document.getElementById('clearSearch');
+    const filterHintDefault = document.getElementById('filterHintDefault');
+    const searchStatus = document.getElementById('searchStatus');
+    const usersPanelList = document.querySelector('.users-panel-list');
     
     if (!searchInput || !usersTableBody) return;
     
@@ -2495,14 +2504,26 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
     const csrfToken = <?= json_encode($CSRF) ?>;
     
     // Fonction pour mettre à jour le tableau
-    function updateTable(users) {
+    function updateTable(users, query) {
+        query = query || '';
+        const hasQuery = query.length > 0;
+        
+        if (usersPanelList) {
+            usersPanelList.classList.toggle('is-filtered', hasQuery);
+        }
+        
         if (!users || users.length === 0) {
-            usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun" role="cell">Aucun utilisateur trouvé.</td></tr>';
+            const msg = hasQuery
+                ? 'Aucun utilisateur ne correspond à « ' + escapeHtml(query) + ' ».'
+                : 'Aucun utilisateur trouvé.';
+            usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun aucun-resultat" role="cell">' + msg + '</td></tr>';
             usersCount.textContent = '0';
+            updateSearchStatus(hasQuery ? 'Aucun résultat' : '', hasQuery);
             return;
         }
         
         usersCount.textContent = users.length.toString();
+        updateSearchStatus(hasQuery ? users.length + ' résultat' + (users.length > 1 ? 's' : '') : '', hasQuery);
         
         let html = '';
         users.forEach(function(u) {
@@ -2543,6 +2564,20 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         usersTableBody.innerHTML = html;
     }
     
+    // Mise à jour du statut de recherche (hint dynamique)
+    function updateSearchStatus(text, isFiltered) {
+        if (!filterHintDefault || !searchStatus) return;
+        if (isFiltered && text) {
+            filterHintDefault.style.display = 'none';
+            searchStatus.textContent = text;
+            searchStatus.style.display = 'inline';
+        } else {
+            filterHintDefault.style.display = '';
+            searchStatus.style.display = 'none';
+            searchStatus.textContent = '';
+        }
+    }
+    
     // Fonction d'échappement HTML
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -2557,13 +2592,19 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
             currentRequest.abort();
         }
         
-        // Afficher le loader
+        // Afficher le loader et le statut
         if (searchLoading) {
-            searchLoading.style.display = 'inline-block';
+            searchLoading.style.display = 'inline-flex';
+        }
+        if (filterHintDefault && searchStatus) {
+            filterHintDefault.style.display = 'none';
+            searchStatus.textContent = 'Recherche…';
+            searchStatus.style.display = 'inline';
         }
         
         // Effectuer la requête AJAX (si vide, charge tous les utilisateurs)
         const url = '/API/profil_search_users.php?q=' + encodeURIComponent(query || '');
+        let requestAborted = false;
         currentRequest = fetch(url, {
             method: 'GET',
             headers: {
@@ -2579,37 +2620,38 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         })
         .then(function(data) {
             if (data.ok && data.users) {
-                updateTable(data.users);
+                updateTable(data.users, query);
             } else {
                 console.error('Erreur de recherche:', data.error || 'Erreur inconnue');
-                usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun" role="cell">Erreur lors de la recherche.</td></tr>';
+                usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun aucun-resultat" role="cell">Erreur lors de la recherche.</td></tr>';
                 usersCount.textContent = '0';
+                updateSearchStatus('', false);
             }
         })
         .catch(function(error) {
-            if (error.name !== 'AbortError') {
+            if (error.name === 'AbortError') {
+                requestAborted = true;
+            } else {
                 console.error('Erreur AJAX:', error);
-                usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun" role="cell">Erreur de connexion.</td></tr>';
+                usersTableBody.innerHTML = '<tr><td colspan="7" class="aucun aucun-resultat" role="cell">Erreur de connexion.</td></tr>';
                 usersCount.textContent = '0';
+                updateSearchStatus('', false);
             }
         })
         .finally(function() {
-            // Masquer le loader
             if (searchLoading) {
                 searchLoading.style.display = 'none';
             }
-            currentRequest = null;
+            if (!requestAborted) {
+                currentRequest = null;
+            }
         });
     }
     
     // Fonction pour afficher/masquer le bouton de nettoyage
     function toggleClearButton(show) {
         if (clearSearchBtn) {
-            if (show) {
-                clearSearchBtn.style.display = 'block';
-            } else {
-                clearSearchBtn.style.display = 'none';
-            }
+            clearSearchBtn.style.display = show ? 'flex' : 'none';
         }
     }
     
