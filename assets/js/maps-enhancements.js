@@ -244,8 +244,9 @@ const FilterManager = {
     },
     
     applyFilters() {
-        // Vérifications robustes
-        if (typeof map === 'undefined' || !map || typeof clientMarkers === 'undefined' || !clientMarkers) {
+        // Vérifications robustes (markerClusterGroup si clustering actif, sinon map)
+        const layerTarget = (typeof markerClusterGroup !== 'undefined' && markerClusterGroup) ? markerClusterGroup : (typeof map !== 'undefined' ? map : null);
+        if (!layerTarget || typeof clientMarkers === 'undefined' || !clientMarkers) {
             return;
         }
         
@@ -271,12 +272,12 @@ const FilterManager = {
             }
             
             if (visible) {
-                if (!map.hasLayer(marker)) {
-                    map.addLayer(marker);
+                if (!layerTarget.hasLayer(marker)) {
+                    layerTarget.addLayer(marker);
                 }
             } else {
-                if (map.hasLayer(marker)) {
-                    map.removeLayer(marker);
+                if (layerTarget.hasLayer(marker)) {
+                    layerTarget.removeLayer(marker);
                 }
             }
         });

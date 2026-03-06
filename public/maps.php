@@ -46,6 +46,15 @@ try {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
+    <!-- Leaflet.markercluster : clustering des marqueurs -->
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+          crossorigin=""/>
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+          crossorigin=""/>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+            crossorigin=""></script>
 </head>
 <body class="page-maps" id="maps-page">
 
@@ -339,6 +348,7 @@ const SEARCH_CACHE_TTL = 60000; // 1 minute
 // ==================
 
 let map;
+let markerClusterGroup;
 const clientMarkers = {};
 
 const clientSearchInput = document.getElementById('clientSearch');
@@ -612,6 +622,10 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
 }).addTo(map);
 
+// Groupe de clustering des marqueurs clients (améliore lisibilité et performances)
+markerClusterGroup = L.markerClusterGroup();
+markerClusterGroup.addTo(map);
+
 // === Icônes selon type de marqueur (SAV/livraison) ===
 function getMarkerColor(markerType) {
     switch(markerType) {
@@ -803,11 +817,11 @@ function addClientToMap(client, autoFit = true) {
         return true;
     }
     
-    // Créer un nouveau marqueur avec la bonne couleur
+    // Créer un nouveau marqueur avec la bonne couleur (ajout au cluster group)
     const marker = L.marker([client.lat, client.lng], {
         icon: createMarkerIcon(markerType),
         clientId: client.id // Stocker l'ID pour les filtres
-    }).addTo(map);
+    }).addTo(markerClusterGroup);
     
     // Afficher l'adresse exacte de la base de données
     const displayAddress = client.displayAddress || client.address || 
@@ -1772,7 +1786,7 @@ document.getElementById('btnRoute').addEventListener('click', () => {
 const activeFilters = new Set(['all', 'sav', 'livraison', 'normal']);
 
 function applyMarkerFilters() {
-    if (!map || !clientMarkers) return;
+    if (!map || !markerClusterGroup || !clientMarkers) return;
     
     Object.values(clientMarkers).forEach(marker => {
         const clientId = marker.options?.clientId;
@@ -1795,12 +1809,12 @@ function applyMarkerFilters() {
         }
         
         if (visible) {
-            if (!map.hasLayer(marker)) {
-                map.addLayer(marker);
+            if (!markerClusterGroup.hasLayer(marker)) {
+                markerClusterGroup.addLayer(marker);
             }
         } else {
-            if (map.hasLayer(marker)) {
-                map.removeLayer(marker);
+            if (markerClusterGroup.hasLayer(marker)) {
+                markerClusterGroup.removeLayer(marker);
             }
         }
     });
