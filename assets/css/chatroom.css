@@ -21,6 +21,8 @@
     margin-bottom: 1rem;
     padding: 0;
     flex-shrink: 0;
+    min-height: fit-content;
+    overflow: visible;
 }
 
 .page-chatroom {
@@ -62,6 +64,8 @@
     gap: 0.75rem;
     z-index: 10;
     flex-shrink: 0;
+    min-height: fit-content;
+    overflow: visible;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     position: relative;
 }
@@ -72,6 +76,8 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 1rem;
+    flex-shrink: 0;
+    min-height: fit-content;
 }
 
 .chatroom-header::after {
@@ -113,6 +119,7 @@
     margin: 0;
     font-size: 1.5rem;
     font-weight: 700;
+    line-height: 1.3;
     color: var(--text-primary);
     display: flex;
     align-items: center;
@@ -122,6 +129,7 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     letter-spacing: -0.02em;
+    min-height: 1.4em;
 }
 
 .chatroom-header .chatroom-status {
@@ -158,11 +166,12 @@
     align-items: center;
     justify-content: flex-start;
     gap: 0.75rem;
-    padding: 0.5rem 0 0;
-    margin-top: 0.25rem;
+    padding: 0.6rem 0 0;
+    margin-top: 0.35rem;
     border-top: 1px solid var(--border-color);
     flex-wrap: wrap;
-    min-height: 0;
+    flex-shrink: 0;
+    min-height: fit-content;
 }
 
 /* Avatars / badges à gauche */
@@ -295,6 +304,7 @@
 /* ====== Zone de messages (scrollable) ====== */
 .chatroom-messages {
     flex: 1;
+    min-height: 0; /* Permet au flex de répartir l'espace : le header reste visible */
     overflow-y: auto;
     overflow-x: hidden;
     padding: 2rem;
@@ -303,7 +313,7 @@
     flex-direction: column;
     gap: 1.25rem;
     scroll-behavior: smooth;
-    min-height: 500px;
+    min-height: 200px;
     max-height: calc(100vh - 300px);
     position: relative;
 }
@@ -581,6 +591,7 @@
     align-items: flex-end;
     gap: 0.6rem;
     z-index: 10;
+    flex-shrink: 0; /* Ne jamais compresser la zone de saisie */
     flex-wrap: nowrap; /* Empêche les éléments de passer à la ligne */
     min-width: 0; /* Permet au flex de rétrécir correctement */
     position: relative; /* Pour le positionnement des enfants */

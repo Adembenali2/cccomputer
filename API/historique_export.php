@@ -5,12 +5,15 @@
  * Accès : Admin, Dirigeant
  */
 
+ob_start();
+
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
 
 if (!checkPagePermission('historique', ['Admin', 'Dirigeant'])) {
+    ob_end_clean();
     header('HTTP/1.1 403 Forbidden');
     exit('Accès non autorisé');
 }
@@ -36,11 +39,18 @@ function parseDateFilterExport(string $dateInput): ?array {
     return ['start' => $dateStart, 'end' => $dateEnd];
 }
 
-$searchUser = sanitizeUserSearchExport((string)($_GET['user_search'] ?? ''));
-$dateDebutFilter = parseDateFilterExport((string)($_GET['date_debut'] ?? ''));
-$dateFinFilter = parseDateFilterExport((string)($_GET['date_fin'] ?? ''));
+$rawUser = isset($_GET['user_search']) ? (string)$_GET['user_search'] : '';
+$rawDateDebut = isset($_GET['date_debut']) ? (string)$_GET['date_debut'] : '';
+$rawDateFin = isset($_GET['date_fin']) ? (string)$_GET['date_fin'] : '';
+$rawCategorie = isset($_GET['categorie']) ? (string)$_GET['categorie'] : '';
+$rawAction = isset($_GET['action_filter']) ? (string)$_GET['action_filter'] : '';
+
+$searchUser = sanitizeUserSearchExport($rawUser);
+$dateDebutFilter = parseDateFilterExport($rawDateDebut);
+$dateFinFilter = parseDateFilterExport($rawDateFin);
+
 $allowedCategories = array_keys(AUDIT_CATEGORY_PATTERNS);
-$searchCategory = in_array($_GET['categorie'] ?? '', $allowedCategories, true) ? $_GET['categorie'] : '';
+$searchCategory = in_array($rawCategorie, $allowedCategories, true) ? $rawCategorie : '';
 
 $distinctActions = [];
 try {
@@ -49,7 +59,7 @@ try {
 } catch (PDOException $e) {
     $distinctActions = [];
 }
-$searchAction = (is_string($_GET['action_filter'] ?? '') && in_array($_GET['action_filter'], $distinctActions, true)) ? $_GET['action_filter'] : '';
+$searchAction = ($rawAction !== '' && in_array($rawAction, $distinctActions, true)) ? $rawAction : '';
 
 $params = [];
 $whereConditions = [];
@@ -118,13 +128,16 @@ try {
     error_log('historique_export.php: ' . $e->getMessage());
 }
 
+ob_end_clean();
+
 $filename = 'historique_cccomputer_' . date('Y-m-d_His') . '.csv';
 header('Content-Type: text/csv; charset=UTF-8');
 header('Content-Disposition: attachment; filename="' . $filename . '"');
 header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
 
 $out = fopen('php://output', 'w');
-fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM UTF-8
+fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
 fputcsv($out, ['ID', 'Date', 'Heure', 'Utilisateur', 'Catégorie', 'Action', 'Détails', 'IP'], ';');
 
