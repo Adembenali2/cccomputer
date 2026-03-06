@@ -1,46 +1,53 @@
 <?php
 // /public/messagerie.php
-// Messagerie - Interface de communication en temps réel
+// Messagerie privée utilisateur à utilisateur - Messages conservés 24h puis suppression automatique
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
-authorize_page('messagerie', []); // Accessible à tous les utilisateurs connectés
+authorize_page('messagerie', []);
 require_once __DIR__ . '/../includes/helpers.php';
 
-// Récupérer PDO via la fonction centralisée
 $pdo = getPdo();
-
 $CSRF = ensureCsrfToken();
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
 $currentUserNom = $_SESSION['user_nom'] ?? '';
 $currentUserPrenom = $_SESSION['user_prenom'] ?? '';
-$currentUserEmploi = $_SESSION['emploi'] ?? '';
-
-// Récupérer les informations de l'utilisateur pour l'affichage
 $currentUserName = trim($currentUserPrenom . ' ' . $currentUserNom);
 
-// Vérifier si la table existe
 $tableExists = false;
 try {
-    $checkTable = $pdo->prepare("SHOW TABLES LIKE 'chatroom_messages'");
+    $checkTable = $pdo->prepare("SHOW TABLES LIKE 'private_messages'");
     $checkTable->execute();
     $tableExists = $checkTable->rowCount() > 0;
 } catch (PDOException $e) {
     error_log('messagerie.php - Erreur vérification table: ' . $e->getMessage());
 }
 
-// Les messages et images ne sont plus supprimés automatiquement.
-// Les photos restent accessibles dans la messagerie.
-
+// Purge des messages privés de plus de 24h (à chaque chargement de page)
+if ($tableExists) {
+    try {
+        $stmt = $pdo->prepare("SELECT id, image_path FROM private_messages WHERE date_envoi < DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+        $stmt->execute();
+        $oldMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($oldMessages as $msg) {
+            if (!empty($msg['image_path'])) {
+                $imagePath = dirname(__DIR__) . $msg['image_path'];
+                if (file_exists($imagePath)) @unlink($imagePath);
+            }
+            $pdo->prepare("DELETE FROM private_messages WHERE id = ?")->execute([$msg['id']]);
+        }
+    } catch (PDOException $e) {
+        error_log('messagerie.php - Purge: ' . $e->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Messagerie - CCComputer</title>
+    <title>Messagerie privée - CCComputer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="/assets/logos/logo.png">
-    
     <link rel="stylesheet" href="/assets/css/main.css">
     <link rel="stylesheet" href="/assets/css/chatroom.css">
     <script src="/assets/js/api.js" defer></script>
@@ -51,168 +58,95 @@ try {
 
 <main class="page-container">
     <header class="page-header">
-        <h1 class="page-title">Messagerie</h1>
+        <h1 class="page-title">Messagerie privée</h1>
     </header>
 
     <?php if (!$tableExists): ?>
         <div class="maps-message alert" style="margin: 1rem 0;">
-            <strong>⚠️ Attention :</strong> La table <code>chatroom_messages</code> n'existe pas encore.
-            Veuillez exécuter la migration SQL : <code>sql/migration_create_chatroom_messages.sql</code>
+            <strong>⚠️ Attention :</strong> La table <code>private_messages</code> n'existe pas.
+            Exécutez la migration : <code>sql/migration_create_private_messages.sql</code>
         </div>
     <?php endif; ?>
 
-    <div class="chatroom-container">
-        <!-- Header de la chatroom (titre + utilisateurs en ligne intégrés) -->
-        <div class="chatroom-header">
-            <div class="chatroom-header-top">
-                <div>
-                    <h2>Messagerie</h2>
-                    <div class="chatroom-status">
-                        <span class="chatroom-status-indicator" id="onlineIndicator"></span>
-                        <span id="statusText">En ligne</span>
-                    </div>
-                </div>
-                <div id="notificationsInfo" class="chatroom-notifications-info" style="display: none;">
-                    <span id="notificationsCount">0</span> notification(s) non lue(s)
-                </div>
+    <div class="chatroom-container private-messaging-layout">
+        <!-- Sidebar : liste des utilisateurs -->
+        <aside class="private-sidebar" id="usersSidebar">
+            <div class="private-sidebar-header">
+                <h3>Conversations</h3>
+                <input type="text" id="userSearch" class="private-search" placeholder="Rechercher un utilisateur..." aria-label="Rechercher">
             </div>
-            <div class="online-users-bar" id="onlineUsersBar" aria-label="Utilisateurs en ligne">
-                <div class="online-users-list" id="onlineUsersList" role="list">
-                    <!-- Rempli dynamiquement par JS -->
-                </div>
-                <span class="online-users-label">
-                    <span class="online-users-dot"></span>
-                    En ligne
-                </span>
+            <div class="private-users-list" id="usersList">
+                <div class="chatroom-loading" id="usersLoading">Chargement...</div>
             </div>
-        </div>
+        </aside>
 
-        <!-- Zone de messages (scrollable) -->
-        <div class="chatroom-messages" id="chatroomMessages" role="log" aria-live="polite" aria-label="Messages de la messagerie">
-            <div class="chatroom-loading" id="loadingIndicator">
-                Chargement des messages...
+        <!-- Zone principale : conversation -->
+        <div class="private-main">
+            <div class="private-conversation-placeholder" id="conversationPlaceholder">
+                <p>Sélectionnez un utilisateur pour démarrer une conversation.</p>
+                <small>Les messages sont conservés 24 heures.</small>
             </div>
-        </div>
-        
-        <!-- Barre de saisie (fixe en bas) -->
-        <div class="chatroom-input-container">
-            <button 
-                type="button" 
-                id="imageUploadButton" 
-                class="image-upload-btn" 
-                title="Ajouter une image"
-                aria-label="Ajouter une image">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="20" height="20">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                </svg>
-            </button>
-            <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
-            <div class="chatroom-input-wrapper">
-                <div id="imagePreviewContainer" class="image-preview-container" style="display: none;">
-                    <img id="imagePreview" class="image-preview" alt="Aperçu">
-                    <button type="button" id="removeImagePreview" class="image-preview-remove">✕</button>
+            <div class="private-conversation-panel" id="conversationPanel" style="display: none;">
+                <div class="chatroom-header private-conversation-header">
+                    <h2 id="conversationTitle">Conversation</h2>
                 </div>
-            <textarea 
-                id="messageInput" 
-                class="chatroom-input" 
-                placeholder="Tapez votre message... (Entrée pour envoyer, Ctrl+V pour coller une image)"
-                rows="1"
-                maxlength="5000"
-                aria-label="Zone de saisie de message"
-                aria-describedby="messageInputHelp"></textarea>
-            <div id="messageInputHelp" class="sr-only">Appuyez sur Entrée pour envoyer, Shift+Entrée pour une nouvelle ligne</div>
-                <div id="mentionSuggestions" class="chatroom-mention-suggestions" role="listbox" aria-label="Suggestions de mentions"></div>
+                <div class="chatroom-messages" id="chatroomMessages" role="log" aria-live="polite">
+                    <div class="chatroom-loading" id="loadingIndicator">Chargement...</div>
+                </div>
+                <div class="chatroom-input-container" id="inputContainer">
+                    <button type="button" id="imageUploadButton" class="image-upload-btn" title="Ajouter une image" aria-label="Ajouter une image">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </button>
+                    <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
+                    <div class="chatroom-input-wrapper">
+                        <div id="imagePreviewContainer" class="image-preview-container" style="display: none;">
+                            <img id="imagePreview" class="image-preview" alt="Aperçu">
+                            <button type="button" id="removeImagePreview" class="image-preview-remove">✕</button>
+                        </div>
+                        <textarea id="messageInput" class="chatroom-input" placeholder="Tapez votre message..." rows="1" maxlength="5000" aria-label="Message"></textarea>
+                    </div>
+                    <button type="button" id="sendButton" class="chatroom-send-btn" title="Envoyer" aria-label="Envoyer">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                </div>
             </div>
-            <button 
-                type="button" 
-                id="sendButton" 
-                class="chatroom-send-btn" 
-                title="Envoyer le message"
-                aria-label="Envoyer le message">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                </svg>
-            </button>
-        </div>
-        
-        <!-- Indicateur de statut de connexion -->
-        <div id="connectionStatus" class="connection-status" role="status" aria-live="polite" style="display: none;">
-            <span class="connection-status-indicator"></span>
-            <span class="connection-status-text"></span>
         </div>
     </div>
 </main>
 
 <script>
-// ============================================
-// Configuration globale
-// ============================================
-    const CONFIG = {
+const CONFIG = {
     currentUserId: <?= $currentUserId ?>,
     currentUserName: <?= json_encode($currentUserName) ?>,
     csrfToken: <?= json_encode($CSRF) ?>,
-    refreshInterval: 2000, // 2 secondes
     maxMessageLength: 5000
 };
 
-// Vérification de sécurité pour éviter les erreurs
-if (typeof CONFIG.currentUserId === 'undefined' || CONFIG.currentUserId === null) {
-    console.error('Erreur: currentUserId non défini');
-    CONFIG.currentUserId = 0;
-}
-if (typeof CONFIG.currentUserName === 'undefined' || CONFIG.currentUserName === null) {
-    console.error('Erreur: currentUserName non défini');
-    CONFIG.currentUserName = 'Utilisateur';
-}
-if (typeof CONFIG.csrfToken === 'undefined' || CONFIG.csrfToken === null) {
-    console.error('Erreur: csrfToken non défini');
-    CONFIG.csrfToken = '';
-}
-
-// ============================================
-// Éléments DOM
-// ============================================
 const messagesContainer = document.getElementById('chatroomMessages');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const loadingIndicator = document.getElementById('loadingIndicator');
-const mentionSuggestions = document.getElementById('mentionSuggestions');
 const imageUploadButton = document.getElementById('imageUploadButton');
 const imageInput = document.getElementById('imageInput');
 const imagePreviewContainer = document.getElementById('imagePreviewContainer');
 const imagePreview = document.getElementById('imagePreview');
 const removeImagePreview = document.getElementById('removeImagePreview');
-const connectionStatusEl = document.getElementById('connectionStatus');
-const statusText = document.getElementById('statusText');
-const onlineIndicator = document.getElementById('onlineIndicator');
-const notificationsInfo = document.getElementById('notificationsInfo');
-const notificationsCount = document.getElementById('notificationsCount');
-const chatroomContainer = document.querySelector('.chatroom-container');
-const onlineUsersBar = document.getElementById('onlineUsersBar');
-const onlineUsersList = document.getElementById('onlineUsersList');
+const usersList = document.getElementById('usersList');
+const userSearch = document.getElementById('userSearch');
+const conversationPlaceholder = document.getElementById('conversationPlaceholder');
+const conversationPanel = document.getElementById('conversationPanel');
+const conversationTitle = document.getElementById('conversationTitle');
+const inputContainer = document.getElementById('inputContainer');
 
-// ============================================
-// Variables d'état
-// ============================================
+let selectedUserId = null;
+let selectedUserName = '';
 let lastMessageId = 0;
 let isLoading = false;
 let isSending = false;
-let autoScrollEnabled = true;
+let selectedImage = null;
 let refreshIntervalId = null;
-let mentionSearchTimeout = null;
-let mentionSearchIndex = -1;
-let mentionSuggestionsList = [];
-let allUsers = []; // Cache des utilisateurs pour les mentions
-let selectedImage = null; // Image sélectionnée pour upload
-let refreshInterval = 2000; // Intervalle de rafraîchissement dynamique
-let consecutiveEmptyResponses = 0; // Compteur pour backoff exponentiel
-let connectionStatus = 'online'; // Statut de connexion
-let pendingMessageId = null; // ID du message en cours d'envoi (pour feedback visuel)
-let lastRenderedDateStr = null; // Dernière date de séparation rendue (pour éviter les doublons)
+let lastRenderedDateStr = null;
 
-// ============================================
-// Fonctions utilitaires
-// ============================================
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -225,575 +159,229 @@ function formatTime(dateString) {
     if (isNaN(date.getTime())) return '';
     const now = new Date();
     const diff = now - date;
-    
     if (diff < 60000) return 'À l\'instant';
     if (diff < 3600000) return `Il y a ${Math.floor(diff / 60000)} min`;
-    if (date.toDateString() === now.toDateString()) {
-        return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    }
+    if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) {
-        return 'Hier à ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    }
+    if (date.toDateString() === yesterday.toDateString()) return 'Hier à ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     return date.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function scrollToBottom(smooth = true) {
-    if (!autoScrollEnabled) return;
-    setTimeout(() => {
-        messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-    }, 100);
-}
-
-// ============================================
-// Gestion des mentions
-// ============================================
-async function searchUsers(query, signal = null) {
-    // Permettre la recherche même avec query vide (pour afficher tous les utilisateurs)
-    // query peut être une chaîne vide ou undefined
-    const searchQuery = query || '';
-    
-    try {
-        // Utiliser fetch directement si apiClient n'est pas disponible
-        const fetchOptions = {
-            method: 'GET',
-            credentials: 'include'
-        };
-        
-        if (signal) {
-            fetchOptions.signal = signal;
-        }
-        
-        const response = await fetch(`/API/chatroom_search_users.php?q=${encodeURIComponent(searchQuery)}&limit=10`, fetchOptions);
-        
-        const data = await response.json();
-        
-        if (data.ok && data.users) {
-            mentionSuggestionsList = data.users;
-            displayMentionSuggestions();
-        } else {
-            mentionSuggestionsList = [];
-            mentionSuggestions.classList.remove('show');
-        }
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            // Erreur silencieuse pour la recherche (ne pas perturber l'utilisateur)
-            mentionSuggestions.classList.remove('show');
-        }
-    }
-}
-
-function displayMentionSuggestions() {
-    mentionSuggestions.innerHTML = '';
-    if (mentionSuggestionsList.length === 0) {
-        mentionSuggestions.classList.remove('show');
-        return;
-    }
-    
-    mentionSuggestionsList.forEach((user, index) => {
-        const item = document.createElement('div');
-        item.className = 'chatroom-mention-item' + (index === mentionSearchIndex ? ' selected' : '');
-        item.innerHTML = `<strong>${escapeHtml(user.display_name)}</strong><br><small>${escapeHtml(user.emploi)}</small>`;
-        item.addEventListener('click', () => insertMention(user));
-        mentionSuggestions.appendChild(item);
-    });
-    mentionSuggestions.classList.add('show');
-}
-
-function insertMention(user) {
-    const text = messageInput.value;
-    const cursorPos = messageInput.selectionStart;
-    const textBefore = text.substring(0, cursorPos);
-    const textAfter = text.substring(cursorPos);
-    
-    const atIndex = textBefore.lastIndexOf('@');
-    if (atIndex === -1) return;
-    
-    const newText = text.substring(0, atIndex) + `@${user.display_name} ` + textAfter;
-    messageInput.value = newText;
-    const newCursorPos = atIndex + user.display_name.length + 2;
-    messageInput.setSelectionRange(newCursorPos, newCursorPos);
-    mentionSuggestions.classList.remove('show');
-    mentionSearchIndex = -1;
-    adjustTextareaHeight();
-}
-
-function detectMentions(text) {
-    const mentionRegex = /@([^\s@]+)/g;
-    const mentions = [];
-    let match;
-    while ((match = mentionRegex.exec(text)) !== null) {
-        mentions.push(match[1]);
-    }
-    return mentions;
-}
-
-async function extractMentionIds(mentions) {
-    if (mentions.length === 0) return [];
-    
-    if (allUsers.length === 0) {
-        try {
-            const response = await fetch('/API/chatroom_search_users.php?q=&limit=1000', { credentials: 'include' });
-            const data = await response.json();
-            if (data.ok && data.users) {
-                allUsers = data.users;
-            }
-        } catch (error) {
-            console.error('Erreur chargement utilisateurs:', error);
-        }
-    }
-    
-    const mentionIds = [];
-    mentions.forEach(mentionName => {
-        const user = allUsers.find(u => 
-            u.display_name.toLowerCase() === mentionName.toLowerCase() ||
-            `${u.prenom} ${u.nom}`.toLowerCase() === mentionName.toLowerCase()
-        );
-        if (user) mentionIds.push(user.id);
-    });
-    
-    return mentionIds;
-}
-
-function formatMessageContent(message, mentions = []) {
-    let content = escapeHtml(message);
-    
-    // Détecter et rendre cliquables les URLs
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    content = content.replace(urlRegex, (url) => {
-        return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="message-link">${escapeHtml(url)}</a>`;
-    });
-    
-    // Détecter automatiquement toutes les mentions dans le texte (format @nom)
-    // Cette regex détecte @ suivi d'un ou plusieurs caractères (pas d'espaces ni @)
-    const mentionRegex = /@([^\s@]+)/g;
-    
-    // Remplacer toutes les mentions par des spans stylisés (échappement XSS obligatoire)
-    content = content.replace(mentionRegex, (match, mentionName) => {
-        return `<span class="mention">${escapeHtml(mentionName)}</span>`;
-    });
-    
+function formatMessageContent(text) {
+    let content = escapeHtml(text);
+    content = content.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="message-link">${escapeHtml(url)}</a>`);
     return content;
 }
 
-// ============================================
-// Affichage des messages
-// ============================================
 function getInitials(prenom, nom) {
     const first = (prenom || '').charAt(0).toUpperCase();
     const last = (nom || '').charAt(0).toUpperCase();
     return (first + last) || '?';
 }
 
-function renderMessage(message) {
-    // Vérification de sécurité
-    if (!message || typeof message !== 'object') {
-        console.error('Message invalide:', message);
-        return '';
-    }
-    
-    const isMe = message.is_me === true || message.is_me === 1;
+function renderMessage(msg) {
+    if (!msg || typeof msg !== 'object') return '';
+    const isMe = msg.is_me === true || msg.is_me === 1;
     const messageClass = isMe ? 'message-me' : 'message-other';
-    const authorName = isMe ? 'Moi' : escapeHtml((message.user_prenom || '') + ' ' + (message.user_nom || ''));
+    const authorName = isMe ? 'Moi' : escapeHtml((msg.user_prenom || '') + ' ' + (msg.user_nom || ''));
     const userInfo = isMe ? '' : `<span class="message-author">${authorName}</span>`;
-    
-    // Avatar avec initiales - avec vérification de sécurité
-    let avatarInitials = '?';
-    try {
-        if (isMe) {
-            const nameParts = (CONFIG.currentUserName || '').split(' ');
-            avatarInitials = getInitials(nameParts[0] || '', nameParts[1] || '');
-        } else {
-            avatarInitials = getInitials(message.user_prenom || '', message.user_nom || '');
-        }
-    } catch (e) {
-        console.error('Erreur génération initiales:', e);
-        avatarInitials = '?';
-    }
+    let avatarInitials = isMe ? getInitials((CONFIG.currentUserName || '').split(' ')[0], (CONFIG.currentUserName || '').split(' ')[1]) : getInitials(msg.user_prenom || '', msg.user_nom || '');
     const avatarHtml = `<div class="message-avatar" aria-hidden="true">${avatarInitials}</div>`;
-    
-    let messageContent = '';
-    if (message.message) {
-        messageContent = `<p class="message-content">${formatMessageContent(message.message, message.mentions || [])}</p>`;
-    }
-    
-    // Afficher l'image si présente avec lightbox
+    let messageContent = msg.message ? `<p class="message-content">${formatMessageContent(msg.message)}</p>` : '';
     let imageContent = '';
-    if (message.image_path) {
-        imageContent = `<div class="message-image-wrapper">
-            <img src="${escapeHtml(message.image_path)}" alt="Image du message" class="message-image" loading="lazy" onclick="openImageLightbox('${escapeHtml(message.image_path)}')" onerror="this.onerror=null; this.style.opacity='0.5'; this.alt='Image non disponible';">
-        </div>`;
+    if (msg.image_path) {
+        imageContent = `<div class="message-image-wrapper"><img src="${escapeHtml(msg.image_path)}" alt="Image" class="message-image" loading="lazy" onclick="openImageLightbox('${escapeHtml(msg.image_path)}')" onerror="this.onerror=null; this.style.opacity='0.5'; this.alt='Image non disponible';"></div>`;
     }
-    
-    // Indicateur d'envoi en cours
-    const sendingIndicator = message.sending ? '<span class="message-sending"><span class="spinner"></span> Envoi en cours...</span>' : '';
-    
-    const messageHtml = `
-        <div class="chatroom-message ${messageClass}" data-message-id="${message.id}" role="article" aria-label="Message de ${authorName}">
+    const sendingIndicator = msg.sending ? '<span class="message-sending"><span class="spinner"></span> Envoi...</span>' : '';
+    return `
+        <div class="chatroom-message ${messageClass}" data-message-id="${msg.id}" role="article">
             ${!isMe ? avatarHtml : ''}
             <div class="message-content-wrapper">
-                <div class="message-bubble">
-                    ${messageContent}
-                    ${imageContent}
-                    ${sendingIndicator}
-                </div>
-                <div class="message-info">
-                    ${userInfo}
-                    <span class="message-time">${formatTime(message.date_envoi)}</span>
-                </div>
+                <div class="message-bubble">${messageContent}${imageContent}${sendingIndicator}</div>
+                <div class="message-info">${userInfo}<span class="message-time">${formatTime(msg.date_envoi)}</span></div>
             </div>
             ${isMe ? avatarHtml : ''}
-        </div>
-    `;
-    
-    return messageHtml;
+        </div>`;
 }
 
 function addDateSeparator(dateString) {
     const date = new Date(dateString);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    let dateLabel = '';
-    if (messageDate.getTime() === today.getTime()) {
-        dateLabel = 'Aujourd\'hui';
-    } else if (messageDate.getTime() === yesterday.getTime()) {
-        dateLabel = 'Hier';
-    } else {
-        dateLabel = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-    }
-    
-    const separator = document.createElement('div');
-    separator.className = 'message-date-separator';
-    separator.innerHTML = `<span>${dateLabel}</span>`;
-    return separator;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const msgDate = new Date(date);
+    msgDate.setHours(0,0,0,0);
+    let label = msgDate.getTime() === today.getTime() ? 'Aujourd\'hui' : (msgDate.getTime() === today.getTime() - 86400000 ? 'Hier' : date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }));
+    const sep = document.createElement('div');
+    sep.className = 'message-date-separator';
+    sep.innerHTML = `<span>${label}</span>`;
+    return sep;
 }
 
-function renderMessages(messages, append = false) {
+function renderMessages(messages, append) {
     if (!messages || messages.length === 0) {
-        if (!append && loadingIndicator) {
-            loadingIndicator.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
-        }
+        if (!append && loadingIndicator) loadingIndicator.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
         return;
     }
-    
-    if (loadingIndicator) loadingIndicator.style.display = 'none';
-    
-    const wasAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 100;
-    
+    loadingIndicator.style.display = 'none';
+    const wasAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
     if (append) {
         messages.forEach(msg => {
-            if (!msg || typeof msg.id === 'undefined' || msg.id === null) {
-                return;
-            }
-
-            // Ne pas ajouter deux fois le même message (même ID)
-            if (messagesContainer.querySelector(`[data-message-id="${msg.id}"]`)) {
-                return;
-            }
-
-            // Ajouter un séparateur de date si nécessaire
-            const msgDate = new Date(msg.date_envoi);
-            const msgDateStr = msgDate.toDateString();
+            if (!msg || msg.id === undefined) return;
+            if (messagesContainer.querySelector(`[data-message-id="${msg.id}"]`)) return;
+            const msgDateStr = new Date(msg.date_envoi).toDateString();
             if (lastRenderedDateStr !== msgDateStr) {
-                const separator = addDateSeparator(msg.date_envoi);
-                messagesContainer.appendChild(separator);
+                messagesContainer.appendChild(addDateSeparator(msg.date_envoi));
                 lastRenderedDateStr = msgDateStr;
             }
-            
-            const messageElement = document.createElement('div');
-            messageElement.innerHTML = renderMessage(msg);
-            const messageDiv = messageElement.firstElementChild;
-            messageDiv.classList.add('message-new');
-            messagesContainer.appendChild(messageDiv);
+            const div = document.createElement('div');
+            div.innerHTML = renderMessage(msg);
+            div.firstElementChild.classList.add('message-new');
+            messagesContainer.appendChild(div.firstElementChild);
         });
-        if (messages.length > 0) {
-            lastMessageId = Math.max(lastMessageId, ...messages.map(m => m.id));
-        }
-        if (wasAtBottom || autoScrollEnabled) scrollToBottom(true);
+        lastMessageId = Math.max(lastMessageId, ...messages.map(m => m.id || 0));
+        if (wasAtBottom) messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'smooth' });
     } else {
         messagesContainer.innerHTML = '';
         lastRenderedDateStr = null;
         messages.forEach(msg => {
-            // Ajouter un séparateur de date si nécessaire
-            const msgDate = new Date(msg.date_envoi);
-            const msgDateStr = msgDate.toDateString();
+            const msgDateStr = new Date(msg.date_envoi).toDateString();
             if (lastRenderedDateStr !== msgDateStr) {
-                const separator = addDateSeparator(msg.date_envoi);
-                messagesContainer.appendChild(separator);
+                messagesContainer.appendChild(addDateSeparator(msg.date_envoi));
                 lastRenderedDateStr = msgDateStr;
             }
-            
-            const messageElement = document.createElement('div');
-            messageElement.innerHTML = renderMessage(msg);
-            messagesContainer.appendChild(messageElement.firstElementChild);
+            const div = document.createElement('div');
+            div.innerHTML = renderMessage(msg);
+            messagesContainer.appendChild(div.firstElementChild);
         });
-        if (messages.length > 0) {
-            lastMessageId = Math.max(...messages.map(m => m.id));
-        }
-        scrollToBottom(false);
+        lastMessageId = messages.length ? Math.max(...messages.map(m => m.id)) : 0;
+        messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'auto' });
     }
 }
 
-// ============================================
-// Chargement des messages
-// ============================================
-async function loadMessages(append = false) {
-    // Empêcher les appels multiples simultanés
-    if (isLoading) {
-        console.log('loadMessages déjà en cours, ignoré');
-        return;
+async function loadUsers(query = '') {
+    try {
+        const url = `/API/private_messages_list_users.php?q=${encodeURIComponent(query)}&limit=100`;
+        const res = await fetch(url, { credentials: 'include' });
+        const data = await res.json();
+        if (!data.ok || !data.users) return;
+        usersList.innerHTML = '';
+        if (data.users.length === 0) {
+            usersList.innerHTML = '<div class="chatroom-empty"><p>Aucun utilisateur trouvé</p></div>';
+            return;
+        }
+        data.users.forEach(u => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'private-user-item' + (selectedUserId === u.id ? ' selected' : '');
+            item.dataset.userId = u.id;
+            item.innerHTML = `<span class="private-user-avatar">${getInitials(u.prenom, u.nom)}</span><span class="private-user-name">${escapeHtml(u.display_name)}</span>`;
+            item.addEventListener('click', () => selectUser(u.id, u.display_name));
+            usersList.appendChild(item);
+        });
+    } catch (e) {
+        usersList.innerHTML = '<div class="chatroom-empty"><p>Erreur chargement</p></div>';
     }
+}
+
+function selectUser(userId, userName) {
+    selectedUserId = userId;
+    selectedUserName = userName;
+    usersList.querySelectorAll('.private-user-item').forEach(el => el.classList.toggle('selected', parseInt(el.dataset.userId) === userId));
+    conversationPlaceholder.style.display = 'none';
+    conversationPanel.style.display = 'flex';
+    conversationTitle.textContent = userName;
+    lastMessageId = 0;
+    loadMessages(false);
+    messageInput.focus();
+}
+
+async function loadMessages(append) {
+    if (!selectedUserId || isLoading) return;
     isLoading = true;
-    
     try {
         const url = append && lastMessageId > 0
-            ? `/API/chatroom_get.php?since_id=${lastMessageId}`
-            : `/API/chatroom_get.php?limit=100`;
-        
-        const response = await fetch(url, { credentials: 'include', headers: { 'Accept': 'application/json' } });
-        
-        // Essayer de récupérer le JSON même en cas d'erreur
-        let data;
-        try {
-            data = await response.json();
-        } catch (e) {
-            // Si le JSON échoue, essayer de récupérer le texte
-            try {
-                const text = await response.text();
-                throw new Error(`Réponse non-JSON (${response.status}): ${text.substring(0, 200)}`);
-            } catch (textError) {
-                throw new Error(`Impossible de lire la réponse (${response.status}): ${textError.message}`);
-            }
-        }
-        
-        if (!response.ok) {
-            const errorMsg = data.error || `Erreur HTTP ${response.status}`;
-            console.error('Erreur chargement messages:', errorMsg);
-            
-            if (loadingIndicator) {
-                loadingIndicator.innerHTML = '<div class="chatroom-loading">Erreur de chargement</div>';
-            }
-            throw new Error(errorMsg);
-        }
-        
+            ? `/API/private_messages_get.php?with=${selectedUserId}&since_id=${lastMessageId}`
+            : `/API/private_messages_get.php?with=${selectedUserId}&limit=100`;
+        const res = await fetch(url, { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
         if (data.ok && data.messages) {
-            // Ne rendre les messages que s'il y en a de nouveaux
-            if (data.messages.length > 0) {
-                renderMessages(data.messages, append);
-                
-                // Mettre à jour lastMessageId avec le plus grand ID reçu
-                const maxId = Math.max(...data.messages.map(m => m.id || 0));
-                if (maxId > lastMessageId) {
-                    lastMessageId = maxId;
-                }
+            if (data.messages.length > 0) renderMessages(data.messages, append);
+            else if (!append) {
+                loadingIndicator.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
+                loadingIndicator.style.display = 'block';
             }
-            
-            // Optimisation du polling : backoff exponentiel si pas de nouveaux messages
-            if (data.messages.length === 0) {
-                consecutiveEmptyResponses++;
-                // Augmenter progressivement l'intervalle (max 30 secondes)
-                refreshInterval = Math.min(2000 * Math.pow(1.5, consecutiveEmptyResponses), 30000);
-            } else {
-                consecutiveEmptyResponses = 0;
-                refreshInterval = 2000; // Reset à 2 secondes
-            }
-            
-            updateConnectionStatus('online');
-        } else if (!data.ok) {
-            throw new Error(data.error || 'Erreur inconnue');
         }
-    } catch (error) {
-        console.error('Erreur chargement messages:', error);
-        updateConnectionStatus('error');
-        
-        if (loadingIndicator) {
-            loadingIndicator.innerHTML = '<div class="chatroom-loading">Erreur de chargement</div>';
-        }
-        
-        // Afficher une notification d'erreur
-        showErrorNotification('Erreur lors du chargement des messages. Nouvelle tentative...');
+    } catch (e) {
+        if (loadingIndicator) loadingIndicator.innerHTML = '<div class="chatroom-loading">Erreur de chargement</div>';
     } finally {
         isLoading = false;
     }
 }
 
-// ============================================
-// Envoi de message
-// ============================================
 async function sendMessage() {
-    const messageText = messageInput.value.trim();
-    const hasImage = selectedImage !== null && selectedImage instanceof File;
-    
-    // Le message ou l'image doit être présent
-    if (!messageText && !hasImage) {
-        return;
-    }
-    
-    if (messageText && messageText.length > CONFIG.maxMessageLength) {
-        showErrorNotification(`Le message est trop long (max ${CONFIG.maxMessageLength} caractères)`);
-        return;
-    }
-    
-    if (isSending) return;
-    
+    const text = messageInput.value.trim();
+    const hasImage = selectedImage && selectedImage instanceof File;
+    if (!text && !hasImage) return;
+    if (text && text.length > CONFIG.maxMessageLength) return;
+    if (!selectedUserId || isSending) return;
+
     isSending = true;
     sendButton.disabled = true;
-    const originalMessage = messageText;
+    const originalMessage = text;
     const originalImage = hasImage ? selectedImage : null;
-    
-    // Afficher un message temporaire "Envoi en cours..."
-    const tempMessage = {
-        id: 'temp_' + Date.now(),
-        message: messageText || '(image)',
-        date_envoi: new Date().toISOString(),
-        is_me: true,
-        sending: true,
-        image_path: hasImage ? URL.createObjectURL(originalImage) : null
-    };
-    pendingMessageId = tempMessage.id;
-    renderMessages([tempMessage], true);
-    
-    // Extraire les mentions
-    const mentionNames = detectMentions(messageText);
-    const mentionIds = await extractMentionIds(mentionNames);
-    
-    // Réinitialiser l'interface (libérer l'URL blob pour éviter fuite mémoire)
-    if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreview.src);
-    }
+
+    const tempMsg = { id: 'temp_' + Date.now(), message: text || '(image)', date_envoi: new Date().toISOString(), is_me: true, sending: true, image_path: hasImage ? URL.createObjectURL(originalImage) : null };
+    renderMessages([tempMsg], true);
+
+    if (imagePreview.src && imagePreview.src.startsWith('blob:')) URL.revokeObjectURL(imagePreview.src);
     messageInput.value = '';
     selectedImage = null;
     imagePreviewContainer.style.display = 'none';
-    adjustTextareaHeight();
-    
+
     try {
         let imagePath = null;
-        
-        // Upload de l'image si présente (vérification stricte)
         if (hasImage && originalImage instanceof File) {
-            try {
-                const formData = new FormData();
-                formData.append('image', originalImage);
-                formData.append('csrf_token', CONFIG.csrfToken);
-                
-                const uploadResponse = await fetch('/API/chatroom_upload_image.php', {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'include'
-                });
-                
-                // Vérifier si la réponse est OK avant de parser le JSON
-                if (!uploadResponse.ok) {
-                    let errorMsg = 'Erreur lors de l\'upload de l\'image';
-                    try {
-                        const errorData = await uploadResponse.json();
-                        errorMsg = errorData.error || errorMsg;
-                    } catch (e) {
-                        // Si ce n'est pas du JSON, utiliser le texte de la réponse
-                        try {
-                            const errorText = await uploadResponse.text();
-                            errorMsg = errorText || errorMsg;
-                        } catch (textError) {
-                            errorMsg = `Erreur HTTP ${uploadResponse.status}`;
-                        }
-                    }
-                    throw new Error(errorMsg);
-                }
-                
-                const uploadData = await uploadResponse.json();
-                if (uploadData.ok && uploadData.image_path) {
-                    imagePath = uploadData.image_path;
-                } else {
-                    throw new Error(uploadData.error || 'Erreur lors de l\'upload de l\'image');
-                }
-            } catch (uploadError) {
-                // Si l'upload échoue, on ne peut pas continuer
-                throw uploadError;
+            const formData = new FormData();
+            formData.append('image', originalImage);
+            formData.append('csrf_token', CONFIG.csrfToken);
+            const upRes = await fetch('/API/chatroom_upload_image.php', { method: 'POST', body: formData, credentials: 'include' });
+            if (!upRes.ok) {
+                const err = await upRes.json();
+                throw new Error(err.error || 'Erreur upload');
             }
+            const upData = await upRes.json();
+            if (upData.ok && upData.image_path) imagePath = upData.image_path;
         }
-        
-        // Envoyer le message
-        const response = await fetch('/API/chatroom_send.php', {
+
+        const res = await fetch('/API/private_messages_send.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({
-                csrf_token: CONFIG.csrfToken,
-                message: originalMessage || null,
-                mentions: mentionIds,
-                image_path: imagePath || null
-            }),
+            body: JSON.stringify({ csrf_token: CONFIG.csrfToken, id_receiver: selectedUserId, message: originalMessage || '', image_path: imagePath || null }),
             credentials: 'include'
         });
-        
-        // Essayer de récupérer le JSON même en cas d'erreur
-        let data;
-        try {
-            data = await response.json();
-        } catch (e) {
-            // Si le JSON échoue, essayer de récupérer le texte
-            try {
-                const text = await response.text();
-                throw new Error(`Réponse non-JSON (${response.status}): ${text.substring(0, 200)}`);
-            } catch (textError) {
-                throw new Error(`Impossible de lire la réponse (${response.status}): ${textError.message}`);
-            }
-        }
-        
-        if (!response.ok) {
-            const errorMsg = data.error || `Erreur HTTP ${response.status}`;
-            console.error('Erreur envoi message:', errorMsg);
-            throw new Error(errorMsg);
-        }
-        
-        // Supprimer le message temporaire
-        const tempMsgEl = messagesContainer.querySelector(`[data-message-id="${pendingMessageId}"]`);
-        if (tempMsgEl) {
-            tempMsgEl.remove();
-        }
-        pendingMessageId = null;
-        
-        if (data.ok && data.message) {
-            // Ajouter l'image_path au message si présent
-            if (imagePath) {
-                data.message.image_path = imagePath;
-            }
+        const data = await res.json();
+
+        const tempEl = messagesContainer.querySelector(`[data-message-id="${tempMsg.id}"]`);
+        if (tempEl) tempEl.remove();
+
+        if (res.ok && data.ok && data.message) {
             renderMessages([data.message], true);
-            
-            // Mettre à jour lastMessageId pour que le prochain polling récupère les nouveaux messages
-            if (data.message.id) {
-                lastMessageId = Math.max(lastMessageId, data.message.id);
-            }
-            
-            // Ne pas appeler loadMessages ici car le polling le fera automatiquement
-            // Cela évite les appels multiples et les boucles infinies
-            updateConnectionStatus('online');
+            lastMessageId = Math.max(lastMessageId, data.message.id);
         } else {
-            throw new Error(data.error || 'Erreur lors de l\'envoi');
+            throw new Error(data.error || 'Erreur envoi');
         }
-    } catch (error) {
-        console.error('Erreur envoi message:', error);
-        
-        // Supprimer le message temporaire en cas d'erreur
-        const tempMsgEl = messagesContainer.querySelector(`[data-message-id="${pendingMessageId}"]`);
-        if (tempMsgEl) {
-            tempMsgEl.remove();
-        }
-        pendingMessageId = null;
-        
-        showErrorNotification('Erreur lors de l\'envoi du message: ' + error.message);
+    } catch (e) {
+        const tempEl = messagesContainer.querySelector(`[data-message-id="${tempMsg.id}"]`);
+        if (tempEl) tempEl.remove();
+        alert('Erreur : ' + e.message);
         messageInput.value = originalMessage;
         if (originalImage) {
             selectedImage = originalImage;
             imagePreview.src = URL.createObjectURL(originalImage);
             imagePreviewContainer.style.display = 'flex';
         }
-        adjustTextareaHeight();
-        updateConnectionStatus('error');
     } finally {
         isSending = false;
         sendButton.disabled = false;
@@ -801,462 +389,76 @@ async function sendMessage() {
     }
 }
 
-// ============================================
-// Gestion de la hauteur du textarea et mentions
-// ============================================
 function adjustTextareaHeight() {
     messageInput.style.height = 'auto';
     messageInput.style.height = Math.min(messageInput.scrollHeight, 80) + 'px';
 }
 
-// Debouncing amélioré pour les mentions
-let mentionSearchAbortController = null;
-
-messageInput.addEventListener('input', (e) => {
-    adjustTextareaHeight();
-    
-    const text = e.target.value;
-    const cursorPos = e.target.selectionStart;
-    const textBefore = text.substring(0, cursorPos);
-    const atIndex = textBefore.lastIndexOf('@');
-    
-    if (atIndex !== -1) {
-        // Récupérer le texte après le @ jusqu'au curseur
-        const query = textBefore.substring(atIndex + 1).trim();
-        
-        // Vérifier qu'il n'y a pas d'espace entre @ et le curseur (sinon ce n'est pas une mention)
-        const textAfterAt = textBefore.substring(atIndex + 1);
-        if (!textAfterAt.includes(' ')) {
-            // Annuler la recherche précédente si elle existe
-            if (mentionSearchAbortController) {
-                mentionSearchAbortController.abort();
-            }
-            
-            // Lancer la recherche même si query est vide (pour afficher tous les utilisateurs)
-            clearTimeout(mentionSearchTimeout);
-            mentionSearchTimeout = setTimeout(() => {
-                mentionSearchAbortController = new AbortController();
-                searchUsers(query, mentionSearchAbortController.signal);
-            }, 300); // Debounce de 300ms pour réduire les requêtes
-            return;
-        }
-    }
-    // Si on n'est pas dans une mention, cacher les suggestions
-    mentionSuggestions.classList.remove('show');
-    mentionSearchIndex = -1;
-});
-
-messageInput.addEventListener('keydown', (e) => {
-    if (mentionSuggestions.classList.contains('show') && mentionSuggestionsList.length > 0) {
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            mentionSearchIndex = Math.min(mentionSearchIndex + 1, mentionSuggestionsList.length - 1);
-            displayMentionSuggestions();
-            return;
-        }
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            mentionSearchIndex = Math.max(mentionSearchIndex - 1, -1);
-            displayMentionSuggestions();
-            return;
-        }
-        if (e.key === 'Enter' && mentionSearchIndex >= 0) {
-            e.preventDefault();
-            insertMention(mentionSuggestionsList[mentionSearchIndex]);
-            return;
-        }
-        if (e.key === 'Escape') {
-            mentionSuggestions.classList.remove('show');
-            return;
-        }
-    }
-    
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-});
-
-// Fermer les suggestions au clic extérieur
-document.addEventListener('click', (e) => {
-    if (!messageInput.contains(e.target) && !mentionSuggestions.contains(e.target)) {
-        mentionSuggestions.classList.remove('show');
-    }
-});
-
-// ============================================
-// Gestion du scroll
-// ============================================
-messagesContainer.addEventListener('scroll', () => {
-    const isAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 100;
-    autoScrollEnabled = isAtBottom;
-});
-
-// ============================================
-// Event Listeners
-// ============================================
-sendButton.addEventListener('click', sendMessage);
-
-// ============================================
-// Gestion de l'upload d'images
-// ============================================
-imageUploadButton.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Réinitialiser l'input pour permettre de sélectionner une nouvelle image
-    // même si une image est déjà sélectionnée
-    imageInput.value = '';
-    imageInput.click();
-});
-
+userSearch.addEventListener('input', () => loadUsers(userSearch.value.trim()));
+imageUploadButton.addEventListener('click', () => imageInput.click());
 imageInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    
-    // Nettoyer l'ancienne URL blob si elle existe
-    if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreview.src);
-    }
-    
-    if (file && file instanceof File) {
-        // Vérifier le type
-        if (!file.type.startsWith('image/')) {
-            showErrorNotification('Veuillez sélectionner une image');
-            imageInput.value = ''; // Réinitialiser l'input
-            return;
-        }
-        
-        // Vérifier la taille (5MB max)
-        if (file.size > 5 * 1024 * 1024) {
-            showErrorNotification('L\'image est trop volumineuse (max 5MB)');
-            imageInput.value = ''; // Réinitialiser l'input
-            return;
-        }
-        
-        // Vérifier que le fichier n'est pas vide
-        if (file.size === 0) {
-            showErrorNotification('Le fichier sélectionné est vide');
-            imageInput.value = ''; // Réinitialiser l'input
-            return;
-        }
-        
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+        if (file.size > 5 * 1024 * 1024) { alert('Image trop volumineuse (max 5MB)'); return; }
         selectedImage = file;
-        const objectUrl = URL.createObjectURL(file);
-        imagePreview.src = objectUrl;
-        imagePreview.onerror = () => {
-            showErrorNotification('Erreur lors du chargement de l\'aperçu de l\'image');
-            selectedImage = null;
-            imagePreviewContainer.style.display = 'none';
-            imageInput.value = '';
-            URL.revokeObjectURL(objectUrl);
-        };
+        imagePreview.src = URL.createObjectURL(file);
         imagePreviewContainer.style.display = 'flex';
-        
-        // Réinitialiser l'input pour permettre de sélectionner la même image à nouveau
-        // On le fait après un court délai pour que le changement soit détecté
-        setTimeout(() => {
-            // Ne pas réinitialiser ici, on veut garder le fichier sélectionné
-            // Mais on peut permettre de changer d'image en cliquant à nouveau
-        }, 100);
-    } else {
-        // Si aucun fichier n'est sélectionné, réinitialiser
-        selectedImage = null;
-        imagePreviewContainer.style.display = 'none';
     }
+    e.target.value = '';
 });
-
 removeImagePreview.addEventListener('click', () => {
-    if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreview.src);
-    }
+    if (imagePreview.src?.startsWith('blob:')) URL.revokeObjectURL(imagePreview.src);
     selectedImage = null;
     imagePreviewContainer.style.display = 'none';
     imageInput.value = '';
 });
 
-// Coller une image depuis le presse-papier (capture d'écran)
 document.addEventListener('paste', (e) => {
-    // Ne traiter que si l'utilisateur est dans la zone de chat (évite interception dans le header)
-    if (!chatroomContainer) return;
-    const target = e.target;
-    const activeEl = document.activeElement;
-    const inChatArea = chatroomContainer.contains(target) || (activeEl && chatroomContainer.contains(activeEl));
-    if (!inChatArea) return;
     const items = e.clipboardData?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.kind === 'file' && item.type.startsWith('image/')) {
+        if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
             e.preventDefault();
-            const file = item.getAsFile();
-            if (!file || !(file instanceof File)) {
-                showErrorNotification('Impossible de récupérer l\'image du presse-papiers');
-                return;
+            const file = items[i].getAsFile();
+            if (file && file.size > 0 && file.size <= 5 * 1024 * 1024) {
+                selectedImage = file;
+                imagePreview.src = URL.createObjectURL(file);
+                imagePreviewContainer.style.display = 'flex';
             }
-            if (file.size === 0) {
-                showErrorNotification('L\'image collée est vide');
-                return;
-            }
-            if (file.size > 5 * 1024 * 1024) {
-                showErrorNotification('L\'image collée est trop volumineuse (max 5MB)');
-                return;
-            }
-            if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
-                URL.revokeObjectURL(imagePreview.src);
-            }
-            selectedImage = file;
-            imagePreview.src = URL.createObjectURL(file);
-            imagePreviewContainer.style.display = 'flex';
-            messageInput.focus();
             break;
         }
     }
 });
 
-// ============================================
-// Gestion du statut de connexion
-// ============================================
-function updateConnectionStatus(status) {
-    connectionStatus = status;
-    
-    if (status === 'online') {
-        onlineIndicator.style.background = '#4ade80';
-        statusText.textContent = 'En ligne';
-        connectionStatusEl.style.display = 'none';
-    } else if (status === 'offline' || status === 'error') {
-        onlineIndicator.style.background = '#ef4444';
-        statusText.textContent = 'Hors ligne';
-        connectionStatusEl.style.display = 'flex';
-        connectionStatusEl.querySelector('.connection-status-indicator').style.background = '#ef4444';
-        connectionStatusEl.querySelector('.connection-status-text').textContent = 'Connexion perdue. Reconnexion en cours...';
-    }
-}
-
-// Détecter les changements de connexion réseau
-window.addEventListener('online', () => {
-    updateConnectionStatus('online');
-    loadMessages(true);
+messageInput.addEventListener('input', adjustTextareaHeight);
+messageInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
+sendButton.addEventListener('click', sendMessage);
 
-window.addEventListener('offline', () => {
-    updateConnectionStatus('offline');
-});
-
-// ============================================
-// Système de notifications
-// ============================================
-function showErrorNotification(message) {
-    // Utiliser showNotification si disponible (depuis api.js), sinon alert
-    if (typeof window.showNotification === 'function') {
-        window.showNotification(message, 'error');
-    } else {
-        // Fallback : créer une notification visuelle simple
-        const notification = document.createElement('div');
-        notification.className = 'chatroom-notification error';
-        notification.textContent = message;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #ef4444;
-            color: white;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            z-index: 10000;
-            animation: slideIn 0.3s ease-out;
-        `;
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease-out';
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
-    }
-}
-
-// ============================================
-// Gestion des notifications
-// ============================================
-async function loadNotificationsCount() {
-    try {
-        const response = await fetch('/API/chatroom_get_notifications.php', {
-            credentials: 'include',
-            cache: 'no-cache'
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.ok && data.count > 0) {
-                notificationsCount.textContent = data.count;
-                notificationsInfo.style.display = 'flex';
-                notificationsInfo.classList.add('has-notifications');
-            } else {
-                notificationsInfo.style.display = 'none';
-                notificationsInfo.classList.remove('has-notifications');
-            }
-        }
-    } catch (error) {
-        // Erreur silencieuse
-        notificationsInfo.style.display = 'none';
-    }
-}
-
-// ============================================
-// Utilisateurs en ligne
-// ============================================
-async function loadOnlineUsers() {
-    if (!onlineUsersList) return;
-    try {
-        const response = await fetch('/API/chatroom_get_online_users.php', {
-            credentials: 'include',
-            cache: 'no-cache'
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!data.ok || !Array.isArray(data.users)) return;
-
-        onlineUsersList.innerHTML = '';
-        data.users.forEach((u) => {
-            const item = document.createElement('div');
-            item.className = 'online-user-item' + (u.is_me ? ' is-me' : '');
-            item.setAttribute('role', 'listitem');
-            const initials = getInitials(u.prenom, u.nom);
-            const name = escapeHtml(u.display_name || 'Utilisateur');
-            const title = u.emploi ? `${name} – ${escapeHtml(u.emploi)}` : name;
-            item.innerHTML = `
-                <span class="online-user-avatar" title="${title}">${initials}</span>
-                <span class="online-user-name">${name}</span>
-            `;
-            onlineUsersList.appendChild(item);
-        });
-    } catch (error) {
-        // Erreur silencieuse
-    }
-}
-
-async function markNotificationsAsRead() {
-    try {
-        const response = await fetch('/API/chatroom_mark_notifications_read.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ mark_all: true, csrf_token: CONFIG.csrfToken }),
-            credentials: 'include'
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.ok) {
-                // Mettre à jour le badge dans le header si disponible
-                if (typeof window.updateMessagerieBadge === 'function') {
-                    window.updateMessagerieBadge();
-                }
-                // Masquer l'info de notifications dans la page
-                notificationsInfo.style.display = 'none';
-                notificationsInfo.classList.remove('has-notifications');
-            }
-        }
-    } catch (error) {
-        // Erreur silencieuse pour ne pas perturber l'utilisateur
-        console.error('Erreur marquage notifications:', error);
-    }
-}
-
-// ============================================
-// Initialisation
-// ============================================
-async function init() {
-    // Charger le nombre de notifications avant de les marquer comme lues
-    await loadNotificationsCount();
-    
-    // Marquer les notifications comme lues quand on ouvre la messagerie
-    await markNotificationsAsRead();
-    
-    await loadMessages(false);
-    await loadOnlineUsers();
-
-    // Utiliser l'intervalle dynamique pour le polling
-    function scheduleNextRefresh() {
-        // Nettoyer l'ancien timeout s'il existe
-        if (refreshIntervalId) {
-            clearTimeout(refreshIntervalId);
-            refreshIntervalId = null;
-        }
-        
-        // Programmer le prochain rafraîchissement
-        refreshIntervalId = setTimeout(() => {
-            // Vérifier que nous ne sommes pas déjà en train de charger
-            if (!isLoading) {
-                loadMessages(true).then(() => {
-                    // Programmer le prochain rafraîchissement seulement après la fin du chargement
-                    scheduleNextRefresh();
-                }).catch((error) => {
-                    console.error('Erreur dans scheduleNextRefresh:', error);
-                    // Continuer le polling même en cas d'erreur
-                    scheduleNextRefresh();
-                });
-            } else {
-                // Si on est déjà en train de charger, réessayer plus tard
-                scheduleNextRefresh();
-            }
-        }, refreshInterval);
-    }
-    
-    scheduleNextRefresh();
-    messageInput.focus();
-    updateConnectionStatus('online');
-    
-    // Mettre à jour le compteur de notifications périodiquement
-    setInterval(loadNotificationsCount, 30000); // Toutes les 30 secondes
-    // Mettre à jour la liste des utilisateurs en ligne
-    setInterval(loadOnlineUsers, 20000); // Toutes les 20 secondes
-}
-
-// ============================================
-// Lightbox pour les images
-// ============================================
-function openImageLightbox(imageSrc) {
-    const lightbox = document.createElement('div');
-    lightbox.className = 'image-lightbox';
-    lightbox.innerHTML = `
-        <div class="lightbox-backdrop" onclick="closeImageLightbox()"></div>
-        <div class="lightbox-content">
-            <button class="lightbox-close" onclick="closeImageLightbox()" aria-label="Fermer">✕</button>
-            <img src="${escapeHtml(imageSrc)}" alt="Image agrandie" class="lightbox-image">
-        </div>
-    `;
-    document.body.appendChild(lightbox);
+function openImageLightbox(src) {
+    const lb = document.createElement('div');
+    lb.className = 'image-lightbox';
+    lb.innerHTML = `<div class="lightbox-backdrop" onclick="closeImageLightbox()"></div><div class="lightbox-content"><button class="lightbox-close" onclick="closeImageLightbox()">✕</button><img src="${escapeHtml(src)}" alt="Image" class="lightbox-image"></div>`;
+    document.body.appendChild(lb);
     document.body.style.overflow = 'hidden';
-    
-    // Fermer avec Escape
-    const escapeHandler = (e) => {
-        if (e.key === 'Escape') {
-            closeImageLightbox();
-            document.removeEventListener('keydown', escapeHandler);
-        }
-    };
-    document.addEventListener('keydown', escapeHandler);
+    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { closeImageLightbox(); document.removeEventListener('keydown', esc); } });
 }
-
 function closeImageLightbox() {
-    const lightbox = document.querySelector('.image-lightbox');
-    if (lightbox) {
-        lightbox.style.animation = 'fadeOut 0.2s ease-out';
-        setTimeout(() => {
-            lightbox.remove();
-            document.body.style.overflow = '';
-        }, 200);
-    }
+    const lb = document.querySelector('.image-lightbox');
+    if (lb) { lb.remove(); document.body.style.overflow = ''; }
 }
-
-// Exposer les fonctions globalement
 window.openImageLightbox = openImageLightbox;
 window.closeImageLightbox = closeImageLightbox;
 
+async function init() {
+    await loadUsers();
+    refreshIntervalId = setInterval(() => {
+        if (selectedUserId && !isLoading) loadMessages(true);
+    }, 3000);
+}
 init();
-
-window.addEventListener('beforeunload', () => {
-    if (refreshIntervalId) clearTimeout(refreshIntervalId);
-});
+window.addEventListener('beforeunload', () => clearInterval(refreshIntervalId));
 </script>
 </body>
 </html>
