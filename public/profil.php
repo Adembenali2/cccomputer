@@ -24,7 +24,6 @@ $pdo = getPdo();
 // CONSTANTES
 // ========================================================================
 const USERS_LIMIT = 300;
-const SEARCH_MAX_LENGTH = 120;
 const ROLES_CACHE_TTL = 3600; // 1 heure
 
 // ========================================================================
@@ -85,18 +84,6 @@ function getAvailableRoles(PDO $pdo): array {
     @file_put_contents($cacheFile, json_encode($roles));
     
     return $roles;
-}
-
-/**
- * Nettoie et valide une recherche
- */
-function sanitizeSearch(?string $value): string {
-    $value = trim((string)$value);
-    if ($value === '') {
-        return '';
-    }
-    $value = mb_substr(preg_replace('/\s+/', ' ', $value), 0, SEARCH_MAX_LENGTH);
-    return $value;
 }
 
 /**
@@ -163,6 +150,23 @@ unset($_SESSION['flash']);
 
 // Récupérer les rôles disponibles
 $ROLES = getAvailableRoles($pdo);
+
+// Liste des pages disponibles pour les permissions (source unique)
+$availablePages = [
+    'dashboard' => 'Dashboard',
+    'agenda' => 'Agenda',
+    'historique' => 'Historique',
+    'clients' => 'Clients',
+    'client_fiche' => 'Fiche Client',
+    'paiements' => 'Paiements & Factures',
+    'messagerie' => 'Messagerie',
+    'sav' => 'SAV',
+    'livraison' => 'Livraisons',
+    'stock' => 'Stock',
+    'photocopieurs_details' => 'Détails Photocopieurs',
+    'maps' => 'Cartes & Planification',
+    'profil' => 'Gestion Utilisateurs'
+];
 
 // Générer le token CSRF
 ensureCsrfToken();
@@ -422,36 +426,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Utilisateur introuvable.');
             }
             
-            // Liste des pages disponibles (organisées par catégories)
-            $availablePages = [
-                // Pages principales
-                'dashboard' => 'Dashboard',
-                'agenda' => 'Agenda',
-                'historique' => 'Historique',
-                
-                // Gestion clients
-                'clients' => 'Clients',
-                'client_fiche' => 'Fiche Client',
-                
-                // Gestion financière
-                'paiements' => 'Paiements & Factures',
-                
-                // Communication
-                'messagerie' => 'Messagerie',
-                
-                // Opérations
-                'sav' => 'SAV',
-                'livraison' => 'Livraisons',
-                'stock' => 'Stock',
-                'photocopieurs_details' => 'Détails Photocopieurs',
-                
-                // Planification
-                'maps' => 'Cartes & Planification',
-                
-                // Administration
-                'profil' => 'Gestion Utilisateurs'
-            ];
-            
             // Récupérer les permissions envoyées
             $permissions = $_POST['permissions'] ?? [];
             
@@ -522,60 +496,15 @@ $search = sanitizeSearch($_GET['q'] ?? '');
 $savSearch = trim((string)($_GET['q_sav'] ?? ''));
 $savSearch = mb_substr(preg_replace('/\s+/', ' ', $savSearch), 0, 120);
 
-// Construction de la requête SQL optimisée avec recherche partielle intelligente
-$params = [];
-$where = [];
-
-if ($search !== '') {
-    $searchLower = mb_strtolower(trim($search));
-    
-    // Recherche intelligente : combine toutes les possibilités avec OR
-    // 1. Recherche dans nom, prénom, email, téléphone
-    // 2. Recherche dans les rôles (correspondance partielle, insensible à la casse)
-    // 3. Recherche dans les statuts (correspondance partielle)
-    
-    $searchConditions = [];
-    $paramIndex = 0;
-    
-    // Recherche intelligente : nom OU prénom OU email commence par la saisie (LIKE 'saisie%')
-    $key = ':search_text';
-    $searchPattern = $search . '%';
-    $searchConditions[] = "(LOWER(nom) LIKE LOWER({$key}) OR LOWER(prenom) LIKE LOWER({$key}) OR LOWER(Email) LIKE LOWER({$key}))";
-    $params[$key] = $searchPattern;
-    
-    // Recherche dans les rôles (correspondance partielle, insensible à la casse)
-    // Recherche directement dans le champ Emploi avec LIKE
-    $key = ':search_role';
-    $searchConditions[] = "LOWER(Emploi) LIKE LOWER({$key})";
-    $params[$key] = "%{$search}%";
-    
-    // Recherche dans les statuts (correspondance partielle)
-    $statusConditions = [];
-    if (stripos('actif', $searchLower) !== false || stripos($searchLower, 'actif') !== false) {
-        $key = ':search_status_actif';
-        $statusConditions[] = "statut = {$key}";
-        $params[$key] = 'actif';
-    }
-    if (stripos('inactif', $searchLower) !== false || stripos($searchLower, 'inactif') !== false) {
-        $key = ':search_status_inactif';
-        $statusConditions[] = "statut = {$key}";
-        $params[$key] = 'inactif';
-    }
-    if (!empty($statusConditions)) {
-        $searchConditions[] = '(' . implode(' OR ', $statusConditions) . ')';
-    }
-    
-    // Combiner toutes les conditions avec OR pour un filtrage intelligent
-    // Si l'utilisateur tape "diri", ça cherche dans nom/prénom/email/téléphone ET dans les rôles
-    if (!empty($searchConditions)) {
-        $where[] = '(' . implode(' OR ', $searchConditions) . ')';
-    }
-}
+// Construction de la requête SQL (logique de recherche unifiée avec l'API)
+$searchResult = buildUserSearchWhere($search);
+$params = $searchResult['params'];
+$whereClause = $searchResult['where'];
 
 $sql = "SELECT id, Email, nom, prenom, telephone, Emploi, statut, date_debut, date_creation, date_modification
         FROM utilisateurs";
-if ($where) {
-    $sql .= ' WHERE ' . implode(' AND ', $where);
+if ($whereClause !== '') {
+    $sql .= ' WHERE ' . $whereClause;
 }
 $sql .= ' ORDER BY nom ASC, prenom ASC LIMIT ' . USERS_LIMIT;
 
@@ -632,10 +561,20 @@ $filtersActive = ($search !== '');
 // ========================================================================
 // RÉCUPÉRATION DES DONNÉES SAV, PAIEMENTS ET FACTURES
 // ========================================================================
+// Vérifier si type_panne existe (compatibilité schéma)
+$hasTypePanne = false;
+try {
+    require_once __DIR__ . '/../includes/api_helpers.php';
+    $hasTypePanne = columnExists($pdo, 'sav', 'type_panne');
+} catch (Throwable $e) {
+    error_log('profil.php - Erreur vérification colonne type_panne: ' . $e->getMessage());
+}
+$selectTypePanne = $hasTypePanne ? "s.type_panne," : "";
+
 // Récupérer les SAV (filtrés par nom, prénom ou raison sociale du client si recherche)
 $savSql = "
     SELECT s.id, s.reference, s.description, s.date_ouverture, s.date_fermeture, 
-           s.statut, s.priorite, s.type_panne,
+           s.statut, s.priorite, {$selectTypePanne}
            c.raison_sociale as client_nom,
            c.nom_dirigeant as client_nom_dirigeant,
            c.prenom_dirigeant as client_prenom_dirigeant,
@@ -680,35 +619,7 @@ $facturesList = safeFetchAll($pdo, "
 // ========================================================================
 // GESTION DES PERMISSIONS (ACL)
 // ========================================================================
-// Liste des pages disponibles pour les permissions (organisées par catégories)
-$availablePages = [
-    // Pages principales
-    'dashboard' => 'Dashboard',
-    'agenda' => 'Agenda',
-    'historique' => 'Historique',
-    
-    // Gestion clients
-    'clients' => 'Clients',
-    'client_fiche' => 'Fiche Client',
-    
-    // Gestion financière
-    'paiements' => 'Paiements & Factures',
-    
-    // Communication
-    'messagerie' => 'Messagerie',
-    
-    // Opérations
-    'sav' => 'SAV',
-    'livraison' => 'Livraisons',
-    'stock' => 'Stock',
-    'photocopieurs_details' => 'Détails Photocopieurs',
-    
-    // Planification
-    'maps' => 'Cartes & Planification',
-    
-    // Administration
-    'profil' => 'Gestion Utilisateurs'
-];
+// ($availablePages défini plus haut, source unique)
 
 // Utilisateur cible pour les permissions (utilise l'utilisateur en édition si présent, sinon sélectionné)
 $permUserId = 0;
@@ -741,13 +652,6 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
             $userPermissions[$pageKey] = true; // Par défaut autorisé (fallback sur rôles)
         }
     }
-}
-
-// Fonction utilitaire pour décoder msg JSON
-function decode_msg($row) {
-    if (!isset($row['msg'])) return null;
-    $d = json_decode((string)$row['msg'], true);
-    return (json_last_error() === JSON_ERROR_NONE) ? $d : null;
 }
 ?>
 <!DOCTYPE html>
@@ -2507,7 +2411,7 @@ function decode_msg($row) {
                 <tbody>
                     <?php if (empty($facturesList)): ?>
                         <tr>
-                            <td colspan="10" class="aucun">Aucune facture trouvée.</td>
+                            <td colspan="12" class="aucun">Aucune facture trouvée.</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($facturesList as $facture): ?>

@@ -82,6 +82,67 @@ if (!function_exists('validateString')) {
 }
 
 /**
+ * Nettoie et valide une chaîne de recherche (max 120 caractères)
+ */
+if (!function_exists('sanitizeSearch')) {
+    function sanitizeSearch(?string $value): string {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return '';
+        }
+        $value = mb_substr(preg_replace('/\s+/', ' ', $value), 0, 120);
+        return $value;
+    }
+}
+
+/**
+ * Construit la clause WHERE et les paramètres pour la recherche utilisateurs.
+ * Logique unifiée : nom, prénom, email (LIKE 'saisie%'), Emploi (LIKE '%saisie%'), statut si "actif"/"inactif".
+ *
+ * @return array{where: string, params: array} where vide si pas de recherche
+ */
+if (!function_exists('buildUserSearchWhere')) {
+    function buildUserSearchWhere(string $search): array {
+        if ($search === '') {
+            return ['where' => '', 'params' => []];
+        }
+        $params = [];
+        $searchConditions = [];
+        $searchLower = mb_strtolower(trim($search));
+
+        // nom, prénom, email (commence par)
+        $key = ':search_text';
+        $searchPattern = $search . '%';
+        $searchConditions[] = "(LOWER(nom) LIKE LOWER({$key}) OR LOWER(prenom) LIKE LOWER({$key}) OR LOWER(Email) LIKE LOWER({$key}))";
+        $params[$key] = $searchPattern;
+
+        // Emploi / rôle (contient)
+        $key = ':search_role';
+        $searchConditions[] = "LOWER(Emploi) LIKE LOWER({$key})";
+        $params[$key] = "%{$search}%";
+
+        // Statut actif/inactif
+        $statusConditions = [];
+        if (stripos($searchLower, 'actif') !== false) {
+            $key = ':search_status_actif';
+            $statusConditions[] = "statut = {$key}";
+            $params[$key] = 'actif';
+        }
+        if (stripos($searchLower, 'inactif') !== false) {
+            $key = ':search_status_inactif';
+            $statusConditions[] = "statut = {$key}";
+            $params[$key] = 'inactif';
+        }
+        if (!empty($statusConditions)) {
+            $searchConditions[] = '(' . implode(' OR ', $statusConditions) . ')';
+        }
+
+        $where = '(' . implode(' OR ', $searchConditions) . ')';
+        return ['where' => $where, 'params' => $params];
+    }
+}
+
+/**
  * Formate une date pour l'affichage (version robuste avec gestion d'erreurs)
  */
 if (!function_exists('formatDate')) {

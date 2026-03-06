@@ -57,29 +57,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 try {
-    // Récupérer et nettoyer la recherche
-    $search = trim($_GET['q'] ?? '');
-    $search = mb_substr(preg_replace('/\s+/', ' ', $search), 0, 120);
-    
-    // Construire la requête SQL avec LIKE 'saisie%' (commence par)
-    $params = [];
-    $where = [];
-    
-    if ($search !== '') {
-        $searchPattern = $search . '%';
-        
-        // Recherche intelligente : nom OU email OU prénom commence par la saisie
-        $where[] = "(LOWER(nom) LIKE LOWER(:search_nom) OR LOWER(prenom) LIKE LOWER(:search_prenom) OR LOWER(Email) LIKE LOWER(:search_email))";
-        $params[':search_nom'] = $searchPattern;
-        $params[':search_prenom'] = $searchPattern;
-        $params[':search_email'] = $searchPattern;
-    }
-    
+    // Récupérer et nettoyer la recherche (même logique que profil.php)
+    $search = sanitizeSearch($_GET['q'] ?? '');
+
+    // Logique unifiée : nom, prénom, email, rôle, statut
+    $searchResult = buildUserSearchWhere($search);
+    $params = $searchResult['params'];
+    $whereClause = $searchResult['where'];
+
     $sql = "SELECT id, Email, nom, prenom, telephone, Emploi, statut, date_debut
             FROM utilisateurs";
-    
-    if (!empty($where)) {
-        $sql .= ' WHERE ' . implode(' OR ', $where);
+
+    if ($whereClause !== '') {
+        $sql .= ' WHERE ' . $whereClause;
     }
     
     $sql .= ' ORDER BY nom ASC, prenom ASC LIMIT 300';
