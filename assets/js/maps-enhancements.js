@@ -152,29 +152,38 @@ const ToastManager = {
 
 const StorageManager = {
     KEY_SELECTED_CLIENTS: 'maps_selected_clients',
+    KEY_SELECTED_CLIENTS_DATE: 'maps_selected_clients_date',
     KEY_START_POINT: 'maps_start_point',
     
     /**
      * Sauvegarde les clients sélectionnés (format minimal stable)
+     * Enregistre aussi la date du jour pour éviter de restaurer une ancienne tournée
      */
     saveSelectedClients(clients) {
         try {
             if (!Array.isArray(clients)) return;
-            // Format minimal : uniquement id et priority
             const minimal = clients.map(x => ({
                 id: parseInt(x.id) || 0,
                 priority: parseInt(x.priority) || 1
             })).filter(x => x.id > 0);
             localStorage.setItem(this.KEY_SELECTED_CLIENTS, JSON.stringify(minimal));
+            localStorage.setItem(this.KEY_SELECTED_CLIENTS_DATE, new Date().toISOString().slice(0, 10));
         } catch (e) {
             console.warn('localStorage save failed:', e);
         }
     },
     
+    /**
+     * Charge les clients sélectionnés depuis localStorage.
+     * Retourne null si pas de données ou si la date enregistrée n'est pas aujourd'hui
+     * (évite de restaurer une tournée d'un autre jour).
+     */
     loadSelectedClients() {
         try {
             const data = localStorage.getItem(this.KEY_SELECTED_CLIENTS);
-            if (!data) return null;
+            const savedDate = localStorage.getItem(this.KEY_SELECTED_CLIENTS_DATE);
+            const today = new Date().toISOString().slice(0, 10);
+            if (!data || savedDate !== today) return null;
             const parsed = JSON.parse(data);
             return Array.isArray(parsed) ? parsed : null;
         } catch (e) {
@@ -214,6 +223,7 @@ const StorageManager = {
     clear() {
         try {
             localStorage.removeItem(this.KEY_SELECTED_CLIENTS);
+            localStorage.removeItem(this.KEY_SELECTED_CLIENTS_DATE);
             localStorage.removeItem(this.KEY_START_POINT);
         } catch (e) {
             console.warn('localStorage clear failed:', e);
@@ -400,29 +410,29 @@ function exportRoute(format = 'csv') {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Restaurer depuis localStorage (après chargement clients)
+    // Restaurer depuis localStorage (après chargement clients + tournée du jour)
+    // Priorité : tournée du jour > localStorage (daté, même jour uniquement)
     setTimeout(() => {
         try {
-            const savedClients = StorageManager.loadSelectedClients();
-            if (savedClients && savedClients.length > 0 && typeof clientsCache !== 'undefined' && clientsCache && typeof selectedClients !== 'undefined' && Array.isArray(selectedClients)) {
-                // Éviter les doublons : vérifier si le client n'est pas déjà dans selectedClients
-                const existingIds = new Set(selectedClients.map(s => s.id));
-                let restored = 0;
-                
-                savedClients.forEach(saved => {
-                    if (existingIds.has(saved.id)) return; // Déjà présent, skip
-                    
-                    const client = clientsCache.get(saved.id);
-                    if (client) {
-                        selectedClients.push({ id: client.id, priority: saved.priority || 1 });
-                        existingIds.add(saved.id);
-                        restored++;
+            // Ne pas restaurer selectedClients si la tournée du jour a été chargée
+            if (!window.mapsTodayRouteLoaded && typeof clientsCache !== 'undefined' && clientsCache && typeof selectedClients !== 'undefined' && Array.isArray(selectedClients)) {
+                const savedClients = StorageManager.loadSelectedClients();
+                if (savedClients && savedClients.length > 0) {
+                    const existingIds = new Set(selectedClients.map(s => s.id));
+                    let restored = 0;
+                    savedClients.forEach(saved => {
+                        if (existingIds.has(saved.id)) return;
+                        const client = clientsCache.get(saved.id);
+                        if (client) {
+                            selectedClients.push({ id: client.id, priority: saved.priority || 1 });
+                            existingIds.add(saved.id);
+                            restored++;
+                        }
+                    });
+                    if (restored > 0 && typeof renderSelectedClients === 'function') {
+                        renderSelectedClients();
+                        ToastManager.show(`${restored} client(s) restauré(s) depuis la sauvegarde`, 'info', 3000);
                     }
-                });
-                
-                if (restored > 0 && typeof renderSelectedClients === 'function') {
-                    renderSelectedClients();
-                    ToastManager.show(`${restored} client(s) restauré(s) depuis la sauvegarde`, 'info', 3000);
                 }
             }
             
@@ -433,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Restore from localStorage error:', e);
         }
-    }, 2000);
+    }, 2500);
     
     // Filtres : gérés par maps.php (évite doublon avec FilterManager)
     

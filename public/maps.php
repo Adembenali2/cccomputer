@@ -450,6 +450,62 @@ async function loadAllClients() {
     }
 }
 
+/**
+ * Charge la tournée du jour (livraisons + SAV programmés aujourd'hui) et l'ajoute à la sélection.
+ * Priorité : tournée du jour remplace toute sélection existante.
+ * Définit window.mapsTodayRouteLoaded pour que maps-enhancements ne restaure pas depuis localStorage.
+ */
+async function loadTodayRoute() {
+    window.mapsTodayRouteLoaded = false;
+    try {
+        const response = await fetchWithTimeout('/API/maps_get_today_route.php', {}, CONFIG.FETCH_TIMEOUT_MS);
+        if (!response.ok) return;
+        const text = await response.text();
+        if (!text || text.trim() === '') return;
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            return;
+        }
+        if (!data.ok || !Array.isArray(data.clientIds)) return;
+
+        const clientIds = data.clientIds;
+        if (clientIds.length === 0) {
+            if (routeMessageEl) {
+                routeMessageEl.textContent = 'Aucune livraison ou aucun SAV programmé aujourd\'hui.';
+                routeMessageEl.className = 'maps-message hint';
+            }
+            return;
+        }
+
+        // Remplacer selectedClients par les clients de la tournée du jour
+        selectedClients.length = 0;
+        let added = 0;
+        for (const id of clientIds) {
+            const client = clientsCache.get(id);
+            if (client) {
+                selectedClients.push({ id: client.id, priority: client.basePriority || 1 });
+                addClientToMap(client, false);
+                added++;
+            }
+        }
+
+        if (added > 0) {
+            window.mapsTodayRouteLoaded = true;
+            if (typeof renderSelectedClients === 'function') renderSelectedClients();
+            if (typeof updateClientsBadge === 'function') updateClientsBadge();
+            if (routeMessageEl) {
+                routeMessageEl.textContent = `Tournée du jour chargée : ${added} client(s) (livraisons et SAV programmés aujourd'hui).`;
+                routeMessageEl.className = 'maps-message success';
+            }
+            if (typeof StorageManager !== 'undefined') StorageManager.saveSelectedClients(selectedClients);
+        }
+    } catch (err) {
+        console.warn('Chargement tournée du jour:', err);
+    }
+}
+
 // Fonction pour ajouter un client à la liste "Clients non trouvés"
 function addClientToNotFoundList(client) {
     if (notFoundClientsSet.has(client.id)) {
@@ -1906,8 +1962,8 @@ if (clientSearchClear && clientSearchInput && clientResultsEl) {
     });
 }
 
-// Charger tous les clients au démarrage (après que toutes les fonctions soient définies)
-loadAllClients();
+// Charger tous les clients au démarrage, puis la tournée du jour
+loadAllClients().then(() => loadTodayRoute());
 
 // ==================
 // Gestion du panneau repliable (mobile)
