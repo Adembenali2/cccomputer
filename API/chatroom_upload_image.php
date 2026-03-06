@@ -92,8 +92,6 @@ try {
 
     // Chemin relatif pour l'URL (toujours accessible depuis la racine web)
     $relativePath = '/uploads/chatroom/' . $filename;
-    
-    error_log('chatroom_upload_image.php - Image uploadée avec succès: ' . $relativePath . ' (fichier: ' . $filepath . ')');
 
     jsonResponse([
         'ok' => true,

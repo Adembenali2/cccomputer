@@ -976,12 +976,11 @@ removeImagePreview.addEventListener('click', () => {
 // Coller une image depuis le presse-papier (capture d'écran)
 document.addEventListener('paste', (e) => {
     // Ne traiter que si l'utilisateur est dans la zone de chat (évite interception dans le header)
-    if (chatroomContainer) {
-        const target = e.target;
-        const activeEl = document.activeElement;
-        const inChatArea = chatroomContainer.contains(target) || (activeEl && chatroomContainer.contains(activeEl));
-        if (!inChatArea) return;
-    }
+    if (!chatroomContainer) return;
+    const target = e.target;
+    const activeEl = document.activeElement;
+    const inChatArea = chatroomContainer.contains(target) || (activeEl && chatroomContainer.contains(activeEl));
+    if (!inChatArea) return;
     const items = e.clipboardData?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
