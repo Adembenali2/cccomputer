@@ -147,8 +147,22 @@ try {
     }
     
     // Valider le chemin de l'image si présent
-    if (!empty($imagePath) && !preg_match('/^\/uploads\/chatroom\/[a-zA-Z0-9_\-\.]+$/', $imagePath)) {
-        jsonResponse(['ok' => false, 'error' => 'Chemin d\'image invalide'], 400);
+    if (!empty($imagePath)) {
+        if (!preg_match('/^\/uploads\/chatroom\/[a-zA-Z0-9_\-\.]+$/', $imagePath)) {
+            jsonResponse(['ok' => false, 'error' => 'Chemin d\'image invalide'], 400);
+        }
+        // Vérifier que le fichier existe (évite injection de chemin arbitraire)
+        $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+        $baseDir = $docRoot !== '' ? $docRoot : dirname(__DIR__);
+        $fullPath = $baseDir . $imagePath;
+        $uploadDirReal = realpath($baseDir . '/uploads/chatroom');
+        if (!$uploadDirReal || !is_dir($uploadDirReal)) {
+            jsonResponse(['ok' => false, 'error' => 'Répertoire d\'upload introuvable'], 500);
+        }
+        $realPath = realpath($fullPath);
+        if (!$realPath || !is_file($realPath) || strpos($realPath, $uploadDirReal) !== 0) {
+            jsonResponse(['ok' => false, 'error' => 'Image introuvable ou invalide'], 400);
+        }
     }
 
     // Récupérer les mentions (@username)

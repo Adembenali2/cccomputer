@@ -172,7 +172,7 @@ if ($tableExists) {
             <textarea 
                 id="messageInput" 
                 class="chatroom-input" 
-                placeholder="Tapez votre message... (Appuyez sur Entrée pour envoyer, Shift+Entrée pour une nouvelle ligne)"
+                placeholder="Tapez votre message... (Entrée pour envoyer, Ctrl+V pour coller une image)"
                 rows="1"
                 maxlength="5000"
                 aria-label="Zone de saisie de message"
@@ -1022,6 +1022,31 @@ removeImagePreview.addEventListener('click', () => {
     selectedImage = null;
     imagePreviewContainer.style.display = 'none';
     imageInput.value = '';
+});
+
+// Coller une image depuis le presse-papier (capture d'écran)
+document.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (file && file instanceof File) {
+                if (file.size > 5 * 1024 * 1024) {
+                    showErrorNotification('L\'image collée est trop volumineuse (max 5MB)');
+                    return;
+                }
+                if (imagePreview.src && imagePreview.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(imagePreview.src);
+                }
+                selectedImage = file;
+                imagePreview.src = URL.createObjectURL(file);
+                imagePreviewContainer.style.display = 'flex';
+            }
+            break;
+        }
+    }
 });
 
 // ============================================

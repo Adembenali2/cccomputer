@@ -39,8 +39,8 @@ try {
     $mimeType = finfo_file($finfo, $file['tmp_name']);
     finfo_close($finfo);
 
-    $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!in_array($mimeType, $allowedMimes, true)) {
+    $allowedMimes = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
+    if (!isset($allowedMimes[$mimeType])) {
         jsonResponse(['ok' => false, 'error' => 'Type de fichier non autorisé. Formats acceptés: JPEG, PNG, GIF, WebP'], 400);
     }
 
@@ -49,6 +49,9 @@ try {
     if ($file['size'] > $maxSize) {
         jsonResponse(['ok' => false, 'error' => 'Fichier trop volumineux (max 5MB)'], 400);
     }
+
+    // Extension dérivée du MIME (jamais du nom client - sécurité)
+    $extension = $allowedMimes[$mimeType];
 
     // Déterminer le chemin d'upload (accessible publiquement)
     $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
@@ -68,14 +71,7 @@ try {
         }
     }
 
-    // Générer un nom de fichier sécurisé
-    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-    if (!in_array($extension, $allowedExtensions, true)) {
-        jsonResponse(['ok' => false, 'error' => 'Extension de fichier non autorisée'], 400);
-    }
-
-    // Nom de fichier: timestamp_userid_randomhash.extension
+    // Nom de fichier: timestamp_userid_randomhash.extension (extension déjà validée via MIME)
     $filename = date('Ymd_His') . '_' . $currentUserId . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
     $filepath = $uploadDir . '/' . $filename;
 

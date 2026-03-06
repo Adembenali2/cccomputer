@@ -8,9 +8,14 @@
 </IfModule>
 
 # Désactiver l'exécution de scripts PHP dans ce répertoire (sécurité)
-<FilesMatch "\.php$">
-    Order allow,deny
-    Deny from all
+<FilesMatch "\.(php|phtml|php5|php7|phar)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
 
 # Autoriser uniquement les fichiers images
