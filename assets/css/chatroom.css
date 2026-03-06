@@ -304,7 +304,7 @@
 /* ====== Zone de messages (scrollable) ====== */
 .chatroom-messages {
     flex: 1;
-    min-height: 0; /* Permet au flex de répartir l'espace : le header reste visible */
+    min-height: 0; /* Permet au flex de répartir l'espace : header et input restent visibles */
     overflow-y: auto;
     overflow-x: hidden;
     padding: 2rem;
@@ -313,8 +313,7 @@
     flex-direction: column;
     gap: 1.25rem;
     scroll-behavior: smooth;
-    min-height: 200px;
-    max-height: calc(100vh - 300px);
+    min-height: 150px;
     position: relative;
 }
 
@@ -586,17 +585,17 @@
 .chatroom-input-container {
     background: var(--bg-primary);
     padding: 0.6rem 1rem;
+    padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px)); /* Réserve l'espace mobile (encoche, barre) */
     border-top: 1px solid var(--border-color);
     display: flex;
     align-items: flex-end;
     gap: 0.6rem;
-    z-index: 10;
+    z-index: 20; /* Au-dessus des messages pour éviter tout recouvrement */
     flex-shrink: 0; /* Ne jamais compresser la zone de saisie */
     flex-wrap: nowrap; /* Empêche les éléments de passer à la ligne */
     min-width: 0; /* Permet au flex de rétrécir correctement */
     position: relative; /* Pour le positionnement des enfants */
     overflow: visible; /* Permet aux boutons de rester visibles */
-    /* S'assurer que les boutons ne sont jamais cachés */
     justify-content: space-between;
 }
 
@@ -907,7 +906,7 @@
 
     .chatroom-container {
         min-height: 400px;
-        max-height: calc(100vh - 150px);
+        /* Pas de max-height : le flex répartit l'espace, la barre de saisie reste visible */
     }
 
     .chatroom-message {
@@ -934,12 +933,13 @@
 
     .chatroom-messages {
         padding: 1.5rem;
-        min-height: 300px;
-        max-height: calc(100vh - 250px);
+        min-height: 150px;
+        /* Pas de max-height : le flex réserve l'espace pour la barre de saisie */
     }
 
     .chatroom-input-container {
         padding: 0.5rem 0.75rem;
+        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
         gap: 0.5rem;
         flex-wrap: nowrap; /* Important : empêche les boutons de passer à la ligne */
     }
@@ -1004,6 +1004,7 @@
     
     .chatroom-input-container {
         padding: 0.45rem 0.6rem;
+        padding-bottom: calc(0.45rem + env(safe-area-inset-bottom, 0px));
         gap: 0.4rem;
     }
     
@@ -1020,13 +1021,7 @@
         max-width: 1600px;
     }
 
-    .chatroom-container {
-        max-height: calc(100vh - 180px);
-    }
-
-    .chatroom-messages {
-        max-height: calc(100vh - 280px);
-    }
+    /* Pas de max-height sur le container : le flex réserve l'espace pour la barre de saisie */
 }
 
 /* ====== Amélioration de l'accessibilité ====== */

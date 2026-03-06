@@ -105,19 +105,6 @@ if (!function_exists('h')) {
       <span class="nav-label">Cartes</span>
     </a>
 
-    <?php
-    $canHistorique = in_array($emploi, ['Admin', 'Dirigeant'], true);
-    if ($canHistorique):
-    ?>
-    <a href="/public/historique.php" aria-label="Historique">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <polyline points="12 6 12 12 16 14"/>
-      </svg>
-      <span class="nav-label">Historique</span>
-    </a>
-    <?php endif; ?>
-
     <a href="/public/profil.php" aria-label="Profil">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
