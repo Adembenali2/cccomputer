@@ -8,7 +8,6 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('messagerie', []);
 require_once __DIR__ . '/../includes/helpers.php';
-require_once __DIR__ . '/../includes/messagerie_purge.php';
 
 $pdo = getPdo();
 $CSRF = ensureCsrfToken();
@@ -30,14 +29,7 @@ try {
     error_log('messagerie.php - Erreur vérification tables: ' . $e->getMessage());
 }
 
-// Purge automatique 24h : général + privé + images (à chaque chargement)
-if ($tablePrivateExists || $tableGeneralExists) {
-    try {
-        purgeMessagerie24h($pdo);
-    } catch (Throwable $e) {
-        error_log('messagerie.php - Purge: ' . $e->getMessage());
-    }
-}
+// Purge 24h : exécutée uniquement par cron (scripts/messagerie_cleanup.php)
 ?>
 <!DOCTYPE html>
 <html lang="fr">

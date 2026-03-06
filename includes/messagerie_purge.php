@@ -2,7 +2,7 @@
 /**
  * includes/messagerie_purge.php
  * Purge automatique des messages et images de messagerie après 24 heures.
- * Appelé au chargement de messagerie.php et par le script cron.
+ * À exécuter UNIQUEMENT par cron : scripts/messagerie_cleanup.php
  *
  * Tables concernées :
  * - chatroom_messages (général)
@@ -12,10 +12,34 @@
  * Images : /uploads/chatroom/ (partagé par général et privé)
  */
 
+if (!function_exists('resolveImagePathForPurge')) {
+    /**
+     * Résout le chemin physique d'une image à supprimer.
+     * Essaie plusieurs bases (DOCUMENT_ROOT, project root, project/public).
+     */
+    function resolveImagePathForPurge(string $imagePath): ?string {
+        if (empty($imagePath) || !preg_match('#^/uploads/chatroom/[a-zA-Z0-9_\-\.]+$#', $imagePath)) {
+            return null;
+        }
+        $bases = [
+            rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/'),
+            dirname(__DIR__),
+            dirname(__DIR__) . '/public',
+        ];
+        foreach ($bases as $base) {
+            if ($base === '') continue;
+            $full = $base . $imagePath;
+            if (file_exists($full) && is_file($full)) {
+                return $full;
+            }
+        }
+        return null;
+    }
+}
+
 if (!function_exists('purgeMessagerie24h')) {
     function purgeMessagerie24h(PDO $pdo): array {
         $stats = ['chatroom' => 0, 'private' => 0, 'images' => 0];
-        $baseDir = dirname(__DIR__);
 
         // 1. Purge chatroom_messages (> 24h) + suppression images
         try {
@@ -40,8 +64,8 @@ if (!function_exists('purgeMessagerie24h')) {
                 $ids = [];
                 foreach ($old as $msg) {
                     if ($hasImagePath && !empty($msg['image_path'])) {
-                        $path = $baseDir . $msg['image_path'];
-                        if (file_exists($path)) { @unlink($path); $stats['images']++; }
+                        $path = resolveImagePathForPurge($msg['image_path']);
+                        if ($path !== null) { @unlink($path); $stats['images']++; }
                     }
                     $ids[] = $msg['id'];
                 }
@@ -69,8 +93,8 @@ if (!function_exists('purgeMessagerie24h')) {
                 $ids = [];
                 foreach ($old as $msg) {
                     if (!empty($msg['image_path'])) {
-                        $path = $baseDir . $msg['image_path'];
-                        if (file_exists($path)) { @unlink($path); $stats['images']++; }
+                        $path = resolveImagePathForPurge($msg['image_path']);
+                        if ($path !== null) { @unlink($path); $stats['images']++; }
                     }
                     $ids[] = $msg['id'];
                 }

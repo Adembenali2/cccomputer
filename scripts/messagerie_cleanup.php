@@ -7,8 +7,7 @@
  * À exécuter via cron toutes les heures :
  * 0 * * * * php /chemin/vers/scripts/messagerie_cleanup.php
  *
- * Note : La purge est aussi exécutée au chargement de messagerie.php.
- * Ce script permet une purge même si personne ne charge la page.
+ * IMPORTANT : C'est le SEUL point d'exécution de la purge (plus de purge au chargement de page).
  */
 
 require_once __DIR__ . '/../includes/helpers.php';
