@@ -194,8 +194,11 @@
 
 /* ====== Layout messagerie privée (sidebar + conversation) ====== */
 .private-messaging-layout {
+    display: flex;
     flex-direction: row !important;
+    flex: 1;
     min-height: 500px;
+    overflow: hidden;
 }
 
 .private-sidebar {

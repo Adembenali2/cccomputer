@@ -1,12 +1,14 @@
 <?php
 /**
- * scripts/private_messages_cleanup.php
- * Purge des messages privés et images après 24 heures.
+ * scripts/messagerie_cleanup.php
+ * Purge automatique des messages et images de messagerie après 24 heures.
+ * Général (chatroom_messages) + Privé (private_messages) + images.
  *
- * @deprecated Utiliser scripts/messagerie_cleanup.php qui purge général + privé + images.
- * Ce script reste compatible : il appelle la purge centralisée (général + privé).
+ * À exécuter via cron toutes les heures :
+ * 0 * * * * php /chemin/vers/scripts/messagerie_cleanup.php
  *
- * Cron : 0 * * * * php /chemin/vers/scripts/private_messages_cleanup.php
+ * Note : La purge est aussi exécutée au chargement de messagerie.php.
+ * Ce script permet une purge même si personne ne charge la page.
  */
 
 require_once __DIR__ . '/../includes/helpers.php';
@@ -15,7 +17,7 @@ require_once __DIR__ . '/../includes/messagerie_purge.php';
 try {
     $pdo = getPdo();
 } catch (Throwable $e) {
-    error_log('private_messages_cleanup.php - Erreur PDO: ' . $e->getMessage());
+    error_log('messagerie_cleanup.php - Erreur PDO: ' . $e->getMessage());
     echo "Erreur connexion: " . $e->getMessage() . "\n";
     exit(1);
 }
@@ -28,7 +30,7 @@ try {
     }
     exit(0);
 } catch (Throwable $e) {
-    error_log('private_messages_cleanup.php - Erreur: ' . $e->getMessage());
+    error_log('messagerie_cleanup.php - Erreur: ' . $e->getMessage());
     echo "Erreur: " . $e->getMessage() . "\n";
     exit(1);
 }
