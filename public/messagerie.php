@@ -130,28 +130,28 @@ if ($tableExists) {
     <?php endif; ?>
 
     <div class="chatroom-container">
-        <!-- Header de la chatroom -->
+        <!-- Header de la chatroom (titre + utilisateurs en ligne intégrés) -->
         <div class="chatroom-header">
-            <div>
-                <h2>Messagerie</h2>
-                <div class="chatroom-status">
-                    <span class="chatroom-status-indicator" id="onlineIndicator"></span>
-                    <span id="statusText">En ligne</span>
+            <div class="chatroom-header-top">
+                <div>
+                    <h2>Messagerie</h2>
+                    <div class="chatroom-status">
+                        <span class="chatroom-status-indicator" id="onlineIndicator"></span>
+                        <span id="statusText">En ligne</span>
+                    </div>
+                </div>
+                <div id="notificationsInfo" class="chatroom-notifications-info" style="display: none;">
+                    <span id="notificationsCount">0</span> notification(s) non lue(s)
                 </div>
             </div>
-            <div id="notificationsInfo" class="chatroom-notifications-info" style="display: none;">
-                <span id="notificationsCount">0</span> notification(s) non lue(s)
-            </div>
-        </div>
-
-        <!-- Barre des utilisateurs connectés -->
-        <div class="online-users-bar" id="onlineUsersBar" aria-label="Utilisateurs en ligne">
-            <span class="online-users-label">
-                <span class="online-users-dot"></span>
-                En ligne
-            </span>
-            <div class="online-users-list" id="onlineUsersList" role="list">
-                <!-- Rempli dynamiquement par JS -->
+            <div class="online-users-bar" id="onlineUsersBar" aria-label="Utilisateurs en ligne">
+                <div class="online-users-list" id="onlineUsersList" role="list">
+                    <!-- Rempli dynamiquement par JS -->
+                </div>
+                <span class="online-users-label">
+                    <span class="online-users-dot"></span>
+                    En ligne
+                </span>
             </div>
         </div>
 
