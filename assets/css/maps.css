@@ -488,10 +488,27 @@
   cursor: pointer;
   font-size: 0.85rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  align-items: flex-start;
+  gap: 0.5rem;
   transition: all 0.2s ease;
   border-bottom: 1px solid var(--border-color);
+}
+
+.client-result-dot {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.15);
+  margin-top: 0.35rem;
+}
+
+.client-result-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .client-result-item:last-child {
@@ -593,7 +610,7 @@
 
 .selected-client-chip:hover {
   box-shadow: var(--shadow-md);
-  border-color: var(--accent-primary);
+  border-color: var(--chip-accent, var(--accent-primary));
   transform: translateX(4px);
 }
 
@@ -604,9 +621,9 @@
   top: 0;
   bottom: 0;
   width: 4px;
-  background: var(--accent-primary);
+  background: var(--chip-accent, var(--accent-primary));
   border-radius: var(--radius-md) 0 0 var(--radius-md);
-  opacity: 0;
+  opacity: 0.9;
   transition: opacity 0.2s ease;
 }
 

@@ -219,25 +219,10 @@ try {
                 </div>
             </div>
             <div id="map" aria-label="Carte des clients">
-                <!-- Légende des marqueurs -->
+                <!-- Légende des marqueurs (générée depuis MARKER_TYPES) -->
                 <div class="map-legend" id="mapLegend" role="region" aria-label="Légende des marqueurs">
                     <div class="map-legend-title">Légende</div>
-                    <div class="map-legend-item">
-                        <div class="map-legend-color" style="background: #16a34a;"></div>
-                        <span class="map-legend-label">Client normal</span>
-                    </div>
-                    <div class="map-legend-item">
-                        <div class="map-legend-color" style="background: #3b82f6;"></div>
-                        <span class="map-legend-label">Livraison en cours</span>
-                    </div>
-                    <div class="map-legend-item">
-                        <div class="map-legend-color" style="background: #eab308;"></div>
-                        <span class="map-legend-label">SAV en cours</span>
-                    </div>
-                    <div class="map-legend-item">
-                        <div class="map-legend-color" style="background: #ef4444;"></div>
-                        <span class="map-legend-label">SAV + Livraison</span>
-                    </div>
+                    <div id="mapLegendItems"></div>
                 </div>
                 
                 <!-- Filtres de marqueurs -->
@@ -626,14 +611,33 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 markerClusterGroup = L.markerClusterGroup();
 markerClusterGroup.addTo(map);
 
-// === Icônes selon type de marqueur (SAV/livraison) ===
+// === Source de vérité unique : types de marqueurs et couleurs ===
+// Types : both (SAV+livraison), sav, delivery, normal
+const MARKER_TYPES = {
+    normal: { color: '#16a34a', label: 'Client normal' },
+    delivery: { color: '#3b82f6', label: 'Livraison en cours' },
+    sav: { color: '#eab308', label: 'SAV en cours' },
+    both: { color: '#ef4444', label: 'SAV + Livraison' }
+};
+
+/**
+ * Calcule le type de marqueur à partir des propriétés client (source de vérité unique).
+ * @param {Object} client - Objet client avec hasSav, hasLivraison (ou markerType en fallback)
+ * @returns {'both'|'sav'|'delivery'|'normal'}
+ */
+function computeMarkerType(client) {
+    if (!client) return 'normal';
+    const hasSav = !!client.hasSav;
+    const hasLivraison = !!client.hasLivraison;
+    if (hasSav && hasLivraison) return 'both';
+    if (hasSav) return 'sav';
+    if (hasLivraison) return 'delivery';
+    return 'normal';
+}
+
 function getMarkerColor(markerType) {
-    switch(markerType) {
-        case 'both': return '#ef4444'; // Rouge : SAV + livraison
-        case 'livraison': return '#3b82f6'; // Bleu : livraison uniquement
-        case 'sav': return '#eab308'; // Jaune : SAV uniquement
-        default: return '#16a34a'; // Vert : normal
-    }
+    const t = markerType === 'livraison' ? 'delivery' : markerType;
+    return (MARKER_TYPES[t] || MARKER_TYPES.normal).color;
 }
 
 function createMarkerIcon(markerType) {
@@ -645,6 +649,20 @@ function createMarkerIcon(markerType) {
         iconAnchor: [9, 9]
     });
 }
+
+// Générer la légende depuis MARKER_TYPES (source de vérité unique)
+(function initLegend() {
+    const container = document.getElementById('mapLegendItems');
+    if (!container || typeof MARKER_TYPES === 'undefined') return;
+    ['normal', 'delivery', 'sav', 'both'].forEach(key => {
+        const t = MARKER_TYPES[key];
+        if (!t) return;
+        const item = document.createElement('div');
+        item.className = 'map-legend-item';
+        item.innerHTML = `<div class="map-legend-color" style="background:${t.color};"></div><span class="map-legend-label">${t.label}</span>`;
+        container.appendChild(item);
+    });
+})();
 
 // Initialiser la carte sur la France par défaut
 // Les clients seront chargés et la vue ajustée automatiquement
@@ -789,19 +807,7 @@ function addClientToMap(client, autoFit = true) {
         return false; // Retourner false si pas de coordonnées
     }
     
-    // Déterminer le type de marqueur (utiliser markerType du client ou calculer depuis hasLivraison/hasSav)
-    let markerType = client.markerType || 'normal';
-    if (!client.markerType) {
-        const hasLivraison = client.hasLivraison || false;
-        const hasSav = client.hasSav || false;
-        if (hasLivraison && hasSav) {
-            markerType = 'both';
-        } else if (hasLivraison) {
-            markerType = 'livraison';
-        } else if (hasSav) {
-            markerType = 'sav';
-        }
-    }
+    const markerType = computeMarkerType(client);
     
     // Si le marqueur existe déjà, juste le mettre à jour
     if (clientMarkers[client.id]) {
@@ -827,14 +833,14 @@ function addClientToMap(client, autoFit = true) {
     const displayAddress = client.displayAddress || client.address || 
         `${escapeHtml(client.adresse || '')} ${escapeHtml(client.code_postal || '')} ${escapeHtml(client.ville || '')}`.trim();
     
-    // Construire le contenu du popup avec les infos SAV/livraisons
+    // Construire le contenu du popup avec les infos SAV/livraisons (couleur depuis MARKER_TYPES)
+    const mt = computeMarkerType(client);
     let popupInfo = '';
-    if (client.hasLivraison && client.hasSav) {
-        popupInfo = '<br><small style="color:#ef4444;">⚠️ SAV + Livraison en cours</small>';
-    } else if (client.hasLivraison) {
-        popupInfo = '<br><small style="color:#3b82f6;">📦 Livraison en cours</small>';
-    } else if (client.hasSav) {
-        popupInfo = '<br><small style="color:#eab308;">🔧 SAV en cours</small>';
+    if (mt !== 'normal') {
+        const color = getMarkerColor(mt);
+        const label = MARKER_TYPES[mt].label;
+        const icon = mt === 'both' ? '⚠️' : mt === 'delivery' ? '📦' : '🔧';
+        popupInfo = `<br><small style="color:${color};">${icon} ${label}</small>`;
     }
     
     const popupContent = `
@@ -909,6 +915,8 @@ function renderSelectedClients() {
 
         const chip = document.createElement('div');
         chip.className = 'selected-client-chip';
+        const mt = computeMarkerType(client);
+        chip.style.setProperty('--chip-accent', getMarkerColor(mt));
 
         // Afficher l'adresse exacte de la base de données
         const displayAddress = client.displayAddress || client.address || 
@@ -939,9 +947,7 @@ function renderSelectedClients() {
             sel.priority = parseInt(select.value, 10) || 1;
             const marker = clientMarkers[client.id];
             if (marker) {
-                // Utiliser le markerType du client plutôt que la priorité pour la couleur
-                const markerType = client.markerType || 'normal';
-                marker.setIcon(createMarkerIcon(markerType));
+                marker.setIcon(createMarkerIcon(computeMarkerType(client)));
             }
         });
 
@@ -1226,15 +1232,21 @@ clientSearchInput.addEventListener('input', () => {
                     extraInfo.push(`Tel: ${escapeHtml(client.telephone)}`);
                 }
                 
+                const markerType = computeMarkerType(client);
+                const color = getMarkerColor(markerType);
+                
                 const item = document.createElement('div');
                 item.className = 'client-result-item';
                 item.setAttribute('role', 'button');
                 item.setAttribute('tabindex', '0');
                 item.setAttribute('aria-label', `Ajouter ${escapeHtml(client.name)} à la tournée`);
                 item.innerHTML =
+                    `<span class="client-result-dot" style="background:${color};" aria-hidden="true"></span>` +
+                    `<div class="client-result-text">` +
                     `<strong>${escapeHtml(client.name)}</strong>` +
                     `<span>${escapeHtml(displayAddress)} — ${escapeHtml(client.code)}</span>` +
-                    (extraInfo.length > 0 ? `<small>${extraInfo.join(' • ')}</small>` : '');
+                    (extraInfo.length > 0 ? `<small>${extraInfo.join(' • ')}</small>` : '') +
+                    `</div>`;
                 
                 // Support clavier
                 const handleClick = () => {

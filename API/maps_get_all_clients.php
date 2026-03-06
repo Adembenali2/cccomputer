@@ -233,7 +233,7 @@ try {
         if ($hasLivraison && $hasSav) {
             $markerType = 'both'; // Rouge
         } elseif ($hasLivraison) {
-            $markerType = 'livraison'; // Bleu
+            $markerType = 'delivery'; // Bleu
         } elseif ($hasSav) {
             $markerType = 'sav'; // Jaune
         }
