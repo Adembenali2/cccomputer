@@ -12,6 +12,7 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/historique.php';
 
 // Vérifier que c'est une requête POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -256,6 +257,9 @@ try {
         }
         
         $pdo->commit();
+
+        $details = sprintf('Facture #%s - Ref: %s - %.2f € - %s', $facture['numero'] ?? $factureId, $reference, $montant, $modePaiement);
+        enregistrerAction($pdo, $userId, 'paiement_enregistre', $details);
         
         jsonResponse([
             'ok' => true,

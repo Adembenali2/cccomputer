@@ -1,14 +1,22 @@
 <?php
 // includes/logout.php (VERSION SÉCURISÉE, sans sortie)
 
-// 1) Session & dépendances (session déjà démarrée dans session_config.php)
 require_once __DIR__ . '/session_config.php';
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/historique.php';
 
-// 2) Note: Les connexions/déconnexions ne sont plus enregistrées dans l'historique
+// Enregistrer la déconnexion AVANT de purge la session (pour avoir user_id)
+$userId = (int)($_SESSION['user_id'] ?? 0);
+if ($userId > 0) {
+    try {
+        $pdo = getPdo();
+        enregistrerAction($pdo, $userId, 'deconnexion', 'Déconnexion');
+    } catch (Throwable $e) {
+        error_log('logout.php audit: ' . $e->getMessage());
+    }
+}
 
-// 3) Purge de la session
+// Purge de la session
 $_SESSION = [];
 
 // 4) Supprimer le cookie de session (forcer path "/")

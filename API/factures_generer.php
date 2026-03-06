@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/historique.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
 // Vérifier que c'est une requête POST seulement si le fichier est appelé directement
@@ -211,6 +212,9 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
             $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfWebPath, $factureId]);
 
             $pdo->commit();
+
+            $details = sprintf('Facture #%s - Client %s - %.2f € TTC', $numeroFacture, $client['raison_sociale'] ?? $clientId, $montantTTC);
+            enregistrerAction($pdo, currentUserId(), 'facture_generee', $details);
 
             jsonResponse([
                 'ok' => true,

@@ -48,15 +48,15 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 // Vérifs
 if (!$user || !password_verify($pass, $user['password'])) {
+    enregistrerAction($pdo, null, 'connexion_echouee', 'Tentative échouée');
     $_SESSION['login_error'] = "Adresse e-mail ou mot de passe incorrect.";
-    // Note: Les connexions/déconnexions ne sont plus enregistrées dans l'historique
     header('Location: /public/login.php');
     exit;
 }
 
 if (($user['statut'] ?? 'inactif') !== 'actif') {
+    enregistrerAction($pdo, (int)$user['id'], 'connexion_echouee', 'Compte désactivé');
     $_SESSION['login_error'] = "Votre compte est désactivé.";
-    // Note: Les connexions/déconnexions ne sont plus enregistrées dans l'historique
     header('Location: /public/login.php');
     exit;
 }
@@ -88,7 +88,7 @@ try {
     error_log('Warning: last_activity update on login failed (field may not exist): ' . $e->getMessage());
 }
 
-// Note: Les connexions/déconnexions ne sont plus enregistrées dans l'historique
+enregistrerAction($pdo, (int)$user['id'], 'connexion_reussie', 'Connexion réussie');
 
 // Redirection directe vers le dashboard
 header('Location: /public/dashboard.php');

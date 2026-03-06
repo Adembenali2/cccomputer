@@ -13,6 +13,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/historique.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use App\Services\InvoiceEmailService;
@@ -57,6 +58,8 @@ try {
     $result = $invoiceEmailService->sendInvoiceAfterGeneration($factureId, true);
     
     if ($result['success']) {
+        $details = sprintf('Facture #%d envoyée à %s', $factureId, $result['email'] ?? 'client');
+        enregistrerAction($pdo, currentUserId(), 'facture_envoyee', $details);
         jsonResponse([
             'ok' => true,
             'message' => $result['message'],

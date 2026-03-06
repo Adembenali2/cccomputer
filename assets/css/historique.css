@@ -76,6 +76,33 @@
   background: rgba(59, 130, 246, 0.06);
 }
 
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: var(--bg-primary, #fff);
+  border: 2px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  color: var(--text-primary, #1e293b);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.btn-export:hover {
+  border-color: #22c55e;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.06);
+}
+
 .btn-actualiser-icon {
   font-size: 1.1rem;
   display: inline-block;
@@ -326,6 +353,9 @@
 .badge-factures { background: rgba(22, 163, 74, 0.2); color: #166534; }
 .badge-paiements { background: rgba(134, 239, 172, 0.4); color: #15803d; }
 .badge-auth { background: rgba(100, 116, 139, 0.2); color: #475569; }
+.badge-profil { background: rgba(100, 116, 139, 0.2); color: #475569; }
+.badge-agenda { background: rgba(59, 130, 246, 0.15); color: #1d4ed8; }
+.badge-system { background: rgba(148, 163, 184, 0.25); color: #475569; }
 .badge-other { background: rgba(148, 163, 184, 0.2); color: #64748b; }
 
 /* ===============================

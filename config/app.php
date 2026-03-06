@@ -11,7 +11,7 @@ return [
     'limits' => [
         'clients_per_page' => 500,
         'users_per_page' => 300,
-        'historique_per_page' => 1000,
+        'historique_per_page' => 100,
         'cache_ttl' => 300, // 5 minutes
         'roles_cache_ttl' => 3600, // 1 heure
     ],

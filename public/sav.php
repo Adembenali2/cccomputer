@@ -237,6 +237,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                             }
                             
                             enregistrerAction($pdo, currentUserId(), 'sav_modifie', $details);
+                            if ($isBecomingResolu) {
+                                enregistrerAction($pdo, currentUserId(), 'sav_cloture', sprintf('SAV #%d (%s) clôturé', $savId, $sav['reference'] ?? 'N/A'));
+                            }
                         } catch (Throwable $e) {
                             error_log('sav.php historique error: ' . $e->getMessage());
                         }

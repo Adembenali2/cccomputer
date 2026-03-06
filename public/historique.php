@@ -1,54 +1,27 @@
 <?php
 /**
  * /public/historique.php
- * Page d'historique des actions - Version améliorée
+ * Page d'historique des actions - Interface SaaS professionnelle
  *
- * Affiche l'historique des actions utilisateurs avec filtres, pagination et modal détail.
+ * Filtres, pagination SQL, modal détail, export CSV.
  * Accès réservé aux rôles Admin et Dirigeant.
  */
 
-// ====== Configuration & Sécurité ======
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('historique', ['Admin', 'Dirigeant']);
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/historique.php';
 
 $pdo = getPdo();
 
-// Charger la config
 $config = require __DIR__ . '/../config/app.php';
-$perPage = (int)($config['limits']['historique_per_page'] ?? 1000);
-$perPage = max(10, min(500, $perPage)); // Bornes 10-500
+$perPage = (int)($config['limits']['historique_per_page'] ?? 100);
+$perPage = max(10, min(500, $perPage));
 
 const USER_SEARCH_MAX_CHARS = 80;
 const DEBOUNCE_DELAY_MS = 400;
-const DEBUG_MODE = false;
 
-// Mapping catégorie → patterns d'action (pour filtre SQL)
-const CATEGORY_PATTERNS = [
-    'Clients' => ['client%', 'photocopieur%'],
-    'SAV' => ['sav%'],
-    'Livraisons' => ['livraison%'],
-    'Stock' => ['mouvement_stock%', 'stock%'],
-    'Messagerie' => ['message%'],
-    'Factures' => ['facture%'],
-    'Paiements' => ['paiement%'],
-    'Authentification' => ['connexion%', 'deconnexion%', 'login%'],
-];
-
-// Couleurs des badges par catégorie
-const CATEGORY_COLORS = [
-    'Clients' => 'badge-clients',
-    'SAV' => 'badge-sav',
-    'Livraisons' => 'badge-livraisons',
-    'Stock' => 'badge-stock',
-    'Messagerie' => 'badge-messagerie',
-    'Factures' => 'badge-factures',
-    'Paiements' => 'badge-paiements',
-    'Authentification' => 'badge-auth',
-    'Autre' => 'badge-other',
-];
-
-// ====== Helpers ======
+// ====== Helpers locaux ======
 function sanitizeUserSearch(string $input): string {
     $cleaned = trim($input);
     if ($cleaned === '') return '';
@@ -68,24 +41,9 @@ function parseDateFilter(string $dateInput): ?array {
     return ['start' => $dateStart, 'end' => $dateEnd, 'display' => $cleaned];
 }
 
-function getCategoryFromAction(?string $action): string {
-    if (!$action) return 'Autre';
-    foreach (CATEGORY_PATTERNS as $cat => $patterns) {
-        foreach ($patterns as $p) {
-            $prefix = rtrim($p, '%');
-            if ($prefix !== '' && stripos($action, $prefix) === 0) return $cat;
-        }
-    }
-    return 'Autre';
-}
-
 function formatFullName(?string $nom, ?string $prenom): string {
     $fullname = trim(($nom ?? '') . ' ' . ($prenom ?? ''));
     return $fullname !== '' ? $fullname : '—';
-}
-
-function formatAction(?string $action): string {
-    return $action ? str_replace('_', ' ', $action) : '—';
 }
 
 // ====== Validation des paramètres GET ======
@@ -102,8 +60,8 @@ $dateFinFilter = parseDateFilter(is_string($rawDateFin) ? $rawDateFin : '');
 $searchDateDebut = $dateDebutFilter ? $dateDebutFilter['display'] : '';
 $searchDateFin = $dateFinFilter ? $dateFinFilter['display'] : '';
 
-// Catégorie : whitelist
-$allowedCategories = array_keys(CATEGORY_PATTERNS);
+// Catégorie : whitelist (mapping centralisé)
+$allowedCategories = array_keys(AUDIT_CATEGORY_PATTERNS);
 $searchCategory = in_array($rawCategory, $allowedCategories, true) ? $rawCategory : '';
 
 // Action : whitelist (fetch distinct from DB)
@@ -154,9 +112,9 @@ if ($dateFinFilter) {
 }
 
 // Catégorie
-if ($searchCategory !== '' && isset(CATEGORY_PATTERNS[$searchCategory])) {
+if ($searchCategory !== '' && isset(AUDIT_CATEGORY_PATTERNS[$searchCategory])) {
     $catConditions = [];
-    foreach (CATEGORY_PATTERNS[$searchCategory] as $i => $p) {
+    foreach (AUDIT_CATEGORY_PATTERNS[$searchCategory] as $i => $p) {
         $key = ':cat_' . $searchCategory . '_' . $i;
         $catConditions[] = "h.action LIKE " . $key;
         $params[$key] = $p;
@@ -393,10 +351,15 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
                 <p class="page-subtitle">Surveillez les opérations clés en temps réel</p>
             </div>
         </div>
-        <a href="historique.php<?= $queryString ? '?' . $queryString : '' ?>" class="btn-actualiser" title="Actualiser les données">
-            <span class="btn-actualiser-icon" aria-hidden="true">↻</span>
-            Actualiser
-        </a>
+        <div class="page-header-actions">
+            <a href="/API/historique_export.php?<?= h($queryString) ?>" class="btn-export" title="Exporter en CSV" target="_blank">
+                <span aria-hidden="true">📥</span> Export CSV
+            </a>
+            <a href="historique.php<?= $queryString ? '?' . $queryString : '' ?>" class="btn-actualiser" title="Actualiser les données">
+                <span class="btn-actualiser-icon" aria-hidden="true">↻</span>
+                Actualiser
+            </a>
+        </div>
     </header>
 
     <section class="history-meta <?= $filtersActive ? 'has-filter' : '' ?>" role="region" aria-label="Statistiques">
@@ -434,7 +397,7 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
             <span class="pill"><?= h($searchCategory) ?></span>
         <?php endif; ?>
         <?php if ($searchAction !== ''): ?>
-            <span class="pill"><?= h(formatAction($searchAction)) ?></span>
+            <span class="pill"><?= h(formatActionLabel($searchAction)) ?></span>
         <?php endif; ?>
         <a class="pill pill-clear" href="historique.php" aria-label="Réinitialiser les filtres">✕ Réinitialiser</a>
     </div>
@@ -465,7 +428,7 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
             <select id="action_filter" name="action_filter">
                 <option value="">Toutes</option>
                 <?php foreach ($distinctActions as $act): ?>
-                    <option value="<?= h($act) ?>" <?= $searchAction === $act ? 'selected' : '' ?>><?= h(formatAction($act)) ?></option>
+                    <option value="<?= h($act) ?>" <?= $searchAction === $act ? 'selected' : '' ?>><?= h(formatActionLabel($act)) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
@@ -513,11 +476,11 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
                     </tr>
                 <?php else: ?>
                     <?php foreach ($historique as $entree):
-                        $cat = getCategoryFromAction($entree['action']);
-                        $badgeClass = CATEGORY_COLORS[$cat] ?? 'badge-other';
+                        $cat = getActionCategory($entree['action']);
+                        $badgeClass = getBadgeClassForCategory($cat);
                         $detailsFormatted = formatDetails($pdo, $entree['details']);
                     ?>
-                        <tr class="history-row" data-date="<?= h($entree['date_action']) ?>" data-user="<?= h(formatFullName($entree['nom'], $entree['prenom'])) ?>" data-action="<?= h($entree['action']) ?>" data-details="<?= h($detailsFormatted) ?>" data-ip="<?= h($entree['ip_address'] ?? '') ?>">
+                        <tr class="history-row" data-id="<?= h((string)($entree['id'] ?? '')) ?>" data-date="<?= h($entree['date_action']) ?>" data-user="<?= h(formatFullName($entree['nom'], $entree['prenom'])) ?>" data-category="<?= h($cat) ?>" data-action="<?= h($entree['action']) ?>" data-details="<?= h($detailsFormatted) ?>" data-ip="<?= h($entree['ip_address'] ?? '') ?>">
                             <td data-label="Date & Heure">
                                 <time datetime="<?= h($entree['date_action']) ?>"><?= h(formatDate($entree['date_action'], 'd/m/Y H:i')) ?></time>
                             </td>
@@ -526,7 +489,7 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
                                 <span class="badge-categorie <?= h($badgeClass) ?>"><?= h($cat) ?></span>
                             </td>
                             <td data-label="Action">
-                                <span class="action-badge <?= h($badgeClass) ?>"><?= h(formatAction($entree['action'])) ?></span>
+                                <span class="action-badge <?= h($badgeClass) ?>"><?= h(formatActionLabel($entree['action'])) ?></span>
                             </td>
                             <td data-label="Détails">
                                 <?php if (!empty($entree['details'])): ?>
@@ -559,11 +522,11 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
             <li class="history-item"><div class="aucun-resultat">📭 Aucun résultat trouvé.</div></li>
         <?php else: ?>
             <?php foreach ($historique as $entree):
-                $cat = getCategoryFromAction($entree['action']);
-                $badgeClass = CATEGORY_COLORS[$cat] ?? 'badge-other';
+                $cat = getActionCategory($entree['action']);
+                $badgeClass = getBadgeClassForCategory($cat);
                 $detailsFormatted = formatDetails($pdo, $entree['details']);
             ?>
-                <li class="history-item" data-date="<?= h($entree['date_action']) ?>" data-user="<?= h(formatFullName($entree['nom'], $entree['prenom'])) ?>" data-action="<?= h($entree['action']) ?>" data-details="<?= h($detailsFormatted) ?>" data-ip="<?= h($entree['ip_address'] ?? '') ?>">
+                <li class="history-item" data-id="<?= h((string)($entree['id'] ?? '')) ?>" data-date="<?= h($entree['date_action']) ?>" data-user="<?= h(formatFullName($entree['nom'], $entree['prenom'])) ?>" data-category="<?= h($cat) ?>" data-action="<?= h($entree['action']) ?>" data-details="<?= h($detailsFormatted) ?>" data-ip="<?= h($entree['ip_address'] ?? '') ?>">
                     <div class="item-header">
                         <span class="item-title"><?= h(formatFullName($entree['nom'], $entree['prenom'])) ?></span>
                         <time class="item-date" datetime="<?= h($entree['date_action']) ?>"><?= h(formatDate($entree['date_action'], 'd/m/Y H:i')) ?></time>
@@ -575,7 +538,7 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
                         </div>
                         <div class="item-detail">
                             <span class="label">Action :</span>
-                            <span class="action-badge <?= h($badgeClass) ?>"><?= h(formatAction($entree['action'])) ?></span>
+                            <span class="action-badge <?= h($badgeClass) ?>"><?= h(formatActionLabel($entree['action'])) ?></span>
                         </div>
                         <?php if (!empty($entree['details'])): ?>
                             <div class="item-detail">
@@ -649,10 +612,14 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
         </div>
         <div class="modal-body">
             <dl class="modal-details">
+                <dt>ID</dt>
+                <dd id="modalId">—</dd>
                 <dt>Date</dt>
                 <dd id="modalDate">—</dd>
                 <dt>Utilisateur</dt>
                 <dd id="modalUser">—</dd>
+                <dt>Catégorie</dt>
+                <dd id="modalCategory">—</dd>
                 <dt>Action</dt>
                 <dd id="modalAction">—</dd>
                 <dt>Détails</dt>
@@ -694,9 +661,11 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
         });
     });
 
-    function openEventModal(date, user, action, details, ip) {
+    function openEventModal(id, date, user, category, action, details, ip) {
+        document.getElementById('modalId').textContent = id || '—';
         document.getElementById('modalDate').textContent = date || '—';
         document.getElementById('modalUser').textContent = user || '—';
+        document.getElementById('modalCategory').textContent = category || '—';
         document.getElementById('modalAction').textContent = action || '—';
         document.getElementById('modalDetails').textContent = details || '—';
         document.getElementById('modalIp').textContent = ip || '—';
@@ -715,6 +684,11 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
 
     window.closeEventModal = closeEventModal;
 
+    function formatActionLabelJs(action) {
+        var labels = <?= json_encode(AUDIT_ACTION_LABELS) ?>;
+        return labels[action] || (action ? action.replace(/_/g, ' ') : '');
+    }
+
     document.getElementById('eventModal').addEventListener('click', function(e) {
         if (e.target === this) closeEventModal();
     });
@@ -726,9 +700,11 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
         var row = btn.closest('.history-row') || btn.closest('.history-item');
         if (!row) return;
         openEventModal(
+            row.getAttribute('data-id') || '',
             row.getAttribute('data-date') || '',
             row.getAttribute('data-user') || '',
-            row.getAttribute('data-action') ? row.getAttribute('data-action').replace(/_/g, ' ') : '',
+            row.getAttribute('data-category') || '',
+            row.getAttribute('data-action') ? formatActionLabelJs(row.getAttribute('data-action')) : '',
             row.getAttribute('data-details') || '',
             row.getAttribute('data-ip') || ''
         );
