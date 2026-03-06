@@ -18,12 +18,14 @@ function escapeHtml(str) {
 }
 
 /**
- * Valide des coordonnées géographiques
+ * Utilise window.isValidCoordinate (défini par maps.php) si disponible, sinon fallback local.
+ * Évite la duplication : maps.php est la source de vérité.
  */
 function isValidCoordinate(lat, lng) {
-    if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
-        return false;
+    if (typeof window.isValidCoordinate === 'function') {
+        return window.isValidCoordinate(lat, lng);
     }
+    if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) return false;
     return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 

@@ -995,57 +995,59 @@ function renderSelectedClients() {
 }
 
 async function addClientToRoute(client) {
-    if (!client) return;
+    try {
+        if (!client) return false;
 
-    if (selectedClients.find(s => s.id === client.id)) {
+        if (selectedClients.find(s => s.id === client.id)) {
+            if (clientSearchInput) clientSearchInput.value = '';
+            if (clientResultsEl) { clientResultsEl.innerHTML = ''; clientResultsEl.style.display = 'none'; }
+            return false;
+        }
+
+        // Si pas de coordonnées valides, géocoder l'adresse
+        if (!isValidCoordinate(client.lat, client.lng)) {
+            if (routeMessageEl) { routeMessageEl.textContent = "Géocodage de l'adresse en cours…"; routeMessageEl.className = 'maps-message hint'; }
+            
+            const clientWithCoords = await loadClientWithGeocode(client);
+            if (!clientWithCoords || !isValidCoordinate(clientWithCoords.lat, clientWithCoords.lng)) {
+                if (routeMessageEl) { routeMessageEl.textContent = "Impossible de géocoder l'adresse de ce client. Veuillez vérifier l'adresse."; routeMessageEl.className = 'maps-message alert'; }
+                return false;
+            }
+            client = clientWithCoords;
+        }
+
+        selectedClients.push({
+            id: client.id,
+            priority: client.basePriority || 1
+        });
+
         if (clientSearchInput) clientSearchInput.value = '';
         if (clientResultsEl) { clientResultsEl.innerHTML = ''; clientResultsEl.style.display = 'none'; }
-        return;
-    }
-
-    // Si pas de coordonnées valides, géocoder l'adresse
-    if (!isValidCoordinate(client.lat, client.lng)) {
-        if (routeMessageEl) { routeMessageEl.textContent = "Géocodage de l'adresse en cours…"; routeMessageEl.className = 'maps-message hint'; }
         
-        const clientWithCoords = await loadClientWithGeocode(client);
-        if (!clientWithCoords || !isValidCoordinate(clientWithCoords.lat, clientWithCoords.lng)) {
-            if (routeMessageEl) { routeMessageEl.textContent = "Impossible de géocoder l'adresse de ce client. Veuillez vérifier l'adresse."; routeMessageEl.className = 'maps-message alert'; }
-            return;
+        // Ajouter le client sur la carte AVANT de rendre la liste (pour qu'il soit visible immédiatement)
+        const added = addClientToMap(client, false); // false = ne pas ajuster la vue automatiquement
+        
+        // Centrer la carte sur le client sélectionné et ouvrir le popup
+        if (isValidCoordinate(client.lat, client.lng)) {
+            map.setView([client.lat, client.lng], 15); // Zoom plus proche pour voir le client
+            setTimeout(() => {
+                if (clientMarkers[client.id]) {
+                    clientMarkers[client.id].openPopup();
+                }
+            }, 100);
         }
-        client = clientWithCoords;
+        
+        renderSelectedClients();
+        
+        if (added && routeMessageEl) {
+            routeMessageEl.textContent = `Client "${client.name}" ajouté à la tournée et affiché sur la carte.`;
+            routeMessageEl.className = 'maps-message success';
+        }
+        return !!added;
+    } catch (err) {
+        console.error('addClientToRoute error:', err);
+        return false;
     }
-
-    selectedClients.push({
-        id: client.id,
-        priority: client.basePriority || 1
-    });
-
-    if (clientSearchInput) clientSearchInput.value = '';
-    if (clientResultsEl) { clientResultsEl.innerHTML = ''; clientResultsEl.style.display = 'none'; }
-    
-    // Ajouter le client sur la carte AVANT de rendre la liste (pour qu'il soit visible immédiatement)
-    const added = addClientToMap(client, false); // false = ne pas ajuster la vue automatiquement
-    
-    // Centrer la carte sur le client sélectionné et ouvrir le popup
-    if (isValidCoordinate(client.lat, client.lng)) {
-        map.setView([client.lat, client.lng], 15); // Zoom plus proche pour voir le client
-        // Attendre un peu pour que le marqueur soit créé
-        setTimeout(() => {
-            if (clientMarkers[client.id]) {
-                clientMarkers[client.id].openPopup();
-            }
-        }, 100);
-    }
-    
-    // Mettre à jour la liste des clients sélectionnés
-    renderSelectedClients();
-    
-    // Message de confirmation
-    if (added && routeMessageEl) {
-        routeMessageEl.textContent = `Client "${client.name}" ajouté à la tournée et affiché sur la carte.`;
-        routeMessageEl.className = 'maps-message success';
-    }
-    return added;
 }
 
 // Fonction utilitaire pour fetch avec timeout
@@ -1069,7 +1071,7 @@ async function fetchWithTimeout(url, options = {}, timeout = CONFIG.FETCH_TIMEOU
     }
 }
 
-// Fonction utilitaire pour valider les coordonnées
+// Fonction utilitaire pour valider les coordonnées (source de vérité unique, exposée globalement)
 function isValidCoordinate(lat, lng) {
     if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
         return false;
@@ -1079,6 +1081,7 @@ function isValidCoordinate(lat, lng) {
            lng >= CONFIG.COORDINATE_BOUNDS.LNG_MIN && 
            lng <= CONFIG.COORDINATE_BOUNDS.LNG_MAX;
 }
+window.isValidCoordinate = isValidCoordinate;
 
 // Recherche de clients depuis la base de données avec cache
 let searchTimeout = null;
