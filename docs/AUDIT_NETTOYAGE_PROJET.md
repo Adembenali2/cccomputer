@@ -291,4 +291,3 @@ Remove-Item "c:\Users\USER33\Desktop\cccomputer-1\public\stock_ui_mockup.html" -
 
 ---
 
-*Rapport généré par audit de nettoyage — aucune suppression automatique effectuée.*
