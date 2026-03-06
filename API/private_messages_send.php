@@ -86,9 +86,25 @@ try {
     $config = require __DIR__ . '/../config/app.php';
     $mysqlTz = $config['mysql_timezone'] ?? 'UTC';
 
+    $hasDeliveredRead = false;
+    try {
+        $checkCol = $pdo->prepare("
+            SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'private_messages'
+            AND COLUMN_NAME IN ('delivered_at','read_at')
+        ");
+        $checkCol->execute();
+        $hasDeliveredRead = (int)$checkCol->fetch(PDO::FETCH_ASSOC)['cnt'] >= 2;
+    } catch (PDOException $e) {
+        // ignore
+    }
+
+    $selectCols = $hasDeliveredRead
+        ? 'm.id, m.id_sender, m.id_receiver, m.message, m.image_path, m.date_envoi, m.delivered_at, m.read_at, u.nom, u.prenom, u.Emploi'
+        : 'm.id, m.id_sender, m.id_receiver, m.message, m.image_path, m.date_envoi, u.nom, u.prenom, u.Emploi';
+
     $stmt = $pdo->prepare("
-        SELECT m.id, m.id_sender, m.id_receiver, m.message, m.image_path, m.date_envoi,
-               u.nom, u.prenom, u.Emploi
+        SELECT {$selectCols}
         FROM private_messages m
         INNER JOIN utilisateurs u ON u.id = m.id_sender
         WHERE m.id = ?
@@ -108,6 +124,11 @@ try {
         'user_emploi' => $row['Emploi'],
         'is_me' => true,
     ];
+    if ($hasDeliveredRead) {
+        $responseMessage['delivered_at'] = null;
+        $responseMessage['read_at'] = null;
+        $responseMessage['lu'] = 0;
+    }
 
     jsonResponse(['ok' => true, 'message' => $responseMessage]);
 } catch (PDOException $e) {

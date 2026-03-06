@@ -244,7 +244,7 @@ function getInitials(prenom, nom) {
     return (first + last) || '?';
 }
 
-function renderMessage(msg, currentUserName) {
+function renderMessage(msg, currentUserName, isPrivate = false) {
     if (!msg || typeof msg !== 'object') return '';
     const isMe = msg.is_me === true || msg.is_me === 1;
     const messageClass = isMe ? 'message-me' : 'message-other';
@@ -258,12 +258,18 @@ function renderMessage(msg, currentUserName) {
         imageContent = `<div class="message-image-wrapper"><img src="${escapeHtml(msg.image_path)}" alt="Image" class="message-image" loading="lazy" onclick="openImageLightbox('${escapeHtml(msg.image_path)}')" onerror="this.onerror=null; this.style.opacity='0.5'; this.alt='Image non disponible';"></div>`;
     }
     const sendingIndicator = msg.sending ? '<span class="message-sending"><span class="spinner"></span> Envoi...</span>' : '';
+    let statusIndicator = '';
+    if (isPrivate && isMe && !msg.sending) {
+        const read = msg.read_at || msg.lu === 1;
+        const delivered = msg.delivered_at || read;
+        statusIndicator = `<span class="message-status" aria-label="${read ? 'Lu' : delivered ? 'Reçu' : 'Envoyé'}">${read ? '✓✓' : delivered ? '✓' : '○'}</span>`;
+    }
     return `
         <div class="chatroom-message ${messageClass}" data-message-id="${msg.id}" role="article">
             ${!isMe ? avatarHtml : ''}
             <div class="message-content-wrapper">
                 <div class="message-bubble">${messageContent}${imageContent}${sendingIndicator}</div>
-                <div class="message-info">${userInfo}<span class="message-time">${formatTime(msg.date_envoi)}</span></div>
+                <div class="message-info">${userInfo}<span class="message-time">${formatTime(msg.date_envoi)}</span>${statusIndicator}</div>
             </div>
             ${isMe ? avatarHtml : ''}
         </div>`;
@@ -294,6 +300,7 @@ function switchTab(tab) {
 
     if (tab === 'general') {
         stopPrivatePolling();
+        markGeneralNotificationsAsRead();
         loadGeneralMessages(false);
         startGeneralPolling();
     } else {
@@ -442,6 +449,18 @@ async function sendGeneralMessage() {
     }
 }
 
+async function markGeneralNotificationsAsRead() {
+    try {
+        await fetch('/API/chatroom_mark_notifications_read.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ csrf_token: CONFIG.csrfToken, mark_all: true }),
+            credentials: 'include'
+        });
+        if (typeof window.updateMessagerieBadge === 'function') window.updateMessagerieBadge();
+    } catch (e) { /* ignore */ }
+}
+
 function startGeneralPolling() {
     stopGeneralPolling();
     generalRefreshIntervalId = setInterval(() => {
@@ -472,7 +491,7 @@ function renderPrivateMessages(messages, append) {
                 lastRenderedDateStr = msgDateStr;
             }
             const div = document.createElement('div');
-            div.innerHTML = renderMessage(msg, CONFIG.currentUserName);
+            div.innerHTML = renderMessage(msg, CONFIG.currentUserName, true);
             div.firstElementChild.classList.add('message-new');
             c.appendChild(div.firstElementChild);
         });
@@ -488,7 +507,7 @@ function renderPrivateMessages(messages, append) {
                 lastRenderedDateStr = msgDateStr;
             }
             const div = document.createElement('div');
-            div.innerHTML = renderMessage(msg, CONFIG.currentUserName);
+            div.innerHTML = renderMessage(msg, CONFIG.currentUserName, true);
             c.appendChild(div.firstElementChild);
         });
         lastPrivateMessageId = messages.length ? Math.max(...messages.map(m => m.id)) : 0;
@@ -597,6 +616,7 @@ async function loadPrivateMessages(append) {
             else if (!append) {
                 privateMessagesContainer.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
             }
+            if (typeof window.updateMessagerieBadge === 'function') window.updateMessagerieBadge();
         }
     } catch (e) {
         if (requestedUserId === selectedUserId) {
@@ -794,6 +814,7 @@ sendButton.addEventListener('click', sendPrivateMessage);
 
 // === Init ===
 async function init() {
+    markGeneralNotificationsAsRead();
     loadGeneralMessages(false);
     startGeneralPolling();
     await loadUsers();

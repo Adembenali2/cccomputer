@@ -212,8 +212,27 @@ document.addEventListener('DOMContentLoaded', () => {
   if (messagerieBadge) {
     let isUpdating = false;
     let lastUpdate = 0;
-    const UPDATE_INTERVAL = 10000; // 10 secondes (plus fréquent pour les notifications chatroom)
+    let lastBadgeCount = 0;
+    let isFirstBadgeUpdate = true;
+    const UPDATE_INTERVAL = 10000; // 10 secondes
     const MIN_UPDATE_INTERVAL = 3000; // Minimum 3 secondes entre mises à jour
+    
+    function showNewMessageToast(count) {
+      if (document.hidden) return;
+      const isOnMessagerie = /\/messagerie\.php/.test(window.location.pathname);
+      if (isOnMessagerie) return;
+      let toast = document.getElementById('header-messagerie-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'header-messagerie-toast';
+        toast.className = 'header-messagerie-toast';
+        toast.setAttribute('role', 'status');
+        document.body.appendChild(toast);
+      }
+      toast.textContent = count === 1 ? '1 nouveau message' : count + ' nouveaux messages';
+      toast.classList.add('header-messagerie-toast-visible');
+      setTimeout(() => toast.classList.remove('header-messagerie-toast-visible'), 3000);
+    }
     
     async function updateMessagerieBadge() {
       // Éviter les requêtes simultanées
@@ -274,6 +293,12 @@ document.addEventListener('DOMContentLoaded', () => {
         clearTimeout(timeoutId);
         
         const totalCount = chatroomCount + oldMessagerieCount;
+        if (!isFirstBadgeUpdate && lastBadgeCount === 0 && totalCount > 0) {
+          showNewMessageToast(totalCount);
+        }
+        isFirstBadgeUpdate = false;
+        lastBadgeCount = totalCount;
+        
         if (totalCount > 0) {
           messagerieBadge.textContent = totalCount > 99 ? '99+' : String(totalCount);
           messagerieBadge.style.display = 'inline-block';

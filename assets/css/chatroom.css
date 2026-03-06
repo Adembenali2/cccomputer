@@ -944,6 +944,17 @@
     opacity: 0.7;
 }
 
+/* Statut reçu/lu (messages privés envoyés) */
+.message-status {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    margin-left: 0.25rem;
+}
+
+.message-me .message-status {
+    color: var(--accent-primary);
+}
+
 /* ====== Barre de saisie (fixe en bas) ====== */
 .chatroom-input-container {
     background: var(--bg-primary);

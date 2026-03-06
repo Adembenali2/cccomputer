@@ -273,3 +273,26 @@ body {
 [data-theme="dark"] .notif-item.unread { 
     background: var(--bg-tertiary); 
 }
+
+/* Toast notification nouveaux messages (depuis le header) */
+.header-messagerie-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(1rem);
+    padding: 0.6rem 1.2rem;
+    background: var(--accent-primary);
+    color: #fff;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+}
+.header-messagerie-toast.header-messagerie-toast-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
