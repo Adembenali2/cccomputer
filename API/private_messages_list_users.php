@@ -20,7 +20,7 @@ try {
 
     if (empty($query)) {
         $stmt = $pdo->prepare("
-            SELECT id, nom, prenom, Emploi
+            SELECT id, nom, prenom, Emploi, last_activity, date_modification
             FROM utilisateurs
             WHERE statut = 'actif' AND id != ?
             ORDER BY nom ASC, prenom ASC
@@ -30,7 +30,7 @@ try {
     } else {
         $search = $query . '%';
         $stmt = $pdo->prepare("
-            SELECT id, nom, prenom, Emploi
+            SELECT id, nom, prenom, Emploi, last_activity, date_modification
             FROM utilisateurs
             WHERE statut = 'actif' AND id != ?
             AND (nom LIKE ? OR prenom LIKE ? OR CONCAT(prenom, ' ', nom) LIKE ? OR CONCAT(nom, ' ', prenom) LIKE ?)
@@ -43,12 +43,16 @@ try {
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $users = [];
     foreach ($rows as $r) {
+        $lastActivity = $r['last_activity'] ?? $r['date_modification'] ?? null;
+        $ts = $lastActivity ? strtotime($lastActivity) : 0;
+        $online = $ts > 0 && (time() - $ts) < 300;
         $users[] = [
             'id' => (int)$r['id'],
             'nom' => $r['nom'],
             'prenom' => $r['prenom'],
             'display_name' => trim($r['prenom'] . ' ' . $r['nom']),
             'emploi' => $r['Emploi'],
+            'online' => $online,
         ];
     }
 

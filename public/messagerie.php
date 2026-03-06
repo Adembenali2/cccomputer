@@ -132,6 +132,10 @@ if ($tableExists) {
             <div class="private-conversation-panel" id="conversationPanel" style="display: none;">
                 <div class="chatroom-header private-conversation-header">
                     <h2 id="conversationTitle">Conversation</h2>
+                    <span id="conversationStatus" class="conversation-status" aria-live="polite">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span id="statusText">—</span>
+                    </span>
                 </div>
                 <div class="chatroom-messages" id="chatroomMessages" role="log" aria-live="polite">
                     <div class="chatroom-loading" id="loadingIndicator">Chargement...</div>
@@ -185,6 +189,9 @@ const userSearch = document.getElementById('userSearch');
 const conversationPlaceholder = document.getElementById('conversationPlaceholder');
 const conversationPanel = document.getElementById('conversationPanel');
 const conversationTitle = document.getElementById('conversationTitle');
+const conversationStatus = document.getElementById('conversationStatus');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
 const inputContainer = document.getElementById('inputContainer');
 
 const generalMessagesContainer = document.getElementById('generalMessages');
@@ -221,6 +228,7 @@ let generalIsSending = false;
 let generalSelectedImage = null;
 let generalPollIntervalId = null;
 let generalUnreadCount = 0;
+let onlineStatusIntervalId = null;
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -496,9 +504,10 @@ function setMode(mode) {
     }
 
     if (mode === 'private') {
-        if (selectedUserId) loadMessages(false);
+        if (selectedUserId) { loadMessages(false); startOnlineStatusPolling(); }
         if (!refreshIntervalId) refreshIntervalId = setInterval(() => { if (selectedUserId && !isLoading) loadMessages(true); }, 3000);
     } else {
+        stopOnlineStatusPolling();
         if (refreshIntervalId) { clearInterval(refreshIntervalId); refreshIntervalId = null; }
     }
 }
@@ -519,8 +528,10 @@ async function loadUsers(query = '') {
             item.type = 'button';
             item.className = 'private-user-item' + (selectedUserId === u.id ? ' selected' : '');
             item.dataset.userId = u.id;
-            item.innerHTML = `<span class="private-user-avatar">${getInitials(u.prenom, u.nom)}</span><span class="private-user-name">${escapeHtml(u.display_name)}</span>`;
-            item.addEventListener('click', () => selectUser(u.id, u.display_name));
+            const isOnline = u.online === true;
+            const onlineClass = isOnline ? ' user-online' : '';
+            item.innerHTML = `<span class="private-user-avatar${onlineClass}">${getInitials(u.prenom, u.nom)}</span><span class="private-user-status-dot ${isOnline ? 'status-online' : 'status-offline'}" aria-label="${isOnline ? 'En ligne' : 'Hors ligne'}"></span><span class="private-user-name">${escapeHtml(u.display_name)}</span>`;
+            item.addEventListener('click', () => selectUser(u.id, u.display_name, isOnline));
             usersList.appendChild(item);
         });
     } catch (e) {
@@ -528,16 +539,57 @@ async function loadUsers(query = '') {
     }
 }
 
-function selectUser(userId, userName) {
+function selectUser(userId, userName, online) {
     selectedUserId = userId;
     selectedUserName = userName;
     usersList.querySelectorAll('.private-user-item').forEach(el => el.classList.toggle('selected', parseInt(el.dataset.userId) === userId));
     conversationPlaceholder.style.display = 'none';
     conversationPanel.style.display = 'flex';
     conversationTitle.textContent = userName;
+    updateConversationStatus(online);
     lastMessageId = 0;
     loadMessages(false);
     messageInput.focus();
+    messageInput.placeholder = 'Message privé à ' + userName + '...';
+    startOnlineStatusPolling();
+}
+
+function updateConversationStatus(online) {
+    if (!statusDot || !statusText) return;
+    statusDot.className = 'status-dot ' + (online ? 'status-online' : 'status-offline');
+    statusText.textContent = online ? 'En ligne' : 'Hors ligne';
+}
+
+async function fetchOnlineStatus(userId) {
+    try {
+        const res = await fetch(`/API/user_online_status.php?user_id=${userId}`, { credentials: 'include' });
+        const data = await res.json();
+        if (data.ok && selectedUserId === userId) updateConversationStatus(data.online);
+    } catch (e) { /* ignore */ }
+}
+
+async function heartbeatPresence() {
+    try {
+        await fetch('/API/chatroom_get_online_users.php', { credentials: 'include' });
+    } catch (e) { /* ignore */ }
+}
+
+function startOnlineStatusPolling() {
+    clearInterval(onlineStatusIntervalId);
+    if (!selectedUserId) return;
+    fetchOnlineStatus(selectedUserId);
+    heartbeatPresence();
+    onlineStatusIntervalId = setInterval(() => {
+        if (selectedUserId && currentMode === 'private') {
+            fetchOnlineStatus(selectedUserId);
+            heartbeatPresence();
+        }
+    }, 30000);
+}
+
+function stopOnlineStatusPolling() {
+    clearInterval(onlineStatusIntervalId);
+    onlineStatusIntervalId = null;
 }
 
 async function loadMessages(append) {
@@ -565,6 +617,7 @@ async function loadMessages(append) {
 }
 
 async function sendMessage() {
+    if (currentMode !== 'private') return;
     const text = messageInput.value.trim();
     const hasImage = selectedImage && selectedImage instanceof File;
     if (!text && !hasImage) return;
@@ -743,6 +796,7 @@ init();
 window.addEventListener('beforeunload', () => {
     clearInterval(refreshIntervalId);
     clearInterval(generalPollIntervalId);
+    stopOnlineStatusPolling();
 });
 </script>
 </body>
