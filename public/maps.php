@@ -400,8 +400,10 @@ async function loadAllClients() {
             let clientsWithCoords = 0;
             let clientsToGeocode = [];
             
-            routeMessageEl.textContent = `Chargement de ${totalClients} client(s)…`;
-            routeMessageEl.className = 'maps-message hint';
+            if (routeMessageEl) {
+                routeMessageEl.textContent = `Chargement de ${totalClients} client(s)…`;
+                routeMessageEl.className = 'maps-message hint';
+            }
             
             // Traiter tous les clients : ceux avec coordonnées et ceux à géocoder
             for (const client of data.clients) {
@@ -428,8 +430,10 @@ async function loadAllClients() {
                 map.fitBounds(bounds, { padding: [40, 40] });
             }
             
-            routeMessageEl.textContent = `${clientsWithCoords} client(s) chargé(s) et affiché(s) sur la carte.${clientsToGeocode.length > 0 ? ' Géocodage en arrière-plan des autres clients…' : ''}`;
-            routeMessageEl.className = 'maps-message success';
+            if (routeMessageEl) {
+                routeMessageEl.textContent = `${clientsWithCoords} client(s) chargé(s) et affiché(s) sur la carte.${clientsToGeocode.length > 0 ? ' Géocodage en arrière-plan des autres clients…' : ''}`;
+                routeMessageEl.className = 'maps-message success';
+            }
             clientsLoaded = true;
             
             // Géocoder les clients sans coordonnées en arrière-plan (par lots pour respecter la limite Nominatim)
@@ -437,13 +441,17 @@ async function loadAllClients() {
                 geocodeClientsInBackground(clientsToGeocode);
             }
         } else {
-            routeMessageEl.textContent = "Erreur lors du chargement des clients : " + (data.error || 'Erreur inconnue');
-            routeMessageEl.className = 'maps-message alert';
+            if (routeMessageEl) {
+                routeMessageEl.textContent = "Erreur lors du chargement des clients : " + (data.error || 'Erreur inconnue');
+                routeMessageEl.className = 'maps-message alert';
+            }
         }
     } catch (err) {
         console.error('Erreur chargement clients:', err);
-        routeMessageEl.textContent = "Erreur lors du chargement des clients : " + err.message;
-        routeMessageEl.className = 'maps-message alert';
+        if (routeMessageEl) {
+            routeMessageEl.textContent = "Erreur lors du chargement des clients : " + err.message;
+            routeMessageEl.className = 'maps-message alert';
+        }
     }
 }
 
@@ -489,7 +497,7 @@ async function geocodeClientsInBackground(clientsToGeocode) {
     
     // Mettre à jour le message pour indiquer la progression
     const updateProgress = () => {
-        if (processed < clientsToGeocode.length) {
+        if (processed < clientsToGeocode.length && routeMessageEl) {
             routeMessageEl.textContent = `Géocodage en cours : ${processed}/${clientsToGeocode.length} client(s) traités (${found} trouvé(s))…`;
         }
     };
@@ -586,8 +594,10 @@ async function geocodeClientsInBackground(clientsToGeocode) {
         }
     }
     
-    routeMessageEl.textContent = `Géocodage terminé : ${found} trouvé(s), ${notFound} non trouvé(s) sur ${processed} client(s) traités.`;
-    routeMessageEl.className = 'maps-message success';
+    if (routeMessageEl) {
+        routeMessageEl.textContent = `Géocodage terminé : ${found} trouvé(s), ${notFound} non trouvé(s) sur ${processed} client(s) traités.`;
+        routeMessageEl.className = 'maps-message success';
+    }
     console.log(`Géocodage terminé : ${found} trouvé(s), ${notFound} non trouvé(s) sur ${processed} client(s) traités`);
 }
 
@@ -620,13 +630,6 @@ function createMarkerIcon(markerType) {
         iconSize: [18, 18],
         iconAnchor: [9, 9]
     });
-}
-
-// Fonction pour compatibilité avec l'ancien système de priorité
-function createPriorityIcon(priority) {
-    if (priority >= 3) return createMarkerIcon('both');
-    if (priority === 2) return createMarkerIcon('sav');
-    return createMarkerIcon('normal');
 }
 
 // Initialiser la carte sur la France par défaut
@@ -852,15 +855,20 @@ function addClientToMap(client, autoFit = true) {
     return true;
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// escapeHtml : défini dans maps-enhancements.js ; fallback si absent
+if (typeof escapeHtml === 'undefined') {
+    window.escapeHtml = function(text) {
+        if (text == null) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    };
 }
 
 function updateClientsBadge() {
     const count = Object.keys(clientMarkers).length;
-    document.getElementById('badgeClients').textContent = `Clients chargés : ${count}`;
+    const el = document.getElementById('badgeClients');
+    if (el) el.textContent = `Clients chargés : ${count}`;
 }
 
 updateClientsBadge();
@@ -870,6 +878,7 @@ updateClientsBadge();
 // =========================
 
 function renderSelectedClients() {
+    if (!selectedClientsContainer) return;
     selectedClientsContainer.innerHTML = '';
 
     if (!selectedClients.length) {
@@ -989,21 +998,18 @@ async function addClientToRoute(client) {
     if (!client) return;
 
     if (selectedClients.find(s => s.id === client.id)) {
-        clientSearchInput.value = '';
-        clientResultsEl.innerHTML = '';
-        clientResultsEl.style.display = 'none';
+        if (clientSearchInput) clientSearchInput.value = '';
+        if (clientResultsEl) { clientResultsEl.innerHTML = ''; clientResultsEl.style.display = 'none'; }
         return;
     }
 
     // Si pas de coordonnées valides, géocoder l'adresse
     if (!isValidCoordinate(client.lat, client.lng)) {
-        routeMessageEl.textContent = "Géocodage de l'adresse en cours…";
-        routeMessageEl.className = 'maps-message hint';
+        if (routeMessageEl) { routeMessageEl.textContent = "Géocodage de l'adresse en cours…"; routeMessageEl.className = 'maps-message hint'; }
         
         const clientWithCoords = await loadClientWithGeocode(client);
         if (!clientWithCoords || !isValidCoordinate(clientWithCoords.lat, clientWithCoords.lng)) {
-            routeMessageEl.textContent = "Impossible de géocoder l'adresse de ce client. Veuillez vérifier l'adresse.";
-            routeMessageEl.className = 'maps-message alert';
+            if (routeMessageEl) { routeMessageEl.textContent = "Impossible de géocoder l'adresse de ce client. Veuillez vérifier l'adresse."; routeMessageEl.className = 'maps-message alert'; }
             return;
         }
         client = clientWithCoords;
@@ -1014,9 +1020,8 @@ async function addClientToRoute(client) {
         priority: client.basePriority || 1
     });
 
-    clientSearchInput.value = '';
-    clientResultsEl.innerHTML = '';
-    clientResultsEl.style.display = 'none';
+    if (clientSearchInput) clientSearchInput.value = '';
+    if (clientResultsEl) { clientResultsEl.innerHTML = ''; clientResultsEl.style.display = 'none'; }
     
     // Ajouter le client sur la carte AVANT de rendre la liste (pour qu'il soit visible immédiatement)
     const added = addClientToMap(client, false); // false = ne pas ajuster la vue automatiquement
@@ -1036,10 +1041,11 @@ async function addClientToRoute(client) {
     renderSelectedClients();
     
     // Message de confirmation
-    if (added) {
+    if (added && routeMessageEl) {
         routeMessageEl.textContent = `Client "${client.name}" ajouté à la tournée et affiché sur la carte.`;
         routeMessageEl.className = 'maps-message success';
     }
+    return added;
 }
 
 // Fonction utilitaire pour fetch avec timeout
@@ -1134,6 +1140,7 @@ async function searchClients(query, retryCount = 0) {
     }
 }
 
+if (clientSearchInput && clientResultsEl) {
 clientSearchInput.addEventListener('input', () => {
     const q = clientSearchInput.value;
     clientResultsEl.innerHTML = '';
@@ -1246,12 +1253,15 @@ clientSearchInput.addEventListener('input', () => {
         }
     }, CONFIG.SEARCH_DEBOUNCE_MS);
 });
+}
 
+if (clientResultsEl && clientSearchInput) {
 document.addEventListener('click', (e) => {
     if (!clientResultsEl.contains(e.target) && e.target !== clientSearchInput) {
         clientResultsEl.style.display = 'none';
     }
 });
+}
 
 // ==========================
 // Gestion du point de départ
@@ -1853,7 +1863,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Bouton clear pour la recherche
 const clientSearchClear = document.getElementById('clientSearchClear');
-if (clientSearchClear) {
+if (clientSearchClear && clientSearchInput && clientResultsEl) {
     clientSearchClear.addEventListener('click', () => {
         clientSearchInput.value = '';
         clientResultsEl.innerHTML = '';

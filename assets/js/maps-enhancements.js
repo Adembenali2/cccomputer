@@ -393,49 +393,6 @@ function exportRoute(format = 'csv') {
 }
 
 // ============================================
-// SECTIONS REPLIABLES
-// ============================================
-
-function initCollapsibleSections() {
-    const sections = document.querySelectorAll('#maps-page .section-title[data-section]');
-    sections.forEach(title => {
-        title.addEventListener('click', () => {
-            const content = title.nextElementSibling;
-            if (content && content.classList.contains('section-content')) {
-                title.classList.toggle('collapsed');
-                content.classList.toggle('collapsed');
-            }
-        });
-    });
-}
-
-// ============================================
-// BARRE DE PROGRESSION GÉOCODAGE
-// ============================================
-
-function updateGeocodeProgress(current, total) {
-    let progressBar = document.getElementById('geocodeProgressBar');
-    if (!progressBar) {
-        const container = document.getElementById('notFoundClientsSection');
-        if (container && container.parentNode) {
-            progressBar = document.createElement('div');
-            progressBar.id = 'geocodeProgressBar';
-            progressBar.className = 'progress-bar';
-            progressBar.innerHTML = '<div class="progress-bar-fill" style="width: 0%"></div>';
-            container.parentNode.insertBefore(progressBar, container);
-        }
-    }
-    
-    if (progressBar) {
-        const fill = progressBar.querySelector('.progress-bar-fill');
-        if (fill) {
-            const percent = total > 0 ? (current / total) * 100 : 0;
-            fill.style.width = percent + '%';
-        }
-    }
-}
-
-// ============================================
 // INITIALISATION AU CHARGEMENT
 // ============================================
 
@@ -475,15 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 2000);
     
-    // Initialiser sections repliables
-    initCollapsibleSections();
-    
-    // Initialiser filtres (après chargement map)
-    setTimeout(() => {
-        if (typeof FilterManager !== 'undefined') {
-            FilterManager.init();
-        }
-    }, 1000);
+    // Filtres : gérés par maps.php (évite doublon avec FilterManager)
     
     // Bouton recherche zone visible
     const toolbarRight = document.querySelector('#maps-page .map-toolbar-right');
@@ -507,24 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
         routeExtra.appendChild(btnExport);
     }
     
-    // Bouton effacer recherche
-    const clearBtn = document.getElementById('clientSearchClear');
-    const clientSearchInput = document.getElementById('clientSearch');
-    const clientResultsEl = document.getElementById('clientResults');
-    
-    if (clearBtn && clientSearchInput && clientResultsEl) {
-        clearBtn.addEventListener('click', () => {
-            clientSearchInput.value = '';
-            clientResultsEl.innerHTML = '';
-            clientResultsEl.style.display = 'none';
-            clearBtn.classList.remove('visible');
-            clientSearchInput.focus();
-        });
-        
-        clientSearchInput.addEventListener('input', () => {
-            clearBtn.classList.toggle('visible', clientSearchInput.value.length > 0);
-        });
-    }
+    // Bouton effacer recherche : géré par maps.php (évite doublon de listeners)
 });
 
 // ============================================
