@@ -457,12 +457,10 @@ function stopGeneralPolling() {
 // === Messages privés ===
 function renderPrivateMessages(messages, append) {
     const c = privateMessagesContainer;
-    const le = loadingIndicator;
     if (!messages || messages.length === 0) {
-        if (!append && le) { le.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>'; le.style.display = 'block'; }
+        if (!append) c.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
         return;
     }
-    if (le) le.style.display = 'none';
     const wasAtBottom = c.scrollHeight - c.scrollTop <= c.clientHeight + 50;
     if (append) {
         messages.forEach(msg => {
@@ -533,6 +531,11 @@ function selectUser(userId, userName, online) {
     conversationTitle.textContent = userName;
     updateConversationStatus(online);
     lastPrivateMessageId = 0;
+    lastRenderedDateStr = null;
+    isLoadingPrivate = false;
+
+    // Vider immédiatement le conteneur pour éviter d'afficher les messages d'une autre discussion
+    privateMessagesContainer.innerHTML = '<div class="chatroom-loading" id="loadingIndicator">Chargement...</div>';
     loadPrivateMessages(false);
     messageInput.focus();
     messageInput.placeholder = 'Message privé à ' + userName + '...';
@@ -579,6 +582,7 @@ function stopOnlineStatusPolling() {
 
 async function loadPrivateMessages(append) {
     if (!selectedUserId || isLoadingPrivate) return;
+    const requestedUserId = selectedUserId;
     isLoadingPrivate = true;
     try {
         const url = append && lastPrivateMessageId > 0
@@ -586,16 +590,18 @@ async function loadPrivateMessages(append) {
             : `/API/private_messages_get.php?with=${selectedUserId}&limit=100`;
         const res = await fetch(url, { credentials: 'include' });
         const data = await res.json();
+        if (requestedUserId !== selectedUserId) return;
         if (!res.ok) throw new Error(data.error || 'Erreur');
         if (data.ok && data.messages) {
             if (data.messages.length > 0) renderPrivateMessages(data.messages, append);
             else if (!append) {
-                loadingIndicator.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
-                loadingIndicator.style.display = 'block';
+                privateMessagesContainer.innerHTML = '<div class="chatroom-empty"><p>Aucun message</p></div>';
             }
         }
     } catch (e) {
-        if (loadingIndicator) loadingIndicator.innerHTML = '<div class="chatroom-loading">Erreur de chargement</div>';
+        if (requestedUserId === selectedUserId) {
+            privateMessagesContainer.innerHTML = '<div class="chatroom-loading">Erreur de chargement</div>';
+        }
     } finally {
         isLoadingPrivate = false;
     }
