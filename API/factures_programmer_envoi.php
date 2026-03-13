@@ -47,20 +47,31 @@ try {
     if (empty($dateEnvoi)) {
         jsonResponse(['ok' => false, 'error' => 'Date d\'envoi requise'], 400);
     }
-    $dt = \DateTime::createFromFormat('Y-m-d\TH:i', $dateEnvoi);
+
+    $config = require __DIR__ . '/../config/app.php';
+    $appTz = new \DateTimeZone($config['app_timezone'] ?? 'Europe/Paris');
+    $utcTz = new \DateTimeZone('UTC');
+
+    $dt = \DateTime::createFromFormat('Y-m-d\TH:i', $dateEnvoi, $appTz);
     if (!$dt) {
-        $dt = \DateTime::createFromFormat('Y-m-d H:i', $dateEnvoi);
+        $dt = \DateTime::createFromFormat('Y-m-d H:i', $dateEnvoi, $appTz);
     }
     if (!$dt) {
-        $dt = \DateTime::createFromFormat('Y-m-d', $dateEnvoi);
+        $dt = \DateTime::createFromFormat('Y-m-d', $dateEnvoi, $appTz);
         if ($dt) {
             $dt->setTime(9, 0);
         }
     }
-    if (!$dt || $dt < new \DateTime()) {
-        jsonResponse(['ok' => false, 'error' => 'Date/heure invalide ou passée'], 400);
+    if (!$dt) {
+        jsonResponse(['ok' => false, 'error' => 'Format de date/heure invalide'], 400);
     }
+    $dt->setTimezone($utcTz);
     $dateEnvoiFormatted = $dt->format('Y-m-d H:i:s');
+
+    $nowUtc = new \DateTime('now', $utcTz);
+    if ($dt <= $nowUtc) {
+        jsonResponse(['ok' => false, 'error' => 'La date/heure doit être dans le futur'], 400);
+    }
 
     if ($typeEnvoi === 'une_facture') {
         $factureId = isset($data['facture_id']) ? (int)$data['facture_id'] : null;

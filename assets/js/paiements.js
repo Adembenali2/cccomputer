@@ -4100,6 +4100,18 @@
             manualGroup.style.display = (!useClient && !allClients) ? 'block' : 'none';
         }
 
+        function formatUtcToLocale(utcStr) {
+            if (!utcStr) return '-';
+            let d;
+            if (utcStr.endsWith('Z') || utcStr.includes('+')) {
+                d = new Date(utcStr);
+            } else {
+                d = new Date(utcStr.replace(' ', 'T') + 'Z');
+            }
+            if (isNaN(d.getTime())) return utcStr;
+            return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
         async function loadProgrammerEnvoisList() {
             const loading = document.getElementById('programmerEnvoisListLoading');
             const container = document.getElementById('programmerEnvoisListContainer');
@@ -4121,11 +4133,12 @@
                             actions = `<button type="button" class="btn btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="progAnnuler(${p.id})">Annuler</button>
                                 <button type="button" class="btn btn-primary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="progEnvoyerMaintenant(${p.id})">Envoyer maintenant</button>`;
                         }
+                        const dateAffichage = p.date_envoi_locale || (p.date_envoi_programmee ? formatUtcToLocale(p.date_envoi_programmee) : '-');
                         return `<tr style="border-bottom:1px solid var(--border-color);">
                             <td style="padding:0.5rem;">${p.id}</td>
                             <td style="padding:0.5rem;">${facturesStr}</td>
                             <td style="padding:0.5rem;">${p.destinataire || '-'}</td>
-                            <td style="padding:0.5rem;">${p.date_envoi_programmee || '-'}</td>
+                            <td style="padding:0.5rem;">${dateAffichage}</td>
                             <td style="padding:0.5rem; text-align:center;"><span style="${statutClass[p.statut] || ''}">${statutLabels[p.statut] || p.statut}</span></td>
                             <td style="padding:0.5rem; text-align:center;">${actions}</td>
                         </tr>`;
@@ -4225,6 +4238,15 @@
             const dateEnvoi = document.getElementById('progDateEnvoi').value;
             const heureEnvoi = document.getElementById('progHeureEnvoi').value;
             const dateHeure = dateEnvoi + 'T' + (heureEnvoi || '09:00');
+            const dateLocale = new Date(dateHeure);
+            if (isNaN(dateLocale.getTime())) {
+                showToast('Date/heure invalide', 'error');
+                return;
+            }
+            if (dateLocale <= new Date()) {
+                showToast('La date/heure doit être dans le futur', 'error');
+                return;
+            }
             const payload = {
                 type_envoi: typeEnvoi,
                 facture_id: factureId,

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 /**
  * API pour lister les programmations d'envoi
+ * date_envoi_programmee stockée en UTC, retournée en ISO 8601 UTC pour affichage local côté frontend
  */
 
 require_once __DIR__ . '/../includes/api_helpers.php';
@@ -15,6 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 try {
     $pdo = getPdo();
+    $config = require __DIR__ . '/../config/app.php';
+    $appTz = new DateTimeZone($config['app_timezone'] ?? 'Europe/Paris');
 
     $stmt = $pdo->query("
         SELECT 
@@ -54,6 +57,17 @@ try {
         if ($r['all_clients']) {
             $dest = 'Tous les clients';
         }
+        $dateUtc = $r['date_envoi_programmee'];
+        $dateIsoUtc = null;
+        $dateLocaleFormatted = null;
+        if ($dateUtc) {
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $dateUtc, new DateTimeZone('UTC'));
+            if ($dt) {
+                $dateIsoUtc = $dt->format('Y-m-d\TH:i:s\Z');
+                $dt->setTimezone($appTz);
+                $dateLocaleFormatted = $dt->format('d/m/Y H:i');
+            }
+        }
         $result[] = [
             'id' => (int)$r['id'],
             'type_envoi' => $r['type_envoi'],
@@ -63,7 +77,8 @@ try {
             'destinataire' => $dest,
             'sujet' => $r['sujet'],
             'message' => $r['message'],
-            'date_envoi_programmee' => $r['date_envoi_programmee'],
+            'date_envoi_programmee' => $dateIsoUtc ?: $dateUtc,
+            'date_envoi_locale' => $dateLocaleFormatted ?: $dateUtc,
             'statut' => $r['statut'],
             'erreur_message' => $r['erreur_message'],
             'created_at' => $r['created_at'],

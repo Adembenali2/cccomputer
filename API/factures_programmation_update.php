@@ -42,19 +42,29 @@ try {
     }
 
     $dateEnvoi = $data['date_envoi_programmee'] ?? null;
+    $dt = null;
     if ($dateEnvoi) {
-        $dt = \DateTime::createFromFormat('Y-m-d\TH:i', $dateEnvoi);
+        $config = require __DIR__ . '/../config/app.php';
+        $appTz = new \DateTimeZone($config['app_timezone'] ?? 'Europe/Paris');
+        $utcTz = new \DateTimeZone('UTC');
+
+        $dt = \DateTime::createFromFormat('Y-m-d\TH:i', $dateEnvoi, $appTz);
         if (!$dt) {
-            $dt = \DateTime::createFromFormat('Y-m-d H:i', $dateEnvoi);
+            $dt = \DateTime::createFromFormat('Y-m-d H:i', $dateEnvoi, $appTz);
         }
         if (!$dt) {
-            $dt = \DateTime::createFromFormat('Y-m-d', $dateEnvoi);
+            $dt = \DateTime::createFromFormat('Y-m-d', $dateEnvoi, $appTz);
             if ($dt) {
                 $dt->setTime(9, 0);
             }
         }
-        if (!$dt || $dt < new \DateTime()) {
-            jsonResponse(['ok' => false, 'error' => 'Date/heure invalide ou passée'], 400);
+        if (!$dt) {
+            jsonResponse(['ok' => false, 'error' => 'Format de date/heure invalide'], 400);
+        }
+        $dt->setTimezone($utcTz);
+        $nowUtc = new \DateTime('now', $utcTz);
+        if ($dt <= $nowUtc) {
+            jsonResponse(['ok' => false, 'error' => 'La date/heure doit être dans le futur'], 400);
         }
     }
 
@@ -64,7 +74,7 @@ try {
     $fields = ['sujet', 'message', 'email_destination', 'date_envoi_programmee'];
     foreach ($fields as $f) {
         if (array_key_exists($f, $data)) {
-            if ($f === 'date_envoi_programmee' && $dateEnvoi) {
+            if ($f === 'date_envoi_programmee' && $dt) {
                 $updates[] = "{$f} = :{$f}";
                 $params[":{$f}"] = $dt->format('Y-m-d H:i:s');
             } elseif ($f !== 'date_envoi_programmee') {

@@ -80,13 +80,17 @@ try {
 $config = require $baseDir . '/config/app.php';
 $invoiceEmailService = new InvoiceEmailService($pdo, $config);
 
+// Forcer UTC pour cohérence Railway
+date_default_timezone_set('UTC');
+logMsg('UTC now: ' . gmdate('Y-m-d H:i:s'));
+
 // === 4. Récupérer les programmations à exécuter ===
-// Railway/MySQL : NOW() en UTC par défaut. date_envoi_programmee stockée en UTC.
+// date_envoi_programmee stockée en UTC. Comparaison explicite en UTC.
 try {
     $stmt = $pdo->query("
-        SELECT id, type_envoi, facture_id, factures_json, email_destination, use_client_email, all_clients, sujet, message
+        SELECT id, type_envoi, facture_id, factures_json, email_destination, use_client_email, all_clients, sujet, message, date_envoi_programmee
         FROM factures_envois_programmes
-        WHERE statut = 'en_attente' AND date_envoi_programmee <= NOW()
+        WHERE statut = 'en_attente' AND date_envoi_programmee <= UTC_TIMESTAMP()
         ORDER BY date_envoi_programmee ASC
     ");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -105,6 +109,9 @@ if (empty($rows)) {
 }
 
 logMsg(count($rows) . ' programmation(s) trouvée(s)');
+foreach ($rows as $prog) {
+    logMsg("Programmation #{$prog['id']}: date_envoi_programmee={$prog['date_envoi_programmee']}");
+}
 
 $totalSent = 0;
 $totalFailed = 0;
@@ -177,7 +184,7 @@ foreach ($rows as $prog) {
     try {
         $pdo->prepare("
             UPDATE factures_envois_programmes 
-            SET statut = :statut, sent_at = NOW(), erreur_message = :err 
+            SET statut = :statut, sent_at = UTC_TIMESTAMP(), erreur_message = :err 
             WHERE id = :id
         ")->execute([
             ':statut' => $statut,
