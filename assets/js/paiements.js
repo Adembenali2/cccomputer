@@ -1,5 +1,9 @@
+        // Instance Chart.js pour le graphique (évite la collision avec l'élément DOM id="statsChart")
+        let statsChart = null;
+        let currentData = null;
+
         /**
-         * RÃ©cupÃ¨re le token CSRF depuis le data attribute du body
+         * Récupère le token CSRF depuis le data attribute du body
          */
         function getCsrfToken() {
             return document.body.dataset.csrfToken || '';
@@ -4069,8 +4073,17 @@
          * Met ÃƒÂ  jour le graphique (Total + N&B + Couleur) et la pill d'estimation en texte
          */
         function updateChart(data) {
-            const ctx = document.getElementById('statsChart').getContext('2d');
-            if (statsChart) statsChart.destroy();
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js n\'est pas chargé');
+                return;
+            }
+            const statsCanvas = document.getElementById('statsChart');
+            if (!statsCanvas) return;
+            const ctx = statsCanvas.getContext('2d');
+            if (statsChart && typeof statsChart.destroy === 'function') {
+                statsChart.destroy();
+                statsChart = null;
+            }
 
             const groupBy = data.group_by || 'day';
             const isMonthly = groupBy === 'month';
