@@ -82,17 +82,46 @@ $invoiceEmailService = new InvoiceEmailService($pdo, $config);
 
 // Forcer UTC pour cohérence Railway
 date_default_timezone_set('UTC');
-logMsg('UTC now: ' . gmdate('Y-m-d H:i:s'));
+
+// Forcer la session MySQL en UTC (évite toute ambiguïté)
+try {
+    $pdo->exec("SET time_zone = '+00:00'");
+} catch (PDOException $e) {
+    logMsg('Warning: SET time_zone failed - ' . $e->getMessage());
+}
+
+$utcNow = gmdate('Y-m-d H:i:s');
+logMsg('UTC now (PHP): ' . $utcNow);
+
+// Diagnostic: récupérer UTC_TIMESTAMP() de MySQL pour comparaison
+try {
+    $tzRow = $pdo->query("SELECT UTC_TIMESTAMP() as mysql_utc, NOW() as mysql_now")->fetch(PDO::FETCH_ASSOC);
+    logMsg('UTC now (MySQL): ' . ($tzRow['mysql_utc'] ?? 'N/A') . ' | NOW(): ' . ($tzRow['mysql_now'] ?? 'N/A'));
+} catch (PDOException $e) {
+    logMsg('Warning: timezone check failed');
+}
+
+// Diagnostic: lister TOUTES les programmations en_attente (même celles non éligibles)
+try {
+    $allPending = $pdo->query("SELECT id, date_envoi_programmee FROM factures_envois_programmes WHERE statut = 'en_attente' ORDER BY date_envoi_programmee ASC")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($allPending as $p) {
+        $eligible = (strcmp($p['date_envoi_programmee'], $utcNow) <= 0);
+        logMsg("En attente #{$p['id']}: date={$p['date_envoi_programmee']} eligible=" . ($eligible ? 'OUI' : 'NON'));
+    }
+} catch (PDOException $e) {
+    logMsg('Warning: diagnostic pending failed');
+}
 
 // === 4. Récupérer les programmations à exécuter ===
-// date_envoi_programmee stockée en UTC. Comparaison explicite en UTC.
+// Utilisation de la date UTC PHP (gmdate) en paramètre pour éviter toute ambiguïté MySQL
 try {
-    $stmt = $pdo->query("
+    $stmt = $pdo->prepare("
         SELECT id, type_envoi, facture_id, factures_json, email_destination, use_client_email, all_clients, sujet, message, date_envoi_programmee
         FROM factures_envois_programmes
-        WHERE statut = 'en_attente' AND date_envoi_programmee <= UTC_TIMESTAMP()
+        WHERE statut = 'en_attente' AND date_envoi_programmee <= :utc_now
         ORDER BY date_envoi_programmee ASC
     ");
+    $stmt->execute([':utc_now' => $utcNow]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     logMsg('Erreur SQL: ' . $e->getMessage());
@@ -108,10 +137,7 @@ if (empty($rows)) {
     exit(0);
 }
 
-logMsg(count($rows) . ' programmation(s) trouvée(s)');
-foreach ($rows as $prog) {
-    logMsg("Programmation #{$prog['id']}: date_envoi_programmee={$prog['date_envoi_programmee']}");
-}
+logMsg(count($rows) . ' programmation(s) éligible(s) à exécuter');
 
 $totalSent = 0;
 $totalFailed = 0;
