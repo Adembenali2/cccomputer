@@ -144,6 +144,7 @@ $totalFailed = 0;
 
 foreach ($rows as $prog) {
     $id = (int)$prog['id'];
+    logMsg("Programmation #{$id} date={$prog['date_envoi_programmee']} statut=en_attente → exécution");
     $emailOverride = null;
     if (!$prog['use_client_email'] && !$prog['all_clients'] && !empty($prog['email_destination'])) {
         $emailOverride = trim($prog['email_destination']);
