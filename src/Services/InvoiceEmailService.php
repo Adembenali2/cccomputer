@@ -56,10 +56,19 @@ class InvoiceEmailService
      * 
      * @param int $factureId ID de la facture
      * @param bool $force Forcer l'envoi même si email_envoye = 1 (bypass le claim, mais refuse si email_envoye=2)
+     * @param string|null $emailOverride Email destinataire (si fourni et valide, remplace l'email client)
+     * @param string|null $sujetOverride Sujet personnalisé
+     * @param string|null $messageOverride Message additionnel pour le corps
      * @return array ['success' => bool, 'message' => string, 'log_id' => int|null, 'message_id' => string|null]
      * @throws RuntimeException En cas d'erreur critique
      */
-    public function sendInvoiceAfterGeneration(int $factureId, bool $force = false): array
+    public function sendInvoiceAfterGeneration(
+        int $factureId,
+        bool $force = false,
+        ?string $emailOverride = null,
+        ?string $sujetOverride = null,
+        ?string $messageOverride = null
+    ): array
     {
         // Vérifier si l'envoi automatique est activé
         if (!$this->autoSendEnabled && !$force) {
@@ -233,25 +242,32 @@ class InvoiceEmailService
                 }
             }
             
-            // Vérifier que le client a un email
+            // Déterminer l'email destinataire : override si fourni et valide, sinon email client
             $clientEmail = trim($facture['client_email'] ?? '');
-            if (empty($clientEmail) || !filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+            $destEmail = null;
+            if (!empty($emailOverride) && filter_var(trim($emailOverride), FILTER_VALIDATE_EMAIL)) {
+                $destEmail = trim($emailOverride);
+            } elseif (!empty($clientEmail) && filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+                $destEmail = $clientEmail;
+            }
+            if (empty($destEmail)) {
                 // Remettre email_envoye à 0 en cas d'erreur de validation
                 $stmt = $this->pdo->prepare("UPDATE factures SET email_envoye = 0 WHERE id = :id");
                 $stmt->execute([':id' => $factureId]);
                 $this->pdo->rollBack();
                 
-                error_log("[InvoiceEmailService] Email client invalide pour facture #{$factureId}: " . ($clientEmail ?: 'vide'));
+                error_log("[InvoiceEmailService] Email invalide pour facture #{$factureId}: " . ($emailOverride ?: $clientEmail ?: 'vide'));
                 return [
                     'success' => false,
-                    'message' => 'Email client invalide ou manquant',
+                    'message' => 'Email destinataire invalide ou manquant',
                     'log_id' => null,
                     'message_id' => null
                 ];
             }
             
+            $sujetLog = $sujetOverride ?: "Facture {$facture['numero']} - CC Computer";
             // Créer l'entrée de log SEULEMENT si le claim a réussi
-            $logId = $this->createEmailLog($factureId, $clientEmail, "Facture {$facture['numero']} - CC Computer");
+            $logId = $this->createEmailLog($factureId, $destEmail, $sujetLog);
             
             // COMMIT de la transaction courte (pas de SMTP dans la transaction)
             $this->pdo->commit();
@@ -290,9 +306,14 @@ class InvoiceEmailService
             }
             
             // Préparer le sujet et les messages (texte + HTML)
-            $sujet = "Facture {$facture['numero']} - CC Computer";
+            $sujet = $sujetOverride ?: "Facture {$facture['numero']} - CC Computer";
             $textBody = $this->buildEmailBody($facture);
             $htmlBody = $this->buildEmailHtmlBody($facture);
+            if (!empty($messageOverride)) {
+                $msg = trim($messageOverride);
+                $textBody .= "\n\n---\n" . $msg;
+                $htmlBody .= '<br><br><hr><p>' . nl2br(htmlspecialchars($msg, ENT_QUOTES, 'UTF-8')) . '</p>';
+            }
             
             // Envoyer l'email (HORS transaction)
             // Détecter si Brevo API est disponible, sinon fallback SMTP
@@ -306,7 +327,7 @@ class InvoiceEmailService
                     error_log("[InvoiceEmailService] Utilisation de l'API Brevo pour l'envoi");
                     $brevoService = new BrevoApiMailerService();
                     $messageId = $brevoService->sendEmailWithPdf(
-                        $clientEmail,
+                        $destEmail,
                         $sujet,
                         $textBody,
                         $pdfPath,
@@ -318,7 +339,7 @@ class InvoiceEmailService
                     $emailConfig = $this->config['email'] ?? [];
                     $mailerService = new MailerService($emailConfig);
                     $messageId = $mailerService->sendEmailWithPdf(
-                        $clientEmail,
+                        $destEmail,
                         $sujet,
                         $textBody,
                         $pdfPath,
@@ -359,14 +380,14 @@ class InvoiceEmailService
                     error_log("[InvoiceEmailService] PDF temporaire supprimé: {$pdfPath}");
                 }
                 
-                error_log("[InvoiceEmailService] ✅ Facture #{$factureId} envoyée avec succès à {$clientEmail} (Message-ID: {$messageId})");
+                error_log("[InvoiceEmailService] ✅ Facture #{$factureId} envoyée avec succès à {$destEmail} (Message-ID: {$messageId})");
                 
                 return [
                     'success' => true,
                     'message' => 'Facture envoyée avec succès',
                     'log_id' => $logId,
                     'message_id' => $messageId,
-                    'email' => $clientEmail
+                    'email' => $destEmail
                 ];
                 
             } catch (MailerException $e) {
@@ -648,6 +669,24 @@ class InvoiceEmailService
         return str_replace(array_keys($replacements), array_values($replacements), $template);
     }
     
+    /**
+     * Envoie une facture à une adresse email spécifique (pour envois programmés ou manuels)
+     * 
+     * @param int $factureId ID de la facture
+     * @param string|null $emailOverride Email destinataire (si null, utilise l'email du client)
+     * @param string|null $sujetOverride Sujet personnalisé (si null, sujet par défaut)
+     * @param string|null $messageOverride Message additionnel à ajouter au corps (si null, pas de message)
+     * @return array ['success' => bool, 'message' => string, 'log_id' => int|null, 'message_id' => string|null, 'email' => string|null]
+     */
+    public function sendInvoiceToEmail(
+        int $factureId,
+        ?string $emailOverride = null,
+        ?string $sujetOverride = null,
+        ?string $messageOverride = null
+    ): array {
+        return $this->sendInvoiceAfterGeneration($factureId, true, $emailOverride, $sujetOverride, $messageOverride);
+    }
+
     /**
      * Vérifie si l'envoi automatique est activé
      * 

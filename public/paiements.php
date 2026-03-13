@@ -291,6 +291,29 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     </button>
                 </div>
             </div>
+
+            <!-- Section Programmer envois -->
+            <div class="section-card" id="sectionProgrammerEnvois">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                    </div>
+                    <h3 class="section-card-title">Programmer envois</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Programmez l'envoi automatique de factures par email à une date/heure définie</p>
+                    <button class="section-card-btn" onclick="openSection('programmer-envois')">
+                        Programmer un envoi
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1010,6 +1033,93 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 <button type="button" class="btn btn-primary" id="btnEnvoyerMasse" onclick="submitEnvoiMasse()" disabled>
                     Envoyer les factures sélectionnées
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Programmer envois -->
+    <div class="modal-overlay" id="programmerEnvoisModalOverlay" onclick="closeProgrammerEnvoisModal()">
+        <div class="modal" id="programmerEnvoisModal" onclick="event.stopPropagation()" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Programmer des envois</h2>
+                <button class="modal-close" onclick="closeProgrammerEnvoisModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="programmerEnvoisForm" onsubmit="submitProgrammerEnvoisForm(event)">
+                    <input type="hidden" name="csrf_token" id="programmerEnvoisFormCsrf" value="<?= h($_SESSION['csrf_token'] ?? '') ?>">
+                    <div class="modal-form-group">
+                        <label for="progTypeEnvoi">Type d'envoi <span style="color: #ef4444;">*</span></label>
+                        <select id="progTypeEnvoi" name="type_envoi" required onchange="onProgTypeEnvoiChange()">
+                            <option value="une_facture">Une facture précise</option>
+                            <option value="plusieurs_factures">Plusieurs factures</option>
+                            <option value="toutes_selectionnees">Toutes les factures sélectionnées</option>
+                        </select>
+                    </div>
+                    <div class="modal-form-group" id="progFactureGroup">
+                        <label for="progFactureSearch" id="progFactureGroupLabel">Facture <span style="color: #ef4444;">*</span></label>
+                        <input type="text" id="progFactureSearch" autocomplete="off" placeholder="Rechercher une facture…">
+                        <input type="hidden" name="facture_id" id="progFactureId" value="">
+                        <div id="progFactureSuggestions" class="client-suggestions" style="display: none;"></div>
+                        <div class="input-hint" id="progFactureSearchHint">Tapez le nom du client pour rechercher ses factures</div>
+                    </div>
+                    <div class="modal-form-group" id="progFacturesMultiGroup" style="display: none;">
+                        <label>Factures à envoyer</label>
+                        <div class="input-hint">Recherchez une facture ci-dessus (champ Facture) puis cliquez sur une suggestion pour l'ajouter</div>
+                        <div id="progFacturesMultiList" style="max-height: 150px; overflow-y: auto; border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 0.5rem; min-height: 2.5rem;"><em style="color: var(--text-secondary);">Aucune facture sélectionnée</em></div>
+                    </div>
+                    <div class="modal-form-group">
+                        <label><input type="checkbox" id="progUseClientEmail" name="use_client_email" checked onchange="onProgEmailOptionChange()"> Utiliser l'email du client</label>
+                    </div>
+                    <div class="modal-form-group" id="progEmailManualGroup" style="display: none;">
+                        <label for="progEmailDestination">Email destinataire <span style="color: #ef4444;">*</span></label>
+                        <input type="email" id="progEmailDestination" name="email_destination" placeholder="client@example.com">
+                    </div>
+                    <div class="modal-form-group">
+                        <label><input type="checkbox" id="progAllClients" name="all_clients" onchange="onProgEmailOptionChange()"> Tous les clients concernés</label>
+                    </div>
+                    <div class="modal-form-row">
+                        <div class="modal-form-group">
+                            <label for="progDateEnvoi">Date d'envoi <span style="color: #ef4444;">*</span></label>
+                            <input type="date" id="progDateEnvoi" name="date_envoi" required>
+                        </div>
+                        <div class="modal-form-group">
+                            <label for="progHeureEnvoi">Heure d'envoi <span style="color: #ef4444;">*</span></label>
+                            <input type="time" id="progHeureEnvoi" name="heure_envoi" required value="09:00">
+                        </div>
+                    </div>
+                    <div class="modal-form-group">
+                        <label for="progSujet">Objet email</label>
+                        <input type="text" id="progSujet" name="sujet" placeholder="Facture - CC Computer">
+                    </div>
+                    <div class="modal-form-group">
+                        <label for="progMessage">Message email</label>
+                        <textarea id="progMessage" name="message" rows="4" placeholder="Message personnalisé à inclure..."></textarea>
+                    </div>
+                </form>
+                <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-color);">
+                <h3 style="margin: 0 0 1rem; font-size: 1rem;">Programmations existantes</h3>
+                <div id="programmerEnvoisListLoading" style="text-align: center; padding: 1rem; color: var(--text-secondary);">Chargement…</div>
+                <div id="programmerEnvoisListContainer" style="display: none;">
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                            <thead>
+                                <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                                    <th style="padding: 0.5rem; text-align: left;">ID</th>
+                                    <th style="padding: 0.5rem; text-align: left;">Facture(s)</th>
+                                    <th style="padding: 0.5rem; text-align: left;">Destinataire</th>
+                                    <th style="padding: 0.5rem; text-align: left;">Date/heure</th>
+                                    <th style="padding: 0.5rem; text-align: center;">Statut</th>
+                                    <th style="padding: 0.5rem; text-align: center;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="programmerEnvoisTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeProgrammerEnvoisModal()">Fermer</button>
+                <button type="submit" form="programmerEnvoisForm" class="btn btn-primary" id="btnProgrammerEnvois">Créer la programmation</button>
             </div>
         </div>
     </div>

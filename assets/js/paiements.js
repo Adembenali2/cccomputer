@@ -40,6 +40,8 @@
                 openGenerationFactureClientsModal();
             } else if (section === 'envoi-masse') {
                 openEnvoiMasseModal();
+            } else if (section === 'programmer-envois') {
+                openProgrammerEnvoisModal();
             } else {
                 console.log('Ouverture de la section:', section);
                 showToast(`Section "${section}" - À implémenter`, 'info');
@@ -3822,6 +3824,286 @@
             logContainer.style.display = 'block';
         }
 
+        // ============================================
+        // PROGRAMMER ENVOIS
+        // ============================================
+        let progFacturesMultiSelected = [];
+
+        function openProgrammerEnvoisModal() {
+            const modal = document.getElementById('programmerEnvoisModal');
+            const overlay = document.getElementById('programmerEnvoisModalOverlay');
+            if (!modal || !overlay) return;
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('progDateEnvoi').value = today;
+            document.getElementById('progHeureEnvoi').value = '09:00';
+            document.getElementById('progFactureId').value = '';
+            document.getElementById('progFactureSearch').value = '';
+            document.getElementById('progUseClientEmail').checked = true;
+            document.getElementById('progAllClients').checked = false;
+            document.getElementById('progEmailDestination').value = '';
+            document.getElementById('progEmailManualGroup').style.display = 'none';
+            progFacturesMultiSelected = [];
+            onProgTypeEnvoiChange();
+            loadProgrammerEnvoisList();
+        }
+
+        function closeProgrammerEnvoisModal() {
+            const overlay = document.getElementById('programmerEnvoisModalOverlay');
+            if (overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+
+        function onProgTypeEnvoiChange() {
+            const type = document.getElementById('progTypeEnvoi').value;
+            const factureGroup = document.getElementById('progFactureGroup');
+            const multiGroup = document.getElementById('progFacturesMultiGroup');
+            const multiGroupLabel = multiGroup ? multiGroup.querySelector('label');
+            const searchHint = document.getElementById('progFactureSearch') ? document.getElementById('progFactureSearch').parentElement : null;
+            if (type === 'une_facture') {
+                factureGroup.style.display = 'block';
+                if (multiGroupLabel) multiGroupLabel.textContent = 'Facture';
+                if (searchHint && searchHint.querySelector('.input-hint')) searchHint.querySelector('.input-hint').textContent = 'Tapez le nom du client pour rechercher ses factures';
+            } else if (type === 'plusieurs_factures' || type === 'toutes_selectionnees') {
+                factureGroup.style.display = 'block';
+                if (factureGroup) {
+                    const lbl = factureGroup.querySelector('label');
+                    if (lbl) lbl.textContent = 'Rechercher une facture pour l\'ajouter';
+                    const hint = factureGroup.querySelector('.input-hint');
+                    if (hint) hint.textContent = 'Cliquez sur une suggestion pour l\'ajouter à la liste';
+                }
+                multiGroup.style.display = 'block';
+            } else {
+                factureGroup.style.display = 'block';
+                multiGroup.style.display = 'none';
+            }
+        }
+
+        function onProgEmailOptionChange() {
+            const useClient = document.getElementById('progUseClientEmail').checked;
+            const allClients = document.getElementById('progAllClients').checked;
+            const manualGroup = document.getElementById('progEmailManualGroup');
+            manualGroup.style.display = (!useClient && !allClients) ? 'block' : 'none';
+        }
+
+        async function loadProgrammerEnvoisList() {
+            const loading = document.getElementById('programmerEnvoisListLoading');
+            const container = document.getElementById('programmerEnvoisListContainer');
+            const tbody = document.getElementById('programmerEnvoisTableBody');
+            if (!loading || !container || !tbody) return;
+            loading.style.display = 'block';
+            container.style.display = 'none';
+            try {
+                const res = await fetch('/API/factures_programmations_liste.php', { credentials: 'include' });
+                const data = await res.json();
+                loading.style.display = 'none';
+                if (data.ok && data.programmations) {
+                    tbody.innerHTML = data.programmations.map(p => {
+                        const facturesStr = (p.factures_info || []).map(f => f.numero || '#' + f.id).join(', ') || '-';
+                        const statutLabels = { en_attente: 'En attente', envoye: 'Envoyé', annule: 'Annulé', echoue: 'Échoué' };
+                        const statutClass = { en_attente: 'color:#f59e0b', envoye: 'color:#10b981', annule: 'color:#6b7280', echoue: 'color:#ef4444' };
+                        let actions = '';
+                        if (p.statut === 'en_attente') {
+                            actions = `<button type="button" class="btn btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="progAnnuler(${p.id})">Annuler</button>
+                                <button type="button" class="btn btn-primary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="progEnvoyerMaintenant(${p.id})">Envoyer maintenant</button>`;
+                        }
+                        return `<tr style="border-bottom:1px solid var(--border-color);">
+                            <td style="padding:0.5rem;">${p.id}</td>
+                            <td style="padding:0.5rem;">${facturesStr}</td>
+                            <td style="padding:0.5rem;">${p.destinataire || '-'}</td>
+                            <td style="padding:0.5rem;">${p.date_envoi_programmee || '-'}</td>
+                            <td style="padding:0.5rem; text-align:center;"><span style="${statutClass[p.statut] || ''}">${statutLabels[p.statut] || p.statut}</span></td>
+                            <td style="padding:0.5rem; text-align:center;">${actions}</td>
+                        </tr>`;
+                    }).join('');
+                    container.style.display = 'block';
+                }
+            } catch (e) {
+                loading.style.display = 'none';
+                tbody.innerHTML = '<tr><td colspan="6" style="padding:1rem; color:#ef4444;">Erreur de chargement</td></tr>';
+                container.style.display = 'block';
+            }
+        }
+
+        async function progAnnuler(id) {
+            if (!confirm('Annuler cette programmation ?')) return;
+            try {
+                const res = await fetch('/API/factures_programmation_annuler.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
+                    body: JSON.stringify({ id }),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast('Programmation annulée', 'success');
+                    loadProgrammerEnvoisList();
+                } else {
+                    showToast(data.error || 'Erreur', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur: ' + e.message, 'error');
+            }
+        }
+
+        async function progEnvoyerMaintenant(id) {
+            if (!confirm('Envoyer maintenant cette programmation ?')) return;
+            try {
+                const res = await fetch('/API/factures_programmation_envoyer_maintenant.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
+                    body: JSON.stringify({ id }),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast(data.message || 'Envoi effectué', 'success');
+                    loadProgrammerEnvoisList();
+                } else {
+                    showToast(data.error || 'Erreur', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur: ' + e.message, 'error');
+            }
+        }
+
+        function progRemoveFacture(id) {
+            progFacturesMultiSelected = progFacturesMultiSelected.filter(x => x !== id);
+            const listEl = document.getElementById('progFacturesMultiList');
+            if (listEl) {
+                listEl.innerHTML = progFacturesMultiSelected.length ? progFacturesMultiSelected.map(fid => `<span style="display:inline-block; margin:0.25rem; padding:0.25rem 0.5rem; background:var(--bg-secondary); border-radius:4px;">#${fid} <button type="button" style="margin-left:0.25rem; border:none; background:none; cursor:pointer; color:#ef4444;" onclick="progRemoveFacture(${fid})">&times;</button></span>`).join('') : '<em style="color:var(--text-secondary);">Aucune facture sélectionnée</em>';
+            }
+        }
+
+        function openProgFacturesPicker() {
+            const type = document.getElementById('progTypeEnvoi').value;
+            if (type === 'plusieurs_factures' || type === 'toutes_selectionnees') {
+                document.getElementById('progFactureSearch').focus();
+                showToast('Recherchez une facture puis cliquez sur une suggestion pour l\'ajouter à la liste', 'info');
+            }
+        }
+
+        async function submitProgrammerEnvoisForm(e) {
+            e.preventDefault();
+            const typeEnvoi = document.getElementById('progTypeEnvoi').value;
+            const useClientEmail = document.getElementById('progUseClientEmail').checked;
+            const allClients = document.getElementById('progAllClients').checked;
+            const emailDest = document.getElementById('progEmailDestination').value.trim();
+            if (!useClientEmail && !allClients && !emailDest) {
+                showToast('Indiquez un email ou cochez "Utiliser l\'email du client"', 'error');
+                return;
+            }
+            let factureId = null;
+            let factureIds = [];
+            if (typeEnvoi === 'une_facture') {
+                factureId = parseInt(document.getElementById('progFactureId').value);
+                if (!factureId) {
+                    showToast('Sélectionnez une facture', 'error');
+                    return;
+                }
+            } else if (typeEnvoi === 'plusieurs_factures' || typeEnvoi === 'toutes_selectionnees') {
+                factureIds = progFacturesMultiSelected.length ? progFacturesMultiSelected : [];
+                if (factureIds.length === 0) {
+                    showToast('Sélectionnez au moins une facture', 'error');
+                    return;
+                }
+            }
+            const dateEnvoi = document.getElementById('progDateEnvoi').value;
+            const heureEnvoi = document.getElementById('progHeureEnvoi').value;
+            const dateHeure = dateEnvoi + 'T' + (heureEnvoi || '09:00');
+            const payload = {
+                type_envoi: typeEnvoi,
+                facture_id: factureId,
+                facture_ids: factureIds,
+                use_client_email: useClientEmail ? 1 : 0,
+                all_clients: allClients ? 1 : 0,
+                email_destination: emailDest || null,
+                date_envoi_programmee: dateHeure,
+                sujet: document.getElementById('progSujet').value.trim() || null,
+                message: document.getElementById('progMessage').value.trim() || null
+            };
+            const btn = document.getElementById('btnProgrammerEnvois');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch('/API/factures_programmer_envoi.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
+                    body: JSON.stringify(payload),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast('Programmation créée', 'success');
+                    document.getElementById('programmerEnvoisForm').reset();
+                    document.getElementById('progFactureId').value = '';
+                    document.getElementById('progFactureSearch').value = '';
+                    progFacturesMultiSelected = [];
+                    loadProgrammerEnvoisList();
+                } else {
+                    showToast(data.error || 'Erreur', 'error');
+                }
+            } catch (err) {
+                showToast('Erreur: ' + err.message, 'error');
+            }
+            if (btn) btn.disabled = false;
+        }
+
+        // Facture search pour programmer (réutiliser facture_search si disponible)
+        (function initProgFactureSearch() {
+            const input = document.getElementById('progFactureSearch');
+            const suggestions = document.getElementById('progFactureSuggestions');
+            const hidden = document.getElementById('progFactureId');
+            if (!input || !suggestions || !hidden) return;
+            let debounce = null;
+            input.addEventListener('input', () => {
+                clearTimeout(debounce);
+                const q = input.value.trim();
+                if (q.length < 2) { suggestions.style.display = 'none'; return; }
+                debounce = setTimeout(async () => {
+                    try {
+                        const res = await fetch('/API/factures_search.php?q=' + encodeURIComponent(q), { credentials: 'include' });
+                        const data = await res.json();
+                        const factures = data.results || data.factures || [];
+                        if (data.ok && factures.length) {
+                            suggestions.innerHTML = factures.slice(0, 8).map(f => {
+                                const label = `${f.numero || '#' + f.id} - ${f.client_nom || ''} - ${f.date_emission || f.date_facture || ''}`;
+                                return `<div role="option" tabindex="0" style="padding:0.5rem 1rem; cursor:pointer;" data-id="${f.id}" data-numero="${String(f.numero || '#' + f.id).replace(/"/g, '&quot;')}">${label}</div>`;
+                            }).join('');
+                            suggestions.style.display = 'block';
+                            suggestions.querySelectorAll('[data-id]').forEach(el => {
+                                el.addEventListener('click', () => {
+                                    const type = document.getElementById('progTypeEnvoi').value;
+                                    const id = parseInt(el.dataset.id);
+                                    if (type === 'plusieurs_factures' || type === 'toutes_selectionnees') {
+                                        if (!progFacturesMultiSelected.includes(id)) {
+                                            progFacturesMultiSelected.push(id);
+                                            const listEl = document.getElementById('progFacturesMultiList');
+                                            if (listEl) {
+                                                listEl.innerHTML = progFacturesMultiSelected.map(fid => `<span style="display:inline-block; margin:0.25rem; padding:0.25rem 0.5rem; background:var(--bg-secondary); border-radius:4px;">#${fid} <button type="button" style="margin-left:0.25rem; border:none; background:none; cursor:pointer; color:#ef4444;" onclick="progRemoveFacture(${fid})">&times;</button></span>`).join('');
+                                            }
+                                        }
+                                        input.value = '';
+                                    } else {
+                                        hidden.value = id;
+                                        input.value = el.dataset.numero || '#' + id;
+                                    }
+                                    suggestions.style.display = 'none';
+                                });
+                            });
+                        } else {
+                            suggestions.style.display = 'none';
+                        }
+                    } catch (e) {
+                        suggestions.style.display = 'none';
+                    }
+                }, 300);
+            });
+            input.addEventListener('blur', () => setTimeout(() => { suggestions.style.display = 'none'; }, 150));
+        })();
+
         // Exposer les fonctions globalement pour les onclick
         window.openSection = openSection;
         window.openFactureModal = openFactureModal;
@@ -3864,6 +4146,13 @@
         window.toggleSelectAllEnvoiMasse = toggleSelectAllEnvoiMasse;
         window.updateEnvoiMasseSelection = updateEnvoiMasseSelection;
         window.submitEnvoiMasse = submitEnvoiMasse;
+        window.openProgrammerEnvoisModal = openProgrammerEnvoisModal;
+        window.closeProgrammerEnvoisModal = closeProgrammerEnvoisModal;
+        window.submitProgrammerEnvoisForm = submitProgrammerEnvoisForm;
+        window.progAnnuler = progAnnuler;
+        window.progEnvoyerMaintenant = progEnvoyerMaintenant;
+        window.progRemoveFacture = progRemoveFacture;
+        window.openProgFacturesPicker = openProgFacturesPicker;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
@@ -3888,9 +4177,12 @@
                     const factureMailModalOverlay = document.getElementById('factureMailModalOverlay');
                     const generationFactureClientsModalOverlay = document.getElementById('generationFactureClientsModalOverlay');
                     const envoiMasseModalOverlay = document.getElementById('envoiMasseModalOverlay');
+                    const programmerEnvoisModalOverlay = document.getElementById('programmerEnvoisModalOverlay');
                     
                     if (pdfViewerModalOverlay && pdfViewerModalOverlay.classList.contains('active')) {
                         closePDFViewer();
+                    } else if (programmerEnvoisModalOverlay && programmerEnvoisModalOverlay.classList.contains('active')) {
+                        closeProgrammerEnvoisModal();
                     } else if (envoiMasseModalOverlay && envoiMasseModalOverlay.classList.contains('active')) {
                         closeEnvoiMasseModal();
                     } else if (generationFactureClientsModalOverlay && generationFactureClientsModalOverlay.classList.contains('active')) {
