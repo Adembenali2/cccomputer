@@ -840,7 +840,7 @@
             opacity: 1;
         }
         
-        /* CompatibilitÃ© avec l'ancien systÃ¨me */
+        /* Compatibilité avec l'ancien système */
         .modal.active {
             display: flex !important;
             transform: scale(1);

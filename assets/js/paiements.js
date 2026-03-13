@@ -10,7 +10,7 @@
         }
 
         /**
-         * Retourne les headers avec le token CSRF pour les requÃªtes modifiantes
+         * Retourne les headers avec le token CSRF pour les requêtes modifiantes
          */
         function getCsrfHeaders() {
             const token = getCsrfToken();
@@ -18,14 +18,14 @@
         }
 
         // ============================================
-        // FONCTIONS GLOBALES - Doivent ÃƒÂªtre dÃƒÂ©finies en premier
+        // FONCTIONS GLOBALES - Doivent être définies en premier
         // ============================================
         
         /**
-         * Ouvre une section spÃƒÂ©cifique
+         * Ouvre une section spécifique
          */
         function openSection(section) {
-            console.log('openSection appelÃƒÂ© avec:', section);
+            console.log('openSection appelé avec:', section);
             if (section === 'generer-facture') {
                 openFactureModal();
             } else if (section === 'factures') {
@@ -42,12 +42,12 @@
                 openEnvoiMasseModal();
             } else {
                 console.log('Ouverture de la section:', section);
-                showToast(`Section "${section}" - Ã€ implÃ©menter`, 'info');
+                showToast(`Section "${section}" - À implémenter`, 'info');
             }
         }
 
         /**
-         * Ouvre le modal de gÃƒÂ©nÃƒÂ©ration de facture
+         * Ouvre le modal de génération de facture
          */
         function openFactureModal() {
             console.log('Ouverture du modal de facture');
@@ -56,28 +56,28 @@
             
             if (!modal) {
                 console.error('Modal factureModal introuvable');
-                showToast('Erreur: Le modal de facture est introuvable. VÃ©rifiez la console pour plus de dÃ©tails.', 'error');
+                showToast('Erreur: Le modal de facture est introuvable. Vérifiez la console pour plus de détails.', 'error');
                 return;
             }
             if (!overlay) {
                 console.error('Overlay factureModalOverlay introuvable');
-                showToast('Erreur: L\'overlay du modal est introuvable. VÃ©rifiez la console pour plus de dÃ©tails.', 'error');
+                showToast('Erreur: L\'overlay du modal est introuvable. Vérifiez la console pour plus de détails.', 'error');
                 return;
             }
             
             try {
-                // RÃƒÂ©initialiser le formulaire
+                // Réinitialiser le formulaire
                 const form = document.getElementById('factureForm');
                 if (form) {
                     form.reset();
-                    // RÃƒÂ©initialiser la date ÃƒÂ  aujourd'hui
+                    // Réinitialiser la date à aujourd'hui
                     const dateInput = document.getElementById('factureDate');
                     if (dateInput) {
                         dateInput.value = new Date().toISOString().split('T')[0];
                     }
                 }
                 
-                // RÃƒÂ©initialiser les lignes
+                // Réinitialiser les lignes
                 const lignesContainer = document.getElementById('factureLignes');
                 if (lignesContainer) {
                     lignesContainer.innerHTML = '';
@@ -88,20 +88,20 @@
                 document.getElementById('factureClientNotifications').innerHTML = '';
                 window.factureMachineData = null;
                 
-                // RÃƒÂ©initialiser les totaux
+                // Réinitialiser les totaux
                 calculateFactureTotal();
                 
-                // RÃƒÂ©initialiser le champ offre
+                // Réinitialiser le champ offre
                 document.getElementById('factureOffre').value = '';
                 
-                // RÃƒÂ©initialiser les champs Achat
+                // Réinitialiser les champs Achat
                 const achatProduitsContainer = document.getElementById('factureAchatProduits');
                 if (achatProduitsContainer) {
                     achatProduitsContainer.innerHTML = '';
-                    addAchatProduit(); // Ajouter une premiÃƒÂ¨re ligne vide
+                    addAchatProduit(); // Ajouter une première ligne vide
                 }
                 
-                // RÃƒÂ©initialiser les champs Service
+                // Réinitialiser les champs Service
                 const serviceDescription = document.getElementById('factureServiceDescription');
                 const serviceMontant = document.getElementById('factureServiceMontant');
                 if (serviceDescription) serviceDescription.value = '';
@@ -117,7 +117,7 @@
                 
                 // Charger la liste des clients
                 loadClientsForFacture();
-                console.log('Modal ouvert avec succÃƒÂ¨s');
+                console.log('Modal ouvert avec succès');
             } catch (error) {
                 console.error('Erreur lors de l\'ouverture du modal:', error);
                 showToast('Erreur lors de l\'ouverture du modal: ' + error.message, 'error');
@@ -125,7 +125,7 @@
         }
 
         /**
-         * Ferme le modal de gÃƒÂ©nÃƒÂ©ration de facture
+         * Ferme le modal de génération de facture
          */
         function closeFactureModal() {
             const modal = document.getElementById('factureModal');
@@ -134,7 +134,7 @@
                 overlay.classList.remove('active');
                 // Le modal se cachera automatiquement
                 document.body.style.overflow = '';
-                // RÃƒÂ©initialiser le formulaire
+                // Réinitialiser le formulaire
                 const form = document.getElementById('factureForm');
                 if (form) {
                     form.reset();
@@ -148,7 +148,7 @@
         }
 
         /**
-         * RÃƒÂ©initialise le champ client (autocomplete) ÃƒÂ  l'ouverture du modal
+         * Réinitialise le champ client (autocomplete) à l'ouverture du modal
          */
         function loadClientsForFacture() {
             const searchInput = document.getElementById('client_search');
@@ -265,13 +265,13 @@
         })();
 
         /**
-         * GÃƒÂ¨re le changement de client
+         * Gère le changement de client
          */
         async function onFactureClientChange() {
             const clientId = document.getElementById('factureClient').value;
             const offre = document.getElementById('factureOffre').value;
             
-            // VÃƒÂ©rifier les imprimantes et afficher les notifications
+            // Vérifier les imprimantes et afficher les notifications
             await checkClientNotifications(clientId);
             
             if (clientId && offre) {
@@ -281,7 +281,7 @@
         }
 
         /**
-         * VÃƒÂ©rifie les notifications pour un client (imprimantes et relevÃƒÂ©s)
+         * Vérifie les notifications pour un client (imprimantes et relevés)
          */
         async function checkClientNotifications(clientId) {
             const notificationsContainer = document.getElementById('factureClientNotifications');
@@ -305,20 +305,20 @@
                 const dernierReleveJours = data.dernier_releve_jours;
                 const notifications = [];
                 
-                // Notification 1: Pas d'imprimante attribuÃƒÂ©e
+                // Notification 1: Pas d'imprimante attribuée
                 if (nbPhotocopieurs === 0) {
                     notifications.push({
                         type: 'warning',
-                        message: 'Ã¢Å¡Â Ã¯Â¸Â Ce client n\'a pas d\'imprimante attribuÃƒÂ©e.'
+                        message: '⚠️ Ce client n\'a pas d\'imprimante attribuée.'
                     });
                 }
                 
-                // Notification 2: Pas de relevÃƒÂ© depuis plus de 2 jours
+                // Notification 2: Pas de relevé depuis plus de 2 jours
                 if (nbPhotocopieurs > 0 && dernierReleveJours !== null && dernierReleveJours > 2) {
                     const joursText = dernierReleveJours === 1 ? 'jour' : 'jours';
                     notifications.push({
                         type: 'info',
-                        message: `Ã¢â€žÂ¹Ã¯Â¸Â Aucun relevÃƒÂ© de compteur reÃƒÂ§u depuis ${dernierReleveJours} ${joursText}.`
+                        message: `ℹ️ Aucun relevé de compteur reçu depuis ${dernierReleveJours} ${joursText}.`
                     });
                 }
                 
@@ -350,13 +350,13 @@
                     notificationsContainer.style.display = 'none';
                 }
             } catch (error) {
-                console.error('Erreur lors de la vÃƒÂ©rification des notifications:', error);
+                console.error('Erreur lors de la vérification des notifications:', error);
                 notificationsContainer.style.display = 'none';
             }
         }
 
         /**
-         * GÃƒÂ¨re le changement de type de facture
+         * Gère le changement de type de facture
          */
         function onFactureTypeChange() {
             const typeSelect = document.getElementById('factureType');
@@ -403,13 +403,13 @@
                     if (prixInput) prixInput.setAttribute('required', 'required');
                 });
                 
-                // Ajouter une premiÃƒÂ¨re ligne de produit si le conteneur est vide
+                // Ajouter une première ligne de produit si le conteneur est vide
                 const achatProduitsContainer = document.getElementById('factureAchatProduits');
                 if (achatProduitsContainer && achatProduitsContainer.children.length === 0) {
                     addAchatProduit();
                 }
                 
-                // RÃƒÂ©initialiser les totaux
+                // Réinitialiser les totaux
                 calculateFactureTotalAchat();
             } else if (type === 'Service') {
                 // Masquer les autres champs
@@ -446,7 +446,7 @@
                 if (serviceDescription) serviceDescription.setAttribute('required', 'required');
                 if (serviceMontant) serviceMontant.setAttribute('required', 'required');
                 
-                // RÃƒÂ©initialiser les totaux
+                // Réinitialiser les totaux
                 calculateFactureTotalService();
             } else {
                 // Type Consommation
@@ -454,7 +454,7 @@
                 if (achatFields) achatFields.style.display = 'none';
                 if (serviceFields) serviceFields.style.display = 'none';
                 
-                // Retirer l'attribut required de tous les champs Achat et Service pour ÃƒÂ©viter l'erreur de validation
+                // Retirer l'attribut required de tous les champs Achat et Service pour éviter l'erreur de validation
                 const achatProduits = document.querySelectorAll('.achat-produit');
                 achatProduits.forEach(produit => {
                     const typeSelect = produit.querySelector('.achat-produit-type');
@@ -480,7 +480,7 @@
                     factureOffre.setAttribute('required', 'required');
                 }
                 
-                // RÃƒÂ©initialiser les totaux
+                // Réinitialiser les totaux
                 calculateFactureTotal();
             }
         }
@@ -490,7 +490,7 @@
          */
         function calculateFactureTotalService() {
             const montantHT = parseFloat(document.getElementById('factureServiceMontant').value) || 0;
-            const tauxTVA = 20; // TVA ÃƒÂ  20%
+            const tauxTVA = 20; // TVA à 20%
             const tva = montantHT * (tauxTVA / 100);
             const totalTTC = montantHT + tva;
             
@@ -520,29 +520,29 @@
                     <div class="facture-ligne-field">
                         <label>Type de produit <span style="color: #ef4444;">*</span></label>
                         <select name="achatProduits[${produitIndex}][type]" class="achat-produit-type" required onchange="onAchatProduitTypeChange(this)">
-                            <option value="">SÃƒÂ©lectionner un type</option>
+                            <option value="">Sélectionner un type</option>
                             <option value="PC">PC</option>
                             <option value="LCD">LCD</option>
                             <option value="Imprimante">Imprimante</option>
                             <option value="Papier">Papier</option>
                             <option value="Toner">Toner</option>
-                            <option value="Autre">Autre (ÃƒÂ  prÃƒÂ©ciser)</option>
+                            <option value="Autre">Autre (à préciser)</option>
                         </select>
                     </div>
                     <div class="facture-ligne-field achat-produit-autre-group" style="display: none;">
-                        <label>PrÃƒÂ©cision <span style="color: #ef4444;">*</span></label>
+                        <label>Précision <span style="color: #ef4444;">*</span></label>
                         <input type="text" name="achatProduits[${produitIndex}][autre]" class="achat-produit-autre" placeholder="Ex: Clavier, Souris">
                     </div>
                     <div class="facture-ligne-field">
-                        <label>QuantitÃƒÂ© <span style="color: #ef4444;">*</span></label>
+                        <label>Quantité <span style="color: #ef4444;">*</span></label>
                         <input type="number" name="achatProduits[${produitIndex}][quantite]" class="achat-produit-quantite" step="0.01" min="0" value="1" required onchange="calculateAchatProduitTotal(this)">
                     </div>
                     <div class="facture-ligne-field">
-                        <label>Prix unitaire HT (Ã¢â€šÂ¬) <span style="color: #ef4444;">*</span></label>
+                        <label>Prix unitaire HT (€) <span style="color: #ef4444;">*</span></label>
                         <input type="number" name="achatProduits[${produitIndex}][prix]" class="achat-produit-prix" step="0.01" min="0" value="0" required onchange="calculateAchatProduitTotal(this)">
                     </div>
                     <div class="facture-ligne-field">
-                        <label>Total HT (Ã¢â€šÂ¬)</label>
+                        <label>Total HT (€)</label>
                         <input type="number" name="achatProduits[${produitIndex}][total]" class="achat-produit-total" step="0.01" value="0" readonly style="font-weight: 600;">
                     </div>
                     <div class="facture-ligne-actions">
@@ -571,7 +571,7 @@
         }
 
         /**
-         * GÃƒÂ¨re le changement de type de produit (pour afficher/masquer le champ "Autre")
+         * Gère le changement de type de produit (pour afficher/masquer le champ "Autre")
          */
         function onAchatProduitTypeChange(select) {
             const produitDiv = select.closest('.achat-produit');
@@ -613,7 +613,7 @@
                 totalHT += parseFloat(input.value) || 0;
             });
             
-            const tauxTVA = 20; // TVA ÃƒÂ  20%
+            const tauxTVA = 20; // TVA à 20%
             const tva = totalHT * (tauxTVA / 100);
             const totalTTC = totalHT + tva;
             
@@ -623,7 +623,7 @@
         }
 
         /**
-         * GÃƒÂ¨re le changement d'offre
+         * Gère le changement d'offre
          */
         async function onFactureOffreChange() {
             const clientId = document.getElementById('factureClient').value;
@@ -636,11 +636,11 @@
         }
 
         /**
-         * VÃƒÂ©rifie le nombre de photocopieurs pour l'offre 2000
+         * Vérifie le nombre de photocopieurs pour l'offre 2000
          */
         async function checkClientPhotocopieurs(clientId, offre) {
             if (offre !== '2000') {
-                return; // Pas de vÃƒÂ©rification nÃƒÂ©cessaire pour l'offre 1000
+                return; // Pas de vérification nécessaire pour l'offre 1000
             }
             
             try {
@@ -651,17 +651,17 @@
                 
                 if (data.ok) {
                     if (data.nb_photocopieurs !== 2) {
-                        showToast(`L'offre 2000 nÃ©cessite exactement 2 photocopieurs. Ce client a ${data.nb_photocopieurs} photocopieur(s).`, 'error');
+                        showToast(`L'offre 2000 nécessite exactement 2 photocopieurs. Ce client a ${data.nb_photocopieurs} photocopieur(s).`, 'error');
                         document.getElementById('factureOffre').value = '';
                         return false;
                     }
                 } else {
-                    showToast('Erreur lors de la vÃ©rification des photocopieurs: ' + (data.error || 'Erreur inconnue'), 'error');
+                    showToast('Erreur lors de la vérification des photocopieurs: ' + (data.error || 'Erreur inconnue'), 'error');
                     return false;
                 }
             } catch (error) {
-                console.error('Erreur lors de la vÃƒÂ©rification:', error);
-                showToast('Erreur lors de la vÃ©rification des photocopieurs', 'error');
+                console.error('Erreur lors de la vérification:', error);
+                showToast('Erreur lors de la vérification des photocopieurs', 'error');
                 return false;
             }
             
@@ -669,7 +669,7 @@
         }
 
         /**
-         * Charge les donnÃƒÂ©es de consommation et calcule automatiquement les lignes
+         * Charge les données de consommation et calcule automatiquement les lignes
          */
         async function loadConsommationData() {
             const clientId = document.getElementById('factureClient').value;
@@ -686,7 +686,7 @@
             if (!dateDebut || !dateFin) {
                 document.getElementById('factureConsommationInfo').style.display = 'block';
                 document.getElementById('factureConsommationContent').innerHTML = 
-                    '<p style="color: var(--text-secondary);">Veuillez sÃƒÂ©lectionner les dates de dÃƒÂ©but et fin de pÃƒÂ©riode</p>';
+                    '<p style="color: var(--text-secondary);">Veuillez sélectionner les dates de début et fin de période</p>';
                 document.getElementById('factureLignesContainer').style.display = 'none';
                 return;
             }
@@ -697,7 +697,7 @@
                     credentials: 'include'
                 });
                 
-                // VÃƒÂ©rifier si la rÃƒÂ©ponse est OK
+                // Vérifier si la réponse est OK
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error('Erreur HTTP:', response.status, errorText);
@@ -711,13 +711,13 @@
                 const data = await response.json();
                 
                 if (data.ok) {
-                    // VÃƒÂ©rifier si des dates ont ÃƒÂ©tÃƒÂ© ajustÃƒÂ©es et mettre ÃƒÂ  jour les champs
+                    // Vérifier si des dates ont été ajustées et mettre à jour les champs
                     const notificationsContainer = document.getElementById('factureClientNotifications');
                     if (data.dates_ajustees && data.dates_ajustees.length > 0) {
-                        // Mettre ÃƒÂ  jour les champs de date avec les dates ajustÃƒÂ©es
+                        // Mettre à jour les champs de date avec les dates ajustées
                         data.dates_ajustees.forEach(ajustement => {
                             if (ajustement.type === 'debut') {
-                                // Convertir la date utilisÃƒÂ©e (dd/mm/yyyy) en format YYYY-MM-DD pour le champ
+                                // Convertir la date utilisée (dd/mm/yyyy) en format YYYY-MM-DD pour le champ
                                 const dateParts = ajustement.date_utilisee.split('/');
                                 if (dateParts.length === 3) {
                                     const dateAjustee = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
@@ -736,10 +736,10 @@
                         if (notificationsContainer) {
                             let notificationsHtml = '';
                             data.dates_ajustees.forEach(ajustement => {
-                                const typeText = ajustement.type === 'debut' ? 'dÃƒÂ©but' : 'fin';
+                                const typeText = ajustement.type === 'debut' ? 'début' : 'fin';
                                 notificationsHtml += `
                                     <div style="padding: 0.75rem 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-bottom: 0.5rem; font-size: 0.875rem; color: #92400E;">
-                                        Ã¢â€žÂ¹Ã¯Â¸Â Aucun relevÃƒÂ© reÃƒÂ§u le ${ajustement.date_demandee}. Utilisation du dernier relevÃƒÂ© disponible du ${ajustement.date_utilisee} (${ajustement.machine}).
+                                        ℹ️ Aucun relevé reçu le ${ajustement.date_demandee}. Utilisation du dernier relevé disponible du ${ajustement.date_utilisee} (${ajustement.machine}).
                                     </div>
                                 `;
                             });
@@ -748,12 +748,12 @@
                         }
                     }
                     
-                    // Afficher les informations de consommation avec les compteurs de dÃƒÂ©but et fin
-                    let infoHtml = '<h4 style="margin: 0 0 1rem; font-size: 1rem; font-weight: 600;">RelevÃƒÂ©s de compteurs:</h4>';
+                    // Afficher les informations de consommation avec les compteurs de début et fin
+                    let infoHtml = '<h4 style="margin: 0 0 1rem; font-size: 1rem; font-weight: 600;">Relevés de compteurs:</h4>';
                     
                     data.machines.forEach((machine, index) => {
-                        const dateDebutFormatted = machine.date_debut_releve ? new Date(machine.date_debut_releve).toLocaleString('fr-FR') : 'Non trouvÃƒÂ©';
-                        const dateFinFormatted = machine.date_fin_releve ? new Date(machine.date_fin_releve).toLocaleString('fr-FR') : 'Non trouvÃƒÂ©';
+                        const dateDebutFormatted = machine.date_debut_releve ? new Date(machine.date_debut_releve).toLocaleString('fr-FR') : 'Non trouvé';
+                        const dateFinFormatted = machine.date_fin_releve ? new Date(machine.date_fin_releve).toLocaleString('fr-FR') : 'Non trouvé';
                         
                         infoHtml += `
                             <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
@@ -763,7 +763,7 @@
                                 
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.75rem;">
                                     <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-sm);">
-                                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Jour de dÃƒÂ©but pÃƒÂ©riode</div>
+                                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Jour de début période</div>
                                         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">${dateDebutFormatted}</div>
                                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                                             <span style="color: var(--text-primary);">N&B:</span>
@@ -776,7 +776,7 @@
                                     </div>
                                     
                                     <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-sm);">
-                                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Jour de fin pÃƒÂ©riode</div>
+                                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Jour de fin période</div>
                                         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">${dateFinFormatted}</div>
                                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                                             <span style="color: var(--text-primary);">N&B:</span>
@@ -790,7 +790,7 @@
                                 </div>
                                 
                                 <div style="padding: 0.75rem; background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1)); border-radius: var(--radius-sm); border: 1px solid var(--accent-primary);">
-                                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Consommation calculÃƒÂ©e (Fin - DÃƒÂ©but):</div>
+                                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">Consommation calculée (Fin - Début):</div>
                                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                                         <span style="color: var(--text-primary); font-weight: 600;">N&B:</span>
                                         <strong style="color: var(--accent-primary); font-size: 1.1rem;">${machine.conso_nb.toLocaleString('fr-FR')} copies</strong>
@@ -807,7 +807,7 @@
                     document.getElementById('factureConsommationContent').innerHTML = infoHtml;
                     document.getElementById('factureConsommationInfo').style.display = 'block';
                     
-                    // GÃƒÂ©nÃƒÂ©rer les lignes de facture automatiquement
+                    // Générer les lignes de facture automatiquement
                     generateFactureLinesFromConsommation(data);
                 } else {
                     document.getElementById('factureConsommationInfo').style.display = 'block';
@@ -825,13 +825,13 @@
         }
 
         /**
-         * GÃƒÂ©nÃƒÂ¨re les lignes de facture depuis les donnÃƒÂ©es de consommation
+         * Génère les lignes de facture depuis les données de consommation
          */
         function generateFactureLinesFromConsommation(data) {
             const container = document.getElementById('factureLignes');
             container.innerHTML = '';
             
-            // PrÃƒÂ©parer les donnÃƒÂ©es pour l'API
+            // Préparer les données pour l'API
             const machines = {};
             data.machines.forEach((machine, index) => {
                 machines[`machine${index + 1}`] = {
@@ -847,14 +847,14 @@
                 };
             });
             
-            // Stocker les donnÃƒÂ©es pour la soumission
+            // Stocker les données pour la soumission
             window.factureMachineData = {
                 offre: parseInt(data.offre),
                 nb_imprimantes: data.machines.length,
                 machines: machines
             };
             
-            // Calculer les totaux cÃƒÂ´tÃƒÂ© client pour prÃƒÂ©visualisation
+            // Calculer les totaux côté client pour prévisualisation
             let totalHT = 0;
             const forfaitHT = 100.0;
             const prixExcessNB = 0.05;
@@ -863,39 +863,39 @@
             
             // Calculer selon l'offre
             if (offre === 1000) {
-                // Offre 1000: forfait 100Ã¢â€šÂ¬ HT + dÃƒÂ©passement NB au-delÃƒÂ  de 1000 + couleur Ãƒâ€” 0.09
+                // Offre 1000: forfait 100€ HT + dépassement NB au-delà de 1000 + couleur × 0.09
                 totalHT += forfaitHT; // Toujours le forfait
                 
                 data.machines.forEach((machine) => {
                     const consoNB = parseFloat(machine.conso_nb) || 0;
                     const consoCouleur = parseFloat(machine.conso_couleur) || 0;
                     
-                    // DÃƒÂ©passement NB si > 1000
+                    // Dépassement NB si > 1000
                     if (consoNB > 1000) {
                         const excessNB = consoNB - 1000;
                         totalHT += excessNB * prixExcessNB;
                     }
                     
-                    // Couleur toujours calculÃƒÂ©e
+                    // Couleur toujours calculée
                     if (consoCouleur > 0) {
                         totalHT += consoCouleur * prixCouleur;
                     }
                 });
             } else if (offre === 2000) {
-                // Offre 2000: forfait 100Ã¢â€šÂ¬ HT (une seule fois) + par imprimante (dÃƒÂ©passement > 2000 + couleur)
+                // Offre 2000: forfait 100€ HT (une seule fois) + par imprimante (dépassement > 2000 + couleur)
                 totalHT += forfaitHT; // Forfait une seule fois
                 
                 data.machines.forEach((machine) => {
                     const consoNB = parseFloat(machine.conso_nb) || 0;
                     const consoCouleur = parseFloat(machine.conso_couleur) || 0;
                     
-                    // DÃƒÂ©passement NB si > 2000 par imprimante
+                    // Dépassement NB si > 2000 par imprimante
                     if (consoNB > 2000) {
                         const excessNB = consoNB - 2000;
                         totalHT += excessNB * prixExcessNB;
                     }
                     
-                    // Couleur toujours calculÃƒÂ©e par imprimante
+                    // Couleur toujours calculée par imprimante
                     if (consoCouleur > 0) {
                         totalHT += consoCouleur * prixCouleur;
                     }
@@ -906,12 +906,12 @@
             const tva = totalHT * 0.20;
             const totalTTC = totalHT + tva;
             
-            // Mettre ÃƒÂ  jour l'affichage des totaux
+            // Mettre à jour l'affichage des totaux
             document.getElementById('factureMontantHT').value = totalHT.toFixed(2);
             document.getElementById('factureTVA').value = tva.toFixed(2);
             document.getElementById('factureMontantTTC').value = totalTTC.toFixed(2);
             
-            // Afficher un rÃƒÂ©capitulatif du calcul
+            // Afficher un récapitulatif du calcul
             const infoDiv = document.createElement('div');
             infoDiv.style.padding = '1rem';
             infoDiv.style.background = 'var(--bg-secondary)';
@@ -925,54 +925,54 @@
                     const consoCouleur = parseFloat(machine.conso_couleur) || 0;
                     
                     if (index === 0) {
-                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Forfait:</strong> ${forfaitHT.toFixed(2)} Ã¢â€šÂ¬ HT</div>`;
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Forfait:</strong> ${forfaitHT.toFixed(2)} € HT</div>`;
                     }
                     
                     if (consoNB > 1000) {
                         const excessNB = consoNB - 1000;
-                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>DÃƒÂ©passement N&B:</strong> ${excessNB} copies Ãƒâ€” ${prixExcessNB.toFixed(2)} Ã¢â€šÂ¬ = ${(excessNB * prixExcessNB).toFixed(2)} Ã¢â€šÂ¬ HT</div>`;
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Dépassement N&B:</strong> ${excessNB} copies × ${prixExcessNB.toFixed(2)} € = ${(excessNB * prixExcessNB).toFixed(2)} € HT</div>`;
                     }
                     
                     if (consoCouleur > 0) {
-                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Couleur (${machine.nom}):</strong> ${consoCouleur} copies Ãƒâ€” ${prixCouleur.toFixed(2)} Ã¢â€šÂ¬ = ${(consoCouleur * prixCouleur).toFixed(2)} Ã¢â€šÂ¬ HT</div>`;
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Couleur (${machine.nom}):</strong> ${consoCouleur} copies × ${prixCouleur.toFixed(2)} € = ${(consoCouleur * prixCouleur).toFixed(2)} € HT</div>`;
                     }
                 });
             } else if (offre === 2000) {
-                detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Forfait:</strong> ${forfaitHT.toFixed(2)} Ã¢â€šÂ¬ HT</div>`;
+                detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Forfait:</strong> ${forfaitHT.toFixed(2)} € HT</div>`;
                 data.machines.forEach((machine) => {
                     const consoNB = parseFloat(machine.conso_nb) || 0;
                     const consoCouleur = parseFloat(machine.conso_couleur) || 0;
                     
                     if (consoNB > 2000) {
                         const excessNB = consoNB - 2000;
-                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>DÃƒÂ©passement N&B (${machine.nom}):</strong> ${excessNB} copies Ãƒâ€” ${prixExcessNB.toFixed(2)} Ã¢â€šÂ¬ = ${(excessNB * prixExcessNB).toFixed(2)} Ã¢â€šÂ¬ HT</div>`;
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Dépassement N&B (${machine.nom}):</strong> ${excessNB} copies × ${prixExcessNB.toFixed(2)} € = ${(excessNB * prixExcessNB).toFixed(2)} € HT</div>`;
                     }
                     
                     if (consoCouleur > 0) {
-                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Couleur (${machine.nom}):</strong> ${consoCouleur} copies Ãƒâ€” ${prixCouleur.toFixed(2)} Ã¢â€šÂ¬ = ${(consoCouleur * prixCouleur).toFixed(2)} Ã¢â€šÂ¬ HT</div>`;
+                        detailCalcul += `<div style="margin-bottom: 0.5rem;"><strong>Couleur (${machine.nom}):</strong> ${consoCouleur} copies × ${prixCouleur.toFixed(2)} € = ${(consoCouleur * prixCouleur).toFixed(2)} € HT</div>`;
                     }
                 });
             }
             
             infoDiv.innerHTML = `
                 <div style="margin-bottom: 0.75rem;">
-                    <strong style="color: var(--text-primary); font-size: 1.05rem;">${data.machines.length} imprimante(s) dÃƒÂ©tectÃƒÂ©e(s) - Offre ${offre}</strong>
+                    <strong style="color: var(--text-primary); font-size: 1.05rem;">${data.machines.length} imprimante(s) détectée(s) - Offre ${offre}</strong>
                 </div>
                 <div style="font-size: 0.95rem; color: var(--text-secondary);">
-                    ${detailCalcul || '<div>Aucun dÃƒÂ©passement</div>'}
+                    ${detailCalcul || '<div>Aucun dépassement</div>'}
                 </div>
                 <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                         <span><strong>Total HT:</strong></span>
-                        <strong>${totalHT.toFixed(2)} Ã¢â€šÂ¬</strong>
+                        <strong>${totalHT.toFixed(2)} €</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                         <span><strong>TVA (20%):</strong></span>
-                        <strong>${tva.toFixed(2)} Ã¢â€šÂ¬</strong>
+                        <strong>${tva.toFixed(2)} €</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
                         <span><strong style="font-size: 1.1rem;">Total TTC:</strong></span>
-                        <strong style="font-size: 1.1rem; color: var(--accent-primary);">${totalTTC.toFixed(2)} Ã¢â€šÂ¬</strong>
+                        <strong style="font-size: 1.1rem; color: var(--accent-primary);">${totalTTC.toFixed(2)} €</strong>
                     </div>
                 </div>
             `;
@@ -1005,15 +1005,15 @@
                         </select>
                     </div>
                     <div class="facture-ligne-field">
-                        <label>QuantitÃƒÂ©</label>
+                        <label>Quantité</label>
                         <input type="number" name="lignes[${ligneIndex}][quantite]" step="0.01" min="0" value="1" required>
                     </div>
                     <div class="facture-ligne-field">
-                        <label>Prix unitaire HT (Ã¢â€šÂ¬)</label>
+                        <label>Prix unitaire HT (€)</label>
                         <input type="number" name="lignes[${ligneIndex}][prix_unitaire]" step="0.01" min="0" value="0" required>
                     </div>
                     <div class="facture-ligne-field">
-                        <label>Total HT (Ã¢â€šÂ¬)</label>
+                        <label>Total HT (€)</label>
                         <input type="number" name="lignes[${ligneIndex}][total_ht]" step="0.01" min="0" value="0" readonly class="ligne-total">
                     </div>
                     <div class="facture-ligne-actions">
@@ -1060,9 +1060,9 @@
          * Calcule le total de la facture
          */
         function calculateFactureTotal() {
-            // Si on a des donnÃƒÂ©es de machine, ne pas recalculer (dÃƒÂ©jÃƒÂ  calculÃƒÂ© dans generateFactureLinesFromConsommation)
+            // Si on a des données de machine, ne pas recalculer (déjà calculé dans generateFactureLinesFromConsommation)
             if (window.factureMachineData) {
-                return; // Les totaux sont dÃƒÂ©jÃƒÂ  calculÃƒÂ©s et affichÃƒÂ©s
+                return; // Les totaux sont déjà calculés et affichés
             }
             
             // Calcul classique depuis les lignes manuelles
@@ -1071,7 +1071,7 @@
                 totalHT += parseFloat(input.value) || 0;
             });
             
-            const tauxTVA = 20; // TVA ÃƒÂ  20%
+            const tauxTVA = 20; // TVA à 20%
             const tva = totalHT * (tauxTVA / 100);
             const totalTTC = totalHT + tva;
             
@@ -1108,11 +1108,11 @@
             
             // Validation
             if (!data.factureClient) {
-                showToast('Veuillez sÃ©lectionner un client dans la liste (tapez pour rechercher, puis cliquez ou appuyez sur EntrÃ©e)', 'error');
+                showToast('Veuillez sélectionner un client dans la liste (tapez pour rechercher, puis cliquez ou appuyez sur Entrée)', 'error');
                 return;
             }
             
-            // GÃƒÂ©rer le type "Service"
+            // Gérer le type "Service"
             if (data.factureType === 'Service') {
                 const serviceDescription = data.serviceDescription || '';
                 const serviceMontant = parseFloat(data.serviceMontant) || 0;
@@ -1127,7 +1127,7 @@
                     return;
                 }
                 
-                // CrÃƒÂ©er la ligne de facture pour le service
+                // Créer la ligne de facture pour le service
                 data.lignes = [{
                     description: serviceDescription.trim(),
                     type: 'Service',
@@ -1136,7 +1136,7 @@
                     total_ht: serviceMontant
                 }];
             } else if (data.factureType === 'Achat') {
-                // RÃƒÂ©cupÃƒÂ©rer tous les produits
+                // Récupérer tous les produits
                 const produits = [];
                 const produitInputs = document.querySelectorAll('.achat-produit');
                 
@@ -1153,17 +1153,17 @@
                     const total = parseFloat(produitDiv.querySelector('.achat-produit-total').value) || 0;
                     
                     if (!type) {
-                        showToast(`Veuillez sÃ©lectionner un type pour le produit ${index + 1}`, 'error');
+                        showToast(`Veuillez sélectionner un type pour le produit ${index + 1}`, 'error');
                         return;
                     }
                     
                     if (type === 'Autre' && !autre.trim()) {
-                        showToast(`Veuillez prÃ©ciser le type pour le produit ${index + 1}`, 'error');
+                        showToast(`Veuillez préciser le type pour le produit ${index + 1}`, 'error');
                         return;
                     }
                     
                     if (quantite <= 0) {
-                        showToast(`Veuillez saisir une quantitÃ© valide pour le produit ${index + 1}`, 'error');
+                        showToast(`Veuillez saisir une quantité valide pour le produit ${index + 1}`, 'error');
                         return;
                     }
                     
@@ -1189,24 +1189,24 @@
                 
                 data.lignes = produits;
             } else if (window.factureMachineData) {
-                // Si on a des donnÃƒÂ©es de machine (nouveau format), utiliser celui-ci
+                // Si on a des données de machine (nouveau format), utiliser celui-ci
                 data.offre = window.factureMachineData.offre;
                 data.nb_imprimantes = window.factureMachineData.nb_imprimantes;
                 data.machines = window.factureMachineData.machines;
             } else {
                 // Ancien format: validation des lignes manuelles
                 if (!data.lignes || data.lignes.length === 0) {
-                    showToast('Veuillez ajouter au moins une ligne de facture ou sÃ©lectionner une offre', 'error');
+                    showToast('Veuillez ajouter au moins une ligne de facture ou sélectionner une offre', 'error');
                     return;
                 }
             }
             
             const btnSubmit = document.getElementById('btnGenererFacture');
             btnSubmit.disabled = true;
-            btnSubmit.textContent = 'GÃƒÂ©nÃƒÂ©ration en cours...';
+            btnSubmit.textContent = 'Génération en cours...';
             
             try {
-                console.log('Envoi des donnÃƒÂ©es:', data);
+                console.log('Envoi des données:', data);
                 const response = await fetch('/API/factures_generer.php', {
                     method: 'POST',
                     headers: {
@@ -1230,10 +1230,10 @@
                 }
                 
                 const result = await response.json();
-                console.log('RÃƒÂ©ponse reÃƒÂ§ue:', result);
+                console.log('Réponse reçue:', result);
                 
                 if (result.ok) {
-                    showToast('Facture gÃ©nÃ©rÃ©e avec succÃ¨s !', 'success');
+                    showToast('Facture générée avec succès !', 'success');
                     if (result.pdf_url) {
                         window.open(result.pdf_url, '_blank');
                     }
@@ -1244,11 +1244,11 @@
                     showToast('Erreur : ' + errorMsg, 'error');
                 }
             } catch (error) {
-                console.error('Erreur lors de la requÃƒÂªte:', error);
-                showToast('Erreur lors de la gÃ©nÃ©ration de la facture: ' + error.message, 'error');
+                console.error('Erreur lors de la requête:', error);
+                showToast('Erreur lors de la génération de la facture: ' + error.message, 'error');
             } finally {
                 btnSubmit.disabled = false;
-                btnSubmit.textContent = 'GÃƒÂ©nÃƒÂ©rer la facture';
+                btnSubmit.textContent = 'Générer la facture';
             }
         }
 
@@ -1301,7 +1301,7 @@
             container.style.display = 'none';
             errorDiv.style.display = 'none';
             
-            // RÃƒÂ©initialiser la recherche
+            // Réinitialiser la recherche
             if (searchInput) {
                 searchInput.value = '';
             }
@@ -1349,7 +1349,7 @@
                 tableBody.innerHTML = `
                     <tr>
                         <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            Aucune facture trouvÃƒÂ©e
+                            Aucune facture trouvée
                         </td>
                     </tr>
                 `;
@@ -1372,10 +1372,10 @@
                     };
                     const statutLabels = {
                         'brouillon': 'Brouillon',
-                        'envoyee': 'EnvoyÃƒÂ©e',
-                        'payee': 'PayÃƒÂ©e',
+                        'envoyee': 'Envoyée',
+                        'payee': 'Payée',
                         'en_retard': 'En retard',
-                        'annulee': 'AnnulÃƒÂ©e'
+                        'annulee': 'Annulée'
                     };
                     const statutColor = statutColors[facture.statut] || '#6b7280';
                     const statutLabel = statutLabels[facture.statut] || facture.statut;
@@ -1403,9 +1403,9 @@
                         <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.date_facture_formatted}</td>
                         <td style="padding: 0.75rem; color: var(--text-primary);">${facture.client_nom}${facture.client_code ? ' (' + facture.client_code + ')' : ''}</td>
                         <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.type}</td>
-                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.montant_ht.toFixed(2).replace('.', ',')} Ã¢â€šÂ¬</td>
-                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.tva.toFixed(2).replace('.', ',')} Ã¢â€šÂ¬</td>
-                        <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">${facture.montant_ttc.toFixed(2).replace('.', ',')} Ã¢â€šÂ¬</td>
+                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.montant_ht.toFixed(2).replace('.', ',')} €</td>
+                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.tva.toFixed(2).replace('.', ',')} €</td>
+                        <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">${facture.montant_ttc.toFixed(2).replace('.', ',')} €</td>
                         <td style="padding: 0.75rem; text-align: center;">
                             <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: var(--radius-md); background: ${statutColor}20; color: ${statutColor}; font-size: 0.85rem; font-weight: 600;">${statutLabel}</span>
                         </td>
@@ -1414,7 +1414,7 @@
                     tableBody.appendChild(row);
                 });
                 
-                // Afficher le nombre de rÃƒÂ©sultats filtrÃƒÂ©s si diffÃƒÂ©rent du total
+                // Afficher le nombre de résultats filtrés si différent du total
                 if (factures.length !== allFactures.length) {
                     filteredCountSpan.textContent = `(${factures.length} sur ${allFactures.length})`;
                 } else {
@@ -1427,19 +1427,19 @@
         let currentPDFPath = '';
 
         /**
-         * Ouvre le PDF d'une facture par son ID (avec rÃƒÂ©gÃƒÂ©nÃƒÂ©ration si nÃƒÂ©cessaire)
+         * Ouvre le PDF d'une facture par son ID (avec régénération si nécessaire)
          */
         function viewFacturePDFById(factureId, factureNumero) {
-            // Utiliser le script PHP qui gÃƒÂ¨re la rÃƒÂ©gÃƒÂ©nÃƒÂ©ration si nÃƒÂ©cessaire
+            // Utiliser le script PHP qui gère la régénération si nécessaire
             const pdfUrl = `/public/view_facture.php?id=${factureId}`;
             window.open(pdfUrl, '_blank');
         }
 
         /**
-         * Ouvre le PDF d'une facture par son ID (avec rÃƒÂ©gÃƒÂ©nÃƒÂ©ration si nÃƒÂ©cessaire)
+         * Ouvre le PDF d'une facture par son ID (avec régénération si nécessaire)
          */
         function viewFacturePDFById(factureId, factureNumero) {
-            // Utiliser le script PHP qui gÃƒÂ¨re la rÃƒÂ©gÃƒÂ©nÃƒÂ©ration si nÃƒÂ©cessaire
+            // Utiliser le script PHP qui gère la régénération si nécessaire
             const pdfUrl = `/public/view_facture.php?id=${factureId}`;
             window.open(pdfUrl, '_blank');
         }
@@ -1455,7 +1455,7 @@
             const title = document.getElementById('pdfViewerTitle');
             
             if (!modal || !overlay) {
-                console.error('Ãƒâ€°lÃƒÂ©ments du modal PDF introuvables');
+                console.error('Éléments du modal PDF introuvables');
                 // Fallback : ouvrir directement dans un nouvel onglet
                 window.open(pdfPath, '_blank');
                 return;
@@ -1472,9 +1472,9 @@
                     fallback.style.display = 'none';
                 }
                 
-                // VÃƒÂ©rifier si le PDF se charge (timeout de 2 secondes)
+                // Vérifier si le PDF se charge (timeout de 2 secondes)
                 setTimeout(function() {
-                    // Si l'embed n'a pas chargÃƒÂ©, afficher le fallback
+                    // Si l'embed n'a pas chargé, afficher le fallback
                     try {
                         if (embed.offsetHeight === 0 || embed.offsetWidth === 0) {
                             if (fallback) {
@@ -1516,7 +1516,7 @@
             if (modal && overlay) {
                 overlay.classList.remove('active');
                 document.body.style.overflow = '';
-                // Vider l'embed pour libÃƒÂ©rer la mÃƒÂ©moire
+                // Vider l'embed pour libérer la mémoire
                 if (embed) {
                     embed.src = '';
                 }
@@ -1540,12 +1540,12 @@
             
             // Filtrer les factures
             const filtered = allFactures.filter(facture => {
-                // Rechercher dans le numÃƒÂ©ro de facture
+                // Rechercher dans le numéro de facture
                 if (facture.numero && facture.numero.toLowerCase().includes(searchTerm)) {
                     return true;
                 }
                 
-                // Rechercher dans la date (format franÃƒÂ§ais et format ISO)
+                // Rechercher dans la date (format français et format ISO)
                 if (facture.date_facture_formatted && facture.date_facture_formatted.includes(searchTerm)) {
                     return true;
                 }
@@ -1568,7 +1568,7 @@
                     return true;
                 }
                 
-                // Rechercher dans le prÃƒÂ©nom du dirigeant
+                // Rechercher dans le prénom du dirigeant
                 if (facture.client_prenom_dirigeant && facture.client_prenom_dirigeant.toLowerCase().includes(searchTerm)) {
                     return true;
                 }
@@ -1581,7 +1581,7 @@
                 return false;
             });
             
-            // Afficher les factures filtrÃƒÂ©es
+            // Afficher les factures filtrées
             displayFactures(filtered);
         }
 
@@ -1646,7 +1646,7 @@
                     filteredPaiements = [...allPaiements];
                     displayPaiements(allPaiements);
                     
-                    // Mettre ÃƒÂ  jour le compteur
+                    // Mettre à jour le compteur
                     document.getElementById('paiementsCount').textContent = allPaiements.length;
                     
                     loadingDiv.style.display = 'none';
@@ -1677,13 +1677,13 @@
                 tableBody.innerHTML = `
                     <tr>
                         <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            Aucune facture trouvÃƒÂ©e
+                            Aucune facture trouvée
                         </td>
                     </tr>
                 `;
                 filteredCountSpan.textContent = '';
             } else {
-                filteredCountSpan.textContent = `${factures.length} affichÃƒÂ©e(s)`;
+                filteredCountSpan.textContent = `${factures.length} affichée(s)`;
                 
                 factures.forEach(facture => {
                     const row = document.createElement('tr');
@@ -1703,9 +1703,9 @@
                     const statutLabels = {
                         'brouillon': 'En cours',
                         'envoyee': 'En attente',
-                        'payee': 'PayÃƒÂ©',
+                        'payee': 'Payé',
                         'en_retard': 'En retard',
-                        'annulee': 'AnnulÃƒÂ©e'
+                        'annulee': 'Annulée'
                     };
                     const currentStatutColor = statutColors[facture.statut] || '#6b7280';
                     const currentStatutLabel = statutLabels[facture.statut] || facture.statut;
@@ -1725,7 +1725,7 @@
                             ${facture.client_code ? ` (${facture.client_code})` : ''}
                         </td>
                         <td style="padding: 0.75rem; text-align: right; color: var(--text-primary); font-weight: 600;">
-                            ${facture.montant_ttc.toFixed(2).replace('.', ',')} Ã¢â€šÂ¬
+                            ${facture.montant_ttc.toFixed(2).replace('.', ',')} €
                         </td>
                         <td style="padding: 0.75rem; text-align: center;">
                             ${statutBadge}
@@ -1779,7 +1779,7 @@
         function filterPaiementsByStatus(status) {
             currentPaiementStatusFilter = status;
             
-            // Mettre ÃƒÂ  jour les boutons de filtre
+            // Mettre à jour les boutons de filtre
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.classList.remove('active');
                 if (btn.dataset.status === status) {
@@ -1798,19 +1798,19 @@
         }
 
         /**
-         * Met ÃƒÂ  jour le statut de paiement d'une facture
+         * Met à jour le statut de paiement d'une facture
          */
         async function updatePaiementStatut(factureId, newStatut, factureNumero, selectElement) {
             const statutLabels = {
                 'brouillon': 'En cours',
                 'envoyee': 'En attente',
-                'payee': 'PayÃƒÂ©',
+                'payee': 'Payé',
                 'en_retard': 'En retard',
-                'annulee': 'AnnulÃƒÂ©e'
+                'annulee': 'Annulée'
             };
             const newStatutLabel = statutLabels[newStatut] || newStatut;
             
-            // Sauvegarder l'ancienne valeur au cas oÃƒÂ¹ l'utilisateur annule
+            // Sauvegarder l'ancienne valeur au cas où l'utilisateur annule
             const oldValue = selectElement ? selectElement.getAttribute('data-old-value') || selectElement.value : null;
             
             if (!confirm(`Voulez-vous vraiment changer le statut de la facture ${factureNumero} en "${newStatutLabel}" ?`)) {
@@ -1846,17 +1846,17 @@
                 const result = await response.json();
                 
                 if (result.ok) {
-                    // Afficher un message de succÃƒÂ¨s
-                    showMessage('Statut mis ÃƒÂ  jour avec succÃƒÂ¨s', 'success');
+                    // Afficher un message de succès
+                    showMessage('Statut mis à jour avec succès', 'success');
                     // Recharger la liste
                     loadPaiementsList();
                 } else {
-                    showMessage('Erreur : ' + (result.error || 'Impossible de mettre ÃƒÂ  jour le statut'), 'error');
+                    showMessage('Erreur : ' + (result.error || 'Impossible de mettre à jour le statut'), 'error');
                     // Remettre l'ancienne valeur en cas d'erreur
                     if (selectElement && oldValue) {
                         selectElement.value = oldValue;
                     }
-                    // RÃƒÂ©activer le select
+                    // Réactiver le select
                     if (selectElement) {
                         selectElement.disabled = false;
                         selectElement.style.opacity = '1';
@@ -1864,13 +1864,13 @@
                     }
                 }
             } catch (error) {
-                console.error('Erreur lors de la mise ÃƒÂ  jour du statut:', error);
-                showMessage('Erreur lors de la mise ÃƒÂ  jour du statut', 'error');
+                console.error('Erreur lors de la mise à jour du statut:', error);
+                showMessage('Erreur lors de la mise à jour du statut', 'error');
                 // Remettre l'ancienne valeur en cas d'erreur
                 if (selectElement && oldValue) {
                     selectElement.value = oldValue;
                 }
-                // RÃƒÂ©activer le select
+                // Réactiver le select
                 if (selectElement) {
                     selectElement.disabled = false;
                     selectElement.style.opacity = '1';
@@ -1880,7 +1880,7 @@
         }
         
         /**
-         * Affiche un message ÃƒÂ  l'utilisateur
+         * Affiche un message à l'utilisateur
          */
         function showMessage(message, type = 'success') {
             const messageContainer = document.getElementById('messageContainer');
@@ -1889,7 +1889,7 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
             
-            const icon = type === 'success' ? 'Ã¢Å“â€œ' : type === 'error' ? 'Ã¢Å“â€¢' : 'Ã¢Å¡Â ';
+            const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : '⚠';
             messageDiv.innerHTML = `
                 <span class="message-icon">${icon}</span>
                 <span>${message}</span>
@@ -1898,7 +1898,7 @@
             messageContainer.innerHTML = '';
             messageContainer.appendChild(messageDiv);
             
-            // Masquer le message aprÃƒÂ¨s 5 secondes
+            // Masquer le message après 5 secondes
             setTimeout(() => {
                 messageDiv.style.opacity = '0';
                 messageDiv.style.transform = 'translateY(-10px)';
@@ -1931,7 +1931,7 @@
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             
-            // RÃƒÂ©initialiser la recherche
+            // Réinitialiser la recherche
             const searchInput = document.getElementById('historiquePaiementsSearchInput');
             if (searchInput) {
                 searchInput.value = '';
@@ -1976,7 +1976,7 @@
                     filteredHistoriquePaiements = [...allHistoriquePaiements];
                     displayHistoriquePaiements(allHistoriquePaiements);
                     
-                    // Mettre ÃƒÂ  jour le compteur
+                    // Mettre à jour le compteur
                     document.getElementById('historiquePaiementsCount').textContent = allHistoriquePaiements.length;
                     
                     loadingDiv.style.display = 'none';
@@ -2007,13 +2007,13 @@
                 tableBody.innerHTML = `
                     <tr>
                         <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            Aucun paiement trouvÃƒÂ©
+                            Aucun paiement trouvé
                         </td>
                     </tr>
                 `;
                 filteredCountSpan.textContent = '';
             } else {
-                filteredCountSpan.textContent = `${paiements.length} affichÃƒÂ©(s)`;
+                filteredCountSpan.textContent = `${paiements.length} affiché(s)`;
                 
                 paiements.forEach(paiement => {
                     const row = document.createElement('tr');
@@ -2044,7 +2044,7 @@
                                     Voir
                                 </button>
                                 ${paiement.client_email ? `
-                                    <button onclick="sendRecuEmail(${paiement.id}, '${paiement.reference || ''}')" style="padding: 0.4rem 0.75rem; background: #10b981; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';" title="Envoyer le reÃƒÂ§u par email">
+                                    <button onclick="sendRecuEmail(${paiement.id}, '${paiement.reference || ''}')" style="padding: 0.4rem 0.75rem; background: #10b981; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';" title="Envoyer le reçu par email">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                                             <polyline points="22,6 12,13 2,6"></polyline>
@@ -2071,7 +2071,7 @@
                             ${paiement.client_code ? ` (${paiement.client_code})` : ''}
                         </td>
                         <td style="padding: 0.75rem; text-align: right; color: var(--text-primary); font-weight: 600;">
-                            ${paiement.montant.toFixed(2).replace('.', ',')} Ã¢â€šÂ¬
+                            ${paiement.montant.toFixed(2).replace('.', ',')} €
                         </td>
                         <td style="padding: 0.75rem; text-align: center; color: var(--text-primary);">
                             ${paiement.mode_paiement_label}
@@ -2090,7 +2090,7 @@
                     tableBody.appendChild(row);
                 });
                 
-                // Afficher le nombre de rÃƒÂ©sultats filtrÃƒÂ©s si diffÃƒÂ©rent du total
+                // Afficher le nombre de résultats filtrés si différent du total
                 if (paiements.length !== allHistoriquePaiements.length) {
                     filteredCountSpan.textContent = `(${paiements.length} sur ${allHistoriquePaiements.length})`;
                 } else {
@@ -2137,7 +2137,7 @@
         function filterHistoriquePaiementsByStatus(status) {
             currentHistoriqueStatusFilter = status;
             
-            // Mettre ÃƒÂ  jour les boutons de filtre
+            // Mettre à jour les boutons de filtre
             document.querySelectorAll('#historiquePaiementsModal .filter-btn').forEach(btn => {
                 btn.classList.remove('active');
                 if (btn.dataset.filter === status) {
@@ -2165,7 +2165,7 @@
         }
 
         /**
-         * Envoie le reÃƒÂ§u de paiement par email au client
+         * Envoie le reçu de paiement par email au client
          */
         async function sendRecuEmail(paiementId, reference) {
             if (!paiementId) {
@@ -2177,7 +2177,7 @@
                 return;
             }
 
-            if (!confirm(`ÃƒÅ tes-vous sÃƒÂ»r de vouloir envoyer le reÃƒÂ§u ${reference || ''} par email au client ?`)) {
+            if (!confirm(`Êtes-vous sûr de vouloir envoyer le reçu ${reference || ''} par email au client ?`)) {
                 return;
             }
 
@@ -2197,27 +2197,27 @@
 
                 if (data.ok) {
                     if (typeof showNotification === 'function') {
-                        showNotification('SuccÃƒÂ¨s', `ReÃƒÂ§u envoyÃƒÂ© avec succÃƒÂ¨s ÃƒÂ  ${data.email || 'le client'}`, 'success');
+                        showNotification('Succès', `Reçu envoyé avec succès à ${data.email || 'le client'}`, 'success');
                     } else {
-                        showToast(`ReÃƒÂ§u envoyÃƒÂ© avec succÃƒÂ¨s ÃƒÂ  ${data.email || 'le client'}`);
+                        showToast(`Reçu envoyé avec succès à ${data.email || 'le client'}`);
                     }
-                    // Recharger l'historique pour mettre ÃƒÂ  jour le statut
+                    // Recharger l'historique pour mettre à jour le statut
                     if (typeof loadHistoriquePaiements === 'function') {
                         loadHistoriquePaiements();
                     }
                 } else {
                     if (typeof showNotification === 'function') {
-                        showNotification('Erreur', data.error || 'Erreur lors de l\'envoi du reÃƒÂ§u', 'error');
+                        showNotification('Erreur', data.error || 'Erreur lors de l\'envoi du reçu', 'error');
                     } else {
-                        showToast('Erreur: ' + (data.error || 'Erreur lors de l\'envoi du reÃ§u'), 'error');
+                        showToast('Erreur: ' + (data.error || 'Erreur lors de l\'envoi du reçu'), 'error');
                     }
                 }
             } catch (error) {
-                console.error('Erreur envoi reÃƒÂ§u:', error);
+                console.error('Erreur envoi reçu:', error);
                 if (typeof showNotification === 'function') {
-                    showNotification('Erreur', 'Erreur lors de l\'envoi du reÃƒÂ§u', 'error');
+                    showNotification('Erreur', 'Erreur lors de l\'envoi du reçu', 'error');
                 } else {
-                    showToast('Erreur lors de l\'envoi du reÃ§u', 'error');
+                    showToast('Erreur lors de l\'envoi du reçu', 'error');
                 }
             }
         }
@@ -2241,7 +2241,7 @@
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             
-            // RÃƒÂ©initialiser le formulaire et l'ÃƒÂ©tat
+            // Réinitialiser le formulaire et l'état
             const form = document.getElementById('factureMailForm');
             if (form) {
                 form.reset();
@@ -2258,12 +2258,12 @@
                 btnRenvoyer.style.display = 'none';
             }
             
-            // RÃƒÂ©initialiser la recherche facture
+            // Réinitialiser la recherche facture
             resetFactureSearch();
         }
 
         /**
-         * RÃƒÂ©initialise le champ recherche facture
+         * Réinitialise le champ recherche facture
          */
         function resetFactureSearch() {
             const searchInput = document.getElementById('facture_search');
@@ -2291,7 +2291,7 @@
             }
         }
 
-        // Ãƒâ€°tat global pour l'envoi d'email
+        // État global pour l'envoi d'email
         let factureMailState = {
             isSubmitting: false,
             selectedFacture: null
@@ -2319,11 +2319,11 @@
             }
 
             function formatSuggestionText(r) {
-                return `${r.client_nom} Ã¢â‚¬â€ ${r.numero} Ã¢â‚¬â€ ${r.date_emission}`;
+                return `${r.client_nom} – ${r.numero} – ${r.date_emission}`;
             }
 
             function formatDisplayText(r) {
-                return `NÃ‚Â°${r.numero} Ã¢â‚¬â€ ${r.client_nom} Ã¢â‚¬â€ ${r.date_emission}`;
+                return `N°${r.numero} – ${r.client_nom} – ${r.date_emission}`;
             }
 
             function selectFacture(r) {
@@ -2434,7 +2434,7 @@
         })();
 
         /**
-         * Met ÃƒÂ  jour le badge de statut de la facture
+         * Met à jour le badge de statut de la facture
          */
         function updateFactureMailStatus(emailEnvoye, dateEnvoi) {
             const badge = document.getElementById('factureMailStatusBadge');
@@ -2449,7 +2449,7 @@
             
             if (emailEnvoye === '0') {
                 badge.classList.add('status-none');
-                badgeText.textContent = 'Non envoyÃƒÂ©e';
+                badgeText.textContent = 'Non envoyée';
             } else if (emailEnvoye === '2') {
                 badge.classList.add('status-pending');
                 badgeText.textContent = 'En cours d\'envoi';
@@ -2457,13 +2457,13 @@
                 badge.classList.add('status-sent');
                 if (dateEnvoi) {
                     const date = new Date(dateEnvoi);
-                    badgeText.textContent = `EnvoyÃƒÂ©e le ${date.toLocaleDateString('fr-FR')} ÃƒÂ  ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+                    badgeText.textContent = `Envoyée le ${date.toLocaleDateString('fr-FR')} à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
                 } else {
-                    badgeText.textContent = 'EnvoyÃƒÂ©e';
+                    badgeText.textContent = 'Envoyée';
                 }
             } else {
                 badge.classList.add('status-failed');
-                badgeText.textContent = 'Ãƒâ€°chec';
+                badgeText.textContent = 'Échec';
             }
         }
 
@@ -2496,7 +2496,7 @@
             const email = formData.get('email');
             
             if (!factureId) {
-                showToast('Veuillez sÃƒÂ©lectionner une facture', 'error');
+                showToast('Veuillez sélectionner une facture', 'error');
                 return;
             }
             
@@ -2505,7 +2505,7 @@
                 return;
             }
             
-            // Mettre ÃƒÂ  jour l'ÃƒÂ©tat
+            // Mettre à jour l'état
             factureMailState.isSubmitting = true;
             setFactureMailLoadingState(true);
             
@@ -2525,14 +2525,14 @@
                 });
                 
                 const result = await response.json();
-                console.log('RÃƒÂ©ponse reÃƒÂ§ue:', result);
+                console.log('Réponse reçue:', result);
                 
                 if (result.ok) {
-                    // SuccÃƒÂ¨s
+                    // Succès
                     showFactureMailSuccess(result);
-                    showToast('Email envoyÃƒÂ© avec succÃƒÂ¨s !', 'success');
+                    showToast('Email envoyé avec succès !', 'success');
                     
-                    // RÃƒÂ©initialiser pour permettre un nouvel envoi
+                    // Réinitialiser pour permettre un nouvel envoi
                     setTimeout(() => {
                         resetFactureSearch();
                     }, 1000);
@@ -2553,19 +2553,19 @@
         }
 
         /**
-         * Renvoie une facture dÃƒÂ©jÃƒÂ  envoyÃƒÂ©e
+         * Renvoie une facture déjà envoyée
          */
         async function renvoyerFactureMail() {
             if (factureMailState.isSubmitting || !factureMailState.selectedFacture) {
                 return;
             }
             
-            // Utiliser la mÃƒÂªme fonction mais avec force=true (gÃƒÂ©rÃƒÂ© cÃƒÂ´tÃƒÂ© backend)
+            // Utiliser la même fonction mais avec force=true (géré côté backend)
             await submitFactureMailForm(new Event('submit'));
         }
 
         /**
-         * Met ÃƒÂ  jour l'ÃƒÂ©tat de chargement de l'UI
+         * Met à jour l'état de chargement de l'UI
          */
         function setFactureMailLoadingState(loading) {
             const btnSubmit = document.getElementById('btnEnvoyerFactureMail');
@@ -2602,7 +2602,7 @@
         }
 
         /**
-         * Affiche le rÃƒÂ©sultat de succÃƒÂ¨s
+         * Affiche le résultat de succès
          */
         function showFactureMailSuccess(result) {
             const resultDiv = document.getElementById('factureMailResult');
@@ -2615,8 +2615,8 @@
             const message = resultDiv.querySelector('.result-message');
             const details = resultDiv.querySelector('.result-details');
             
-            if (icon) icon.textContent = 'Ã¢Å“â€œ';
-            if (message) message.textContent = 'Email envoyÃƒÂ© avec succÃƒÂ¨s !';
+            if (icon) icon.textContent = '✓';
+            if (message) message.textContent = 'Email envoyé avec succès !';
             
             let detailsText = '';
             if (result.message_id) {
@@ -2632,17 +2632,17 @@
             }
             
             if (details) {
-                details.textContent = detailsText || 'Aucun dÃƒÂ©tail disponible';
+                details.textContent = detailsText || 'Aucun détail disponible';
                 details.onclick = () => {
                     navigator.clipboard.writeText(detailsText).then(() => {
-                        showToast('DÃƒÂ©tails copiÃƒÂ©s !', 'success');
+                        showToast('Détails copiés !', 'success');
                     });
                 };
             }
         }
 
         /**
-         * Affiche le rÃƒÂ©sultat d'erreur
+         * Affiche le résultat d'erreur
          */
         function showFactureMailError(errorMsg) {
             const resultDiv = document.getElementById('factureMailResult');
@@ -2655,7 +2655,7 @@
             const message = resultDiv.querySelector('.result-message');
             const details = resultDiv.querySelector('.result-details');
             
-            if (icon) icon.textContent = 'Ã¢Å“â€”';
+            if (icon) icon.textContent = '✗';
             if (message) message.textContent = 'Erreur lors de l\'envoi';
             if (details) {
                 details.textContent = errorMsg;
@@ -2664,7 +2664,7 @@
         }
 
         /**
-         * Cache le rÃƒÂ©sultat
+         * Cache le résultat
          */
         function hideFactureMailResult() {
             const resultDiv = document.getElementById('factureMailResult');
@@ -2677,7 +2677,7 @@
          * Affiche un toast
          */
         function showToast(message, type = 'success') {
-            // CrÃƒÂ©er le conteneur s'il n'existe pas
+            // Créer le conteneur s'il n'existe pas
             let container = document.querySelector('.toast-container');
             if (!container) {
                 container = document.createElement('div');
@@ -2685,13 +2685,13 @@
                 document.body.appendChild(container);
             }
             
-            // CrÃƒÂ©er le toast
+            // Créer le toast
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
             
             const icon = document.createElement('span');
             icon.className = 'toast-icon';
-            icon.textContent = type === 'success' ? 'Ã¢Å“â€œ' : 'Ã¢Å“â€”';
+            icon.textContent = type === 'success' ? '✓' : '✗';
             
             const text = document.createElement('span');
             text.textContent = message;
@@ -2700,7 +2700,7 @@
             toast.appendChild(text);
             container.appendChild(toast);
             
-            // Supprimer aprÃƒÂ¨s 5 secondes
+            // Supprimer après 5 secondes
             setTimeout(() => {
                 toast.classList.add('fade-out');
                 setTimeout(() => {
@@ -2713,25 +2713,25 @@
         }
 
         // ============================================
-        // GESTION DU MODAL GÃƒâ€°NÃƒâ€°RATION FACTURE CLIENTS
+        // GESTION DU MODAL GÉNÉRATION FACTURE CLIENTS
         // ============================================
         
         /**
-         * Ouvre le modal de gÃƒÂ©nÃƒÂ©ration de factures pour clients
+         * Ouvre le modal de génération de factures pour clients
          */
         function openGenerationFactureClientsModal() {
             const modal = document.getElementById('generationFactureClientsModal');
             const overlay = document.getElementById('generationFactureClientsModalOverlay');
             
             if (!modal || !overlay) {
-                console.error('Modal gÃƒÂ©nÃƒÂ©ration facture clients introuvable');
+                console.error('Modal génération facture clients introuvable');
                 return;
             }
             
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             
-            // RÃƒÂ©initialiser le formulaire
+            // Réinitialiser le formulaire
             const form = document.getElementById('generationFactureClientsForm');
             const progressContainer = document.getElementById('genFactureProgressContainer');
             const btnSubmit = document.getElementById('btnGenererFacturesClients');
@@ -2740,7 +2740,7 @@
             if (form) {
                 form.reset();
                 form.style.display = 'block';
-                // RÃƒÂ©initialiser la date ÃƒÂ  aujourd'hui
+                // Réinitialiser la date à aujourd'hui
                 const dateInput = document.getElementById('genFactureDate');
                 if (dateInput) {
                     dateInput.value = new Date().toISOString().split('T')[0];
@@ -2759,17 +2759,17 @@
                 progressContainer.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
             }
             
-            // RÃƒÂ©initialiser les boutons
+            // Réinitialiser les boutons
             if (btnSubmit) {
                 btnSubmit.disabled = false;
                 btnSubmit.style.display = 'inline-block';
-                btnSubmit.textContent = 'GÃƒÂ©nÃƒÂ©rer les factures';
+                btnSubmit.textContent = 'Générer les factures';
             }
             if (btnCancel) {
                 btnCancel.disabled = false;
             }
             
-            // RÃƒÂ©initialiser la barre de progression
+            // Réinitialiser la barre de progression
             const progressBar = document.getElementById('genFactureProgressBar');
             const percentDisplay = document.getElementById('genFactureProgressPercentDisplay');
             const statusText = document.getElementById('genFactureProgressStatus');
@@ -2784,11 +2784,11 @@
                 percentDisplay.classList.remove('complete');
             }
             if (statusText) {
-                statusText.textContent = 'GÃƒÂ©nÃƒÂ©ration en cours...';
+                statusText.textContent = 'Génération en cours...';
                 statusText.classList.remove('complete');
             }
             
-            // RÃƒÂ©initialiser les compteurs
+            // Réinitialiser les compteurs
             updateProgress(0, 0, 0, 0);
             
             // Vider le log
@@ -2803,7 +2803,7 @@
         }
         
         /**
-         * Met ÃƒÂ  jour l'affichage de la progression
+         * Met à jour l'affichage de la progression
          */
         function updateProgress(percent, clients, generees, exclus) {
             const percentEl = document.getElementById('genFactureProgressPercent');
@@ -2820,7 +2820,7 @@
         }
 
         /**
-         * Ferme le modal de gÃƒÂ©nÃƒÂ©ration de factures pour clients
+         * Ferme le modal de génération de factures pour clients
          */
         function closeGenerationFactureClientsModal() {
             const modal = document.getElementById('generationFactureClientsModal');
@@ -2837,7 +2837,7 @@
 
 
         /**
-         * Soumet le formulaire de gÃƒÂ©nÃƒÂ©ration de factures pour clients
+         * Soumet le formulaire de génération de factures pour clients
          */
         async function submitGenerationFactureClientsForm(e) {
             e.preventDefault();
@@ -2866,7 +2866,7 @@
                 progressContainer.style.display = 'block';
             }
             
-            // Initialiser la barre de progression avec l'ÃƒÂ©tat "running"
+            // Initialiser la barre de progression avec l'état "running"
             const progressBar = document.getElementById('genFactureProgressBar');
             const percentDisplay = document.getElementById('genFactureProgressPercentDisplay');
             const statusText = document.getElementById('genFactureProgressStatus');
@@ -2882,7 +2882,7 @@
                 percentDisplay.classList.remove('complete');
             }
             if (statusText) {
-                statusText.textContent = 'GÃƒÂ©nÃƒÂ©ration en cours...';
+                statusText.textContent = 'Génération en cours...';
                 statusText.classList.remove('complete');
             }
             
@@ -2892,7 +2892,7 @@
                 btnCancel.disabled = true;
             }
             
-            // Masquer les notifications prÃƒÂ©cÃƒÂ©dentes
+            // Masquer les notifications précédentes
             const notificationsDiv = document.getElementById('genFactureNotifications');
             if (notificationsDiv) {
                 notificationsDiv.style.display = 'none';
@@ -2906,14 +2906,14 @@
             let statsExclus = 0;
             let progressInterval;
             
-            // Fonction pour calculer la couleur du gradient basÃƒÂ©e sur le pourcentage
+            // Fonction pour calculer la couleur du gradient basée sur le pourcentage
             function getProgressGradient(percent) {
                 if (percent >= 100) {
-                    // Ãƒâ€°tat de succÃƒÂ¨s : vert solide
+                    // État de succès : vert solide
                     return 'linear-gradient(90deg, #10b981 0%, #059669 100%)';
                 }
                 
-                // Gradient dynamique : vert Ã¢â€ â€™ bleu Ã¢â€ â€™ violet
+                // Gradient dynamique : vert → bleu → violet
                 // 0-33% : vert vers bleu
                 // 33-66% : bleu vers violet
                 // 66-100% : violet plus intense
@@ -2938,7 +2938,7 @@
                 }
             }
 
-            // Fonction pour mettre ÃƒÂ  jour la progression avec animations
+            // Fonction pour mettre à jour la progression avec animations
             function updateProgressWithAnimation(percent, clients, generees, exclus) {
                 progressPercent = Math.min(100, Math.max(0, percent));
                 statsClients = clients;
@@ -2953,7 +2953,7 @@
                 const genereesEl = document.getElementById('genFactureStatsGenerees');
                 const exclusEl = document.getElementById('genFactureStatsExclus');
                 
-                // Mettre ÃƒÂ  jour le pourcentage avec transition douce
+                // Mettre à jour le pourcentage avec transition douce
                 if (percentEl) {
                     const roundedPercent = Math.round(progressPercent);
                     // Animation de compteur pour le pourcentage (plus fluide)
@@ -2991,13 +2991,13 @@
                     }
                 }
                 
-                // Mettre ÃƒÂ  jour la barre de progression
+                // Mettre à jour la barre de progression
                 if (barEl) {
                     barEl.style.width = progressPercent + '%';
                     
-                    // GÃƒÂ©rer les ÃƒÂ©tats (running vs complete)
+                    // Gérer les états (running vs complete)
                     if (progressPercent >= 100) {
-                        // Ãƒâ€°tat de succÃƒÂ¨s
+                        // État de succès
                         barEl.classList.remove('running');
                         barEl.classList.add('complete');
                         barEl.style.background = getProgressGradient(100);
@@ -3007,11 +3007,11 @@
                             percentDisplay.classList.add('complete');
                         }
                         if (statusText) {
-                            statusText.textContent = 'Ã¢Å“â€œ GÃƒÂ©nÃƒÂ©ration terminÃƒÂ©e avec succÃƒÂ¨s !';
+                            statusText.textContent = '✓ Génération terminée avec succès !';
                             statusText.classList.add('complete');
                         }
                     } else {
-                        // Ãƒâ€°tat en cours
+                        // État en cours
                         barEl.classList.remove('complete');
                         barEl.classList.add('running');
                         barEl.style.background = getProgressGradient(progressPercent);
@@ -3021,13 +3021,13 @@
                             percentDisplay.classList.remove('complete');
                         }
                         if (statusText) {
-                            statusText.textContent = 'GÃƒÂ©nÃƒÂ©ration en cours...';
+                            statusText.textContent = 'Génération en cours...';
                             statusText.classList.remove('complete');
                         }
                     }
                 }
                 
-                // Mettre ÃƒÂ  jour les statistiques avec animations
+                // Mettre à jour les statistiques avec animations
                 if (clientsEl) {
                     clientsEl.textContent = statsClients;
                     clientsEl.style.transition = 'transform 0.2s ease';
@@ -3110,26 +3110,26 @@
                 }
                 
                 const result = await response.json();
-                console.log('RÃƒÂ©ponse reÃƒÂ§ue:', result);
+                console.log('Réponse reçue:', result);
                 
-                // Mettre ÃƒÂ  jour avec les vraies valeurs
+                // Mettre à jour avec les vraies valeurs
                 const totalClients = (result.total_clients || 0) + (result.total_exclus || 0);
                 updateProgressWithAnimation(100, totalClients, result.total_generees || 0, result.total_exclus || 0);
                 
                 if (result.ok) {
-                    // Changer le style pour le succÃƒÂ¨s
+                    // Changer le style pour le succès
                     if (progressContainer) {
                         progressContainer.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
                     }
                     
-                    // Afficher les rÃƒÂ©sultats dans le log
+                    // Afficher les résultats dans le log
                     const logContainer = document.getElementById('genFactureProgressLog');
                     const logContent = document.getElementById('genFactureProgressLogContent');
                     
                     if (logContainer && logContent) {
                         logContent.innerHTML = '';
                         
-                        // Afficher les factures gÃƒÂ©nÃƒÂ©rÃƒÂ©es (style carte + bouton PDF)
+                        // Afficher les factures générées (style carte + bouton PDF)
                         if (result.factures_generees && result.factures_generees.length > 0) {
                             result.factures_generees.forEach(facture => {
                                 const logItem = document.createElement('div');
@@ -3140,14 +3140,14 @@
                                 logItem.innerHTML = `
                                     <div style="display:flex; align-items:flex-start; gap:0.6rem;">
                                         <div style="width: 22px; height: 22px; border-radius: 999px; background: rgba(16,185,129,0.2); display:flex; align-items:center; justify-content:center; color:#10b981;">
-                                            Ã¢Å“â€œ
+                                            ✓
                                         </div>
                                         <div>
                                             <div style="font-weight:600; margin-bottom:0.15rem; color: #1a202c;">
                                                 ${facture.client_nom}
                                             </div>
                                             <div style="font-size:0.8rem; color: rgba(26,32,44,0.7);">
-                                                Facture <strong>${facture.numero}</strong> Ã¢â‚¬Â¢ <span style="color:#059669;">${montant} Ã¢â€šÂ¬ TTC</span>
+                                                Facture <strong>${facture.numero}</strong> • <span style="color:#059669;">${montant} € TTC</span>
                                             </div>
                                         </div>
                                     </div>
@@ -3182,7 +3182,7 @@
                             result.clients_exclus.forEach(client => {
                                 const logItem = document.createElement('div');
                                 logItem.style.cssText = 'padding: 0.5rem; background: rgba(245,158,11,0.15); border-radius: var(--radius-sm); color: #92400e; font-size: 0.85rem; border-left: 3px solid #f59e0b;';
-                                logItem.innerHTML = `Ã¢Å¡Â Ã¯Â¸Â <strong>${client.client_nom}</strong> - ${client.raison}`;
+                                logItem.innerHTML = `⚠️ <strong>${client.client_nom}</strong> - ${client.raison}`;
                                 logContent.appendChild(logItem);
                             });
                         }
@@ -3190,8 +3190,8 @@
                         logContainer.style.display = 'block';
                     }
                     
-                    // Afficher le message de succÃƒÂ¨s
-                    let message = `${result.total_generees} facture(s) gÃƒÂ©nÃƒÂ©rÃƒÂ©e(s) avec succÃƒÂ¨s`;
+                    // Afficher le message de succès
+                    let message = `${result.total_generees} facture(s) générée(s) avec succès`;
                     if (result.total_exclus > 0) {
                         message += `. ${result.total_exclus} client(s) exclu(s)`;
                     }
@@ -3200,7 +3200,7 @@
                     // Afficher les notifications pour les clients exclus dans le formulaire
                     if (result.clients_exclus && result.clients_exclus.length > 0 && notificationsDiv) {
                         let notificationsHtml = '<div style="padding: 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-top: 1rem;">';
-                        notificationsHtml += '<div style="font-weight: 600; color: #92400E; margin-bottom: 0.75rem;">Ã¢Å¡Â Ã¯Â¸Â Clients exclus de la gÃƒÂ©nÃƒÂ©ration:</div>';
+                        notificationsHtml += '<div style="font-weight: 600; color: #92400E; margin-bottom: 0.75rem;">⚠️ Clients exclus de la génération:</div>';
                         notificationsHtml += '<div style="max-height: 200px; overflow-y: auto;">';
                         
                         result.clients_exclus.forEach(client => {
@@ -3217,7 +3217,7 @@
                         notificationsDiv.style.display = 'block';
                     }
                     
-                    // Si toutes les factures ont ÃƒÂ©tÃƒÂ© gÃƒÂ©nÃƒÂ©rÃƒÂ©es, fermer le modal aprÃƒÂ¨s 5 secondes
+                    // Si toutes les factures ont été générées, fermer le modal après 5 secondes
                     if (result.total_exclus === 0) {
                         setTimeout(() => {
                             closeGenerationFactureClientsModal();
@@ -3256,7 +3256,7 @@
                 }
             } catch (error) {
                 clearInterval(progressInterval);
-                console.error('Erreur lors de la gÃƒÂ©nÃƒÂ©ration:', error);
+                console.error('Erreur lors de la génération:', error);
                 
                 updateProgressWithAnimation(100, statsClients, statsGenerees, statsExclus);
                 
@@ -3264,7 +3264,7 @@
                     progressContainer.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
                 }
                 
-                showMessage('Erreur lors de la gÃƒÂ©nÃƒÂ©ration des factures: ' + error.message, 'error');
+                showMessage('Erreur lors de la génération des factures: ' + error.message, 'error');
                 btnSubmit.disabled = false;
                 btnSubmit.style.display = 'inline-block';
                 if (btnCancel) btnCancel.disabled = false;
@@ -3292,24 +3292,24 @@
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             
-            // RÃƒÂ©initialiser le formulaire
+            // Réinitialiser le formulaire
             const form = document.getElementById('payerForm');
             if (form) {
                 form.reset();
-                // RÃƒÂ©initialiser la date ÃƒÂ  aujourd'hui
+                // Réinitialiser la date à aujourd'hui
                 const dateInput = document.getElementById('payerDate');
                 if (dateInput) {
                     dateInput.value = new Date().toISOString().split('T')[0];
                 }
-                // RÃƒÂ©initialiser la rÃƒÂ©fÃƒÂ©rence (sera gÃƒÂ©nÃƒÂ©rÃƒÂ©e automatiquement)
+                // Réinitialiser la référence (sera générée automatiquement)
                 const referenceInput = document.getElementById('payerReference');
                 if (referenceInput) {
                     referenceInput.value = '';
-                    referenceInput.placeholder = 'GÃƒÂ©nÃƒÂ©rÃƒÂ©e automatiquement';
+                    referenceInput.placeholder = 'Générée automatiquement';
                 }
             }
             
-            // Charger les factures non payÃƒÂ©es
+            // Charger les factures non payées
             loadFacturesForPaiement();
         }
 
@@ -3322,7 +3322,7 @@
             if (modal && overlay) {
                 overlay.classList.remove('active');
                 document.body.style.overflow = '';
-                // RÃƒÂ©initialiser le formulaire
+                // Réinitialiser le formulaire
                 const form = document.getElementById('payerForm');
                 if (form) {
                     form.reset();
@@ -3342,9 +3342,9 @@
                 
                 if (data.ok && data.factures) {
                     const factureSelect = document.getElementById('payerFacture');
-                    factureSelect.innerHTML = '<option value="">SÃƒÂ©lectionner une facture</option>';
+                    factureSelect.innerHTML = '<option value="">Sélectionner une facture</option>';
                     
-                    // Filtrer les factures non payÃƒÂ©es et non annulÃƒÂ©es
+                    // Filtrer les factures non payées et non annulées
                     const facturesDisponibles = data.factures.filter(f => 
                         f.statut !== 'payee' && f.statut !== 'annulee'
                     );
@@ -3352,13 +3352,13 @@
                     facturesDisponibles.forEach(facture => {
                         const option = document.createElement('option');
                         option.value = facture.id;
-                        option.textContent = `${facture.numero} - ${facture.client_nom} - ${facture.montant_ttc.toFixed(2)} Ã¢â€šÂ¬ TTC`;
+                        option.textContent = `${facture.numero} - ${facture.client_nom} - ${facture.montant_ttc.toFixed(2)} € TTC`;
                         option.setAttribute('data-montant', facture.montant_ttc);
                         option.setAttribute('data-client-id', facture.client_id);
                         factureSelect.appendChild(option);
                     });
                     
-                    // Ãƒâ€°couter le changement pour prÃƒÂ©-remplir le montant
+                    // Écouter le changement pour pré-remplir le montant
                     factureSelect.addEventListener('change', function() {
                         const selectedOption = this.options[this.selectedIndex];
                         if (selectedOption && selectedOption.value) {
@@ -3390,7 +3390,7 @@
             const modePaiement = formData.get('mode_paiement');
             
             if (!factureId) {
-                showToast('Veuillez sÃ©lectionner une facture', 'error');
+                showToast('Veuillez sélectionner une facture', 'error');
                 return;
             }
             
@@ -3434,11 +3434,11 @@
                 }
                 
                 const result = await response.json();
-                console.log('RÃƒÂ©ponse reÃƒÂ§ue:', result);
+                console.log('Réponse reçue:', result);
                 
                 if (result.ok) {
-                    const refMessage = result.reference ? ` RÃƒÂ©fÃƒÂ©rence: ${result.reference}` : '';
-                    showMessage('Paiement enregistrÃƒÂ© avec succÃƒÂ¨s !' + refMessage, 'success');
+                    const refMessage = result.reference ? ` Référence: ${result.reference}` : '';
+                    showMessage('Paiement enregistré avec succès !' + refMessage, 'success');
                     closePayerModal();
                     // Recharger la liste des paiements si le modal est ouvert
                     if (document.getElementById('paiementsModalOverlay')?.classList.contains('active')) {
@@ -3450,7 +3450,7 @@
                     showMessage('Erreur : ' + errorMsg, 'error');
                 }
             } catch (error) {
-                console.error('Erreur lors de la requÃƒÂªte:', error);
+                console.error('Erreur lors de la requête:', error);
                 showMessage('Erreur lors de l\'enregistrement du paiement: ' + error.message, 'error');
             } finally {
                 btnSubmit.disabled = false;
@@ -3480,7 +3480,7 @@
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             
-            // RÃƒÂ©initialiser
+            // Réinitialiser
             const progressContainer = document.getElementById('envoiMasseProgressContainer');
             const listContainer = document.getElementById('envoiMasseListContainer');
             if (progressContainer) progressContainer.style.display = 'none';
@@ -3572,8 +3572,8 @@
                     row.onmouseleave = function() { this.style.background = ''; };
                     
                     const emailStatus = facture.email_envoye === 1 ? 
-                        '<span style="color: #10b981; font-weight: 600;">Ã¢Å“â€œ EnvoyÃƒÂ©e</span>' : 
-                        '<span style="color: var(--text-secondary);">Non envoyÃƒÂ©e</span>';
+                        '<span style="color: #10b981; font-weight: 600;">✓ Envoyée</span>' : 
+                        '<span style="color: var(--text-secondary);">Non envoyée</span>';
                     
                     row.innerHTML = `
                         <td style="padding: 0.75rem; text-align: center;">
@@ -3586,7 +3586,7 @@
                             ${facture.client_code ? ` (${facture.client_code})` : ''}
                         </td>
                         <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">
-                            ${facture.montant_ttc.toFixed(2).replace('.', ',')} Ã¢â€šÂ¬
+                            ${facture.montant_ttc.toFixed(2).replace('.', ',')} €
                         </td>
                         <td style="padding: 0.75rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
                             ${facture.client_email || '-'}
@@ -3634,7 +3634,7 @@
         }
         
         /**
-         * Met ÃƒÂ  jour le compteur de sÃƒÂ©lection
+         * Met à jour le compteur de sélection
          */
         function updateEnvoiMasseSelection() {
             const checkboxes = document.querySelectorAll('.envoi-masse-checkbox:checked');
@@ -3648,7 +3648,7 @@
         }
         
         /**
-         * SÃƒÂ©lectionne toutes les factures
+         * Sélectionne toutes les factures
          */
         function selectAllEnvoiMasse() {
             document.querySelectorAll('.envoi-masse-checkbox').forEach(cb => {
@@ -3659,7 +3659,7 @@
         }
         
         /**
-         * DÃƒÂ©sÃƒÂ©lectionne toutes les factures
+         * Désélectionne toutes les factures
          */
         function deselectAllEnvoiMasse() {
             document.querySelectorAll('.envoi-masse-checkbox').forEach(cb => {
@@ -3670,7 +3670,7 @@
         }
         
         /**
-         * Toggle sÃƒÂ©lection toutes
+         * Toggle sélection toutes
          */
         function toggleSelectAllEnvoiMasse(checkbox) {
             document.querySelectorAll('.envoi-masse-checkbox').forEach(cb => {
@@ -3687,11 +3687,11 @@
             const factureIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
             
             if (factureIds.length === 0) {
-                showToast('Veuillez sÃ©lectionner au moins une facture', 'error');
+                showToast('Veuillez sélectionner au moins une facture', 'error');
                 return;
             }
             
-            if (!confirm(`Voulez-vous envoyer ${factureIds.length} facture(s) ÃƒÂ  leurs clients respectifs ?`)) {
+            if (!confirm(`Voulez-vous envoyer ${factureIds.length} facture(s) à leurs clients respectifs ?`)) {
                 return;
             }
             
@@ -3722,7 +3722,7 @@
                 statusText.classList.remove('complete');
             }
             
-            // RÃƒÂ©initialiser les compteurs
+            // Réinitialiser les compteurs
             updateEnvoiMasseProgress(0, factureIds.length, 0, 0);
             
             try {
@@ -3746,7 +3746,7 @@
                 const result = await response.json();
                 
                 if (result.ok) {
-                    // Mettre ÃƒÂ  jour avec les rÃƒÂ©sultats
+                    // Mettre à jour avec les résultats
                     updateEnvoiMasseProgress(100, result.total, result.success, result.failed);
                     
                     if (progressBar) {
@@ -3755,17 +3755,17 @@
                     }
                     if (percentDisplay) percentDisplay.classList.add('complete');
                     if (statusText) {
-                        statusText.textContent = `Ã¢Å“â€œ Envoi terminÃƒÂ© : ${result.success} rÃƒÂ©ussie(s), ${result.failed} ÃƒÂ©chec(s)`;
+                        statusText.textContent = `✓ Envoi terminé : ${result.success} réussie(s), ${result.failed} échec(s)`;
                         statusText.classList.add('complete');
                     }
                     
-                    // Afficher les rÃƒÂ©sultats dÃƒÂ©taillÃƒÂ©s
+                    // Afficher les résultats détaillés
                     displayEnvoiMasseResults(result.results);
                     
-                    // RÃƒÂ©activer les boutons
+                    // Réactiver les boutons
                     if (btnCancel) btnCancel.disabled = false;
                     
-                    showMessage(`${result.success} facture(s) envoyÃƒÂ©e(s) avec succÃƒÂ¨s${result.failed > 0 ? `, ${result.failed} ÃƒÂ©chec(s)` : ''}`, 'success');
+                    showMessage(`${result.success} facture(s) envoyée(s) avec succès${result.failed > 0 ? `, ${result.failed} échec(s)` : ''}`, 'success');
                 } else {
                     throw new Error(result.error || 'Erreur inconnue');
                 }
@@ -3780,7 +3780,7 @@
         }
         
         /**
-         * Met ÃƒÂ  jour la progression de l'envoi
+         * Met à jour la progression de l'envoi
          */
         function updateEnvoiMasseProgress(percent, total, success, failed) {
             const percentEl = document.getElementById('envoiMasseProgressPercent');
@@ -3797,7 +3797,7 @@
         }
         
         /**
-         * Affiche les rÃƒÂ©sultats dÃƒÂ©taillÃƒÂ©s
+         * Affiche les résultats détaillés
          */
         function displayEnvoiMasseResults(results) {
             const logContainer = document.getElementById('envoiMasseProgressLog');
@@ -3811,10 +3811,10 @@
                 const logItem = document.createElement('div');
                 if (result.success) {
                     logItem.style.cssText = 'padding: 0.75rem 1rem; background: rgba(16,185,129,0.15); border-radius: var(--radius-md); color: #065f46; font-size: 0.85rem; border: 1px solid rgba(16,185,129,0.3);';
-                    logItem.innerHTML = `Ã¢Å“â€œ Facture #${result.facture_id} : ${result.message}`;
+                    logItem.innerHTML = `✓ Facture #${result.facture_id} : ${result.message}`;
                 } else {
                     logItem.style.cssText = 'padding: 0.75rem 1rem; background: rgba(239,68,68,0.15); border-radius: var(--radius-md); color: #991b1b; font-size: 0.85rem; border: 1px solid rgba(239,68,68,0.3);';
-                    logItem.innerHTML = `Ã¢Å“â€” Facture #${result.facture_id} : ${result.error || 'Erreur inconnue'}`;
+                    logItem.innerHTML = `✗ Facture #${result.facture_id} : ${result.error || 'Erreur inconnue'}`;
                 }
                 logContent.appendChild(logItem);
             });
@@ -3872,7 +3872,7 @@
             initStatsSection();
 
             // Ne pas ajouter de ligne au chargement, seulement quand le modal s'ouvre
-            // addFactureLigne() sera appelÃƒÂ© dans openFactureModal()
+            // addFactureLigne() sera appelé dans openFactureModal()
 
             // Fermer les modals avec Escape
             document.addEventListener('keydown', function(e) {
@@ -3920,7 +3920,7 @@
             // Charger la liste des clients
             loadClients();
             
-            // Remplir les annÃƒÂ©es (5 derniÃƒÂ¨res annÃƒÂ©es)
+            // Remplir les années (5 dernières années)
             const yearSelect = document.getElementById('filterAnnee');
             const currentYear = new Date().getFullYear();
             for (let i = currentYear; i >= currentYear - 5; i--) {
@@ -3930,13 +3930,13 @@
                 yearSelect.appendChild(option);
             }
             
-            // DÃƒÂ©finir l'annÃƒÂ©e en cours par dÃƒÂ©faut
+            // Définir l'année en cours par défaut
             yearSelect.value = currentYear;
             
-            // Charger les donnÃƒÂ©es initiales
+            // Charger les données initiales
             loadStatsData();
             
-            // Ãƒâ€°couter les changements de filtres
+            // Écouter les changements de filtres
             document.getElementById('filterClient').addEventListener('change', loadStatsData);
             document.getElementById('filterMois').addEventListener('change', () => { updateViewModeSegments(); loadStatsData(); });
             document.getElementById('filterAnnee').addEventListener('change', loadStatsData);
@@ -3983,7 +3983,7 @@
         }
 
         /**
-         * Charge les donnÃƒÂ©es statistiques
+         * Charge les données statistiques
          */
         async function loadStatsData() {
             const loadingDiv = document.getElementById('chartLoading');
@@ -3993,7 +3993,7 @@
             
             loadingDiv.style.display = 'flex';
             if (skeleton) { skeleton.style.display = 'flex'; }
-            if (loadingText) { loadingText.style.display = 'block'; loadingText.textContent = 'Chargement des donnÃƒÂ©es...'; }
+            if (loadingText) { loadingText.style.display = 'block'; loadingText.textContent = 'Chargement des données...'; }
             canvas.style.display = 'none';
             const estimatePill = document.getElementById('statsEstimateText');
             if (estimatePill) { estimatePill.textContent = ''; estimatePill.style.display = 'none'; }
@@ -4022,20 +4022,20 @@
                         canvas.style.display = 'block';
                     } else {
                         if (skeleton) skeleton.style.display = 'none';
-                        if (loadingText) loadingText.textContent = 'Aucune donnÃƒÂ©e disponible pour les filtres sÃƒÂ©lectionnÃƒÂ©s';
+                        if (loadingText) loadingText.textContent = 'Aucune donnée disponible pour les filtres sélectionnés';
                         canvas.style.display = 'none';
                         if (estimatePill) { estimatePill.textContent = ''; estimatePill.style.display = 'none'; }
                     }
                 } else {
                     if (skeleton) skeleton.style.display = 'none';
-                    if (loadingText) loadingText.textContent = data.error || 'Erreur lors du chargement des donnÃƒÂ©es';
+                    if (loadingText) loadingText.textContent = data.error || 'Erreur lors du chargement des données';
                     canvas.style.display = 'none';
                     if (estimatePill) { estimatePill.textContent = ''; estimatePill.style.display = 'none'; }
                 }
             } catch (error) {
                 console.error('Erreur lors du chargement des statistiques:', error);
                 if (skeleton) skeleton.style.display = 'none';
-                if (loadingText) loadingText.textContent = 'Erreur lors du chargement des donnÃƒÂ©es';
+                if (loadingText) loadingText.textContent = 'Erreur lors du chargement des données';
                 canvas.style.display = 'none';
                 const ep = document.getElementById('statsEstimateText');
                 if (ep) { ep.textContent = ''; ep.style.display = 'none'; }
@@ -4053,9 +4053,9 @@
 
         /**
          * Calcule l'estimation mois prochain (moyenne mobile 3 derniers mois complets non nuls)
-         * @param {number[]} totals - donnÃƒÂ©es mensuelles
-         * @param {number} excludeFromIndex - exclure les mois ÃƒÂ  partir de cet index (ex: mois courant)
-         * @param {number|null} currentMonthEstimate - estimation fin mois courant pour pondÃƒÂ©ration
+         * @param {number[]} totals - données mensuelles
+         * @param {number} excludeFromIndex - exclure les mois à partir de cet index (ex: mois courant)
+         * @param {number|null} currentMonthEstimate - estimation fin mois courant pour pondération
          */
         function computeNextMonthEstimate(totals, excludeFromIndex = totals.length, currentMonthEstimate = null) {
             const slice = totals.slice(0, excludeFromIndex);
@@ -4070,7 +4070,7 @@
         }
 
         /**
-         * Met ÃƒÂ  jour le graphique (Total + N&B + Couleur) et la pill d'estimation en texte
+         * Met à jour le graphique (Total + N&B + Couleur) et la pill d'estimation en texte
          */
         function updateChart(data) {
             if (typeof Chart === 'undefined') {
@@ -4143,7 +4143,7 @@
                     if (estimateNextMonth !== null) {
                         parts.push('Est. mois prochain: ~' + fmt(estimateNextMonth) + ' pages');
                     }
-                    estimatePill.textContent = parts.join(' Ã¢â‚¬Â¢ ');
+                    estimatePill.textContent = parts.join(' • ');
                     estimatePill.style.display = parts.length ? 'block' : 'none';
                 } else {
                     estimatePill.textContent = '';
@@ -4305,7 +4305,7 @@
         }
 
         /**
-         * Exporte les donnÃƒÂ©es en Excel avec les filtres appliquÃƒÂ©s
+         * Exporte les données en Excel avec les filtres appliqués
          */
         function exportToExcel() {
             try {
@@ -4326,7 +4326,7 @@
                     params.append('annee', annee);
                 }
                 
-                // Construire l'URL et dÃƒÂ©clencher le tÃƒÂ©lÃƒÂ©chargement
+                // Construire l'URL et déclencher le téléchargement
                 const url = `/API/paiements_export_excel.php?${params.toString()}`;
                 
                 // Afficher un message de chargement
@@ -4336,7 +4336,7 @@
                     btn.disabled = true;
                     btn.innerHTML = '<span style="display: inline-flex; align-items: center; gap: 0.5rem;"><span class="spinner" style="width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></span> Export en cours...</span>';
                     
-                    // CrÃƒÂ©er un lien temporaire pour dÃƒÂ©clencher le tÃƒÂ©lÃƒÂ©chargement
+                    // Créer un lien temporaire pour déclencher le téléchargement
                     const link = document.createElement('a');
                     link.href = url;
                     link.style.display = 'none';
@@ -4344,13 +4344,13 @@
                     link.click();
                     document.body.removeChild(link);
                     
-                    // RÃƒÂ©initialiser le bouton aprÃƒÂ¨s un court dÃƒÂ©lai
+                    // Réinitialiser le bouton après un court délai
                     setTimeout(() => {
                         btn.disabled = false;
                         btn.innerHTML = originalText;
                     }, 2000);
                 } else {
-                    // Fallback si le bouton n'est pas trouvÃƒÂ©
+                    // Fallback si le bouton n'est pas trouvé
                     window.location.href = url;
                 }
             } catch (error) {

@@ -1,8 +1,9 @@
 <?php
+header('Content-Type: text/html; charset=UTF-8');
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
-authorize_page('paiements', []); // Accessible ÃƒÂ  tous les utilisateurs connectÃƒÂ©s
-ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le formulaire paiement)
+authorize_page('paiements', []); // Accessible à tous les utilisateurs connectés
+ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire paiement)
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -26,7 +27,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
         <div class="paiement-header">
             <div class="paiement-header-content">
                 <h1>Paiements & Factures</h1>
-                <p>GÃƒÂ©rez les paiements et factures de vos clients</p>
+                <p>Gérez les paiements et factures de vos clients</p>
             </div>
             <div class="paiement-header-icon">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -72,23 +73,23 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         <select id="filterMois">
                             <option value="">Tous les mois</option>
                             <option value="1">Janvier</option>
-                            <option value="2">FÃƒÂ©vrier</option>
+                            <option value="2">Février</option>
                             <option value="3">Mars</option>
                             <option value="4">Avril</option>
                             <option value="5">Mai</option>
                             <option value="6">Juin</option>
                             <option value="7">Juillet</option>
-                            <option value="8">AoÃƒÂ»t</option>
+                            <option value="8">Août</option>
                             <option value="9">Septembre</option>
                             <option value="10">Octobre</option>
                             <option value="11">Novembre</option>
-                            <option value="12">DÃƒÂ©cembre</option>
+                            <option value="12">Décembre</option>
                         </select>
                     </div>
                     <div class="stats-filter-group">
-                        <label for="filterAnnee">AnnÃƒÂ©e</label>
+                        <label for="filterAnnee">Année</label>
                         <select id="filterAnnee">
-                            <option value="">Toutes les annÃƒÂ©es</option>
+                            <option value="">Toutes les années</option>
                         </select>
                     </div>
                 </div>
@@ -98,7 +99,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                 <div class="stats-chart-header">
                     <div class="stats-chart-header-left">
                         <h3 class="stats-chart-title" id="statsChartTitle">Consommation</h3>
-                        <p class="stats-chart-subtitle" id="statsChartSubtitle">Pages imprimÃƒÂ©es par pÃƒÂ©riode</p>
+                        <p class="stats-chart-subtitle" id="statsChartSubtitle">Pages imprimées par période</p>
                     </div>
                     <div id="statsEstimateText" class="stats-estimate-pill"></div>
                 </div>
@@ -111,7 +112,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             <div class="skeleton-line"></div>
                             <div class="skeleton-line"></div>
                         </div>
-                        <span class="chart-loading-text">Chargement des donnÃƒÂ©es...</span>
+                        <span class="chart-loading-text">Chargement des données...</span>
                     </div>
                     <canvas id="statsChart" style="display: none; width: 100% !important; height: 100% !important;"></canvas>
                 </div>
@@ -132,7 +133,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     <h3 class="section-card-title">Paiements</h3>
                 </div>
                 <div class="section-card-content">
-                    <p class="section-card-description">Consultez et gÃƒÂ©rez tous les paiements enregistrÃƒÂ©s</p>
+                    <p class="section-card-description">Consultez et gérez tous les paiements enregistrés</p>
                     <button class="section-card-btn" onclick="openSection('paiements')">
                         Voir les paiements
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -158,7 +159,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     <h3 class="section-card-title">Factures</h3>
                 </div>
                 <div class="section-card-content">
-                    <p class="section-card-description">Liste de toutes les factures gÃƒÂ©nÃƒÂ©rÃƒÂ©es</p>
+                    <p class="section-card-description">Liste de toutes les factures générées</p>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button class="section-card-btn" onclick="openSection('factures')">
                             Voir les factures
@@ -171,7 +172,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                 </div>
             </div>
 
-            <!-- Section GÃƒÂ©nÃƒÂ©rer facture -->
+            <!-- Section Générer facture -->
             <div class="section-card" id="sectionGenererFacture">
                 <div class="section-card-header">
                     <div class="section-card-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
@@ -182,12 +183,12 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             <line x1="9" y1="15" x2="15" y2="15"></line>
                         </svg>
                     </div>
-                    <h3 class="section-card-title">GÃƒÂ©nÃƒÂ©rer facture</h3>
+                    <h3 class="section-card-title">Générer facture</h3>
                 </div>
                 <div class="section-card-content">
-                    <p class="section-card-description">CrÃƒÂ©ez une nouvelle facture pour un client</p>
+                    <p class="section-card-description">Créez une nouvelle facture pour un client</p>
                     <button class="section-card-btn" onclick="openSection('generer-facture')">
-                        CrÃƒÂ©er une facture
+                        Créer une facture
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14"></path>
                             <path d="M12 5l7 7-7 7"></path>
@@ -231,7 +232,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     <h3 class="section-card-title">Facture Mail</h3>
                 </div>
                 <div class="section-card-content">
-                    <p class="section-card-description">Envoyez une facture par email ÃƒÂ  un client</p>
+                    <p class="section-card-description">Envoyez une facture par email à un client</p>
                     <button class="section-card-btn" onclick="openSection('facture-mail')">
                         Envoyer par email
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -242,7 +243,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                 </div>
             </div>
 
-            <!-- Section GÃƒÂ©nÃƒÂ©ration Facture Clients -->
+            <!-- Section Génération Facture Clients -->
             <div class="section-card" id="sectionGenerationFactureClients">
                 <div class="section-card-header">
                     <div class="section-card-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
@@ -253,12 +254,12 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                         </svg>
                     </div>
-                    <h3 class="section-card-title">GÃƒÂ©nÃƒÂ©ration Facture Clients</h3>
+                    <h3 class="section-card-title">Génération Facture Clients</h3>
                 </div>
                 <div class="section-card-content">
-                    <p class="section-card-description">GÃƒÂ©nÃƒÂ©rez des factures pour plusieurs clients</p>
+                    <p class="section-card-description">Générez des factures pour plusieurs clients</p>
                     <button class="section-card-btn" onclick="openSection('generation-facture-clients')">
-                        GÃƒÂ©nÃƒÂ©rer des factures
+                        Générer des factures
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14"></path>
                             <path d="M12 5l7 7-7 7"></path>
@@ -280,7 +281,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     <h3 class="section-card-title">Envoi en masse</h3>
                 </div>
                 <div class="section-card-content">
-                    <p class="section-card-description">Envoyez plusieurs factures ÃƒÂ  leurs clients respectifs</p>
+                    <p class="section-card-description">Envoyez plusieurs factures à leurs clients respectifs</p>
                     <button class="section-card-btn" onclick="openSection('envoi-masse')">
                         Envoyer en masse
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -303,7 +304,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
             <div class="modal-body" style="padding: 0; height: calc(95vh - 100px); position: relative;">
                 <embed id="pdfViewerEmbed" src="" type="application/pdf" style="width: 100%; height: 100%; border: none;" />
                 <div id="pdfViewerFallback" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">
-                    <p>Le PDF ne peut pas ÃƒÂªtre affichÃƒÂ© directement dans cette page.</p>
+                    <p>Le PDF ne peut pas être affiché directement dans cette page.</p>
                     <button type="button" class="btn btn-primary" id="pdfViewerOpenBtn" onclick="openPDFInNewTab()">Ouvrir le PDF dans un nouvel onglet</button>
                 </div>
             </div>
@@ -333,7 +334,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             <input 
                                 type="text" 
                                 id="facturesSearchInput" 
-                                placeholder="Rechercher par nom, prÃƒÂ©nom, raison sociale, numÃƒÂ©ro de facture ou date..." 
+                                placeholder="Rechercher par nom, prénom, raison sociale, numéro de facture ou date..." 
                                 style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
                                 oninput="filterFactures()"
                             />
@@ -353,14 +354,14 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     </div>
                     
                     <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                        <span><span id="facturesCount">0</span> facture(s) trouvÃƒÂ©e(s)</span>
+                        <span><span id="facturesCount">0</span> facture(s) trouvée(s)</span>
                         <span id="facturesFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
                     </div>
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse;">
                             <thead>
                                 <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">NumÃƒÂ©ro</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Type</th>
@@ -372,7 +373,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                                 </tr>
                             </thead>
                             <tbody id="facturesListTableBody">
-                                <!-- Les factures seront ajoutÃƒÂ©es ici dynamiquement -->
+                                <!-- Les factures seront ajoutées ici dynamiquement -->
                             </tbody>
                         </table>
                     </div>
@@ -405,7 +406,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             <input 
                                 type="text" 
                                 id="paiementsSearchInput" 
-                                placeholder="Rechercher par numÃƒÂ©ro de facture, client ou date..." 
+                                placeholder="Rechercher par numéro de facture, client ou date..." 
                                 style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
                                 oninput="filterPaiements()"
                             />
@@ -430,7 +431,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             Tous
                         </button>
                         <button class="filter-btn" data-status="payee" onclick="filterPaiementsByStatus('payee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            PayÃƒÂ©
+                            Payé
                         </button>
                         <button class="filter-btn" data-status="envoyee" onclick="filterPaiementsByStatus('envoyee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
                             En attente
@@ -444,7 +445,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     </div>
                     
                     <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                        <span><span id="paiementsCount">0</span> facture(s) trouvÃƒÂ©e(s)</span>
+                        <span><span id="paiementsCount">0</span> facture(s) trouvée(s)</span>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                         <span id="paiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
                             <button onclick="openHistoriquePaiementsModal()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
@@ -459,7 +460,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         <table style="width: 100%; border-collapse: collapse;">
                             <thead>
                                 <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">NumÃƒÂ©ro</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
                                     <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant TTC</th>
@@ -468,7 +469,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                                 </tr>
                             </thead>
                             <tbody id="paiementsListTableBody">
-                                <!-- Les factures seront ajoutÃƒÂ©es ici dynamiquement -->
+                                <!-- Les factures seront ajoutées ici dynamiquement -->
                             </tbody>
                         </table>
                     </div>
@@ -483,11 +484,11 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
         </div>
     </div>
 
-    <!-- Modal GÃƒÂ©nÃƒÂ©rer Facture -->
+    <!-- Modal Générer Facture -->
     <div class="modal-overlay" id="factureModalOverlay" onclick="closeFactureModal()">
         <div class="modal" id="factureModal" onclick="event.stopPropagation()">
         <div class="modal-header">
-            <h2 class="modal-title">GÃƒÂ©nÃƒÂ©rer une facture</h2>
+            <h2 class="modal-title">Générer une facture</h2>
             <button class="modal-close" onclick="closeFactureModal()">&times;</button>
         </div>
         <div class="modal-body">
@@ -499,7 +500,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         <input type="text" id="client_search" autocomplete="off" placeholder="Rechercher un client (ex: A, AB...)" aria-describedby="client_search_hint">
                         <input type="hidden" name="factureClient" id="factureClient" value="">
                         <div id="client_suggestions" class="client-suggestions" role="listbox" aria-label="Suggestions clients" style="display: none;"></div>
-                        <div id="client_search_hint" class="input-hint">Tapez pour rechercher par nom (prÃƒÂ©fixe)</div>
+                        <div id="client_search_hint" class="input-hint">Tapez pour rechercher par nom (préfixe)</div>
                     </div>
                     <div class="modal-form-group">
                         <label for="factureDate">Date de facture <span style="color: #ef4444;">*</span></label>
@@ -520,18 +521,18 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     <div class="modal-form-group">
                         <label for="factureOffre">Offre <span style="color: #ef4444;">*</span></label>
                         <select id="factureOffre" name="factureOffre" onchange="onFactureOffreChange()">
-                            <option value="">SÃƒÂ©lectionner une offre</option>
+                            <option value="">Sélectionner une offre</option>
                             <option value="1000">Offre 1000 copies</option>
                             <option value="2000">Offre 2000 copies</option>
                         </select>
-                        <div class="input-hint">Offre 2000: nÃƒÂ©cessite 2 photocopieurs</div>
+                        <div class="input-hint">Offre 2000: nécessite 2 photocopieurs</div>
                     </div>
                     <div class="modal-form-group">
-                        <label for="factureDateDebut">Date dÃƒÂ©but pÃƒÂ©riode</label>
+                        <label for="factureDateDebut">Date début période</label>
                         <input type="date" id="factureDateDebut" name="factureDateDebut" onchange="loadConsommationData()">
                     </div>
                     <div class="modal-form-group">
-                        <label for="factureDateFin">Date fin pÃƒÂ©riode</label>
+                        <label for="factureDateFin">Date fin période</label>
                         <input type="date" id="factureDateFin" name="factureDateFin" onchange="loadConsommationData()">
                     </div>
                 </div>
@@ -540,13 +541,13 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                 <div id="factureAchatFields" style="display: none;">
                     <div class="facture-lignes-container" style="margin-bottom: 1rem;">
                         <div class="facture-lignes-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                            <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Produits ÃƒÂ  facturer</h3>
+                            <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Produits à facturer</h3>
                             <button type="button" class="btn btn-secondary" onclick="addAchatProduit()" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
                                 + Ajouter un produit
                             </button>
                         </div>
                         <div id="factureAchatProduits">
-                            <!-- Les produits seront ajoutÃƒÂ©s ici dynamiquement -->
+                            <!-- Les produits seront ajoutés ici dynamiquement -->
                         </div>
                     </div>
                 </div>
@@ -556,10 +557,10 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     <div class="modal-form-row">
                         <div class="modal-form-group" style="flex: 1;">
                             <label for="factureServiceDescription">Description du service <span style="color: #ef4444;">*</span></label>
-                            <input type="text" id="factureServiceDescription" name="serviceDescription" placeholder="Ex: Maintenance, RÃƒÂ©paration, Installation..." onchange="calculateFactureTotalService()">
+                            <input type="text" id="factureServiceDescription" name="serviceDescription" placeholder="Ex: Maintenance, Réparation, Installation..." onchange="calculateFactureTotalService()">
                         </div>
                         <div class="modal-form-group" style="flex: 0 0 200px;">
-                            <label for="factureServiceMontant">Montant HT (Ã¢â€šÂ¬) <span style="color: #ef4444;">*</span></label>
+                            <label for="factureServiceMontant">Montant HT (€) <span style="color: #ef4444;">*</span></label>
                             <input type="number" id="factureServiceMontant" name="serviceMontant" step="0.01" min="0" placeholder="0.00" onchange="calculateFactureTotalService()">
                         </div>
                     </div>
@@ -567,7 +568,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
 
                 <!-- Zone de notifications client -->
                 <div id="factureClientNotifications" style="display: none; margin-bottom: 1rem;">
-                    <!-- Les notifications seront ajoutÃƒÂ©es ici dynamiquement -->
+                    <!-- Les notifications seront ajoutées ici dynamiquement -->
                 </div>
 
                 <div id="factureConsommationInfo" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
@@ -584,22 +585,22 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                 <div class="facture-totaux">
                     <div class="facture-totaux-row">
                         <span>Total HT :</span>
-                        <span><input type="number" id="factureMontantHT" name="montant_ht" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 600; width: 120px;"> Ã¢â€šÂ¬</span>
+                        <span><input type="number" id="factureMontantHT" name="montant_ht" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 600; width: 120px;"> €</span>
                     </div>
                     <div class="facture-totaux-row">
                         <span>TVA (20%) :</span>
-                        <span><input type="number" id="factureTVA" name="tva" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 600; width: 120px; -moz-appearance: textfield;"> Ã¢â€šÂ¬</span>
+                        <span><input type="number" id="factureTVA" name="tva" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 600; width: 120px; -moz-appearance: textfield;"> €</span>
                     </div>
                     <div class="facture-totaux-row total">
                         <span>Total TTC :</span>
-                        <span><input type="number" id="factureMontantTTC" name="montant_ttc" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 700; width: 120px; font-size: 1.25rem;"> Ã¢â€šÂ¬</span>
+                        <span><input type="number" id="factureMontantTTC" name="montant_ttc" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 700; width: 120px; font-size: 1.25rem;"> €</span>
                     </div>
                 </div>
             </form>
         </div>
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" onclick="closeFactureModal()">Annuler</button>
-            <button type="submit" form="factureForm" class="btn btn-primary" id="btnGenererFacture">GÃƒÂ©nÃƒÂ©rer la facture</button>
+            <button type="submit" form="factureForm" class="btn btn-primary" id="btnGenererFacture">Générer la facture</button>
         </div>
         </div>
     </div>
@@ -622,7 +623,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             <input 
                                 type="text" 
                                 id="historiquePaiementsSearchInput" 
-                                placeholder="Rechercher par facture, client, rÃƒÂ©fÃƒÂ©rence, mode de paiement..." 
+                                placeholder="Rechercher par facture, client, référence, mode de paiement..." 
                                 style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
                                 oninput="filterHistoriquePaiements()"
                             />
@@ -647,21 +648,21 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             Tous
                         </button>
                         <button class="filter-btn" data-filter="recu" onclick="filterHistoriquePaiementsByStatus('recu')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            ReÃƒÂ§u
+                            Reçu
                         </button>
                         <button class="filter-btn" data-filter="en_cours" onclick="filterHistoriquePaiementsByStatus('en_cours')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
                             En cours
                         </button>
                         <button class="filter-btn" data-filter="refuse" onclick="filterHistoriquePaiementsByStatus('refuse')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            RefusÃƒÂ©
+                            Refusé
                         </button>
                         <button class="filter-btn" data-filter="annule" onclick="filterHistoriquePaiementsByStatus('annule')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            AnnulÃƒÂ©
+                            Annulé
                         </button>
                     </div>
                     
                     <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                        <span><span id="historiquePaiementsCount">0</span> paiement(s) trouvÃƒÂ©(s)</span>
+                        <span><span id="historiquePaiementsCount">0</span> paiement(s) trouvé(s)</span>
                         <span id="historiquePaiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
                     </div>
                     <div style="overflow-x: auto;">
@@ -673,13 +674,13 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
                                     <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant</th>
                                     <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Mode</th>
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">RÃƒÂ©fÃƒÂ©rence</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Référence</th>
                                     <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Statut</th>
                                     <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="historiquePaiementsTableBody">
-                                <!-- Les paiements seront ajoutÃƒÂ©s ici dynamiquement -->
+                                <!-- Les paiements seront ajoutés ici dynamiquement -->
                             </tbody>
                         </table>
                     </div>
@@ -711,7 +712,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         <input type="hidden" name="csrf_token" id="factureMailFormCsrf" value="<?= h($_SESSION['csrf_token'] ?? '') ?>">
                         <div class="modal-form-group client-autocomplete-wrap">
                             <label for="facture_search">Facture <span class="required">*</span></label>
-                            <input type="text" id="facture_search" autocomplete="off" placeholder="Rechercher une factureÃ¢â‚¬Â¦" aria-describedby="facture_search_hint">
+                            <input type="text" id="facture_search" autocomplete="off" placeholder="Rechercher une facture…" aria-describedby="facture_search_hint">
                             <input type="hidden" name="facture_id" id="facture_id" value="">
                             <div id="facture_suggestions" class="client-suggestions" role="listbox" aria-label="Suggestions factures" style="display: none;"></div>
                             <div id="facture_search_hint" class="input-hint">Tapez le nom du client pour rechercher ses factures</div>
@@ -725,24 +726,24 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         <div class="modal-form-group">
                             <label for="factureMailEmail">Email du destinataire <span class="required">*</span></label>
                             <input type="email" id="factureMailEmail" name="email" required placeholder="client@example.com">
-                            <div class="input-hint">L'email sera prÃƒÂ©-rempli avec l'email du client si disponible</div>
+                            <div class="input-hint">L'email sera pré-rempli avec l'email du client si disponible</div>
                         </div>
 
                         <div class="modal-form-group">
                             <label for="factureMailSujet">Sujet de l'email</label>
-                            <input type="text" id="factureMailSujet" name="sujet" placeholder="Facture - [NumÃƒÂ©ro de facture]">
-                            <div class="input-hint">Le sujet sera prÃƒÂ©-rempli avec un texte par dÃƒÂ©faut</div>
+                            <input type="text" id="factureMailSujet" name="sujet" placeholder="Facture - [Numéro de facture]">
+                            <div class="input-hint">Le sujet sera pré-rempli avec un texte par défaut</div>
                         </div>
 
                         <div class="modal-form-group">
                             <label for="factureMailMessage">Message (optionnel)</label>
-                            <textarea id="factureMailMessage" name="message" rows="5" placeholder="Message personnalisÃƒÂ© ÃƒÂ  inclure dans l'email..."></textarea>
-                            <div class="input-hint">Le message sera ajoutÃƒÂ© avant la piÃƒÂ¨ce jointe de la facture</div>
+                            <textarea id="factureMailMessage" name="message" rows="5" placeholder="Message personnalisé à inclure dans l'email..."></textarea>
+                            <div class="input-hint">Le message sera ajouté avant la pièce jointe de la facture</div>
                         </div>
                     </form>
                 </div>
 
-                <!-- Zone de rÃƒÂ©sultat (succÃƒÂ¨s/erreur) -->
+                <!-- Zone de résultat (succès/erreur) -->
                 <div id="factureMailResult" class="facture-mail-result" style="display: none;">
                     <div class="result-content">
                         <div class="result-icon"></div>
@@ -768,21 +769,21 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
         </div>
     </div>
 
-    <!-- Modal GÃƒÂ©nÃƒÂ©ration Facture Clients -->
+    <!-- Modal Génération Facture Clients -->
     <div class="modal-overlay" id="generationFactureClientsModalOverlay" onclick="closeGenerationFactureClientsModal()">
         <div class="modal" id="generationFactureClientsModal" onclick="event.stopPropagation()" style="max-width: 1200px;">
             <div class="modal-header">
-                <h2 class="modal-title">GÃƒÂ©nÃƒÂ©ration de factures pour clients</h2>
+                <h2 class="modal-title">Génération de factures pour clients</h2>
                 <button class="modal-close" onclick="closeGenerationFactureClientsModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="generationFactureClientsForm" onsubmit="submitGenerationFactureClientsForm(event)">
                     <input type="hidden" name="csrf_token" id="generationFactureClientsFormCsrf" value="<?= h($_SESSION['csrf_token'] ?? '') ?>">
                     <div class="modal-form-group" style="padding: 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
-                        <div style="font-weight: 600; color: #92400E; margin-bottom: 0.5rem;">Ã¢â€žÂ¹Ã¯Â¸Â GÃƒÂ©nÃƒÂ©ration automatique</div>
+                        <div style="font-weight: 600; color: #92400E; margin-bottom: 0.5rem;">ℹ️Â Génération automatique</div>
                         <div style="font-size: 0.875rem; color: #92400E;">
-                            Les factures seront gÃƒÂ©nÃƒÂ©rÃƒÂ©es automatiquement pour tous les clients valides de la pÃƒÂ©riode sÃƒÂ©lectionnÃƒÂ©e.
-                            Les clients sans imprimantes ou sans relevÃƒÂ© depuis plus d'un mois seront exclus automatiquement.
+                            Les factures seront générées automatiquement pour tous les clients valides de la période sélectionnée.
+                            Les clients sans imprimantes ou sans relevé depuis plus d'un mois seront exclus automatiquement.
                         </div>
                     </div>
 
@@ -797,20 +798,20 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                                 <option value="1000">Offre 1000 (1 imprimante)</option>
                                 <option value="2000">Offre 2000 (2 imprimantes)</option>
                             </select>
-                            <div class="input-hint">SÃƒÂ©lectionnez l'offre ÃƒÂ  appliquer pour tous les clients</div>
+                            <div class="input-hint">Sélectionnez l'offre à appliquer pour tous les clients</div>
                         </div>
                     </div>
 
                     <div class="modal-form-row">
                         <div class="modal-form-group">
-                            <label for="genFactureDateDebut">Date dÃƒÂ©but pÃƒÂ©riode <span style="color: #ef4444;">*</span></label>
+                            <label for="genFactureDateDebut">Date début période <span style="color: #ef4444;">*</span></label>
                             <input type="date" id="genFactureDateDebut" name="date_debut" required>
-                            <div class="input-hint">Si aucun relevÃƒÂ© ÃƒÂ  cette date, le dernier relevÃƒÂ© disponible sera utilisÃƒÂ©</div>
+                            <div class="input-hint">Si aucun relevé à cette date, le dernier relevé disponible sera utilisé</div>
                         </div>
                         <div class="modal-form-group">
-                            <label for="genFactureDateFin">Date fin pÃƒÂ©riode <span style="color: #ef4444;">*</span></label>
+                            <label for="genFactureDateFin">Date fin période <span style="color: #ef4444;">*</span></label>
                             <input type="date" id="genFactureDateFin" name="date_fin" required>
-                            <div class="input-hint">Si aucun relevÃƒÂ© ÃƒÂ  cette date, le dernier relevÃƒÂ© disponible sera utilisÃƒÂ©</div>
+                            <div class="input-hint">Si aucun relevé à cette date, le dernier relevé disponible sera utilisé</div>
                         </div>
                     </div>
 
@@ -826,7 +827,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     
                     <!-- Progress Status Text -->
                     <div class="progress-status-text" id="genFactureProgressStatus">
-                        GÃƒÂ©nÃƒÂ©ration en cours...
+                        Génération en cours...
                     </div>
                     
                     <!-- Progress Bar Container -->
@@ -838,19 +839,19 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         </div>
                     </div>
                     
-                    <!-- Statistiques en temps rÃƒÂ©el -->
+                    <!-- Statistiques en temps réel -->
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
                         <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
                             <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
                                 <span id="genFactureStatsClients">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Clients traitÃƒÂ©s</div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Clients traités</div>
                         </div>
                         <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
                             <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
                                 <span id="genFactureStatsGenerees">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Factures gÃƒÂ©nÃƒÂ©rÃƒÂ©es</div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Factures générées</div>
                         </div>
                         <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
                             <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
@@ -860,16 +861,16 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         </div>
                     </div>
                     
-                    <!-- Liste des rÃƒÂ©sultats en temps rÃƒÂ©el -->
+                    <!-- Liste des résultats en temps réel -->
                     <div id="genFactureProgressLog" style="margin-top: 1.5rem; max-height: 200px; overflow-y: auto; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); padding: 1rem; display: none;">
-                        <div style="font-weight: 600; color: #1a202c; margin-bottom: 0.75rem; font-size: 0.9rem;">DÃƒÂ©tails de la gÃƒÂ©nÃƒÂ©ration:</div>
+                        <div style="font-weight: 600; color: #1a202c; margin-bottom: 0.75rem; font-size: 0.9rem;">Détails de la génération:</div>
                         <div id="genFactureProgressLogContent" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeGenerationFactureClientsModal()" id="btnCancelGeneration">Annuler</button>
-                <button type="submit" form="generationFactureClientsForm" class="btn btn-primary" id="btnGenererFacturesClients">GÃƒÂ©nÃƒÂ©rer les factures</button>
+                <button type="submit" form="generationFactureClientsForm" class="btn btn-primary" id="btnGenererFacturesClients">Générer les factures</button>
             </div>
         </div>
     </div>
@@ -892,7 +893,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             <input 
                                 type="text" 
                                 id="envoiMasseSearchInput" 
-                                placeholder="Rechercher par numÃƒÂ©ro, client, date..." 
+                                placeholder="Rechercher par numéro, client, date..." 
                                 style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
                                 oninput="filterEnvoiMasseFactures()"
                             />
@@ -911,16 +912,16 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         </div>
                     </div>
                     
-                    <!-- Actions de sÃƒÂ©lection -->
+                    <!-- Actions de sélection -->
                     <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                         <button type="button" class="btn btn-secondary" onclick="selectAllEnvoiMasse()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-                            Tout sÃƒÂ©lectionner
+                            Tout sélectionner
                         </button>
                         <button type="button" class="btn btn-secondary" onclick="deselectAllEnvoiMasse()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-                            Tout dÃƒÂ©sÃƒÂ©lectionner
+                            Tout désélectionner
                         </button>
                         <span style="margin-left: auto; font-weight: 600; color: var(--text-primary);">
-                            <span id="envoiMasseSelectedCount">0</span> facture(s) sÃƒÂ©lectionnÃƒÂ©e(s)
+                            <span id="envoiMasseSelectedCount">0</span> facture(s) sélectionnée(s)
                         </span>
                     </div>
                     
@@ -936,7 +937,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                                     <th style="padding: 0.75rem; text-align: center; width: 50px;">
                                         <input type="checkbox" id="envoiMasseSelectAll" onchange="toggleSelectAllEnvoiMasse(this)">
                                     </th>
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">NumÃƒÂ©ro</th>
+                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
                                     <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant TTC</th>
@@ -945,7 +946,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                                 </tr>
                             </thead>
                             <tbody id="envoiMasseTableBody">
-                                <!-- Les factures seront ajoutÃƒÂ©es ici dynamiquement -->
+                                <!-- Les factures seront ajoutées ici dynamiquement -->
                             </tbody>
                         </table>
                     </div>
@@ -975,7 +976,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         </div>
                     </div>
                     
-                    <!-- Statistiques en temps rÃƒÂ©el -->
+                    <!-- Statistiques en temps réel -->
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
                         <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
                             <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
@@ -987,19 +988,19 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                             <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
                                 <span id="envoiMasseStatsSuccess">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">EnvoyÃƒÂ©es</div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Envoyées</div>
                         </div>
                         <div style="text-align: center; padding: 1rem; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.3);">
                             <div style="font-size: 2rem; font-weight: 700; color: #1a202c; margin-bottom: 0.25rem;">
                                 <span id="envoiMasseStatsFailed">0</span>
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Ãƒâ€°checs</div>
+                            <div style="font-size: 0.85rem; color: rgba(26,32,44,0.9); font-weight: 500;">Échecs</div>
                         </div>
                     </div>
                     
-                    <!-- Liste des rÃƒÂ©sultats -->
+                    <!-- Liste des résultats -->
                     <div id="envoiMasseProgressLog" style="margin-top: 1.5rem; max-height: 300px; overflow-y: auto; background: rgba(255,255,255,0.8); border-radius: var(--radius-md); padding: 1rem; display: none;">
-                        <div style="font-weight: 600; color: #1a202c; margin-bottom: 0.75rem; font-size: 0.9rem;">DÃƒÂ©tails de l'envoi:</div>
+                        <div style="font-weight: 600; color: #1a202c; margin-bottom: 0.75rem; font-size: 0.9rem;">Détails de l'envoi:</div>
                         <div id="envoiMasseProgressLogContent" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
                     </div>
                 </div>
@@ -1007,7 +1008,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeEnvoiMasseModal()" id="btnCancelEnvoiMasse">Fermer</button>
                 <button type="button" class="btn btn-primary" id="btnEnvoyerMasse" onclick="submitEnvoiMasse()" disabled>
-                    Envoyer les factures sÃƒÂ©lectionnÃƒÂ©es
+                    Envoyer les factures sélectionnées
                 </button>
             </div>
         </div>
@@ -1028,12 +1029,12 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                         <select id="payerFacture" name="facture_id" required>
                             <option value="">Chargement des factures...</option>
                         </select>
-                        <div class="input-hint">SÃƒÂ©lectionnez la facture ÃƒÂ  payer</div>
+                        <div class="input-hint">Sélectionnez la facture à payer</div>
                     </div>
 
                     <div class="modal-form-row">
                         <div class="modal-form-group">
-                            <label for="payerMontant">Montant (Ã¢â€šÂ¬) <span style="color: #ef4444;">*</span></label>
+                            <label for="payerMontant">Montant (€) <span style="color: #ef4444;">*</span></label>
                             <input type="number" id="payerMontant" name="montant" step="0.01" min="0" required placeholder="0.00">
                         </div>
                         <div class="modal-form-group">
@@ -1045,20 +1046,20 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
                     <div class="modal-form-group">
                         <label for="payerMode">Mode de paiement <span style="color: #ef4444;">*</span></label>
                         <select id="payerMode" name="mode_paiement" required>
-                            <option value="">SÃƒÂ©lectionner un mode de paiement</option>
+                            <option value="">Sélectionner un mode de paiement</option>
                             <option value="cb">Carte bancaire</option>
-                            <option value="cheque">ChÃƒÂ¨que</option>
+                            <option value="cheque">Chèque</option>
                             <option value="virement">Virement</option>
-                            <option value="especes">EspÃƒÂ¨ce</option>
+                            <option value="especes">Espèce</option>
                             <option value="autre">Autre paiement</option>
                         </select>
-                        <div class="input-hint">EspÃƒÂ¨ce et Carte bancaire : statut "PayÃƒÂ©" automatique. Autres modes : statut "En cours"</div>
+                        <div class="input-hint">Espèce et Carte bancaire : statut "Payé" automatique. Autres modes : statut "En cours"</div>
                     </div>
 
                     <div class="modal-form-group">
-                        <label for="payerReference">RÃƒÂ©fÃƒÂ©rence du paiement</label>
-                        <input type="text" id="payerReference" name="reference" readonly style="background-color: var(--bg-secondary); cursor: not-allowed;" placeholder="GÃƒÂ©nÃƒÂ©rÃƒÂ©e automatiquement">
-                        <div class="input-hint">La rÃƒÂ©fÃƒÂ©rence sera gÃƒÂ©nÃƒÂ©rÃƒÂ©e automatiquement au format P + annÃƒÂ©e + mois + jour + numÃƒÂ©ro unique (ex: P20251229001)</div>
+                        <label for="payerReference">Référence du paiement</label>
+                        <input type="text" id="payerReference" name="reference" readonly style="background-color: var(--bg-secondary); cursor: not-allowed;" placeholder="Générée automatiquement">
+                        <div class="input-hint">La référence sera générée automatiquement au format P + année + mois + jour + numéro unique (ex: P20251229001)</div>
                     </div>
 
                     <div class="modal-form-group">
@@ -1069,7 +1070,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
 
                     <div class="modal-form-group">
                         <label for="payerCommentaire">Commentaire</label>
-                        <textarea id="payerCommentaire" name="commentaire" rows="3" placeholder="Notes supplÃƒÂ©mentaires sur ce paiement..."></textarea>
+                        <textarea id="payerCommentaire" name="commentaire" rows="3" placeholder="Notes supplémentaires sur ce paiement..."></textarea>
                     </div>
                 </form>
             </div>
@@ -1080,7 +1081,7 @@ ensureCsrfToken(); // GÃƒÂ©nÃƒÂ¨re le token CSRF si manquant (pour le fo
         </div>
     </div>
 
-    <script src="/assets/js/paiements.js"></script>
+    <script src="/assets/js/paiements.js" charset="UTF-8"></script>
 </body>
 </html>
 
