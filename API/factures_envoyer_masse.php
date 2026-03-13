@@ -19,6 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
 
+requireCsrfToken();
+
 try {
     $pdo = getPdo();
     

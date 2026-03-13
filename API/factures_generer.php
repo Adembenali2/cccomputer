@@ -17,6 +17,8 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
         jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
     }
 
+    requireCsrfToken();
+
     try {
         $pdo = getPdo();
 
