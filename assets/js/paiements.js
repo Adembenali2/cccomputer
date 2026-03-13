@@ -2270,10 +2270,11 @@
         function resetFactureSearch() {
             const searchInput = document.getElementById('facture_search');
             const hiddenInput = document.getElementById('facture_id');
-            const suggestions = document.getElementById('facture_suggestions');
             if (searchInput) searchInput.value = '';
             if (hiddenInput) hiddenInput.value = '';
-            if (suggestions) { suggestions.innerHTML = ''; suggestions.style.display = 'none'; }
+            hideFactureSearchPanel('facture');
+            const filterQ = document.getElementById('factureSearchFilterQ');
+            if (filterQ) filterQ.value = '';
         }
 
         /**
@@ -2300,140 +2301,350 @@
         };
 
         /**
-         * Autocomplete facture - debounce, AbortController, clavier
+         * Format display text pour une facture
          */
-        (function initFactureAutocomplete() {
-            const DEBOUNCE_MS = 200;
+        function formatFactureDisplayText(r) {
+            return `N°${r.numero} - ${r.client_nom} - ${r.date_emission}`;
+        }
+
+        /**
+         * Sélectionne une facture (modal email - sélection unique)
+         */
+        function selectFacture(r) {
             const searchInput = document.getElementById('facture_search');
             const hiddenInput = document.getElementById('facture_id');
-            const suggestionsEl = document.getElementById('facture_suggestions');
-            if (!searchInput || !hiddenInput || !suggestionsEl) return;
+            if (!searchInput || !hiddenInput) return;
+            hiddenInput.value = String(r.id);
+            searchInput.value = formatFactureDisplayText(r);
+            hideFactureSearchPanel('facture');
+            factureMailState.selectedFacture = {
+                id: String(r.id),
+                numero: r.numero,
+                emailEnvoye: r.email_envoye || 0,
+                dateEnvoi: r.date_envoi_email || ''
+            };
+            const emailInput = document.getElementById('factureMailEmail');
+            if (emailInput) emailInput.value = r.client_email || '';
+            const sujetInput = document.getElementById('factureMailSujet');
+            if (sujetInput) sujetInput.value = `Facture ${r.numero} - CC Computer`;
+            updateFactureMailStatus(String(r.email_envoye || 0), r.date_envoi_email || '');
+            const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
+            if (btnRenvoyer) {
+                if (r.email_envoye === 1) {
+                    btnRenvoyer.style.display = 'inline-block';
+                    btnRenvoyer.disabled = false;
+                } else {
+                    btnRenvoyer.style.display = 'none';
+                    btnRenvoyer.disabled = true;
+                }
+            }
+        }
+
+        /**
+         * Charge les factures depuis l'API et affiche les résultats
+         */
+        async function factureSearchLoad(context, params) {
+            const cfg = context === 'facture' ? {
+                panel: 'factureSearchPanel',
+                results: 'facture_search_results',
+                loading: 'facture_search_loading',
+                empty: 'facture_search_empty',
+                filterQ: 'factureSearchFilterQ',
+                filterNom: 'factureSearchFilterNom',
+                filterPrenom: 'factureSearchFilterPrenom',
+                filterNumero: 'factureSearchFilterNumero',
+                filterEmail: 'factureSearchFilterEmail',
+                filterDate: 'factureSearchFilterDate',
+                filterStatut: 'factureSearchFilterStatut'
+            } : {
+                panel: 'progFactureSearchPanel',
+                results: 'progFactureSearchResults',
+                loading: 'progFactureSearchLoading',
+                empty: 'progFactureSearchEmpty',
+                filterQ: 'progFactureSearchFilterQ',
+                filterNom: 'progFactureSearchFilterNom',
+                filterPrenom: 'progFactureSearchFilterPrenom',
+                filterNumero: 'progFactureSearchFilterNumero',
+                filterEmail: 'progFactureSearchFilterEmail',
+                filterDate: 'progFactureSearchFilterDate',
+                filterStatut: 'progFactureSearchFilterStatut'
+            };
+            const resultsEl = document.getElementById(cfg.results);
+            const loadingEl = document.getElementById(cfg.loading);
+            const emptyEl = document.getElementById(cfg.empty);
+            if (!resultsEl || !loadingEl || !emptyEl) return [];
+
+            loadingEl.style.display = 'block';
+            resultsEl.style.display = 'none';
+            emptyEl.style.display = 'none';
+
+            const q = (params && params.q) || '';
+            const nom = (params && params.nom) || '';
+            const prenom = (params && params.prenom) || '';
+            const numero = (params && params.numero_facture) || '';
+            const email = (params && params.email) || '';
+            const date = (params && params.date) || '';
+            const statut = (params && params.statut) || '';
+
+            const searchParams = new URLSearchParams();
+            if (q) searchParams.set('q', q);
+            if (nom) searchParams.set('nom', nom);
+            if (prenom) searchParams.set('prenom', prenom);
+            if (numero) searchParams.set('numero_facture', numero);
+            if (email) searchParams.set('email', email);
+            if (date) searchParams.set('date', date);
+            if (statut) searchParams.set('statut', statut);
+            searchParams.set('limit', '25');
+
+            try {
+                const res = await fetch('/API/factures_search.php?' + searchParams.toString(), { credentials: 'include' });
+                const data = await res.json();
+                loadingEl.style.display = 'none';
+                if (data.ok && data.results && data.results.length > 0) {
+                    resultsEl.style.display = 'block';
+                    emptyEl.style.display = 'none';
+                    return data.results;
+                }
+                resultsEl.style.display = 'none';
+                emptyEl.style.display = 'block';
+                return [];
+            } catch (e) {
+                loadingEl.style.display = 'none';
+                emptyEl.style.display = 'block';
+                emptyEl.textContent = 'Erreur de chargement';
+                return [];
+            }
+        }
+
+        /**
+         * Affiche les résultats dans le panneau
+         */
+        function factureSearchRenderResults(context, results, multiSelect) {
+            const cfg = context === 'facture' ? {
+                results: 'facture_search_results',
+                empty: 'facture_search_empty'
+            } : {
+                results: 'progFactureSearchResults',
+                empty: 'progFactureSearchEmpty'
+            };
+            const resultsEl = document.getElementById(cfg.results);
+            const emptyEl = document.getElementById(cfg.empty);
+            if (!resultsEl || !emptyEl) return;
+
+            const statutLabels = { brouillon: 'Brouillon', envoyee: 'Envoyée', payee: 'Payée', en_retard: 'En retard', annulee: 'Annulée' };
+            resultsEl.innerHTML = '';
+            results.forEach(r => {
+                const row = document.createElement('div');
+                row.className = 'facture-search-result-row';
+                row.dataset.id = r.id;
+                const montant = r.montant_ttc != null ? r.montant_ttc.toFixed(2).replace('.', ',') + ' €' : '-';
+                const statutLabel = statutLabels[r.statut] || r.statut || '-';
+                if (multiSelect) {
+                    row.innerHTML = `
+                        <input type="checkbox" class="result-checkbox" data-id="${r.id}" onclick="event.stopPropagation()">
+                        <div class="result-content">
+                            <span class="result-numero">${escapeHtml(r.numero || '#' + r.id)}</span>
+                            <span class="result-client">${escapeHtml(r.client_nom || '')}</span>
+                            <span class="result-email">${escapeHtml(r.client_email || '-')}</span>
+                            <span class="result-date">${escapeHtml(r.date_emission || '-')}</span>
+                            <span class="result-montant">${escapeHtml(montant)}</span>
+                            <span class="result-statut">${escapeHtml(statutLabel)}</span>
+                        </div>
+                    `;
+                    row.addEventListener('click', (e) => {
+                        if (!e.target.classList.contains('result-checkbox')) {
+                            const cb = row.querySelector('.result-checkbox');
+                            if (cb) {
+                                cb.checked = !cb.checked;
+                                row.classList.toggle('selected', cb.checked);
+                            }
+                        }
+                    });
+                    row.querySelector('.result-checkbox').addEventListener('change', function() {
+                        row.classList.toggle('selected', this.checked);
+                    });
+                } else {
+                    row.innerHTML = `
+                        <div class="result-content" style="grid-column: 1 / -1;">
+                            <span class="result-numero">${escapeHtml(r.numero || '#' + r.id)}</span>
+                            <span class="result-client">${escapeHtml(r.client_nom || '')}</span>
+                            <span class="result-email">${escapeHtml(r.client_email || '-')}</span>
+                            <span class="result-date">${escapeHtml(r.date_emission || '-')}</span>
+                            <span class="result-montant">${escapeHtml(montant)}</span>
+                            <span class="result-statut">${escapeHtml(statutLabel)}</span>
+                        </div>
+                    `;
+                    row.addEventListener('click', () => selectFacture(r));
+                }
+                resultsEl.appendChild(row);
+            });
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            const div = document.createElement('div');
+            div.textContent = String(s);
+            return div.innerHTML;
+        }
+
+        /**
+         * Affiche le panneau de recherche et charge les résultats
+         */
+        function showFactureSearchPanel(context) {
+            const panelId = context === 'facture' ? 'factureSearchPanel' : 'progFactureSearchPanel';
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+            panel.style.display = 'flex';
+            const params = factureSearchGetFilterParams(context);
+            factureSearchLoad(context, params).then(results => {
+                factureSearchRenderResults(context, results, context === 'prog');
+            });
+        }
+
+        /**
+         * Cache le panneau de recherche
+         */
+        function hideFactureSearchPanel(context) {
+            const panelId = context === 'facture' ? 'factureSearchPanel' : 'progFactureSearchPanel';
+            const panel = document.getElementById(panelId);
+            if (panel) panel.style.display = 'none';
+        }
+
+        /**
+         * Récupère les paramètres des filtres
+         */
+        function factureSearchGetFilterParams(context) {
+            const prefix = context === 'facture' ? 'factureSearchFilter' : 'progFactureSearchFilter';
+            const qEl = document.getElementById(prefix + 'Q');
+            const mainInput = context === 'facture' ? document.getElementById('facture_search') : document.getElementById('progFactureSearch');
+            const q = (mainInput && mainInput.value.trim()) || (qEl && qEl.value.trim()) || '';
+            return {
+                q,
+                nom: (document.getElementById(prefix + 'Nom') || {}).value || '',
+                prenom: (document.getElementById(prefix + 'Prenom') || {}).value || '',
+                numero_facture: (document.getElementById(prefix + 'Numero') || {}).value || '',
+                email: (document.getElementById(prefix + 'Email') || {}).value || '',
+                date: (document.getElementById(prefix + 'Date') || {}).value || '',
+                statut: (document.getElementById(prefix + 'Statut') || {}).value || ''
+            };
+        }
+
+        /**
+         * Applique les filtres et recharge
+         */
+        function factureSearchApplyFilters(context) {
+            const params = factureSearchGetFilterParams(context);
+            factureSearchLoad(context, params).then(results => {
+                factureSearchRenderResults(context, results, context === 'prog');
+            });
+        }
+
+        /**
+         * Init recherche facture - modal email (sélection unique)
+         */
+        (function initFactureSearch() {
+            const DEBOUNCE_MS = 350;
+            const searchInput = document.getElementById('facture_search');
+            const hiddenInput = document.getElementById('facture_id');
+            const panel = document.getElementById('factureSearchPanel');
+            const filterQ = document.getElementById('factureSearchFilterQ');
+            if (!searchInput || !hiddenInput || !panel) return;
 
             let debounceTimer = null;
-            let abortController = null;
-            let currentResults = [];
-            let highlightedIndex = -1;
 
-            function hideSuggestions() {
-                suggestionsEl.innerHTML = '';
-                suggestionsEl.style.display = 'none';
-                highlightedIndex = -1;
-            }
-
-            function formatSuggestionText(r) {
-                return `${r.client_nom} - ${r.numero} - ${r.date_emission}`;
-            }
-
-            function formatDisplayText(r) {
-                return `N°${r.numero} - ${r.client_nom} - ${r.date_emission}`;
-            }
-
-            function selectFacture(r) {
-                hiddenInput.value = String(r.id);
-                searchInput.value = formatDisplayText(r);
-                hideSuggestions();
-                factureMailState.selectedFacture = {
-                    id: String(r.id),
-                    numero: r.numero,
-                    emailEnvoye: r.email_envoye || 0,
-                    dateEnvoi: r.date_envoi_email || ''
-                };
-                const emailInput = document.getElementById('factureMailEmail');
-                if (emailInput) emailInput.value = r.client_email || '';
-                const sujetInput = document.getElementById('factureMailSujet');
-                if (sujetInput) sujetInput.value = `Facture ${r.numero} - CC Computer`;
-                updateFactureMailStatus(String(r.email_envoye || 0), r.date_envoi_email || '');
-                const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
-                if (btnRenvoyer) {
-                    if (r.email_envoye === 1) {
-                        btnRenvoyer.style.display = 'inline-block';
-                        btnRenvoyer.disabled = false;
-                    } else {
-                        btnRenvoyer.style.display = 'none';
-                        btnRenvoyer.disabled = true;
-                    }
-                }
-            }
-
-            function showSuggestions(results) {
-                currentResults = results;
-                highlightedIndex = -1;
-                suggestionsEl.innerHTML = '';
-                if (results.length === 0) {
-                    suggestionsEl.style.display = 'none';
-                    return;
-                }
-                results.forEach((r, i) => {
-                    const div = document.createElement('div');
-                    div.className = 'client-suggestion-item';
-                    div.setAttribute('role', 'option');
-                    div.setAttribute('data-id', r.id);
-                    div.textContent = formatSuggestionText(r);
-                    div.addEventListener('click', () => selectFacture(r));
-                    suggestionsEl.appendChild(div);
-                });
-                suggestionsEl.style.display = 'block';
-            }
-
-            function updateHighlight() {
-                const items = suggestionsEl.querySelectorAll('.client-suggestion-item');
-                items.forEach((el, i) => el.classList.toggle('active', i === highlightedIndex));
-            }
-
+            searchInput.addEventListener('focus', () => {
+                if (filterQ) filterQ.value = searchInput.value.trim();
+                showFactureSearchPanel('facture');
+            });
             searchInput.addEventListener('input', () => {
                 hiddenInput.value = '';
                 factureMailState.selectedFacture = null;
                 hideFactureMailStatus();
                 const btnRenvoyer = document.getElementById('btnRenvoyerFactureMail');
                 if (btnRenvoyer) btnRenvoyer.style.display = 'none';
-                const q = searchInput.value.trim();
-                if (q.length < 1) {
-                    hideSuggestions();
-                    return;
-                }
+                if (filterQ) filterQ.value = searchInput.value;
                 clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    if (abortController) abortController.abort();
-                    abortController = new AbortController();
-                    fetch('/API/factures_search.php?q=' + encodeURIComponent(q), {
-                        credentials: 'include',
-                        signal: abortController.signal
-                    })
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.ok && data.results) showSuggestions(data.results);
-                            else hideSuggestions();
-                        })
-                        .catch(err => { if (err.name !== 'AbortError') hideSuggestions(); });
-                }, DEBOUNCE_MS);
+                debounceTimer = setTimeout(() => factureSearchApplyFilters('facture'), DEBOUNCE_MS);
             });
-
-            searchInput.addEventListener('keydown', (e) => {
-                const items = suggestionsEl.querySelectorAll('.client-suggestion-item');
-                if (items.length === 0) return;
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
-                    updateHighlight();
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    highlightedIndex = Math.max(highlightedIndex - 1, -1);
-                    updateHighlight();
-                } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (highlightedIndex >= 0 && currentResults[highlightedIndex]) {
-                        selectFacture(currentResults[highlightedIndex]);
-                    }
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    hideSuggestions();
-                }
-            });
-
-            searchInput.addEventListener('blur', () => {
-                setTimeout(hideSuggestions, 150);
+            if (filterQ) {
+                filterQ.addEventListener('input', () => { searchInput.value = filterQ.value; });
+            }
+            document.addEventListener('click', (e) => {
+                if (panel.contains(e.target) || searchInput.contains(e.target)) return;
+                hideFactureSearchPanel('facture');
             });
         })();
+
+        /**
+         * Init recherche facture - modal programmer (sélection multiple)
+         */
+        (function initProgFactureSearch() {
+            const DEBOUNCE_MS = 350;
+            const searchInput = document.getElementById('progFactureSearch');
+            const panel = document.getElementById('progFactureSearchPanel');
+            const filterQ = document.getElementById('progFactureSearchFilterQ');
+            if (!searchInput || !panel) return;
+
+            let debounceTimer = null;
+
+            searchInput.addEventListener('focus', () => {
+                if (filterQ) filterQ.value = searchInput.value.trim();
+                showFactureSearchPanel('prog');
+            });
+            searchInput.addEventListener('input', () => {
+                if (filterQ) filterQ.value = searchInput.value;
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => factureSearchApplyFilters('prog'), DEBOUNCE_MS);
+            });
+            if (filterQ) {
+                filterQ.addEventListener('input', () => { searchInput.value = filterQ.value; });
+            }
+            document.addEventListener('click', (e) => {
+                if (panel.contains(e.target) || searchInput.contains(e.target)) return;
+                hideFactureSearchPanel('prog');
+            });
+        })();
+
+        function progFactureSelectAll() {
+            document.querySelectorAll('#progFactureSearchResults .result-checkbox').forEach(cb => {
+                cb.checked = true;
+                cb.closest('.facture-search-result-row').classList.add('selected');
+            });
+        }
+        function progFactureDeselectAll() {
+            document.querySelectorAll('#progFactureSearchResults .result-checkbox').forEach(cb => {
+                cb.checked = false;
+                cb.closest('.facture-search-result-row').classList.remove('selected');
+            });
+        }
+        function progFactureValidateSelection() {
+            const checked = Array.from(document.querySelectorAll('#progFactureSearchResults .result-checkbox:checked')).map(cb => parseInt(cb.dataset.id));
+            const typeEnvoi = document.getElementById('progTypeEnvoi').value;
+            if (typeEnvoi === 'une_facture') {
+                if (checked.length === 1) {
+                    progFacturesMultiSelected = checked;
+                    document.getElementById('progFactureId').value = checked[0];
+                    const row = document.querySelector(`#progFactureSearchResults .result-checkbox[data-id="${checked[0]}"]`)?.closest('.facture-search-result-row');
+                    const numero = row?.querySelector('.result-numero')?.textContent || '#' + checked[0];
+                    const client = row?.querySelector('.result-client')?.textContent || '';
+                    document.getElementById('progFactureSearch').value = `N°${numero} - ${client}`;
+                    hideFactureSearchPanel('prog');
+                } else if (checked.length > 1) {
+                    showToast('Sélectionnez une seule facture pour ce type d\'envoi', 'error');
+                } else {
+                    showToast('Sélectionnez une facture', 'error');
+                }
+            } else {
+                progFacturesMultiSelected = checked;
+                const listEl = document.getElementById('progFacturesMultiList');
+                if (listEl) {
+                    listEl.innerHTML = progFacturesMultiSelected.length ? progFacturesMultiSelected.map(fid => `<span style="display:inline-block; margin:0.25rem; padding:0.25rem 0.5rem; background:var(--bg-secondary); border-radius:4px;">#${fid} <button type="button" style="margin-left:0.25rem; border:none; background:none; cursor:pointer; color:#ef4444;" onclick="progRemoveFacture(${fid})">&times;</button></span>`).join('') : '<em style="color:var(--text-secondary);">Aucune facture sélectionnée</em>';
+                }
+                document.getElementById('progFactureSearch').value = '';
+                hideFactureSearchPanel('prog');
+                showToast(progFacturesMultiSelected.length + ' facture(s) sélectionnée(s)', 'success');
+            }
+        }
 
         /**
          * Met à jour le badge de statut de la facture
@@ -4051,59 +4262,6 @@
             if (btn) btn.disabled = false;
         }
 
-        // Facture search pour programmer (réutiliser facture_search si disponible)
-        (function initProgFactureSearch() {
-            const input = document.getElementById('progFactureSearch');
-            const suggestions = document.getElementById('progFactureSuggestions');
-            const hidden = document.getElementById('progFactureId');
-            if (!input || !suggestions || !hidden) return;
-            let debounce = null;
-            input.addEventListener('input', () => {
-                clearTimeout(debounce);
-                const q = input.value.trim();
-                if (q.length < 2) { suggestions.style.display = 'none'; return; }
-                debounce = setTimeout(async () => {
-                    try {
-                        const res = await fetch('/API/factures_search.php?q=' + encodeURIComponent(q), { credentials: 'include' });
-                        const data = await res.json();
-                        const factures = data.results || data.factures || [];
-                        if (data.ok && factures.length) {
-                            suggestions.innerHTML = factures.slice(0, 8).map(f => {
-                                const label = `${f.numero || '#' + f.id} - ${f.client_nom || ''} - ${f.date_emission || f.date_facture || ''}`;
-                                return `<div role="option" tabindex="0" style="padding:0.5rem 1rem; cursor:pointer;" data-id="${f.id}" data-numero="${String(f.numero || '#' + f.id).replace(/"/g, '&quot;')}">${label}</div>`;
-                            }).join('');
-                            suggestions.style.display = 'block';
-                            suggestions.querySelectorAll('[data-id]').forEach(el => {
-                                el.addEventListener('click', () => {
-                                    const type = document.getElementById('progTypeEnvoi').value;
-                                    const id = parseInt(el.dataset.id);
-                                    if (type === 'plusieurs_factures' || type === 'toutes_selectionnees') {
-                                        if (!progFacturesMultiSelected.includes(id)) {
-                                            progFacturesMultiSelected.push(id);
-                                            const listEl = document.getElementById('progFacturesMultiList');
-                                            if (listEl) {
-                                                listEl.innerHTML = progFacturesMultiSelected.map(fid => `<span style="display:inline-block; margin:0.25rem; padding:0.25rem 0.5rem; background:var(--bg-secondary); border-radius:4px;">#${fid} <button type="button" style="margin-left:0.25rem; border:none; background:none; cursor:pointer; color:#ef4444;" onclick="progRemoveFacture(${fid})">&times;</button></span>`).join('');
-                                            }
-                                        }
-                                        input.value = '';
-                                    } else {
-                                        hidden.value = id;
-                                        input.value = el.dataset.numero || '#' + id;
-                                    }
-                                    suggestions.style.display = 'none';
-                                });
-                            });
-                        } else {
-                            suggestions.style.display = 'none';
-                        }
-                    } catch (e) {
-                        suggestions.style.display = 'none';
-                    }
-                }, 300);
-            });
-            input.addEventListener('blur', () => setTimeout(() => { suggestions.style.display = 'none'; }, 150));
-        })();
-
         // Exposer les fonctions globalement pour les onclick
         window.openSection = openSection;
         window.openFactureModal = openFactureModal;
@@ -4153,6 +4311,10 @@
         window.progEnvoyerMaintenant = progEnvoyerMaintenant;
         window.progRemoveFacture = progRemoveFacture;
         window.openProgFacturesPicker = openProgFacturesPicker;
+        window.factureSearchApplyFilters = factureSearchApplyFilters;
+        window.progFactureSelectAll = progFactureSelectAll;
+        window.progFactureDeselectAll = progFactureDeselectAll;
+        window.progFactureValidateSelection = progFactureValidateSelection;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');

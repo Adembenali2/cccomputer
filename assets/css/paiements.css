@@ -971,6 +971,135 @@
             color: white;
         }
 
+        /* ====== Facture Search Panel (grand bloc de recherche) ====== */
+        .facture-search-wrap {
+            position: relative;
+        }
+        .facture-search-panel {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 0.5rem;
+            background: var(--bg-primary);
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            z-index: 200;
+            max-height: 420px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .facture-search-filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        .facture-search-filter-input,
+        .facture-search-filter-select {
+            padding: 0.4rem 0.5rem;
+            font-size: 0.85rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--bg-primary);
+        }
+        .facture-search-filter-input:focus,
+        .facture-search-filter-select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+        .facture-search-actions {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        .facture-search-actions .btn-sm {
+            padding: 0.35rem 0.6rem;
+            font-size: 0.8rem;
+        }
+        .facture-search-results {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 280px;
+            padding: 0.5rem;
+        }
+        .facture-search-result-row {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.75rem;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .facture-search-result-row:last-child {
+            border-bottom: none;
+        }
+        .facture-search-result-row:hover {
+            background: var(--bg-secondary);
+        }
+        .facture-search-result-row.selected {
+            background: rgba(59, 130, 246, 0.15);
+            border-left: 3px solid var(--accent-primary);
+        }
+        .facture-search-result-row .result-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--accent-primary);
+        }
+        .facture-search-result-row .result-content {
+            display: grid;
+            grid-template-columns: minmax(80px, 1fr) minmax(120px, 1.5fr) minmax(100px, 1fr) minmax(70px, auto) minmax(60px, auto) minmax(70px, auto);
+            gap: 0.5rem;
+            align-items: center;
+            font-size: 0.875rem;
+        }
+        .facture-search-result-row .result-numero {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .facture-search-result-row .result-client {
+            color: var(--text-primary);
+        }
+        .facture-search-result-row .result-email {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+        .facture-search-result-row .result-date {
+            color: var(--text-secondary);
+        }
+        .facture-search-result-row .result-montant {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .facture-search-result-row .result-statut {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
+        .facture-search-loading {
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        .facture-search-empty {
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
         .facture-lignes-container {
             margin-top: 1rem;
         }

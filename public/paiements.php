@@ -733,16 +733,38 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 <div class="facture-mail-card">
                     <form id="factureMailForm" onsubmit="submitFactureMailForm(event)">
                         <input type="hidden" name="csrf_token" id="factureMailFormCsrf" value="<?= h($_SESSION['csrf_token'] ?? '') ?>">
-                        <div class="modal-form-group client-autocomplete-wrap">
+                        <div class="modal-form-group facture-search-wrap">
                             <label for="facture_search">Facture <span class="required">*</span></label>
-                            <input type="text" id="facture_search" autocomplete="off" placeholder="Rechercher une facture…" aria-describedby="facture_search_hint">
+                            <input type="text" id="facture_search" autocomplete="off" placeholder="Rechercher une facture (nom, numéro, email, date)…" aria-describedby="facture_search_hint">
                             <input type="hidden" name="facture_id" id="facture_id" value="">
-                            <div id="facture_suggestions" class="client-suggestions" role="listbox" aria-label="Suggestions factures" style="display: none;"></div>
-                            <div id="facture_search_hint" class="input-hint">Tapez le nom du client pour rechercher ses factures</div>
+                            <div id="facture_search_hint" class="input-hint">Cliquez sur le champ pour afficher les résultats. Recherche par nom, prénom, email, numéro ou date.</div>
                             <!-- Badge de statut -->
                             <div id="factureMailStatusBadge" class="status-badge" style="display: none;">
                                 <span class="status-badge-icon"></span>
                                 <span class="status-badge-text"></span>
+                            </div>
+                            <!-- Grand panneau de recherche facture -->
+                            <div id="factureSearchPanel" class="facture-search-panel" style="display: none;">
+                                <div class="facture-search-filters">
+                                    <input type="text" id="factureSearchFilterQ" placeholder="Recherche globale…" class="facture-search-filter-input">
+                                    <input type="text" id="factureSearchFilterNom" placeholder="Nom / Raison sociale" class="facture-search-filter-input">
+                                    <input type="text" id="factureSearchFilterPrenom" placeholder="Prénom" class="facture-search-filter-input">
+                                    <input type="text" id="factureSearchFilterNumero" placeholder="N° facture" class="facture-search-filter-input">
+                                    <input type="text" id="factureSearchFilterEmail" placeholder="Email" class="facture-search-filter-input">
+                                    <input type="date" id="factureSearchFilterDate" class="facture-search-filter-input">
+                                    <select id="factureSearchFilterStatut" class="facture-search-filter-select">
+                                        <option value="">Tous les statuts</option>
+                                        <option value="brouillon">Brouillon</option>
+                                        <option value="envoyee">Envoyée</option>
+                                        <option value="payee">Payée</option>
+                                        <option value="en_retard">En retard</option>
+                                        <option value="annulee">Annulée</option>
+                                    </select>
+                                    <button type="button" class="btn btn-secondary" onclick="factureSearchApplyFilters('facture')">Filtrer</button>
+                                </div>
+                                <div id="facture_search_loading" class="facture-search-loading" style="display: none;">Chargement…</div>
+                                <div id="facture_search_results" class="facture-search-results"></div>
+                                <div id="facture_search_empty" class="facture-search-empty" style="display: none;">Aucune facture trouvée</div>
                             </div>
                         </div>
 
@@ -1055,12 +1077,39 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             <option value="toutes_selectionnees">Toutes les factures sélectionnées</option>
                         </select>
                     </div>
-                    <div class="modal-form-group" id="progFactureGroup">
+                    <div class="modal-form-group facture-search-wrap" id="progFactureGroup">
                         <label for="progFactureSearch" id="progFactureGroupLabel">Facture <span style="color: #ef4444;">*</span></label>
-                        <input type="text" id="progFactureSearch" autocomplete="off" placeholder="Rechercher une facture…">
+                        <input type="text" id="progFactureSearch" autocomplete="off" placeholder="Rechercher une facture (nom, numéro, email, date)…">
                         <input type="hidden" name="facture_id" id="progFactureId" value="">
-                        <div id="progFactureSuggestions" class="client-suggestions" style="display: none;"></div>
-                        <div class="input-hint" id="progFactureSearchHint">Tapez le nom du client pour rechercher ses factures</div>
+                        <div class="input-hint" id="progFactureSearchHint">Cliquez pour afficher les résultats. Sélectionnez une ou plusieurs factures.</div>
+                        <!-- Grand panneau de recherche facture - Programmer -->
+                        <div id="progFactureSearchPanel" class="facture-search-panel" style="display: none;">
+                            <div class="facture-search-filters">
+                                <input type="text" id="progFactureSearchFilterQ" placeholder="Recherche globale…" class="facture-search-filter-input">
+                                <input type="text" id="progFactureSearchFilterNom" placeholder="Nom / Raison sociale" class="facture-search-filter-input">
+                                <input type="text" id="progFactureSearchFilterPrenom" placeholder="Prénom" class="facture-search-filter-input">
+                                <input type="text" id="progFactureSearchFilterNumero" placeholder="N° facture" class="facture-search-filter-input">
+                                <input type="text" id="progFactureSearchFilterEmail" placeholder="Email" class="facture-search-filter-input">
+                                <input type="date" id="progFactureSearchFilterDate" class="facture-search-filter-input">
+                                <select id="progFactureSearchFilterStatut" class="facture-search-filter-select">
+                                    <option value="">Tous les statuts</option>
+                                    <option value="brouillon">Brouillon</option>
+                                    <option value="envoyee">Envoyée</option>
+                                    <option value="payee">Payée</option>
+                                    <option value="en_retard">En retard</option>
+                                    <option value="annulee">Annulée</option>
+                                </select>
+                                <button type="button" class="btn btn-secondary" onclick="factureSearchApplyFilters('prog')">Filtrer</button>
+                            </div>
+                            <div class="facture-search-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="progFactureSelectAll()">Tout sélectionner</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="progFactureDeselectAll()">Tout désélectionner</button>
+                                <button type="button" class="btn btn-primary btn-sm" onclick="progFactureValidateSelection()">Valider la sélection</button>
+                            </div>
+                            <div id="progFactureSearchLoading" class="facture-search-loading" style="display: none;">Chargement…</div>
+                            <div id="progFactureSearchResults" class="facture-search-results"></div>
+                            <div id="progFactureSearchEmpty" class="facture-search-empty" style="display: none;">Aucune facture trouvée</div>
+                        </div>
                     </div>
                     <div class="modal-form-group" id="progFacturesMultiGroup" style="display: none;">
                         <label>Factures à envoyer</label>
