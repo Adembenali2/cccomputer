@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "scheduled-factures": "php cron/send_scheduled_factures.php"
+  },
   "require": {
     "php": ">=8.0",
     "endroid/qr-code": "^5.0",

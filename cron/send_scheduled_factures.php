@@ -4,23 +4,61 @@ declare(strict_types=1);
 /**
  * Script cron pour exécuter les envois de factures programmés
  *
- * À exécuter régulièrement (ex: toutes les 5 minutes) :
- *   php cron/send_scheduled_factures.php
- * ou via crontab :
- *   */5 * * * * cd /chemin/vers/projet && php cron/send_scheduled_factures.php >> /var/log/scheduled_factures.log 2>&1
+ * Conçu pour Railway (UTC) - exécution toutes les 5 minutes.
+ * Protection contre exécutions simultanées via lock file.
+ *
+ * Commande : php cron/send_scheduled_factures.php
+ * Ou : composer scheduled-factures
+ *
+ * Railway Cron : */5 * * * * php cron/send_scheduled_factures.php
  */
 
-// Bootstrap minimal (sans session)
+$logPrefix = '[send_scheduled_factures] ';
+
+function logMsg(string $msg): void {
+    global $logPrefix;
+    error_log($logPrefix . $msg);
+}
+
+// === 1. Lock file : empêcher exécutions simultanées ===
+$lockFile = sys_get_temp_dir() . '/send_scheduled_factures.lock';
+$lockFp = @fopen($lockFile, 'c');
+if (!$lockFp) {
+    logMsg('Impossible de créer le fichier de verrou');
+    exit(1);
+}
+if (!flock($lockFp, LOCK_EX | LOCK_NB)) {
+    logMsg('Une autre instance est déjà en cours - abandon');
+    fclose($lockFp);
+    exit(0);
+}
+// Vérifier lock stale (> 15 min)
+$lockMtime = filemtime($lockFile);
+if ($lockMtime && (time() - $lockMtime) > 900) {
+    logMsg('Lock stale détecté (>15 min), reprise');
+}
+ftruncate($lockFp, 0);
+fwrite($lockFp, (string)getmypid());
+fflush($lockFp);
+
+logMsg('Script started');
+
+// === 2. Bootstrap (sans session) ===
 $baseDir = dirname(__DIR__);
+chdir($baseDir);
+
 require_once $baseDir . '/vendor/autoload.php';
 
-// Charger .env si présent
+// Charger .env si présent (local) - Railway injecte les vars directement
 if (file_exists($baseDir . '/.env')) {
     $lines = file($baseDir . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
         if (strpos(trim($line), '#') === 0) continue;
         if (preg_match('/^([^=]+)=(.*)$/', $line, $m)) {
-            $_ENV[trim($m[1])] = trim($m[2], " \t\n\r\0\x0B\"'");
+            $k = trim($m[1]);
+            $v = trim($m[2], " \t\n\r\0\x0B\"'");
+            $_ENV[$k] = $v;
+            putenv($k . '=' . $v);
         }
     }
 }
@@ -29,32 +67,47 @@ require_once $baseDir . '/includes/helpers.php';
 
 use App\Services\InvoiceEmailService;
 
-$logPrefix = '[send_scheduled_factures] ';
-
+// === 3. Connexion DB ===
 try {
     $pdo = getPdo();
 } catch (Throwable $e) {
-    error_log($logPrefix . 'Erreur connexion DB: ' . $e->getMessage());
+    logMsg('Erreur connexion DB: ' . $e->getMessage());
+    flock($lockFp, LOCK_UN);
+    fclose($lockFp);
     exit(1);
 }
 
 $config = require $baseDir . '/config/app.php';
 $invoiceEmailService = new InvoiceEmailService($pdo, $config);
 
-$stmt = $pdo->query("
-    SELECT id, type_envoi, facture_id, factures_json, email_destination, use_client_email, all_clients, sujet, message
-    FROM factures_envois_programmes
-    WHERE statut = 'en_attente' AND date_envoi_programmee <= NOW()
-    ORDER BY date_envoi_programmee ASC
-");
-
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// === 4. Récupérer les programmations à exécuter ===
+// Railway/MySQL : NOW() en UTC par défaut. date_envoi_programmee stockée en UTC.
+try {
+    $stmt = $pdo->query("
+        SELECT id, type_envoi, facture_id, factures_json, email_destination, use_client_email, all_clients, sujet, message
+        FROM factures_envois_programmes
+        WHERE statut = 'en_attente' AND date_envoi_programmee <= NOW()
+        ORDER BY date_envoi_programmee ASC
+    ");
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    logMsg('Erreur SQL: ' . $e->getMessage());
+    flock($lockFp, LOCK_UN);
+    fclose($lockFp);
+    exit(1);
+}
 
 if (empty($rows)) {
+    logMsg('Aucune programmation à exécuter');
+    flock($lockFp, LOCK_UN);
+    fclose($lockFp);
     exit(0);
 }
 
-error_log($logPrefix . count($rows) . ' programmation(s) à exécuter');
+logMsg(count($rows) . ' programmation(s) trouvée(s)');
+
+$totalSent = 0;
+$totalFailed = 0;
 
 foreach ($rows as $prog) {
     $id = (int)$prog['id'];
@@ -78,9 +131,13 @@ foreach ($rows as $prog) {
     $factureIds = array_unique(array_filter($factureIds, fn($x) => $x > 0));
 
     if (empty($factureIds)) {
-        $pdo->prepare("UPDATE factures_envois_programmes SET statut = 'echoue', erreur_message = 'Aucune facture associée' WHERE id = :id")
-            ->execute([':id' => $id]);
-        error_log($logPrefix . "Programmation #{$id} : aucune facture, marquée échouée");
+        try {
+            $pdo->prepare("UPDATE factures_envois_programmes SET statut = 'echoue', erreur_message = 'Aucune facture associée' WHERE id = :id")
+                ->execute([':id' => $id]);
+        } catch (PDOException $e) {
+            logMsg("Programmation #{$id} : erreur UPDATE - " . $e->getMessage());
+        }
+        logMsg("Programmation #{$id} : aucune facture, marquée échouée");
         continue;
     }
 
@@ -97,14 +154,19 @@ foreach ($rows as $prog) {
             $result = $invoiceEmailService->sendInvoiceToEmail($fid, $emailToUse, $sujetOverride, $messageOverride);
             if ($result['success']) {
                 $success++;
+                $totalSent++;
+                logMsg("Facture #{$fid} envoyée");
             } else {
                 $failed++;
+                $totalFailed++;
                 $lastError = $result['message'] ?? 'Erreur';
+                logMsg("Facture #{$fid} échec: " . $lastError);
             }
         } catch (Throwable $e) {
             $failed++;
+            $totalFailed++;
             $lastError = $e->getMessage();
-            error_log($logPrefix . "Facture #{$fid} erreur: " . $e->getMessage());
+            logMsg("Facture #{$fid} erreur: " . $e->getMessage());
         }
         usleep(100000);
     }
@@ -112,17 +174,27 @@ foreach ($rows as $prog) {
     $statut = $failed === 0 ? 'envoye' : ($success > 0 ? 'envoye' : 'echoue');
     $errMsg = $failed > 0 ? ($success . ' envoyé(s), ' . $failed . ' échoué(s)' . ($lastError ? ': ' . substr($lastError, 0, 200) : '')) : null;
 
-    $pdo->prepare("
-        UPDATE factures_envois_programmes 
-        SET statut = :statut, sent_at = NOW(), erreur_message = :err 
-        WHERE id = :id
-    ")->execute([
-        ':statut' => $statut,
-        ':err' => $errMsg,
-        ':id' => $id
-    ]);
+    try {
+        $pdo->prepare("
+            UPDATE factures_envois_programmes 
+            SET statut = :statut, sent_at = NOW(), erreur_message = :err 
+            WHERE id = :id
+        ")->execute([
+            ':statut' => $statut,
+            ':err' => $errMsg,
+            ':id' => $id
+        ]);
+    } catch (PDOException $e) {
+        logMsg("Programmation #{$id} : erreur UPDATE statut - " . $e->getMessage());
+    }
 
-    error_log($logPrefix . "Programmation #{$id} : {$success} succès, {$failed} échec(s)");
+    logMsg("Programmation #{$id} : {$success} succès, {$failed} échec(s)");
 }
+
+logMsg("Script finished - {$totalSent} facture(s) envoyée(s), {$totalFailed} échec(s)");
+
+flock($lockFp, LOCK_UN);
+fclose($lockFp);
+@unlink($lockFile);
 
 exit(0);
