@@ -320,7 +320,7 @@
                     const joursText = dernierReleveJours === 1 ? 'jour' : 'jours';
                     notifications.push({
                         type: 'info',
-                        message: `ℹ️ Aucun relevé de compteur reçu depuis ${dernierReleveJours} ${joursText}.`
+                        message: `ℹ️ Aucun relevé de compteur reçu depuis ${dernierReleveJours} ${joursText}.`
                     });
                 }
                 
@@ -741,7 +741,7 @@
                                 const typeText = ajustement.type === 'debut' ? 'début' : 'fin';
                                 notificationsHtml += `
                                     <div style="padding: 0.75rem 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-bottom: 0.5rem; font-size: 0.875rem; color: #92400E;">
-                                        ℹ️ Aucun relevé reçu le ${ajustement.date_demandee}. Utilisation du dernier relevé disponible du ${ajustement.date_utilisee} (${ajustement.machine}).
+                                        ℹ️ Aucun relevé reçu le ${ajustement.date_demandee}. Utilisation du dernier relevé disponible du ${ajustement.date_utilisee} (${ajustement.machine}).
                                     </div>
                                 `;
                             });
@@ -2321,11 +2321,11 @@
             }
 
             function formatSuggestionText(r) {
-                return `${r.client_nom} – ${r.numero} – ${r.date_emission}`;
+                return `${r.client_nom} - ${r.numero} - ${r.date_emission}`;
             }
 
             function formatDisplayText(r) {
-                return `N°${r.numero} – ${r.client_nom} – ${r.date_emission}`;
+                return `N°${r.numero} - ${r.client_nom} - ${r.date_emission}`;
             }
 
             function selectFacture(r) {
@@ -3861,7 +3861,7 @@
             const type = document.getElementById('progTypeEnvoi').value;
             const factureGroup = document.getElementById('progFactureGroup');
             const multiGroup = document.getElementById('progFacturesMultiGroup');
-            const multiGroupLabel = multiGroup ? multiGroup.querySelector('label');
+            const multiGroupLabel = multiGroup ? multiGroup.querySelector('label') : null;
             const searchHint = document.getElementById('progFactureSearch') ? document.getElementById('progFactureSearch').parentElement : null;
             if (type === 'une_facture') {
                 factureGroup.style.display = 'block';
