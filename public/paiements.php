@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('paiements', []); // Accessible ÃƒÂ  tous les utilisateurs connectÃƒÂ©s
