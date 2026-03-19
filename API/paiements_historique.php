@@ -62,7 +62,7 @@ try {
         
         // Labels pour les statuts
         $statutLabels = [
-            'en_cours' => 'En cours',
+            'en_cours' => 'En attente',
             'recu' => 'Reçu',
             'refuse' => 'Refusé',
             'annule' => 'Annulé'

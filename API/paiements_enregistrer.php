@@ -261,18 +261,28 @@ try {
         $details = sprintf('Facture #%s - Ref: %s - %.2f € - %s', $facture['numero'] ?? $factureId, $reference, $montant, $modePaiement);
         enregistrerAction($pdo, $userId, 'paiement_enregistre', $details);
 
-        // Envoi automatique du reçu par email au client (si PDF généré, pas de justificatif uploadé, et config activée)
+        // Envoi automatique d'email au client selon le mode de paiement
         $appConfig = require __DIR__ . '/../config/app.php';
-        if ($recuPath && !$justificatifPath && ($appConfig['auto_send_receipts'] ?? true)) {
+        $autoSend = $appConfig['auto_send_receipts'] ?? true;
+        if ($autoSend && !$justificatifPath) {
             try {
                 require_once __DIR__ . '/../vendor/autoload.php';
                 $receiptService = new \App\Services\PaymentReceiptEmailService($pdo, $appConfig);
-                $result = $receiptService->sendReceipt((int)$paiementId);
-                if (!$result['success']) {
-                    error_log('[paiements_enregistrer] Envoi auto reçu échoué: ' . ($result['message'] ?? ''));
+                $modesEnAttente = ['virement', 'cheque', 'autre'];
+                if (in_array($modePaiement, $modesEnAttente, true)) {
+                    // Virement/chèque/autre : email "reçu, en attente de validation" (pas de reçu)
+                    $result = $receiptService->sendPendingValidationEmail((int)$paiementId);
+                } elseif ($recuPath && in_array($modePaiement, ['especes', 'cb'], true)) {
+                    // Espèces/CB : envoi du reçu immédiatement
+                    $result = $receiptService->sendReceipt((int)$paiementId);
+                } else {
+                    $result = ['success' => false];
+                }
+                if (isset($result['success']) && !$result['success']) {
+                    error_log('[paiements_enregistrer] Envoi email échoué: ' . ($result['message'] ?? ''));
                 }
             } catch (Throwable $e) {
-                error_log('[paiements_enregistrer] Erreur envoi auto reçu: ' . $e->getMessage());
+                error_log('[paiements_enregistrer] Erreur envoi email: ' . $e->getMessage());
             }
         }
         

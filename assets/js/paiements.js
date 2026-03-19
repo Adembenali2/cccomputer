@@ -2249,9 +2249,24 @@
                         </span>
                     `;
                     
-                    // Actions (justificatif et envoi si disponible)
+                    // Actions (Valider pour en_cours, Voir/Envoyer pour recu)
                     let actions = '<span style="color: var(--text-muted); font-size: 0.85rem;">-</span>';
-                    if (paiement.recu_path) {
+                    if (paiement.statut === 'en_cours') {
+                        actions = `
+                            <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
+                                ${paiement.recu_path ? `
+                                    <button onclick="viewJustificatif('${paiement.recu_path}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                                        Voir
+                                    </button>
+                                ` : ''}
+                                <button onclick="validatePaiement(${paiement.id}, '${(paiement.reference || '').replace(/'/g, "\\'")}')" style="padding: 0.4rem 0.75rem; background: #10b981; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';" title="Valider le paiement et envoyer le reçu au client">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    Valider
+                                </button>
+                            </div>
+                        `;
+                    } else if (paiement.recu_path) {
                         actions = `
                             <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
                                 <button onclick="viewJustificatif('${paiement.recu_path}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
@@ -2264,7 +2279,7 @@
                                     Voir
                                 </button>
                                 ${paiement.client_email ? `
-                                    <button onclick="sendRecuEmail(${paiement.id}, '${paiement.reference || ''}')" style="padding: 0.4rem 0.75rem; background: #10b981; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';" title="Envoyer le reçu par email">
+                                    <button onclick="sendRecuEmail(${paiement.id}, '${(paiement.reference || '').replace(/'/g, "\\'")}')" style="padding: 0.4rem 0.75rem; background: #10b981; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';" title="Envoyer le reçu par email">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                                             <polyline points="22,6 12,13 2,6"></polyline>
@@ -2381,6 +2396,37 @@
         function viewJustificatif(recuPath) {
             if (recuPath) {
                 window.open(recuPath, '_blank');
+            }
+        }
+
+        /**
+         * Valide un paiement (virement/chèque) : en_cours → recu, envoie le reçu au client
+         */
+        async function validatePaiement(paiementId, reference) {
+            if (!paiementId) {
+                (typeof showToast === 'function' ? showToast : alert)('Erreur: ID de paiement manquant', 'error');
+                return;
+            }
+            if (!confirm(`Valider le paiement ${reference || ''} ? Les fonds seront considérés comme reçus et le reçu sera envoyé au client par email.`)) {
+                return;
+            }
+            try {
+                const response = await fetch('/API/paiements_valider.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
+                    body: JSON.stringify({ paiement_id: paiementId, csrf_token: getCsrfToken() }),
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    (typeof showToast === 'function' ? showToast : alert)(data.recu_envoye ? 'Paiement validé. Reçu envoyé au client.' : 'Paiement validé.', 'success');
+                    if (typeof loadHistoriquePaiements === 'function') loadHistoriquePaiements();
+                } else {
+                    (typeof showToast === 'function' ? showToast : alert)('Erreur: ' + (data.error || 'Validation échouée'), 'error');
+                }
+            } catch (error) {
+                console.error('Erreur validation paiement:', error);
+                (typeof showToast === 'function' ? showToast : alert)('Erreur lors de la validation', 'error');
             }
         }
 
@@ -4581,6 +4627,7 @@
         window.filterHistoriquePaiements = filterHistoriquePaiements;
         window.filterHistoriquePaiementsByStatus = filterHistoriquePaiementsByStatus;
         window.viewJustificatif = viewJustificatif;
+        window.validatePaiement = validatePaiement;
         window.sendRecuEmail = sendRecuEmail;
         window.openFactureMailModal = openFactureMailModal;
         window.closeFactureMailModal = closeFactureMailModal;

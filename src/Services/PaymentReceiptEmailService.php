@@ -120,6 +120,143 @@ class PaymentReceiptEmailService
         }
     }
 
+    /**
+     * Envoie l'email "paiement reçu, en attente de validation" (virement/chèque)
+     * Pas de pièce jointe - le reçu sera envoyé à la validation
+     *
+     * @param int $paiementId ID du paiement
+     * @return array ['success' => bool, 'message' => string, 'message_id' => string|null]
+     */
+    public function sendPendingValidationEmail(int $paiementId): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT p.id, p.montant, p.date_paiement, p.mode_paiement, p.reference,
+                c.raison_sociale as client_nom, c.email as client_email
+            FROM paiements p
+            LEFT JOIN clients c ON p.id_client = c.id
+            WHERE p.id = :paiement_id
+            LIMIT 1
+        ");
+        $stmt->execute([':paiement_id' => $paiementId]);
+        $paiement = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        if (!$paiement) {
+            return ['success' => false, 'message' => 'Paiement introuvable', 'message_id' => null];
+        }
+
+        $destEmail = trim($paiement['client_email'] ?? '');
+        if (empty($destEmail) || !filter_var($destEmail, FILTER_VALIDATE_EMAIL)) {
+            return ['success' => false, 'message' => 'Email destinataire invalide ou manquant', 'message_id' => null];
+        }
+
+        $modes = [
+            'virement' => 'virement bancaire',
+            'cheque' => 'chèque',
+            'autre' => 'paiement',
+        ];
+        $modeLabel = $modes[$paiement['mode_paiement']] ?? 'paiement';
+        $modeLabelCap = ucfirst($modeLabel);
+
+        $companyName = $this->config['company']['name'] ?? 'CC Computer';
+        $sujet = "Confirmation de réception de votre {$modeLabelCap} - {$paiement['reference']} - {$companyName}";
+        $textBody = $this->buildPendingTextBody($paiement, $modeLabelCap);
+        $htmlBody = $this->buildPendingHtmlBody($paiement, $modeLabelCap);
+
+        try {
+            if (!empty($_ENV['BREVO_API_KEY'])) {
+                $brevoService = new BrevoApiMailerService();
+                $messageId = $brevoService->sendEmailWithPdf($destEmail, $sujet, $textBody, null, null, $htmlBody);
+            } else {
+                $emailConfig = $this->config['email'] ?? [];
+                $mailerService = new MailerService($emailConfig);
+                $messageId = $mailerService->sendEmail($destEmail, $sujet, $textBody, $htmlBody);
+            }
+
+            return [
+                'success' => true,
+                'message' => 'Email de confirmation envoyé',
+                'message_id' => $messageId,
+                'email' => $destEmail,
+            ];
+        } catch (MailerException $e) {
+            error_log('[PaymentReceiptEmailService] Erreur envoi pending: ' . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage(), 'message_id' => null];
+        }
+    }
+
+    private function buildPendingTextBody(array $paiement, string $modeLabelCap): string
+    {
+        $company = $this->config['company'] ?? [];
+        $companyName = $company['name'] ?? 'CC Computer';
+        $clientNom = trim($paiement['client_nom'] ?? '') ?: 'Client';
+        $montant = number_format((float)$paiement['montant'], 2, ',', ' ') . ' €';
+        $date = date('d/m/Y', strtotime($paiement['date_paiement']));
+
+        $body = "Bonjour {$clientNom},\n\n";
+        $body .= "Nous vous confirmons avoir bien reçu votre {$modeLabelCap} d'un montant de {$montant}.\n\n";
+        $body .= "Votre paiement est actuellement en attente de validation. ";
+        $body .= "Dès que nous aurons confirmé la réception effective des fonds, vous recevrez automatiquement votre reçu de paiement par email.\n\n";
+        $body .= "Détails : Référence {$paiement['reference']} - Date {$date} - Montant {$montant}\n\n";
+        $body .= "Cordialement,\n{$companyName}\n";
+
+        return $body;
+    }
+
+    private function buildPendingHtmlBody(array $paiement, string $modeLabelCap): string
+    {
+        $templatePath = __DIR__ . '/../Mail/templates/payment_pending_email.html';
+        if (!file_exists($templatePath)) {
+            return '';
+        }
+
+        $template = file_get_contents($templatePath);
+        $company = $this->config['company'] ?? [];
+        $companyName = $company['name'] ?? 'CC Computer';
+        $companyAddress = trim($company['address'] ?? '');
+        $billingEmail = trim($company['billing_contact_email'] ?? '');
+        $appUrl = rtrim($this->config['app_url'] ?? '', '/');
+
+        $modes = [
+            'virement' => 'Virement bancaire',
+            'cheque' => 'Chèque',
+            'autre' => 'Autre',
+        ];
+        $modeLibelle = $modes[$paiement['mode_paiement']] ?? $modeLabelCap;
+
+        $clientNom = htmlspecialchars(trim($paiement['client_nom'] ?? '') ?: 'Client', ENT_QUOTES, 'UTF-8');
+        $reference = htmlspecialchars($paiement['reference'] ?? '', ENT_QUOTES, 'UTF-8');
+        $montant = htmlspecialchars(number_format((float)$paiement['montant'], 2, ',', ' ') . ' €', ENT_QUOTES, 'UTF-8');
+        $date = htmlspecialchars(date('d/m/Y', strtotime($paiement['date_paiement'])), ENT_QUOTES, 'UTF-8');
+        $companyNameEsc = htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8');
+
+        $addressBlock = $companyAddress
+            ? '<p class="footer-line">' . htmlspecialchars($companyAddress, ENT_QUOTES, 'UTF-8') . '</p>'
+            : '';
+        $contactBlock = $billingEmail
+            ? '<p class="footer-line"><strong>Contact :</strong> <a href="mailto:' . htmlspecialchars($billingEmail, ENT_QUOTES, 'UTF-8') . '" style="color:#2563eb;text-decoration:none;">' . htmlspecialchars($billingEmail, ENT_QUOTES, 'UTF-8') . '</a></p>'
+            : '';
+
+        $logoUrl = $appUrl ? $appUrl . '/assets/logos/logo.png' : '';
+        $logoBlock = $logoUrl
+            ? '<img src="' . htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8') . '" alt="' . $companyNameEsc . '" class="logo-img" width="140" style="max-width:140px;height:auto;">'
+            : '<span style="font-size:24px;font-weight:bold;color:#232f3e;">' . $companyNameEsc . '</span>';
+
+        $replacements = [
+            '{{logo_block}}' => $logoBlock,
+            '{{company_name}}' => $companyNameEsc,
+            '{{client_name}}' => $clientNom,
+            '{{receipt_reference}}' => $reference,
+            '{{receipt_date}}' => $date,
+            '{{receipt_amount}}' => $montant,
+            '{{payment_mode}}' => htmlspecialchars($modeLibelle, ENT_QUOTES, 'UTF-8'),
+            '{{payment_mode_label}}' => htmlspecialchars($modeLabelCap, ENT_QUOTES, 'UTF-8'),
+            '{{address_block}}' => $addressBlock,
+            '{{contact_block}}' => $contactBlock,
+        ];
+
+        return str_replace(array_keys($replacements), array_values($replacements), $template);
+    }
+
     private function buildTextBody(array $paiement): string
     {
         $company = $this->config['company'] ?? [];
