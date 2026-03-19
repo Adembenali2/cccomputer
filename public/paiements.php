@@ -351,24 +351,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         <button class="filter-btn-factures" data-status="en_cours" onclick="filterFacturesByStatus('en_cours')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem;">En cours</button>
                         <button class="filter-btn-factures" data-status="en_retard" onclick="filterFacturesByStatus('en_retard')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem;">En retard</button>
                     </div>
-                    <!-- Barre de filtres -->
-                    <div style="margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
-                        <div>
-                            <label for="facturesFilterNom" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">Nom / Raison sociale</label>
-                            <input type="text" id="facturesFilterNom" placeholder="Filtrer par nom..." style="width: 100%; padding: 0.6rem 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem;" oninput="filterFactures()">
-                        </div>
-                        <div>
-                            <label for="facturesFilterPrenom" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">Prénom</label>
-                            <input type="text" id="facturesFilterPrenom" placeholder="Filtrer par prénom..." style="width: 100%; padding: 0.6rem 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem;" oninput="filterFactures()">
-                        </div>
-                        <div>
-                            <label for="facturesFilterNumero" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">Numéro de facture</label>
-                            <input type="text" id="facturesFilterNumero" placeholder="Ex: P202603002" style="width: 100%; padding: 0.6rem 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem;" oninput="filterFactures()">
-                        </div>
-                        <div style="display: flex; align-items: flex-end;">
-                            <button type="button" onclick="document.getElementById('facturesFilterNom').value=''; document.getElementById('facturesFilterPrenom').value=''; document.getElementById('facturesFilterNumero').value=''; filterFactures();" style="padding: 0.6rem 1rem; background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; font-size: 0.9rem;">Réinitialiser</button>
-                        </div>
-                    </div>
                     
                     <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                         <span><span id="facturesCount">0</span> facture(s) trouvée(s)</span>

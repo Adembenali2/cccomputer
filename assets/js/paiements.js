@@ -1350,11 +1350,9 @@
             container.style.display = 'none';
             errorDiv.style.display = 'none';
             
-            // Réinitialiser les filtres
-            ['facturesFilterNom', 'facturesFilterPrenom', 'facturesFilterNumero'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.value = '';
-            });
+            // Réinitialiser la recherche
+            const searchEl = document.getElementById('facturesSearchInput');
+            if (searchEl) searchEl.value = '';
             
             try {
                 const response = await fetch('/API/factures_liste.php', {
@@ -1754,9 +1752,6 @@
 
         function filterFactures() {
             let baseFactures = getFacturesForCurrentTab();
-            const filterNom = (document.getElementById('facturesFilterNom')?.value || '').toLowerCase().trim();
-            const filterPrenom = (document.getElementById('facturesFilterPrenom')?.value || '').toLowerCase().trim();
-            const filterNumero = (document.getElementById('facturesFilterNumero')?.value || '').toLowerCase().trim();
             const searchTerm = (document.getElementById('facturesSearchInput')?.value || '').toLowerCase().trim();
 
             // Filtre par statut
@@ -1772,28 +1767,17 @@
                 }
             }
 
-            // Recherche globale
+            // Recherche globale (numéro, client, prénom, date)
             if (searchTerm) {
                 baseFactures = baseFactures.filter(f => {
                     const num = (f.numero || '').toLowerCase();
                     const client = (f.client_nom || '').toLowerCase();
+                    const prenom = (f.client_prenom_dirigeant || '').toLowerCase();
+                    const nomDirigeant = (f.client_nom_dirigeant || '').toLowerCase();
+                    const code = (f.client_code || '').toLowerCase();
                     const date = (f.date_facture_formatted || f.date_facture || '').toLowerCase();
-                    return num.includes(searchTerm) || client.includes(searchTerm) || date.includes(searchTerm);
-                });
-            }
-
-            // Filtres Nom, Prénom, Numéro
-            if (filterNom || filterPrenom || filterNumero) {
-                baseFactures = baseFactures.filter(facture => {
-                    if (filterNumero && (!facture.numero || !facture.numero.toLowerCase().includes(filterNumero))) return false;
-                    if (filterNom) {
-                        const matchNom = (facture.client_nom && facture.client_nom.toLowerCase().includes(filterNom)) ||
-                            (facture.client_nom_dirigeant && facture.client_nom_dirigeant.toLowerCase().includes(filterNom)) ||
-                            (facture.client_code && facture.client_code.toLowerCase().includes(filterNom));
-                        if (!matchNom) return false;
-                    }
-                    if (filterPrenom && (!facture.client_prenom_dirigeant || !facture.client_prenom_dirigeant.toLowerCase().includes(filterPrenom))) return false;
-                    return true;
+                    return num.includes(searchTerm) || client.includes(searchTerm) || prenom.includes(searchTerm) ||
+                        nomDirigeant.includes(searchTerm) || code.includes(searchTerm) || date.includes(searchTerm);
                 });
             }
 
