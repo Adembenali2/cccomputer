@@ -102,13 +102,14 @@ class FactureStatutService
     }
 
     /**
-     * Met à jour le statut d'une facture après un paiement (payee si total payé).
-     * Si pas payée : en_attente/en_cours/en_retard selon date. Ne modifie pas "envoyee".
+     * Met à jour le statut d'une facture après un paiement.
+     * Ne met jamais à jour vers "payee" : le statut reste en_attente/en_cours/en_retard selon la date.
+     * L'affichage "Payé" est calculé côté liste à partir des paiements validés.
      */
     public function updateFactureStatutAfterPayment(int $factureId): void
     {
+        // Ne pas passer en payee : on garde le statut basé sur la date (en_attente, en_cours, en_retard)
         if ($this->isFactureFullyPaid($factureId)) {
-            $this->pdo->prepare("UPDATE factures SET statut = 'payee' WHERE id = ?")->execute([$factureId]);
             return;
         }
         $stmt = $this->pdo->prepare("SELECT date_facture, statut FROM factures WHERE id = ?");

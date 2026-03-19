@@ -86,13 +86,27 @@ try {
         $conditions[] = 'f.numero LIKE :numero';
         $params[':numero'] = '%' . $numeroFacture . '%';
     }
+    $needPayeeSubquery = false;
     if ($statut !== '' && in_array($statut, ['brouillon', 'en_attente', 'envoyee', 'en_cours', 'en_retard', 'payee', 'annulee'], true)) {
-        $conditions[] = 'f.statut = :statut';
-        $params[':statut'] = $statut;
+        if ($statut === 'payee') {
+            $conditions[] = 'COALESCE(p.total_paye, 0) >= f.montant_ttc AND f.montant_ttc > 0';
+            $needPayeeSubquery = true;
+        } else {
+            $conditions[] = 'f.statut = :statut';
+            $params[':statut'] = $statut;
+        }
     }
 
     $whereClause = implode(' AND ', $conditions);
     $params[':limit'] = $limit;
+
+    $joinPayee = $needPayeeSubquery ? "
+        LEFT JOIN (
+            SELECT id_facture, SUM(montant) as total_paye 
+            FROM paiements 
+            WHERE statut = 'recu' 
+            GROUP BY id_facture
+        ) p ON p.id_facture = f.id" : "";
 
     $sql = "
         SELECT 
@@ -110,6 +124,7 @@ try {
             c.numero_client as client_code
         FROM factures f
         JOIN clients c ON c.id = f.id_client
+        {$joinPayee}
         WHERE {$whereClause}
         ORDER BY f.date_facture DESC, f.id DESC
         LIMIT :limit
@@ -133,6 +148,10 @@ try {
         if ($nomComplet === '') {
             $nomComplet = trim(($r['client_nom_dirigeant'] ?? '') . ' ' . ($r['client_prenom_dirigeant'] ?? '')) ?: 'Client inconnu';
         }
+        $rowStatut = $r['statut'] ?? '';
+        if ($statut === 'payee') {
+            $rowStatut = 'payee'; // Filtre payee : toutes les lignes retournées sont payées
+        }
         $results[] = [
             'id' => (int)$r['id'],
             'numero' => $r['numero'] ?? '',
@@ -142,7 +161,7 @@ try {
             'date_emission' => $dateEmission,
             'date_facture' => $dateEmission,
             'montant_ttc' => isset($r['montant_ttc']) ? (float)$r['montant_ttc'] : null,
-            'statut' => $r['statut'] ?? '',
+            'statut' => $rowStatut,
             'email_envoye' => (int)($r['email_envoye'] ?? 0),
             'date_envoi_email' => $r['date_envoi_email'] ?? ''
         ];

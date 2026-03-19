@@ -113,17 +113,24 @@ try {
         $factTableExists = ((int)$checkTable->fetch(PDO::FETCH_ASSOC)['cnt'] > 0);
         
         if ($factTableExists) {
+            // payee = factures entièrement payées (somme paiements recu >= montant_ttc), pas le statut DB
             $factSql = "
                 SELECT 
                     COUNT(*) as total,
-                    SUM(CASE WHEN statut = 'brouillon' THEN 1 ELSE 0 END) as brouillon,
-                    SUM(CASE WHEN statut = 'en_attente' THEN 1 ELSE 0 END) as en_attente,
-                    SUM(CASE WHEN statut = 'envoyee' THEN 1 ELSE 0 END) as envoyee,
-                    SUM(CASE WHEN statut = 'payee' THEN 1 ELSE 0 END) as payee,
-                    SUM(CASE WHEN statut = 'en_retard' THEN 1 ELSE 0 END) as en_retard,
-                    SUM(CASE WHEN statut = 'annulee' THEN 1 ELSE 0 END) as annulee
-                FROM factures
-                WHERE id_client = :client_id
+                    SUM(CASE WHEN f.statut = 'brouillon' THEN 1 ELSE 0 END) as brouillon,
+                    SUM(CASE WHEN f.statut = 'en_attente' THEN 1 ELSE 0 END) as en_attente,
+                    SUM(CASE WHEN f.statut = 'envoyee' THEN 1 ELSE 0 END) as envoyee,
+                    SUM(CASE WHEN COALESCE(p.total_paye, 0) >= f.montant_ttc AND f.montant_ttc > 0 THEN 1 ELSE 0 END) as payee,
+                    SUM(CASE WHEN f.statut = 'en_retard' THEN 1 ELSE 0 END) as en_retard,
+                    SUM(CASE WHEN f.statut = 'annulee' THEN 1 ELSE 0 END) as annulee
+                FROM factures f
+                LEFT JOIN (
+                    SELECT id_facture, SUM(montant) as total_paye 
+                    FROM paiements 
+                    WHERE statut = 'recu' 
+                    GROUP BY id_facture
+                ) p ON p.id_facture = f.id
+                WHERE f.id_client = :client_id
             ";
             $factStmt = $pdo->prepare($factSql);
             $factStmt->execute([':client_id' => $clientId]);

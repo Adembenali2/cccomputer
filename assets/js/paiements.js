@@ -3741,9 +3741,9 @@
                     const factureSelect = document.getElementById('payerFacture');
                     factureSelect.innerHTML = '<option value="">Sélectionner une facture</option>';
                     
-                    // Filtrer les factures non payées et non annulées
+                    // Filtrer les factures non payées et non annulées (statut_echeance = payee si total payé >= TTC)
                     const facturesDisponibles = data.factures.filter(f => 
-                        f.statut !== 'payee' && f.statut !== 'annulee'
+                        f.statut_echeance !== 'payee' && f.statut !== 'annulee'
                     );
                     
                     facturesDisponibles.forEach(facture => {

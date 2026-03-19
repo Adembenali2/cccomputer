@@ -18,7 +18,7 @@ try {
         error_log('factures_liste updateStatuts: ' . $e->getMessage());
     }
 
-    // Récupérer toutes les factures avec les informations du client
+    // Récupérer toutes les factures avec les informations du client et le total payé (paiements validés)
     $sql = "
         SELECT 
             f.id,
@@ -40,7 +40,11 @@ try {
             c.prenom_dirigeant as client_prenom_dirigeant,
             c.email as client_email,
             f.email_envoye,
-            f.date_envoi_email
+            f.date_envoi_email,
+            COALESCE((
+                SELECT SUM(p.montant) FROM paiements p 
+                WHERE p.id_facture = f.id AND p.statut = 'recu'
+            ), 0) as total_paye
         FROM factures f
         LEFT JOIN clients c ON f.id_client = c.id
         ORDER BY f.date_facture DESC, f.created_at DESC
@@ -55,10 +59,13 @@ try {
     foreach ($factures as $facture) {
         $statut = $facture['statut'] ?? '';
         $emailEnvoye = (bool)($facture['email_envoye'] ?? false);
-        // Envoyé : si email envoyé ou statut envoyee/payee
-        $statutEnvoi = ($emailEnvoye || in_array($statut, ['envoyee', 'payee'], true)) ? 'envoye' : 'non_envoye';
-        // Échéance : payé si payee, annulée si annulee, sinon en_attente/en_cours/en_retard selon date
-        $statutEcheance = ($statut === 'payee') ? 'payee' : (($statut === 'annulee') ? 'annulee' : $statutService->computeStatutFromDate($facture['date_facture']));
+        $totalPaye = (float)($facture['total_paye'] ?? 0);
+        $montantTtc = (float)($facture['montant_ttc'] ?? 0);
+        $estPayee = $totalPaye >= $montantTtc && $montantTtc > 0;
+        // Envoyé : si email envoyé ou statut envoyee ou facture payée
+        $statutEnvoi = ($emailEnvoye || in_array($statut, ['envoyee'], true) || $estPayee) ? 'envoye' : 'non_envoye';
+        // Échéance : annulée si annulee, payé si total payé >= TTC (calculé), sinon en_attente/en_cours/en_retard selon date
+        $statutEcheance = ($statut === 'annulee') ? 'annulee' : ($estPayee ? 'payee' : $statutService->computeStatutFromDate($facture['date_facture']));
 
         $formatted[] = [
             'id' => (int)$facture['id'],
