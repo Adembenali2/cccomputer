@@ -1290,20 +1290,17 @@
         let currentFactureStatusFilter = 'all';
 
         function getFacturesForCurrentTab() {
-            const now = new Date();
-            const currentYear = now.getFullYear();
-            const currentMonth = now.getMonth();
-            const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
-            const firstDayStr = firstDayOfMonth.toISOString().slice(0, 10);
-            const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
-            const lastDayStr = lastDayOfMonth.toISOString().slice(0, 10);
-
+            // Mois en cours : factures non payées OU non envoyées
+            // Archive : factures payées ET envoyées uniquement
             return allFactures.filter(f => {
-                const d = f.date_facture || '';
+                const estPayee = (f.statut_echeance || f.statut) === 'payee';
+                const estEnvoyee = (f.statut_envoi || '') === 'envoye';
+                const vaEnArchive = estPayee && estEnvoyee;
+
                 if (facturesActiveTab === 'mois_en_cours') {
-                    return d >= firstDayStr && d <= lastDayStr;
+                    return !vaEnArchive;
                 }
-                return d < firstDayStr;
+                return vaEnArchive;
             });
         }
 
@@ -1323,10 +1320,17 @@
         }
 
         function updateFacturesTabCounts() {
-            const now = new Date();
-            const firstDayStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-            const moisCount = allFactures.filter(f => (f.date_facture || '') >= firstDayStr).length;
-            const archiveCount = allFactures.filter(f => (f.date_facture || '') < firstDayStr).length;
+            // Mois en cours : non payée OU non envoyée | Archive : payée ET envoyée
+            const moisCount = allFactures.filter(f => {
+                const estPayee = (f.statut_echeance || f.statut) === 'payee';
+                const estEnvoyee = (f.statut_envoi || '') === 'envoye';
+                return !(estPayee && estEnvoyee);
+            }).length;
+            const archiveCount = allFactures.filter(f => {
+                const estPayee = (f.statut_echeance || f.statut) === 'payee';
+                const estEnvoyee = (f.statut_envoi || '') === 'envoye';
+                return estPayee && estEnvoyee;
+            }).length;
             const spanMois = document.getElementById('facturesTabMoisCount');
             const spanArchive = document.getElementById('facturesTabArchiveCount');
             if (spanMois) spanMois.textContent = moisCount > 0 ? `(${moisCount})` : '';
