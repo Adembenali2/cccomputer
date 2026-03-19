@@ -351,6 +351,15 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     Chargement des factures...
                 </div>
                 <div id="facturesListContainer" style="display: none;">
+                    <!-- Onglets Mois en cours / Archive -->
+                    <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color);">
+                        <button type="button" id="facturesTabMoisEnCours" onclick="switchFacturesTab('mois_en_cours')" style="padding: 0.75rem 1.25rem; font-weight: 600; font-size: 0.95rem; border: none; border-bottom: 3px solid var(--accent-primary); margin-bottom: -2px; background: none; color: var(--accent-primary); cursor: pointer; transition: all 0.2s;">
+                            Mois en cours <span id="facturesTabMoisCount"></span>
+                        </button>
+                        <button type="button" id="facturesTabArchive" onclick="switchFacturesTab('archive')" style="padding: 0.75rem 1.25rem; font-weight: 600; font-size: 0.95rem; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; background: none; color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">
+                            Archive <span id="facturesTabArchiveCount"></span>
+                        </button>
+                    </div>
                     <!-- Barre de filtres -->
                     <div style="margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
                         <div>

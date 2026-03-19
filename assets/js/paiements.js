@@ -1268,6 +1268,7 @@
             
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
+            switchFacturesTab('mois_en_cours');
             
             // Charger les factures
             loadFacturesList();
@@ -1287,6 +1288,51 @@
 
         // Variable globale pour stocker toutes les factures
         let allFactures = [];
+        let facturesActiveTab = 'mois_en_cours'; // 'mois_en_cours' | 'archive'
+
+        function getFacturesForCurrentTab() {
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth();
+            const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+            const firstDayStr = firstDayOfMonth.toISOString().slice(0, 10);
+            const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
+            const lastDayStr = lastDayOfMonth.toISOString().slice(0, 10);
+
+            return allFactures.filter(f => {
+                const d = f.date_facture || '';
+                if (facturesActiveTab === 'mois_en_cours') {
+                    return d >= firstDayStr && d <= lastDayStr;
+                }
+                return d < firstDayStr;
+            });
+        }
+
+        function switchFacturesTab(tab) {
+            facturesActiveTab = tab;
+            const btnMois = document.getElementById('facturesTabMoisEnCours');
+            const btnArchive = document.getElementById('facturesTabArchive');
+            if (btnMois) {
+                btnMois.style.color = tab === 'mois_en_cours' ? 'var(--accent-primary)' : 'var(--text-secondary)';
+                btnMois.style.borderBottomColor = tab === 'mois_en_cours' ? 'var(--accent-primary)' : 'transparent';
+            }
+            if (btnArchive) {
+                btnArchive.style.color = tab === 'archive' ? 'var(--accent-primary)' : 'var(--text-secondary)';
+                btnArchive.style.borderBottomColor = tab === 'archive' ? 'var(--accent-primary)' : 'transparent';
+            }
+            filterFactures();
+        }
+
+        function updateFacturesTabCounts() {
+            const now = new Date();
+            const firstDayStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+            const moisCount = allFactures.filter(f => (f.date_facture || '') >= firstDayStr).length;
+            const archiveCount = allFactures.filter(f => (f.date_facture || '') < firstDayStr).length;
+            const spanMois = document.getElementById('facturesTabMoisCount');
+            const spanArchive = document.getElementById('facturesTabArchiveCount');
+            if (spanMois) spanMois.textContent = moisCount > 0 ? `(${moisCount})` : '';
+            if (spanArchive) spanArchive.textContent = archiveCount > 0 ? `(${archiveCount})` : '';
+        }
 
         /**
          * Charge la liste des factures depuis l'API
@@ -1316,11 +1362,9 @@
                 if (data.ok && data.factures) {
                     // Stocker toutes les factures pour le filtrage
                     allFactures = data.factures;
-                    
-                    // Afficher toutes les factures initialement
-                    displayFactures(allFactures);
-                    
-                    countSpan.textContent = data.total || data.factures.length;
+                    updateFacturesTabCounts();
+                    // Afficher selon l'onglet actif (mois en cours par défaut)
+                    filterFactures();
                     loadingDiv.style.display = 'none';
                     container.style.display = 'block';
                 } else {
@@ -1346,6 +1390,7 @@
             
             tableBody.innerHTML = '';
             
+            if (countSpan) countSpan.textContent = factures.length;
             if (factures.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
@@ -1423,9 +1468,10 @@
                     tableBody.appendChild(row);
                 });
                 
-                // Afficher le nombre de résultats filtrés si différent du total
-                if (factures.length !== allFactures.length) {
-                    filteredCountSpan.textContent = `(${factures.length} sur ${allFactures.length})`;
+                // Afficher le nombre de résultats filtrés si différent du total de l'onglet
+                const tabTotal = getFacturesForCurrentTab().length;
+                if (factures.length !== tabTotal) {
+                    filteredCountSpan.textContent = `(${factures.length} sur ${tabTotal})`;
                 } else {
                     filteredCountSpan.textContent = '';
                 }
@@ -1688,19 +1734,20 @@
 
 
         /**
-         * Filtre les factures selon nom, prénom, numéro
+         * Filtre les factures selon nom, prénom, numéro (dans l'onglet actif)
          */
         function filterFactures() {
+            const baseFactures = getFacturesForCurrentTab();
             const filterNom = (document.getElementById('facturesFilterNom')?.value || '').toLowerCase().trim();
             const filterPrenom = (document.getElementById('facturesFilterPrenom')?.value || '').toLowerCase().trim();
             const filterNumero = (document.getElementById('facturesFilterNumero')?.value || '').toLowerCase().trim();
             
             if (!filterNom && !filterPrenom && !filterNumero) {
-                displayFactures(allFactures);
+                displayFactures(baseFactures);
                 return;
             }
             
-            const filtered = allFactures.filter(facture => {
+            const filtered = baseFactures.filter(facture => {
                 if (filterNumero && (!facture.numero || !facture.numero.toLowerCase().includes(filterNumero))) return false;
                 if (filterNom) {
                     const matchNom = (facture.client_nom && facture.client_nom.toLowerCase().includes(filterNom)) ||
@@ -4512,6 +4559,7 @@
         window.updateFacturesSelectionCount = updateFacturesSelectionCount;
         window.supprimerFacturesSelection = supprimerFacturesSelection;
         window.refreshModifierFactureCompteurs = refreshModifierFactureCompteurs;
+        window.switchFacturesTab = switchFacturesTab;
         window.viewFacturePDF = viewFacturePDF;
         window.viewFacturePDFById = viewFacturePDFById;
         window.closePDFViewer = closePDFViewer;
