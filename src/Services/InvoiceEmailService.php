@@ -725,6 +725,178 @@ class InvoiceEmailService
     }
 
     /**
+     * Envoie plusieurs factures dans un seul email (toutes les pièces jointes dans le même mail)
+     * Utilisé quand on programme l'envoi de factures sélectionnées vers une seule adresse email.
+     *
+     * @param array $factureIds IDs des factures
+     * @param string $destEmail Email destinataire (obligatoire)
+     * @param string|null $sujetOverride Sujet personnalisé
+     * @param string|null $messageOverride Message additionnel
+     * @return array ['success' => bool, 'message' => string, 'log_id' => int|null, 'message_id' => string|null]
+     */
+    public function sendMultipleInvoicesToEmail(
+        array $factureIds,
+        string $destEmail,
+        ?string $sujetOverride = null,
+        ?string $messageOverride = null
+    ): array {
+        $factureIds = array_unique(array_filter(array_map('intval', $factureIds), fn($x) => $x > 0));
+        if (empty($factureIds)) {
+            return ['success' => false, 'message' => 'Aucune facture', 'log_id' => null, 'message_id' => null];
+        }
+        if (!filter_var($destEmail, FILTER_VALIDATE_EMAIL)) {
+            return ['success' => false, 'message' => 'Email destinataire invalide', 'log_id' => null, 'message_id' => null];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($factureIds), '?'));
+        $stmt = $this->pdo->prepare("
+            SELECT f.id, f.numero, f.date_facture, f.montant_ttc, f.pdf_path, f.pdf_genere, f.id_client,
+                   c.raison_sociale as client_nom, c.email as client_email,
+                   c.adresse, c.code_postal, c.ville, c.siret
+            FROM factures f
+            LEFT JOIN clients c ON f.id_client = c.id
+            WHERE f.id IN ({$placeholders})
+            ORDER BY f.date_facture DESC, f.id DESC
+        ");
+        $stmt->execute(array_values($factureIds));
+        $factures = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($factures)) {
+            return ['success' => false, 'message' => 'Factures introuvables', 'log_id' => null, 'message_id' => null];
+        }
+
+        $attachments = [];
+        $tmpPaths = [];
+        require_once __DIR__ . '/../../API/factures_generate_pdf_content.php';
+
+        foreach ($factures as $facture) {
+            $pdfPath = null;
+            if (!empty($facture['pdf_path']) && $facture['pdf_genere']) {
+                try {
+                    $pdfPath = MailerService::findPdfPath($facture['pdf_path']);
+                } catch (MailerException $e) {
+                    $pdfPath = null;
+                }
+            }
+            if (!$pdfPath) {
+                $client = [
+                    'raison_sociale' => $facture['client_nom'] ?? '',
+                    'adresse' => $facture['adresse'] ?? '',
+                    'code_postal' => $facture['code_postal'] ?? '',
+                    'ville' => $facture['ville'] ?? '',
+                    'siret' => $facture['siret'] ?? ''
+                ];
+                $tmpDir = sys_get_temp_dir();
+                $pdfPath = generateInvoicePdf($this->pdo, (int)$facture['id'], $facture, $client, $tmpDir);
+                $tmpPaths[] = $pdfPath;
+            }
+            $fileName = basename($facture['pdf_path'] ?? 'facture_' . ($facture['numero'] ?? $facture['id']) . '.pdf');
+            $fileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName);
+            $attachments[] = [$pdfPath, $fileName];
+        }
+
+        $sujet = $sujetOverride ?: 'Factures - CC Computer';
+        $textBody = $this->buildEmailBodyMultiple($factures);
+        $htmlBody = $this->buildEmailHtmlBodyMultiple($factures);
+        if (!empty($messageOverride)) {
+            $msg = trim($messageOverride);
+            $textBody .= "\n\n---\n" . $msg;
+            $htmlBody .= '<br><br><hr><p>' . nl2br(htmlspecialchars($msg, ENT_QUOTES, 'UTF-8')) . '</p>';
+        }
+
+        $logId = $this->createEmailLog(null, $destEmail, $sujet);
+
+        try {
+            if (!empty($_ENV['BREVO_API_KEY'])) {
+                $brevoService = new BrevoApiMailerService();
+                $messageId = $brevoService->sendEmailWithMultiplePdfs($destEmail, $sujet, $textBody, $attachments, $htmlBody);
+            } else {
+                $emailConfig = $this->config['email'] ?? [];
+                $mailerService = new MailerService($emailConfig);
+                $messageId = $mailerService->sendEmailWithMultiplePdfs($destEmail, $sujet, $textBody, $attachments, $htmlBody);
+            }
+
+            foreach ($tmpPaths as $p) {
+                if (file_exists($p)) {
+                    @unlink($p);
+                }
+            }
+
+            $this->pdo->beginTransaction();
+            $stmt = $this->pdo->prepare("UPDATE factures SET email_envoye = 1, date_envoi_email = NOW(), statut = 'envoyee' WHERE id = ?");
+            foreach ($factureIds as $fid) {
+                $stmt->execute([$fid]);
+            }
+            $stmt = $this->pdo->prepare("UPDATE email_logs SET statut = 'sent', sent_at = NOW(), message_id = ? WHERE id = ?");
+            $stmt->execute([$messageId, $logId]);
+            $this->pdo->commit();
+
+            error_log("[InvoiceEmailService] " . count($factureIds) . " facture(s) envoyée(s) en un seul email à {$destEmail}");
+            return ['success' => true, 'message' => count($factureIds) . ' facture(s) envoyée(s)', 'log_id' => $logId, 'message_id' => $messageId];
+        } catch (Throwable $e) {
+            foreach ($tmpPaths as $p) {
+                if (file_exists($p)) {
+                    @unlink($p);
+                }
+            }
+            $this->pdo->beginTransaction();
+            $stmt = $this->pdo->prepare("UPDATE email_logs SET statut = 'failed', error_message = ? WHERE id = ?");
+            $stmt->execute([substr($e->getMessage(), 0, 1000), $logId]);
+            $this->pdo->commit();
+            error_log("[InvoiceEmailService] Erreur envoi multiple: " . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage(), 'log_id' => $logId, 'message_id' => null];
+        }
+    }
+
+    private function buildEmailBodyMultiple(array $factures): string
+    {
+        $companyConfig = $this->config['company'] ?? [];
+        $companyAddress = $companyConfig['address'] ?? '7 Rue Fraizier, 93210 Saint-Denis';
+        $billingContactEmail = $companyConfig['billing_contact_email'] ?? 'facturemail@cccomputer.fr';
+
+        $body = "Bonjour,\n\n";
+        $body .= "Veuillez trouver ci-joint " . count($factures) . " facture(s) :\n\n";
+        foreach ($factures as $f) {
+            $num = $f['numero'] ?? 'N/A';
+            $mt = number_format((float)($f['montant_ttc'] ?? 0), 2, ',', ' ') . ' €';
+            $body .= "- Facture {$num} : {$mt} TTC\n";
+        }
+        $body .= "\nCordialement,\nCC Computer\n\n---\n";
+        $body .= "CC Computer\n{$companyAddress}\nContact : {$billingContactEmail}\n";
+        return $body;
+    }
+
+    private function buildEmailHtmlBodyMultiple(array $factures): string
+    {
+        $companyConfig = $this->config['company'] ?? [];
+        $companyName = $companyConfig['name'] ?? 'CC Computer';
+        $companyAddress = trim($companyConfig['address'] ?? '');
+        $billingContactEmail = trim($companyConfig['billing_contact_email'] ?? '');
+        $directorFullName = htmlspecialchars($this->getDirectorFullName(), ENT_QUOTES, 'UTF-8');
+        $companyNameEsc = htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8');
+
+        $rows = '';
+        foreach ($factures as $f) {
+            $num = htmlspecialchars($f['numero'] ?? 'N/A', ENT_QUOTES, 'UTF-8');
+            $mt = number_format((float)($f['montant_ttc'] ?? 0), 2, ',', ' ') . ' €';
+            $rows .= "<tr><td>{$num}</td><td>{$mt}</td></tr>";
+        }
+        $addressBlock = $companyAddress ? '<p>' . htmlspecialchars($companyAddress, ENT_QUOTES, 'UTF-8') . '</p>' : '';
+        $contactBlock = $billingContactEmail ? '<p>Contact : <a href="mailto:' . htmlspecialchars($billingContactEmail, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($billingContactEmail, ENT_QUOTES, 'UTF-8') . '</a></p>' : '';
+
+        return "<div style='font-family:sans-serif;max-width:600px;'>
+            <p>Bonjour,</p>
+            <p>Veuillez trouver ci-joint " . count($factures) . " facture(s) :</p>
+            <table border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse;'>
+                <tr><th>Numéro</th><th>Montant TTC</th></tr>
+                {$rows}
+            </table>
+            <p>Cordialement,<br>{$directorFullName}<br>{$companyNameEsc}</p>
+            <hr>{$addressBlock}{$contactBlock}
+        </div>";
+    }
+
+    /**
      * Vérifie si l'envoi automatique est activé
      * 
      * @return bool

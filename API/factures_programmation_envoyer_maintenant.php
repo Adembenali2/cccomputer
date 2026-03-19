@@ -78,20 +78,37 @@ try {
     $failed = 0;
     $results = [];
 
-    foreach ($factureIds as $fid) {
-        $emailToUse = $emailOverride;
-        if ($prog['use_client_email'] || $prog['all_clients']) {
-            $emailToUse = null;
-        }
-        $result = $invoiceEmailService->sendInvoiceToEmail($fid, $emailToUse, $sujetOverride, $messageOverride);
+    $emailToUse = $emailOverride;
+    if ($prog['use_client_email'] || $prog['all_clients']) {
+        $emailToUse = null;
+    }
+
+    // Un seul destinataire + plusieurs factures = un seul email avec toutes les pièces jointes
+    if ($emailToUse && count($factureIds) > 1) {
+        $result = $invoiceEmailService->sendMultipleInvoicesToEmail($factureIds, $emailToUse, $sujetOverride, $messageOverride);
         if ($result['success']) {
-            $success++;
-            $results[] = ['facture_id' => $fid, 'success' => true, 'email' => $result['email'] ?? null];
+            $success = count($factureIds);
+            foreach ($factureIds as $fid) {
+                $results[] = ['facture_id' => $fid, 'success' => true, 'email' => $emailToUse];
+            }
         } else {
-            $failed++;
-            $results[] = ['facture_id' => $fid, 'success' => false, 'error' => $result['message'] ?? 'Erreur'];
+            $failed = count($factureIds);
+            foreach ($factureIds as $fid) {
+                $results[] = ['facture_id' => $fid, 'success' => false, 'error' => $result['message'] ?? 'Erreur'];
+            }
         }
-        usleep(100000);
+    } else {
+        foreach ($factureIds as $fid) {
+            $result = $invoiceEmailService->sendInvoiceToEmail($fid, $emailToUse, $sujetOverride, $messageOverride);
+            if ($result['success']) {
+                $success++;
+                $results[] = ['facture_id' => $fid, 'success' => true, 'email' => $result['email'] ?? null];
+            } else {
+                $failed++;
+                $results[] = ['facture_id' => $fid, 'success' => false, 'error' => $result['message'] ?? 'Erreur'];
+            }
+            usleep(100000);
+        }
     }
 
     $pdo->prepare("

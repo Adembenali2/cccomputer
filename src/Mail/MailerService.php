@@ -111,6 +111,59 @@ class MailerService
     }
     
     /**
+     * Envoie un email avec plusieurs fichiers PDF en pièces jointes
+     *
+     * @param string $to Adresse email du destinataire
+     * @param string $subject Sujet de l'email
+     * @param string $textBody Corps du message (texte)
+     * @param array $attachments Tableau de [path, fileName] pour chaque PDF
+     * @param string|null $htmlBody Corps du message HTML (optionnel)
+     * @return string Message-ID généré
+     * @throws MailerException En cas d'erreur
+     */
+    public function sendEmailWithMultiplePdfs(
+        string $to,
+        string $subject,
+        string $textBody,
+        array $attachments,
+        ?string $htmlBody = null
+    ): string {
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            throw new MailerException('Adresse email invalide: ' . $to);
+        }
+        $mail = MailerFactory::create($this->config);
+        try {
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            if (!empty($htmlBody)) {
+                $mail->isHTML(true);
+                $mail->Body = $htmlBody;
+                $mail->AltBody = $textBody;
+            } else {
+                $mail->isHTML(false);
+                $mail->Body = $textBody;
+                $mail->AltBody = $textBody;
+            }
+            $messageId = $this->generateMessageId();
+            $mail->MessageID = $messageId;
+            foreach ($attachments as $att) {
+                $path = $att[0] ?? null;
+                $fileName = $att[1] ?? null;
+                if ($path) {
+                    $this->attachPdf($mail, $path, $fileName);
+                }
+            }
+            $mail->send();
+            error_log("Email envoyé avec " . count($attachments) . " pièce(s) jointe(s) à {$to} (Message-ID: {$messageId})");
+            return $messageId;
+        } catch (PHPMailerException $e) {
+            $errorInfo = preg_replace('/password[=:]\s*\S+/i', 'password=***', $mail->ErrorInfo ?? '');
+            error_log("Erreur PHPMailer: " . $errorInfo);
+            throw new MailerException('Erreur lors de l\'envoi: ' . $this->sanitizeError($mail->ErrorInfo), 0, $e);
+        }
+    }
+
+    /**
      * Envoie un email simple (sans pièce jointe)
      * 
      * @param string $to Adresse email du destinataire

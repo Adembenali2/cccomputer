@@ -101,27 +101,46 @@ try {
         $failed = 0;
         $lastError = null;
         
-        foreach ($factureIds as $fid) {
-            $emailToUse = $emailOverride;
-            if ($prog['use_client_email'] || $prog['all_clients']) {
-                $emailToUse = null;
-            }
+        $emailToUse = $emailOverride;
+        if ($prog['use_client_email'] || $prog['all_clients']) {
+            $emailToUse = null;
+        }
+        
+        if ($emailToUse && count($factureIds) > 1) {
             try {
-                $result = $invoiceEmailService->sendInvoiceToEmail($fid, $emailToUse, $sujetOverride, $messageOverride);
+                $result = $invoiceEmailService->sendMultipleInvoicesToEmail($factureIds, $emailToUse, $sujetOverride, $messageOverride);
                 if ($result['success']) {
-                    $success++;
-                    $totalSent++;
+                    $success = count($factureIds);
+                    $totalSent += $success;
                 } else {
-                    $failed++;
-                    $totalFailed++;
+                    $failed = count($factureIds);
+                    $totalFailed += $failed;
                     $lastError = $result['message'] ?? 'Erreur';
                 }
             } catch (Throwable $e) {
-                $failed++;
-                $totalFailed++;
+                $failed = count($factureIds);
+                $totalFailed += $failed;
                 $lastError = $e->getMessage();
             }
-            usleep(100000);
+        } else {
+            foreach ($factureIds as $fid) {
+                try {
+                    $result = $invoiceEmailService->sendInvoiceToEmail($fid, $emailToUse, $sujetOverride, $messageOverride);
+                    if ($result['success']) {
+                        $success++;
+                        $totalSent++;
+                    } else {
+                        $failed++;
+                        $totalFailed++;
+                        $lastError = $result['message'] ?? 'Erreur';
+                    }
+                } catch (Throwable $e) {
+                    $failed++;
+                    $totalFailed++;
+                    $lastError = $e->getMessage();
+                }
+                usleep(100000);
+            }
         }
         
         $statut = $failed === 0 ? 'envoye' : ($success > 0 ? 'envoye' : 'echoue');

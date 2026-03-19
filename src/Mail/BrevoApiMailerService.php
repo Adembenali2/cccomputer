@@ -92,6 +92,64 @@ class BrevoApiMailerService
             ];
         }
         
+        return $this->sendPayload($payload, $to, $subject);
+    }
+    
+    /**
+     * Envoie un email avec plusieurs fichiers PDF en pièces jointes
+     *
+     * @param string $to Adresse email du destinataire
+     * @param string $subject Sujet de l'email
+     * @param string $textBody Corps du message (texte)
+     * @param array $attachments Tableau de [path, fileName] pour chaque PDF
+     * @param string|null $htmlBody Corps du message HTML (optionnel)
+     * @return string Message-ID retourné par Brevo
+     * @throws MailerException En cas d'erreur
+     */
+    public function sendEmailWithMultiplePdfs(
+        string $to,
+        string $subject,
+        string $textBody,
+        array $attachments,
+        ?string $htmlBody = null
+    ): string {
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            throw new MailerException('Adresse email invalide: ' . $to);
+        }
+        $payload = [
+            'sender' => [
+                'email' => $this->senderEmail,
+                'name' => $this->senderName
+            ],
+            'to' => [['email' => $to]],
+            'subject' => $subject,
+            'textContent' => $textBody
+        ];
+        if (!empty($htmlBody)) {
+            $payload['htmlContent'] = $htmlBody;
+        }
+        $payload['attachment'] = [];
+        foreach ($attachments as $att) {
+            $path = $att[0] ?? null;
+            $fileName = $att[1] ?? basename($path ?? '');
+            if ($path && file_exists($path)) {
+                $content = file_get_contents($path);
+                if ($content !== false) {
+                    $payload['attachment'][] = [
+                        'name' => $fileName ?: basename($path),
+                        'content' => base64_encode($content)
+                    ];
+                }
+            }
+        }
+        return $this->sendPayload($payload, $to, $subject);
+    }
+    
+    /**
+     * Envoie le payload JSON à l'API Brevo
+     */
+    private function sendPayload(array $payload, string $to, string $subject): string
+    {
         // Envoyer la requête HTTP
         $ch = curl_init($this->apiEndpoint);
         

@@ -1142,6 +1142,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     <div class="modal-form-group" id="progEmailManualGroup" style="display: none;">
                         <label for="progEmailDestination">Email destinataire <span style="color: #ef4444;">*</span></label>
                         <input type="email" id="progEmailDestination" name="email_destination" placeholder="client@example.com">
+                        <div class="input-hint" id="progEmailManualHint">Toutes les factures sélectionnées seront envoyées dans un seul email avec toutes les pièces jointes.</div>
                     </div>
                     <div class="modal-form-group">
                         <label><input type="checkbox" id="progAllClients" name="all_clients" onchange="onProgEmailOptionChange()"> Tous les clients concernés</label>

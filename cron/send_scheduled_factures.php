@@ -179,30 +179,53 @@ foreach ($rows as $prog) {
     $failed = 0;
     $lastError = null;
 
-    foreach ($factureIds as $fid) {
-        $emailToUse = $emailOverride;
-        if ($prog['use_client_email'] || $prog['all_clients']) {
-            $emailToUse = null;
-        }
+    $emailToUse = $emailOverride;
+    if ($prog['use_client_email'] || $prog['all_clients']) {
+        $emailToUse = null;
+    }
+
+    // Un seul destinataire + plusieurs factures = un seul email avec toutes les pièces jointes
+    if ($emailToUse && count($factureIds) > 1) {
         try {
-            $result = $invoiceEmailService->sendInvoiceToEmail($fid, $emailToUse, $sujetOverride, $messageOverride);
+            $result = $invoiceEmailService->sendMultipleInvoicesToEmail($factureIds, $emailToUse, $sujetOverride, $messageOverride);
             if ($result['success']) {
-                $success++;
-                $totalSent++;
-                logMsg("Facture #{$fid} envoyée");
+                $success = count($factureIds);
+                $totalSent += $success;
+                logMsg(count($factureIds) . " facture(s) envoyée(s) en un seul email à {$emailToUse}");
             } else {
-                $failed++;
-                $totalFailed++;
+                $failed = count($factureIds);
+                $totalFailed += $failed;
                 $lastError = $result['message'] ?? 'Erreur';
-                logMsg("Facture #{$fid} échec: " . $lastError);
+                logMsg("Envoi groupé échec: " . $lastError);
             }
         } catch (Throwable $e) {
-            $failed++;
-            $totalFailed++;
+            $failed = count($factureIds);
+            $totalFailed += $failed;
             $lastError = $e->getMessage();
-            logMsg("Facture #{$fid} erreur: " . $e->getMessage());
+            logMsg("Envoi groupé erreur: " . $e->getMessage());
         }
-        usleep(100000);
+    } else {
+        foreach ($factureIds as $fid) {
+            try {
+                $result = $invoiceEmailService->sendInvoiceToEmail($fid, $emailToUse, $sujetOverride, $messageOverride);
+                if ($result['success']) {
+                    $success++;
+                    $totalSent++;
+                    logMsg("Facture #{$fid} envoyée");
+                } else {
+                    $failed++;
+                    $totalFailed++;
+                    $lastError = $result['message'] ?? 'Erreur';
+                    logMsg("Facture #{$fid} échec: " . $lastError);
+                }
+            } catch (Throwable $e) {
+                $failed++;
+                $totalFailed++;
+                $lastError = $e->getMessage();
+                logMsg("Facture #{$fid} erreur: " . $e->getMessage());
+            }
+            usleep(100000);
+        }
     }
 
     $statut = $failed === 0 ? 'envoye' : ($success > 0 ? 'envoye' : 'echoue');
