@@ -5,10 +5,19 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 try {
     $pdo = getPdo();
-    
+
+    // Mettre à jour les statuts selon la date (en_attente avant 25, en_cours le 25, en_retard après)
+    try {
+        $statutService = new \App\Services\FactureStatutService($pdo);
+        $statutService->updateStatutsFromDate();
+    } catch (Throwable $e) {
+        error_log('factures_liste updateStatuts: ' . $e->getMessage());
+    }
+
     // Récupérer toutes les factures avec les informations du client
     $sql = "
         SELECT 

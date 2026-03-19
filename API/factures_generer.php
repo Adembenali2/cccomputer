@@ -119,7 +119,7 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
         $pdo->beginTransaction();
 
         try {
-            // Insertion Facture (statut: en_attente si migration faite, brouillon sinon)
+            // Insertion Facture : statut initial = en_attente (puis en_cours le 25, en_retard après)
             $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, :statut, :created_by)");
             $stmt->execute([
                 ':id_client' => $clientId,
@@ -129,7 +129,7 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
                 ':montant_ht' => $montantHT,
                 ':tva' => $tva,
                 ':montant_ttc' => $montantTTC,
-                ':statut' => 'brouillon',
+                ':statut' => 'en_attente',
                 ':created_by' => currentUserId()
             ]);
             $factureId = $pdo->lastInsertId();
