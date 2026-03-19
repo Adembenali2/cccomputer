@@ -40,56 +40,58 @@ function requireCommercial() {
 
 /**
  * Vérifie si l'utilisateur a la permission d'accéder à une page spécifique.
- * Utilise le système ACL (user_permissions) si une permission existe,
- * sinon utilise le système de rôles par défaut (fallback).
+ * 1. Vérifie si le module est activé (parametres_app)
+ * 2. Utilise le système ACL (user_permissions) si une permission existe,
+ * 3. Sinon utilise le système de rôles par défaut (fallback)
  *
  * @param string $page Nom de la page (ex: 'dashboard', 'historique', 'maps')
  * @param array $allowed_roles Liste des rôles autorisés par défaut (fallback)
  * @return bool True si l'utilisateur a accès, false sinon
  */
 function checkPagePermission(string $page, array $allowed_roles = []): bool {
-    // Récupérer PDO via la fonction centralisée
     if (!function_exists('getPdo')) {
         require_once __DIR__ . '/helpers.php';
     }
     try {
         $pdo = getPdo();
     } catch (RuntimeException $e) {
-        // Si PDO n'est pas disponible, refuser l'accès
         error_log('checkPagePermission: Impossible de récupérer PDO: ' . $e->getMessage());
         return false;
     }
-    
-    // Récupérer les informations de l'utilisateur depuis la session
+
     $user_id = (int)($_SESSION['user_id'] ?? 0);
     $emploi = $_SESSION['emploi'] ?? '';
-    
-    // Si pas d'utilisateur, refuser
+
     if (empty($user_id)) {
         return false;
     }
-    
+
     try {
-        // Vérifier si une permission explicite existe pour cet utilisateur et cette page
+        if (!function_exists('isModuleEnabled')) {
+            require_once __DIR__ . '/parametres.php';
+        }
+        if (!isModuleEnabled($pdo, $page)) {
+            return false;
+        }
+    } catch (Throwable $e) {
+        // Table parametres_app peut ne pas exister
+    }
+
+    try {
         $stmt = $pdo->prepare("SELECT allowed FROM user_permissions WHERE user_id = ? AND page = ? LIMIT 1");
         $stmt->execute([$user_id, $page]);
         $permission = $stmt->fetchColumn();
-        
-        // Si une permission existe, l'utiliser
+
         if ($permission !== false) {
             return (int)$permission === 1;
         }
-        
-        // Sinon, utiliser le système de rôles par défaut (fallback)
+
         if (!empty($allowed_roles)) {
             return in_array($emploi, $allowed_roles, true);
         }
-        
-        // Si aucun rôle par défaut n'est spécifié et aucune permission n'existe, autoriser par défaut
-        // (pour éviter de bloquer l'accès si le système ACL n'est pas encore configuré)
+
         return true;
     } catch (PDOException $e) {
-        // Si la table n'existe pas encore (migration pas appliquée), utiliser les rôles par défaut
         error_log('Warning: user_permissions table may not exist: ' . $e->getMessage());
         if (!empty($allowed_roles)) {
             return in_array($emploi, $allowed_roles, true);

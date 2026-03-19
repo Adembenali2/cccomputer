@@ -7,6 +7,23 @@ $csrf            = $_SESSION['csrf_token']    ?? '';
 $isAdmin         = ($emploi === 'Admin'); // Utilise la valeur exacte de la base de données
 $canCommercial   = in_array($emploi, ['Chargé relation clients', 'Admin'], true); // 'Chargé relation clients' remplace 'Commercial'
 
+// Modules activés (parametres_app) - masquer les liens des modules désactivés
+$modEnabled = ['dashboard' => true, 'messagerie' => true, 'agenda' => true, 'commercial' => true, 'maps' => true, 'profil' => true];
+if (function_exists('getPdo')) {
+    try {
+        require_once __DIR__ . '/../../includes/parametres.php';
+        $pdoNav = getPdo();
+        $modEnabled['dashboard']   = isModuleEnabled($pdoNav, 'dashboard');
+        $modEnabled['messagerie']  = isModuleEnabled($pdoNav, 'messagerie');
+        $modEnabled['agenda']      = isModuleEnabled($pdoNav, 'agenda');
+        $modEnabled['commercial']  = isModuleEnabled($pdoNav, 'commercial');
+        $modEnabled['maps']        = isModuleEnabled($pdoNav, 'maps');
+        $modEnabled['profil']      = isModuleEnabled($pdoNav, 'profil');
+    } catch (Throwable $e) {
+        // Table parametres_app peut ne pas exister
+    }
+}
+
 // Helper pour l'échappement XSS
 // Utilise le helper centralisé si disponible, sinon définit une fonction locale
 if (!function_exists('h')) {
@@ -60,6 +77,7 @@ if (!function_exists('h')) {
       <span class="nav-label">Thème</span>
     </button>
 
+    <?php if ($modEnabled['dashboard']): ?>
     <a href="/public/dashboard.php" aria-label="Accueil">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -67,7 +85,9 @@ if (!function_exists('h')) {
       </svg>
       <span class="nav-label">Accueil</span>
     </a>
+    <?php endif; ?>
 
+    <?php if ($modEnabled['messagerie']): ?>
     <a href="/public/messagerie.php" aria-label="Messagerie" class="messagerie-link" id="messagerie-link">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -75,7 +95,9 @@ if (!function_exists('h')) {
       <span class="nav-label">Messagerie</span>
       <span class="messagerie-badge" id="messagerie-badge" style="display:none;">0</span>
     </a>
+    <?php endif; ?>
 
+    <?php if ($modEnabled['agenda']): ?>
     <a href="/public/agenda.php" aria-label="Agenda">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -85,8 +107,9 @@ if (!function_exists('h')) {
       </svg>
       <span class="nav-label">Agenda</span>
     </a>
+    <?php endif; ?>
 
-    <?php if ($canCommercial): ?>
+    <?php if ($modEnabled['commercial'] && $canCommercial): ?>
       <a href="/public/commercial.php" aria-label="Espace commercial">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 7h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/>
@@ -97,6 +120,7 @@ if (!function_exists('h')) {
       </a>
     <?php endif; ?>
 
+    <?php if ($modEnabled['maps']): ?>
     <a href="/public/maps.php" aria-label="Cartes">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2"/>
@@ -105,7 +129,9 @@ if (!function_exists('h')) {
       </svg>
       <span class="nav-label">Cartes</span>
     </a>
+    <?php endif; ?>
 
+    <?php if ($modEnabled['profil']): ?>
     <a href="/public/profil.php" aria-label="Profil">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -113,6 +139,7 @@ if (!function_exists('h')) {
       </svg>
       <span class="nav-label">Profil</span>
     </a>
+    <?php endif; ?>
 
     <a href="/includes/logout.php" id="logout-link" aria-label="Déconnexion">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

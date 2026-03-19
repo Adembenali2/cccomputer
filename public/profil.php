@@ -1855,22 +1855,32 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
 <main class="page-container page-profil">
     <header class="page-header">
         <h1 class="page-title">Gestion des utilisateurs</h1>
-        <?php if ($isAdminOrDirigeant): ?>
+        <?php
+        if ($isAdminOrDirigeant):
+            require_once __DIR__ . '/../includes/parametres.php';
+            $importSftpEnabled = getParametre($pdo, 'module_import_sftp');
+            $importIonosEnabled = getParametre($pdo, 'module_import_ionos');
+            if ($importSftpEnabled || $importIonosEnabled):
+        ?>
         <div class="header-import-btns" data-csrf="<?= h($CSRF) ?>">
+            <?php if ($importSftpEnabled): ?>
             <button type="button" id="btnImportSftp" class="btn-import-sftp" title="Lancer l'import SFTP manuellement">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
                 Import SFTP
             </button>
+            <?php endif; ?>
+            <?php if ($importIonosEnabled): ?>
             <button type="button" id="btnImportIonos" class="btn-import-ionos" title="Lancer l'import IONOS manuellement">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
                 </svg>
                 Import IONOS
             </button>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
+        <?php endif; endif; ?>
     </header>
 
     <div class="quick-actions-bar">
@@ -2088,17 +2098,11 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
 
     <div class="panel panel-toggle-target" id="parametresPanel">
         <h2 class="panel-title">Paramètres de l'application</h2>
-        <div class="parametres-auto-send" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 1rem; background: var(--bg-secondary, #f5f5f5); border-radius: 8px; margin-bottom: 1rem;">
-            <div>
-                <strong>Envoi automatique des emails</strong>
-                <p style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-secondary, #666);">Reçus de paiement et factures envoyés automatiquement lors de l'enregistrement ou validation d'un paiement.</p>
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
-                <button type="button" id="btnToggleAutoSend" class="fiche-action-btn">
-                    <span id="autoSendStatus">Chargement...</span>
-                </button>
-                <button type="button" id="btnRetryAutoSend" class="fiche-action-btn btn-primary" style="display: none;" title="Réessayer le chargement">Réessayer</button>
-            </div>
+        <p class="panel-subtitle">Activez ou désactivez les fonctionnalités du site. Les modules désactivés sont masqués du menu et inaccessibles.</p>
+        <div id="parametresContainer" style="margin-top: 1rem;">
+            <div id="parametresLoading" style="text-align: center; padding: 2rem;">Chargement des paramètres...</div>
+            <div id="parametresList" style="display: none;"></div>
+            <button type="button" id="btnRetryParametres" class="fiche-action-btn btn-primary" style="display: none; margin-top: 1rem;">Réessayer</button>
         </div>
     </div>
     <?php endif; ?>
@@ -2852,105 +2856,126 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
     }
 })();
 
-/* Toggle envoi automatique des emails (reçus et factures) */
+/* Paramètres de l'application - tous les toggles */
 (function() {
-    const btn = document.getElementById('btnToggleAutoSend');
-    const retryBtn = document.getElementById('btnRetryAutoSend');
-    const statusEl = document.getElementById('autoSendStatus');
-    if (!btn || !statusEl) return;
+    const container = document.getElementById('parametresContainer');
+    const loadingEl = document.getElementById('parametresLoading');
+    const listEl = document.getElementById('parametresList');
+    const retryBtn = document.getElementById('btnRetryParametres');
+    if (!container || !listEl) return;
 
     const csrfToken = <?= json_encode($CSRF ?? '') ?>;
+    const categoryLabels = { emails: 'Emails', modules: 'Modules', imports: 'Imports' };
 
-    function updateUI(enabled) {
-        statusEl.textContent = enabled ? 'Désactiver' : 'Activer';
-        btn.classList.toggle('btn-success', !enabled);
-        btn.classList.toggle('btn-danger', enabled);
-        btn.disabled = false;
-        if (retryBtn) retryBtn.style.display = 'none';
+    function escapeHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
     }
 
-    function showError(msg) {
-        statusEl.textContent = 'Erreur';
-        statusEl.title = msg;
-        btn.disabled = true;
-        if (retryBtn) {
-            retryBtn.style.display = 'inline-block';
-            retryBtn.title = msg;
+    function render(parametres) {
+        var byCat = {};
+        for (var cle in parametres) {
+            var p = parametres[cle];
+            var cat = p.category || 'modules';
+            if (!byCat[cat]) byCat[cat] = [];
+            byCat[cat].push({ cle: cle, enabled: p.enabled, label: p.label, desc: p.desc });
         }
+        var html = '';
+        ['emails', 'modules', 'imports'].forEach(function(cat) {
+            if (!byCat[cat] || byCat[cat].length === 0) return;
+            html += '<div class="parametres-category" style="margin-bottom: 1.5rem;">';
+            html += '<h3 style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text-secondary);">' + escapeHtml(categoryLabels[cat] || cat) + '</h3>';
+            byCat[cat].forEach(function(p) {
+                html += '<div class="parametres-item" style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: var(--bg-secondary, #f5f5f5); border-radius: 8px; margin-bottom: 0.5rem;">';
+                html += '<div style="flex: 1;"><strong>' + escapeHtml(p.label) + '</strong>';
+                if (p.desc) html += '<p style="margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--text-secondary);">' + escapeHtml(p.desc) + '</p>';
+                html += '</div>';
+                html += '<button type="button" class="param-toggle-btn fiche-action-btn ' + (p.enabled ? 'btn-danger' : 'btn-success') + '" data-cle="' + escapeHtml(p.cle) + '" data-enabled="' + (p.enabled ? '1' : '0') + '">';
+                html += (p.enabled ? 'Désactiver' : 'Activer') + '</button>';
+                html += '</div>';
+            });
+            html += '</div>';
+        });
+        listEl.innerHTML = html;
+        listEl.style.display = 'block';
+        loadingEl.style.display = 'none';
+        if (retryBtn) retryBtn.style.display = 'none';
+
+        listEl.querySelectorAll('.param-toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var cle = this.dataset.cle;
+                var enabled = this.dataset.enabled === '1';
+                var newEnabled = !enabled;
+                var origText = this.textContent;
+                this.disabled = true;
+                this.textContent = '...';
+
+                fetch('/API/parametres_app.php', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify({ cle: cle, enabled: newEnabled })
+                })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.ok && data.parametres && data.parametres[cle]) {
+                            btn.dataset.enabled = data.parametres[cle].enabled ? '1' : '0';
+                            btn.textContent = data.parametres[cle].enabled ? 'Désactiver' : 'Activer';
+                            btn.classList.toggle('btn-success', !data.parametres[cle].enabled);
+                            btn.classList.toggle('btn-danger', data.parametres[cle].enabled);
+                        } else {
+                            btn.textContent = origText;
+                            alert(data.error || 'Erreur');
+                        }
+                    })
+                    .catch(function() {
+                        btn.textContent = origText;
+                        alert('Erreur réseau.');
+                    })
+                    .finally(function() { btn.disabled = false; });
+            });
+        });
     }
 
-    function loadState() {
+    function loadParametres() {
+        loadingEl.style.display = 'block';
+        listEl.style.display = 'none';
         if (retryBtn) retryBtn.style.display = 'none';
-        statusEl.textContent = 'Chargement...';
-        btn.disabled = true;
 
-        fetch('/API/parametres_auto_send.php', { credentials: 'same-origin' })
+        fetch('/API/parametres_app.php', { credentials: 'same-origin' })
             .then(function(r) {
                 return r.text().then(function(text) {
                     try {
                         return { data: JSON.parse(text), ok: r.ok };
                     } catch (e) {
-                        return { data: { ok: false, error: r.status === 404 ? 'API introuvable (404)' : 'Réponse invalide (vérifiez la table parametres_app)' }, ok: false };
+                        return { data: { ok: false, error: 'Réponse invalide' }, ok: false };
                     }
                 });
             })
             .then(function(result) {
-                if (result.ok && result.data.ok) {
-                    updateUI(result.data.enabled);
+                if (result.ok && result.data.ok && result.data.parametres) {
+                    render(result.data.parametres);
                 } else {
-                    var msg = result.data.error || result.data.message || 'Erreur';
-                    showError(msg);
-                    console.error('Paramètres auto-send:', msg);
+                    loadingEl.textContent = 'Erreur: ' + (result.data.error || 'Chargement impossible');
+                    if (retryBtn) retryBtn.style.display = 'inline-block';
                 }
             })
             .catch(function(err) {
-                var msg = 'Impossible de contacter l\'API. Vérifiez la table parametres_app et la console (F12).';
-                showError(msg);
-                console.error('Paramètres auto-send fetch failed:', err);
+                loadingEl.textContent = 'Impossible de contacter l\'API. Vérifiez la table parametres_app.';
+                if (retryBtn) retryBtn.style.display = 'inline-block';
+                console.error('Paramètres:', err);
             });
     }
 
-    if (retryBtn) retryBtn.addEventListener('click', loadState);
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function() {
+            loadingEl.textContent = 'Chargement des paramètres...';
+            loadParametres();
+        });
+    }
 
-    btn.addEventListener('click', function() {
-        const currentText = statusEl.textContent;
-        if (currentText === 'Chargement...' || currentText === 'Erreur') return;
-
-        const enabled = currentText === 'Désactiver';
-        const newEnabled = !enabled;
-
-        btn.disabled = true;
-        statusEl.textContent = '...';
-
-        const headers = {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': csrfToken
-        };
-        const body = JSON.stringify({ enabled: newEnabled });
-
-        fetch('/API/parametres_auto_send.php', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: headers,
-            body: body
-        })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.ok) {
-                    updateUI(data.enabled);
-                } else {
-                    statusEl.textContent = currentText;
-                    alert(data.message || 'Erreur lors de la mise à jour.');
-                }
-            })
-            .catch(function() {
-                statusEl.textContent = currentText;
-                alert('Erreur réseau.');
-            })
-            .finally(function() { btn.disabled = false; });
-    });
-
-    loadState();
+    loadParametres();
 })();
 
 /* Gestion des permissions */

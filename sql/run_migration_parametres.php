@@ -14,6 +14,15 @@ if (empty($_SESSION['user_id'])) {
 
 $pdo = getPdo();
 
+$defaults = [
+    ['auto_send_emails', '0'],
+    ['module_dashboard', '1'], ['module_agenda', '1'], ['module_historique', '1'],
+    ['module_clients', '1'], ['module_paiements', '1'], ['module_messagerie', '1'],
+    ['module_sav', '1'], ['module_livraison', '1'], ['module_stock', '1'],
+    ['module_photocopieurs', '1'], ['module_maps', '1'], ['module_profil', '1'],
+    ['module_commercial', '1'], ['module_import_sftp', '1'], ['module_import_ionos', '1'],
+];
+
 try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `parametres_app` (
@@ -22,7 +31,10 @@ try {
           `updated_at` DATETIME NULL ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     ");
-    $pdo->exec("INSERT IGNORE INTO `parametres_app` (`cle`, `valeur`) VALUES ('auto_send_emails', '0')");
+    $stmt = $pdo->prepare("INSERT IGNORE INTO `parametres_app` (`cle`, `valeur`) VALUES (?, ?)");
+    foreach ($defaults as $row) {
+        $stmt->execute($row);
+    }
     echo "Migration terminée: table parametres_app créée.\n";
 } catch (PDOException $e) {
     if (strpos($e->getMessage(), 'already exists') !== false || strpos($e->getMessage(), 'Duplicate') !== false) {

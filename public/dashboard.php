@@ -276,6 +276,13 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     <script>
         // CSRF token pour les requêtes AJAX
         window.CSRF_TOKEN = '<?= htmlspecialchars(ensureCsrfToken(), ENT_QUOTES, 'UTF-8') ?>';
+        <?php
+        require_once __DIR__ . '/../includes/parametres.php';
+        $importSftpEnabled = getParametre($pdo, 'module_import_sftp');
+        $importIonosEnabled = getParametre($pdo, 'module_import_ionos');
+        ?>
+        window.IMPORT_SFTP_ENABLED = <?= $importSftpEnabled ? 'true' : 'false' ?>;
+        window.IMPORT_IONOS_ENABLED = <?= $importIonosEnabled ? 'true' : 'false' ?>;
     </script>
 </head>
 <body class="page-dashboard">
@@ -2047,9 +2054,13 @@ $nbClients = is_array($clients) ? count($clients) : 0;
 
         async function runAutoImports() {
             if (document.hidden) return;
-            await triggerImport('/API/import/sftp_trigger.php', 'SFTP');
-            await new Promise(r => setTimeout(r, DELAY_BETWEEN_IMPORTS_MS));
-            await triggerImport('/API/import/ionos_trigger.php', 'IONOS');
+            if (window.IMPORT_SFTP_ENABLED) {
+                await triggerImport('/API/import/sftp_trigger.php', 'SFTP');
+                await new Promise(r => setTimeout(r, DELAY_BETWEEN_IMPORTS_MS));
+            }
+            if (window.IMPORT_IONOS_ENABLED) {
+                await triggerImport('/API/import/ionos_trigger.php', 'IONOS');
+            }
         }
 
         async function pollImportStatus() {
