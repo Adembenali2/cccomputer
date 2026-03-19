@@ -439,6 +439,27 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             </select>
                         </div>
                     </div>
+                    <!-- Modifier Achat : produits (description, quantité, prix) -->
+                    <div id="modifierFactureAchat" style="display: none;">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">Modifiez les produits, quantités et montants. Le PDF sera régénéré.</p>
+                        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Produits</strong>
+                            <button type="button" onclick="addModifierAchatProduit()" style="padding: 0.5rem 1rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.9rem;">+ Ajouter un produit</button>
+                        </div>
+                        <div id="modifierFactureAchatProduits"></div>
+                    </div>
+                    <!-- Modifier Service : description, montant -->
+                    <div id="modifierFactureService" style="display: none;">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">Modifiez le nom du service et le montant. Le PDF sera régénéré.</p>
+                        <div style="margin-bottom: 1rem;">
+                            <label for="modifierFactureServiceDescription" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Nom du service</label>
+                            <input type="text" id="modifierFactureServiceDescription" placeholder="Ex: Maintenance, Réparation..." style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label for="modifierFactureServiceMontant" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Montant HT (€)</label>
+                            <input type="number" id="modifierFactureServiceMontant" step="0.01" min="0" placeholder="0.00" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                        </div>
+                    </div>
                     <div style="margin-bottom: 1rem;">
                         <label for="modifierFactureDate" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Date de facture</label>
                         <input type="date" id="modifierFactureDate" name="date_facture" required style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">

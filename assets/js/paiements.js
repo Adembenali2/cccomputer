@@ -1491,7 +1491,7 @@
         /**
          * Ouvre le modal de modification d'une facture
          */
-        function openModifierFactureModal(factureId, factureNumero, dateFacture, statut, type, dateDebutPeriode, dateFinPeriode, clientId) {
+        async function openModifierFactureModal(factureId, factureNumero, dateFacture, statut, type, dateDebutPeriode, dateFinPeriode, clientId) {
             modifierFactureClientId = clientId || 0;
             document.getElementById('modifierFactureId').value = factureId;
             document.getElementById('modifierFactureDate').value = dateFacture || '';
@@ -1501,14 +1501,98 @@
             document.getElementById('modifierFactureStatut').value = statut || 'brouillon';
             document.getElementById('modifierFactureError').style.display = 'none';
             const isConsommation = (type || '') === 'Consommation';
+            const isAchat = (type || '') === 'Achat';
+            const isService = (type || '') === 'Service';
             document.getElementById('modifierFactureConsommation').style.display = isConsommation ? 'block' : 'none';
             document.getElementById('modifierFactureSimple').style.display = isConsommation ? 'none' : 'block';
+            document.getElementById('modifierFactureAchat').style.display = isAchat ? 'block' : 'none';
+            document.getElementById('modifierFactureService').style.display = isService ? 'block' : 'none';
             document.getElementById('modifierFactureMachinesContainer').innerHTML = '';
             if (isConsommation && modifierFactureClientId && dateDebutPeriode && dateFinPeriode) {
                 refreshModifierFactureCompteurs();
             }
+            if (isAchat || isService) {
+                try {
+                    const res = await fetch(`/API/factures_get_lignes.php?facture_id=${factureId}`, { credentials: 'include' });
+                    const data = await res.json();
+                    if (data.ok && data.lignes) {
+                        if (isAchat) {
+                            const container = document.getElementById('modifierFactureAchatProduits');
+                            container.innerHTML = '';
+                            data.lignes.forEach((l, i) => addModifierAchatProduitRow(l, i));
+                            if (data.lignes.length === 0) addModifierAchatProduitRow(null, 0);
+                        } else {
+                            const l = data.lignes[0] || {};
+                            document.getElementById('modifierFactureServiceDescription').value = l.description || '';
+                            document.getElementById('modifierFactureServiceMontant').value = l.prix_unitaire_ht || l.prix_unitaire || 0;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Erreur chargement lignes:', e);
+                    if (isAchat) addModifierAchatProduitRow(null, 0);
+                }
+            }
             document.getElementById('modifierFactureModalOverlay').classList.add('active');
             document.body.style.overflow = 'hidden';
+        }
+
+        function addModifierAchatProduitRow(ligne, index) {
+            const container = document.getElementById('modifierFactureAchatProduits');
+            if (!container) return;
+            const desc = (ligne && ligne.description) || '';
+            const qty = (ligne && (ligne.quantite ?? 1)) || 1;
+            const pu = (ligne && (ligne.prix_unitaire_ht ?? ligne.prix_unitaire ?? 0)) || 0;
+            const total = (ligne && ligne.total_ht) || (qty * pu);
+            const div = document.createElement('div');
+            div.className = 'modifier-achat-produit';
+            div.style.cssText = 'margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);';
+            div.innerHTML = `
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
+                    <div>
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Produit / Description</label>
+                        <input type="text" class="modifier-achat-desc" value="${(desc || '').replace(/"/g, '&quot;')}" placeholder="Ex: PC, Toner..." style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Quantité</label>
+                        <input type="number" class="modifier-achat-qty" step="0.01" min="0" value="${qty}" style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);" onchange="calculateModifierAchatTotal(this)">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Prix unitaire HT (€)</label>
+                        <input type="number" class="modifier-achat-prix" step="0.01" min="0" value="${pu}" style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);" onchange="calculateModifierAchatTotal(this)">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Total HT (€)</label>
+                        <input type="number" class="modifier-achat-total" step="0.01" value="${total}" readonly style="width: 100%; padding: 0.5rem; font-weight: 600; background: transparent; border: none;">
+                    </div>
+                    <div>
+                        <button type="button" onclick="removeModifierAchatProduit(this)" style="padding: 0.5rem; background: #ef4444; color: white; border: none; border-radius: var(--radius-sm); cursor: pointer;" title="Supprimer">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        function addModifierAchatProduit() {
+            const container = document.getElementById('modifierFactureAchatProduits');
+            const index = container ? container.children.length : 0;
+            addModifierAchatProduitRow(null, index);
+        }
+
+        function removeModifierAchatProduit(btn) {
+            const container = document.getElementById('modifierFactureAchatProduits');
+            if (container && container.children.length > 1) {
+                btn.closest('.modifier-achat-produit').remove();
+            }
+        }
+
+        function calculateModifierAchatTotal(el) {
+            const row = el.closest('.modifier-achat-produit');
+            if (!row) return;
+            const qty = parseFloat(row.querySelector('.modifier-achat-qty').value) || 0;
+            const pu = parseFloat(row.querySelector('.modifier-achat-prix').value) || 0;
+            row.querySelector('.modifier-achat-total').value = (qty * pu).toFixed(2);
         }
 
         async function refreshModifierFactureCompteurs() {
@@ -1574,8 +1658,11 @@
             errorDiv.style.display = 'none';
             const csrf = document.body.dataset.csrfToken || document.querySelector('[data-csrf-token]')?.dataset?.csrfToken || '';
             const isConsommation = type === 'Consommation';
+            const isAchat = type === 'Achat';
+            const isService = type === 'Service';
             try {
-                let url, body;
+                let url = '/API/factures_modifier.php';
+                let body;
                 if (isConsommation && dateDebut && dateFin) {
                     const machines = [];
                     document.querySelectorAll('.modifier-facture-machine-block').forEach(block => {
@@ -1595,8 +1682,44 @@
                         date_facture: dateFacture,
                         machines: machines.length > 0 ? machines : undefined
                     });
+                } else if (isAchat) {
+                    const lignes = [];
+                    document.querySelectorAll('.modifier-achat-produit').forEach(row => {
+                        const desc = (row.querySelector('.modifier-achat-desc')?.value || '').trim();
+                        const qty = parseFloat(row.querySelector('.modifier-achat-qty')?.value) || 0;
+                        const pu = parseFloat(row.querySelector('.modifier-achat-prix')?.value) || 0;
+                        const total = parseFloat(row.querySelector('.modifier-achat-total')?.value) || (qty * pu);
+                        if (desc) {
+                            lignes.push({ description: desc, type: 'Produit', quantite: qty, prix_unitaire: pu, total_ht: total });
+                        }
+                    });
+                    if (lignes.length === 0) {
+                        errorDiv.textContent = 'Ajoutez au moins un produit avec une description';
+                        errorDiv.style.display = 'block';
+                        return false;
+                    }
+                    body = JSON.stringify({ facture_id: parseInt(factureId), date_facture: dateFacture, statut, type, lignes });
+                } else if (isService) {
+                    const desc = (document.getElementById('modifierFactureServiceDescription')?.value || '').trim();
+                    const montant = parseFloat(document.getElementById('modifierFactureServiceMontant')?.value) || 0;
+                    if (!desc) {
+                        errorDiv.textContent = 'Saisissez le nom du service';
+                        errorDiv.style.display = 'block';
+                        return false;
+                    }
+                    if (montant <= 0) {
+                        errorDiv.textContent = 'Le montant doit être supérieur à 0';
+                        errorDiv.style.display = 'block';
+                        return false;
+                    }
+                    body = JSON.stringify({
+                        facture_id: parseInt(factureId),
+                        date_facture: dateFacture,
+                        statut,
+                        type,
+                        lignes: [{ description: desc, type: 'Service', quantite: 1, prix_unitaire: montant, total_ht: montant }]
+                    });
                 } else {
-                    url = '/API/factures_modifier.php';
                     body = JSON.stringify({ facture_id: parseInt(factureId), date_facture: dateFacture, statut, type });
                 }
                 const res = await fetch(url, {
@@ -4512,6 +4635,10 @@
         window.updateFacturesSelectionCount = updateFacturesSelectionCount;
         window.supprimerFacturesSelection = supprimerFacturesSelection;
         window.refreshModifierFactureCompteurs = refreshModifierFactureCompteurs;
+        window.addModifierAchatProduit = addModifierAchatProduit;
+        window.removeModifierAchatProduit = removeModifierAchatProduit;
+        window.calculateModifierAchatTotal = calculateModifierAchatTotal;
+        window.submitModifierFacture = submitModifierFacture;
         window.switchFacturesTab = switchFacturesTab;
         window.viewFacturePDF = viewFacturePDF;
         window.viewFacturePDFById = viewFacturePDFById;
