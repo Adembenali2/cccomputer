@@ -1382,23 +1382,27 @@
                     const statutColor = statutColors[facture.statut] || '#6b7280';
                     const statutLabel = statutLabels[facture.statut] || facture.statut;
                     
-                    // Bouton Action PDF
-                    let actionButtons = '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>';
-                    if (facture.pdf_path) {
-                        actionButtons = `
-                            <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center; flex-wrap: wrap;">
-                                <button onclick="viewFacturePDFById(${facture.id}, '${facture.numero}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                        <polyline points="14 2 14 8 20 8"></polyline>
-                                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                                    </svg>
-                                    PDF
-                                </button>
-                            </div>
-                        `;
-                    }
+                    // Boutons Actions : PDF, Modifier, Supprimer
+                    const dateForInput = facture.date_facture || (facture.date_facture_formatted ? facture.date_facture_formatted.split('/').reverse().join('-') : '');
+                    const safeNumero = (facture.numero || '').replace(/'/g, "\\'");
+                    let actionButtons = `
+                        <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+                            ${facture.pdf_path ? `
+                            <button onclick="viewFacturePDFById(${facture.id}, '${safeNumero}')" style="padding: 0.35rem 0.6rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;" title="Voir PDF">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                                PDF
+                            </button>
+                            ` : ''}
+                            <button onclick="openModifierFactureModal(${facture.id}, '${safeNumero}', '${dateForInput}', '${facture.statut}', '${facture.type}')" style="padding: 0.35rem 0.6rem; background: #6366f1; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;" title="Modifier">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                Modifier
+                            </button>
+                            <button onclick="confirmSupprimerFacture(${facture.id}, '${safeNumero}')" style="padding: 0.35rem 0.6rem; background: #ef4444; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;" title="Supprimer">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                Supprimer
+                            </button>
+                        </div>
+                    `;
                     
                     row.innerHTML = `
                         <td style="padding: 0.75rem; font-weight: 600; color: var(--text-primary);">${facture.numero}</td>
@@ -1432,18 +1436,85 @@
          * Ouvre le PDF d'une facture par son ID (avec régénération si nécessaire)
          */
         function viewFacturePDFById(factureId, factureNumero) {
-            // Utiliser le script PHP qui gère la régénération si nécessaire
             const pdfUrl = `/public/view_facture.php?id=${factureId}`;
             window.open(pdfUrl, '_blank');
         }
 
         /**
-         * Ouvre le PDF d'une facture par son ID (avec régénération si nécessaire)
+         * Ouvre le modal de modification d'une facture
          */
-        function viewFacturePDFById(factureId, factureNumero) {
-            // Utiliser le script PHP qui gère la régénération si nécessaire
-            const pdfUrl = `/public/view_facture.php?id=${factureId}`;
-            window.open(pdfUrl, '_blank');
+        function openModifierFactureModal(factureId, factureNumero, dateFacture, statut, type) {
+            document.getElementById('modifierFactureId').value = factureId;
+            document.getElementById('modifierFactureDate').value = dateFacture || '';
+            document.getElementById('modifierFactureStatut').value = statut || 'brouillon';
+            document.getElementById('modifierFactureType').value = type || 'Consommation';
+            document.getElementById('modifierFactureError').style.display = 'none';
+            document.getElementById('modifierFactureModalOverlay').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModifierFactureModal() {
+            document.getElementById('modifierFactureModalOverlay').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        async function submitModifierFacture(event) {
+            event.preventDefault();
+            const factureId = document.getElementById('modifierFactureId').value;
+            const dateFacture = document.getElementById('modifierFactureDate').value;
+            const statut = document.getElementById('modifierFactureStatut').value;
+            const type = document.getElementById('modifierFactureType').value;
+            const errorDiv = document.getElementById('modifierFactureError');
+            errorDiv.style.display = 'none';
+            const csrf = document.body.dataset.csrfToken || document.querySelector('[data-csrf-token]')?.dataset?.csrfToken || '';
+            try {
+                const res = await fetch('/API/factures_modifier.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                    body: JSON.stringify({ facture_id: parseInt(factureId), date_facture: dateFacture, statut, type }),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    closeModifierFactureModal();
+                    loadFacturesList();
+                    showToast('Facture modifiée avec succès', 'success');
+                } else {
+                    errorDiv.textContent = data.error || 'Erreur inconnue';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (e) {
+                errorDiv.textContent = 'Erreur de connexion';
+                errorDiv.style.display = 'block';
+            }
+            return false;
+        }
+
+        function confirmSupprimerFacture(factureId, factureNumero) {
+            if (confirm(`Êtes-vous sûr de vouloir supprimer la facture ${factureNumero} ?\n\nCette action est irréversible.`)) {
+                supprimerFacture(factureId);
+            }
+        }
+
+        async function supprimerFacture(factureId) {
+            const csrf = document.body.dataset.csrfToken || document.querySelector('[data-csrf-token]')?.dataset?.csrfToken || '';
+            try {
+                const res = await fetch('/API/factures_supprimer.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                    body: JSON.stringify({ facture_id: parseInt(factureId) }),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    loadFacturesList();
+                    showToast('Facture supprimée avec succès', 'success');
+                } else {
+                    showToast(data.error || 'Erreur lors de la suppression', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur de connexion', 'error');
+            }
         }
 
         /**
@@ -4334,6 +4405,9 @@
         window.closeFactureModal = closeFactureModal;
         window.openFacturesListModal = openFacturesListModal;
         window.closeFacturesListModal = closeFacturesListModal;
+        window.openModifierFactureModal = openModifierFactureModal;
+        window.closeModifierFactureModal = closeModifierFactureModal;
+        window.confirmSupprimerFacture = confirmSupprimerFacture;
         window.viewFacturePDF = viewFacturePDF;
         window.viewFacturePDFById = viewFacturePDFById;
         window.closePDFViewer = closePDFViewer;

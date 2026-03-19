@@ -172,6 +172,29 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 </div>
             </div>
 
+            <!-- Section Gestion des factures -->
+            <div class="section-card" id="sectionGestionFactures">
+                <div class="section-card-header">
+                    <div class="section-card-icon" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="section-card-title">Gestion des factures</h3>
+                </div>
+                <div class="section-card-content">
+                    <p class="section-card-description">Modifier, supprimer et gérer toutes vos factures</p>
+                    <button class="section-card-btn" onclick="openSection('factures')">
+                        Gérer les factures
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
             <!-- Section Générer facture -->
             <div class="section-card" id="sectionGenererFacture">
                 <div class="section-card-header">
@@ -407,6 +430,48 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeFacturesListModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Modifier facture -->
+    <div class="modal-overlay" id="modifierFactureModalOverlay" onclick="closeModifierFactureModal()">
+        <div class="modal" id="modifierFactureModal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title">Modifier la facture</h2>
+                <button class="modal-close" onclick="closeModifierFactureModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="modifierFactureForm" onsubmit="return submitModifierFacture(event)">
+                    <input type="hidden" id="modifierFactureId" name="facture_id">
+                    <div style="margin-bottom: 1rem;">
+                        <label for="modifierFactureDate" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Date de facture</label>
+                        <input type="date" id="modifierFactureDate" name="date_facture" required style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label for="modifierFactureStatut" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Statut</label>
+                        <select id="modifierFactureStatut" name="statut" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                            <option value="brouillon">Brouillon</option>
+                            <option value="envoyee">Envoyée</option>
+                            <option value="payee">Payée</option>
+                            <option value="en_retard">En retard</option>
+                            <option value="annulee">Annulée</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label for="modifierFactureType" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Type</label>
+                        <select id="modifierFactureType" name="type" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                            <option value="Consommation">Consommation</option>
+                            <option value="Achat">Achat</option>
+                            <option value="Service">Service</option>
+                        </select>
+                    </div>
+                    <div id="modifierFactureError" style="display: none; padding: 0.75rem; background: rgba(239,68,68,0.1); border-radius: var(--radius-md); color: #dc2626; margin-bottom: 1rem;"></div>
+                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModifierFactureModal()">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
