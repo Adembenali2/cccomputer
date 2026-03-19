@@ -1570,6 +1570,28 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
             flex-wrap: wrap;
         }
 
+        .paiement-validation-select {
+            padding: 0.4rem 0.5rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            min-width: 120px;
+        }
+        .paiement-validation-select:hover {
+            border-color: var(--accent-primary);
+        }
+        .paiement-validation-select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+        .paiement-validation-select:disabled {
+            opacity: 0.7;
+            cursor: wait;
+        }
+
         .payments-table .actions select {
             padding: 0.4rem 0.5rem;
             border: 2px solid var(--border-color);
@@ -1822,7 +1844,7 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         }
     </style>
 </head>
-<body>
+<body data-csrf-token="<?= h($CSRF ?? '') ?>">
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
 <main class="page-container page-profil">
@@ -2427,17 +2449,23 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                             <td colspan="9" class="aucun">Aucun paiement trouvé.</td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($paiementsList as $paiement): ?>
-                            <tr>
+                        <?php foreach ($paiementsList as $paiement): 
+                            $statutVal = $paiement['statut'] ?? 'en_cours';
+                            $isValide = ($statutVal === 'recu');
+                            $statutLabel = $isValide ? 'Validé' : 'En attente';
+                        ?>
+                            <tr data-paiement-id="<?= (int)($paiement['id'] ?? 0) ?>">
                                 <td><?= h($paiement['date_paiement'] ?? '') ?></td>
                                 <td><?= h($paiement['client_nom'] ?? 'N/A') ?></td>
                                 <td><?= h($paiement['facture_numero'] ?? '') ?></td>
                                 <td><?= number_format((float)($paiement['montant'] ?? 0), 2, ',', ' ') ?> €</td>
                                 <td><?= h($paiement['mode_paiement'] ?? '') ?></td>
                                 <td>
-                                    <span class="badge <?= $paiement['statut'] === 'valide' ? 'success' : ($paiement['statut'] === 'en_attente' ? 'warning' : '') ?>">
-                                        <?= h($paiement['statut'] ?? '') ?>
-                                    </span>
+                                    <select class="paiement-validation-select" data-paiement-id="<?= (int)($paiement['id'] ?? 0) ?>" data-reference="<?= h($paiement['reference'] ?? '') ?>" title="Changer la validation du paiement">
+                                        <option value="en_cours" <?= !$isValide ? 'selected' : '' ?>>En attente</option>
+                                        <option value="recu" <?= $isValide ? 'selected' : '' ?>>Validé</option>
+                                    </select>
+                                    <span class="validation-loading" style="display:none; margin-left:0.5rem; font-size:0.85rem;">...</span>
                                 </td>
                                 <td><?= h($paiement['reference'] ?? '') ?></td>
                                 <td>
@@ -2906,6 +2934,67 @@ function scrollToSection(event, sectionId) {
                 triggerImport('/API/import/ionos_trigger.php', btnIonos, 'Import IONOS');
             });
         }
+    })();
+
+    /* Validation des paiements (profil) */
+    (function() {
+        const csrf = document.body.dataset.csrfToken || (typeof csrfToken !== 'undefined' ? csrfToken : '');
+        document.querySelectorAll('.paiement-validation-select').forEach(function(sel) {
+            sel.addEventListener('change', function() {
+                const paiementId = parseInt(this.dataset.paiementId, 10);
+                const reference = this.dataset.reference || '';
+                const newStatut = this.value;
+                const row = this.closest('tr');
+                const loadingSpan = row ? row.querySelector('.validation-loading') : null;
+                const prevValue = this.dataset.prevValue || this.value;
+
+                if (newStatut === prevValue) return;
+
+                if (newStatut === 'recu' && !confirm('Valider le paiement ' + reference + ' ? Le reçu sera envoyé automatiquement au client par email.')) {
+                    this.value = prevValue;
+                    return;
+                }
+                if (newStatut === 'en_cours' && !confirm('Mettre le paiement ' + reference + ' en attente ?')) {
+                    this.value = prevValue;
+                    return;
+                }
+
+                if (loadingSpan) loadingSpan.style.display = 'inline';
+                this.disabled = true;
+
+                fetch('/API/paiements_changer_statut.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                    body: JSON.stringify({
+                        paiement_id: paiementId,
+                        statut: newStatut,
+                        csrf_token: csrf
+                    }),
+                    credentials: 'include'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.ok) {
+                        if (data.recu_envoye) {
+                            alert('Paiement validé. Reçu envoyé au client.');
+                        }
+                        if (sel.dataset) sel.dataset.prevValue = newStatut;
+                    } else {
+                        alert('Erreur : ' + (data.error || 'Action échouée'));
+                        sel.value = prevValue;
+                    }
+                })
+                .catch(function(err) {
+                    alert('Erreur : ' + (err.message || 'Connexion échouée'));
+                    sel.value = prevValue;
+                })
+                .finally(function() {
+                    sel.disabled = false;
+                    if (loadingSpan) loadingSpan.style.display = 'none';
+                });
+            });
+            if (sel.dataset) sel.dataset.prevValue = sel.value;
+        });
     })();
 
 </script>
