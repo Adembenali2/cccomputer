@@ -1771,7 +1771,54 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         }
         .header-import-btns {
             display: flex;
+            gap: 0.75rem;
+        }
+        .btn-import-sftp,
+        .btn-import-ionos {
+            display: inline-flex;
+            align-items: center;
             gap: 0.5rem;
+            padding: 0.6rem 1.25rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+        }
+        .btn-import-sftp {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            color: #fff;
+        }
+        .btn-import-sftp:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4);
+            background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+        }
+        .btn-import-ionos {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            color: #fff;
+        }
+        .btn-import-ionos:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(249, 115, 22, 0.4);
+            background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+        }
+        .btn-import-sftp:active:not(:disabled),
+        .btn-import-ionos:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        .btn-import-sftp:disabled,
+        .btn-import-ionos:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .btn-import-sftp svg,
+        .btn-import-ionos svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
         }
     </style>
 </head>
@@ -1783,10 +1830,16 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         <h1 class="page-title">Gestion des utilisateurs</h1>
         <?php if ($isAdminOrDirigeant): ?>
         <div class="header-import-btns" data-csrf="<?= h($CSRF) ?>">
-            <button type="button" id="btnImportSftp" class="btn btn-secondary" title="Lancer l'import SFTP manuellement">
+            <button type="button" id="btnImportSftp" class="btn-import-sftp" title="Lancer l'import SFTP manuellement">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
                 Import SFTP
             </button>
-            <button type="button" id="btnImportIonos" class="btn btn-secondary" title="Lancer l'import IONOS manuellement">
+            <button type="button" id="btnImportIonos" class="btn-import-ionos" title="Lancer l'import IONOS manuellement">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                </svg>
                 Import IONOS
             </button>
         </div>

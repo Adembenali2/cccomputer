@@ -22,7 +22,7 @@ if (!function_exists('h')) {
 ?>
 <link rel="stylesheet" href="/assets/css/header.css">
 
-<header class="main-header">
+<header class="main-header" data-csrf-token="<?= h($csrf) ?>">
   <a href="/public/dashboard.php" class="logo-header" id="logo-link">
     <img src="/assets/logos/logo.png" alt="Logo CCComputer" width="32" height="32" class="logo-animated" id="logo-img">
     <h1 class="company-name">CCComputer</h1>
@@ -333,5 +333,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // Exposer la fonction globalement pour qu'elle puisse être appelée depuis d'autres pages
     window.updateMessagerieBadge = updateMessagerieBadge;
   }
+
+  // --- EXÉCUTION AUTOMATIQUE DES ENVOIS PROGRAMMÉS (toutes les 1 min) ---
+  (function initScheduledSendsPolling() {
+    const INTERVAL_MS = 60000; // 1 minute
+    const DELAY_FIRST_RUN = 5000;  // Premier appel après 5 secondes (éviter surcharge au chargement)
+    let isRunning = false;
+
+    async function executeScheduledSends() {
+      if (isRunning) return;
+      if (document.hidden) return; // Ne pas exécuter si l'onglet est en arrière-plan
+      isRunning = true;
+      try {
+        const header = document.querySelector('.main-header');
+        const csrfToken = header?.dataset?.csrfToken || '';
+        const res = await fetch('/API/cron_execute_scheduled.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
+          },
+          body: JSON.stringify({}),
+          credentials: 'include'
+        });
+        const data = await res.json();
+        if (data.ok && data.executed > 0 && data.sent > 0) {
+          // Rafraîchir la liste si on est sur la page paiements
+          if (typeof window.loadProgrammerEnvoisList === 'function') {
+            window.loadProgrammerEnvoisList();
+          }
+        }
+      } catch (err) {
+        // Silencieux - ne pas perturber l'utilisateur
+      } finally {
+        isRunning = false;
+      }
+    }
+
+    setTimeout(executeScheduledSends, DELAY_FIRST_RUN);
+    setInterval(executeScheduledSends, INTERVAL_MS);
+  })();
 });
 </script>
