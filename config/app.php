@@ -49,6 +49,7 @@ return [
         'reply_to_email' => $_ENV['SMTP_REPLY_TO'] ?? 'facture@camsongroup.fr',
     ],
     'auto_send_invoices' => (bool)($_ENV['AUTO_SEND_INVOICES'] ?? false),
+    'app_url' => rtrim($_ENV['APP_URL'] ?? '', '/'),
     'company' => [
         'name' => $_ENV['COMPANY_NAME'] ?? 'CC Computer',
         'address' => trim($_ENV['COMPANY_ADDRESS'] ?? '7 Rue Fraizier, 93210 Saint-Denis'),

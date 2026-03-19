@@ -685,7 +685,14 @@ class InvoiceEmailService
             ? '<p class="footer-line"><strong>Contact :</strong> <a href="mailto:' . htmlspecialchars($billingContactEmail, ENT_QUOTES, 'UTF-8') . '" style="color:#2563eb;text-decoration:none;">' . htmlspecialchars($billingContactEmail, ENT_QUOTES, 'UTF-8') . '</a></p>'
             : '';
 
+        $appUrl = rtrim($this->config['app_url'] ?? '', '/');
+        $logoUrl = $appUrl ? $appUrl . '/assets/logos/logo.png' : '';
+        $logoBlock = $logoUrl
+            ? '<img src="' . htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8') . '" alt="' . $companyNameEsc . '" class="logo-img" width="140" style="max-width:140px;height:auto;">'
+            : '<span style="font-size:24px;font-weight:bold;color:#232f3e;">' . $companyNameEsc . '</span>';
+
         $replacements = [
+            '{{logo_block}}' => $logoBlock,
             '{{header_title}}' => $directorFullName,
             '{{company_name}}' => $companyNameEsc,
             '{{client_name}}' => $clientNom,
