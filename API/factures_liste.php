@@ -50,8 +50,16 @@ try {
     $factures = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Formater les données pour le frontend
+    $statutService = new \App\Services\FactureStatutService($pdo);
     $formatted = [];
     foreach ($factures as $facture) {
+        $statut = $facture['statut'] ?? '';
+        $emailEnvoye = (bool)($facture['email_envoye'] ?? false);
+        // Envoyé : si email envoyé ou statut envoyee/payee
+        $statutEnvoi = ($emailEnvoye || in_array($statut, ['envoyee', 'payee'], true)) ? 'envoye' : 'non_envoye';
+        // Échéance : payé si payee, annulée si annulee, sinon en_attente/en_cours/en_retard selon date
+        $statutEcheance = ($statut === 'payee') ? 'payee' : (($statut === 'annulee') ? 'annulee' : $statutService->computeStatutFromDate($facture['date_facture']));
+
         $formatted[] = [
             'id' => (int)$facture['id'],
             'numero' => $facture['numero'],
@@ -63,7 +71,9 @@ try {
             'montant_ht' => (float)$facture['montant_ht'],
             'tva' => (float)$facture['tva'],
             'montant_ttc' => (float)$facture['montant_ttc'],
-            'statut' => $facture['statut'],
+            'statut' => $statut,
+            'statut_envoi' => $statutEnvoi,
+            'statut_echeance' => $statutEcheance,
             'pdf_path' => $facture['pdf_path'],
             'client_id' => (int)$facture['client_id'],
             'client_nom' => $facture['client_nom'] ?? 'Client inconnu',
@@ -71,7 +81,7 @@ try {
             'client_nom_dirigeant' => $facture['client_nom_dirigeant'] ?? '',
             'client_prenom_dirigeant' => $facture['client_prenom_dirigeant'] ?? '',
             'client_email' => $facture['client_email'] ?? '',
-            'email_envoye' => (bool)($facture['email_envoye'] ?? false),
+            'email_envoye' => $emailEnvoye,
             'date_envoi_email' => $facture['date_envoi_email'] ?? null,
             'created_at' => $facture['created_at']
         ];

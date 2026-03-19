@@ -522,9 +522,15 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             Payé
                         </button>
                         <button class="filter-btn" data-status="envoyee" onclick="filterPaiementsByStatus('envoyee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            En attente
+                            Envoyé
                         </button>
                         <button class="filter-btn" data-status="brouillon" onclick="filterPaiementsByStatus('brouillon')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            Non envoyé
+                        </button>
+                        <button class="filter-btn" data-status="en_attente" onclick="filterPaiementsByStatus('en_attente')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
+                            En attente
+                        </button>
+                        <button class="filter-btn" data-status="en_cours" onclick="filterPaiementsByStatus('en_cours')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
                             En cours
                         </button>
                         <button class="filter-btn" data-status="en_retard" onclick="filterPaiementsByStatus('en_retard')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">

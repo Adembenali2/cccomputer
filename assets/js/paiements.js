@@ -1409,27 +1409,14 @@
                     row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
                     row.onmouseleave = function() { this.style.background = ''; };
                     
-                    // Badge de statut
-                    const statutColors = {
-                        'brouillon': '#6b7280',
-                        'en_attente': '#6b7280',
-                        'envoyee': '#3b82f6',
-                        'en_cours': '#f59e0b',
-                        'payee': '#10b981',
-                        'en_retard': '#ef4444',
-                        'annulee': '#000000'
-                    };
-                    const statutLabels = {
-                        'brouillon': 'Brouillon',
-                        'en_attente': 'En attente',
-                        'envoyee': 'Envoyée',
-                        'en_cours': 'En cours',
-                        'payee': 'Payée',
-                        'en_retard': 'En retard',
-                        'annulee': 'Annulée'
-                    };
-                    const statutColor = statutColors[facture.statut] || '#6b7280';
-                    const statutLabel = statutLabels[facture.statut] || facture.statut;
+                    // Deux badges : Envoyé + Échéance (Payé/En attente/En cours/En retard)
+                    const envoiLabel = (facture.statut_envoi === 'envoye') ? 'Envoyé' : 'Non envoyé';
+                    const envoiColor = (facture.statut_envoi === 'envoye') ? '#3b82f6' : '#6b7280';
+                    const echeanceLabels = { payee: 'Payé', en_attente: 'En attente', en_cours: 'En cours', en_retard: 'En retard', annulee: 'Annulée' };
+                    const echeanceColors = { payee: '#10b981', en_attente: '#6b7280', en_cours: '#f59e0b', en_retard: '#ef4444', annulee: '#000000' };
+                    const statutEcheance = facture.statut_echeance || facture.statut;
+                    const echeanceLabel = echeanceLabels[statutEcheance] || statutEcheance;
+                    const echeanceColor = echeanceColors[statutEcheance] || '#6b7280';
                     
                     // Boutons Actions : PDF, Modifier, Supprimer
                     const dateForInput = facture.date_facture || (facture.date_facture_formatted ? facture.date_facture_formatted.split('/').reverse().join('-') : '');
@@ -1465,7 +1452,10 @@
                         <td style="padding: 0.75rem; text-align: right; color: var(--text-primary);">${facture.tva.toFixed(2).replace('.', ',')} €</td>
                         <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">${facture.montant_ttc.toFixed(2).replace('.', ',')} €</td>
                         <td style="padding: 0.75rem; text-align: center;">
-                            <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: var(--radius-md); background: ${statutColor}20; color: ${statutColor}; font-size: 0.85rem; font-weight: 600;">${statutLabel}</span>
+                            <span style="display: inline-flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center;">
+                                <span style="display: inline-block; padding: 0.25rem 0.6rem; border-radius: var(--radius-md); background: ${envoiColor}20; color: ${envoiColor}; font-size: 0.8rem; font-weight: 600;">${envoiLabel}</span>
+                                <span style="display: inline-block; padding: 0.25rem 0.6rem; border-radius: var(--radius-md); background: ${echeanceColor}20; color: ${echeanceColor}; font-size: 0.8rem; font-weight: 600;">${echeanceLabel}</span>
+                            </span>
                         </td>
                                 <td style="padding: 0.75rem; text-align: center;">${actionButtons}</td>
                     `;
@@ -1916,32 +1906,18 @@
                     row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
                     row.onmouseleave = function() { this.style.background = ''; };
                     
-                    // Couleurs et labels pour les statuts
-                    const statutColors = {
-                        'brouillon': '#6b7280',
-                        'en_attente': '#6b7280',
-                        'envoyee': '#3b82f6',
-                        'en_cours': '#f59e0b',
-                        'payee': '#10b981',
-                        'en_retard': '#ef4444',
-                        'annulee': '#000000'
-                    };
-                    const statutLabels = {
-                        'brouillon': 'Brouillon',
-                        'en_attente': 'En attente',
-                        'envoyee': 'Envoyée',
-                        'en_cours': 'En cours',
-                        'payee': 'Payé',
-                        'en_retard': 'En retard',
-                        'annulee': 'Annulée'
-                    };
-                    const currentStatutColor = statutColors[facture.statut] || '#6b7280';
-                    const currentStatutLabel = statutLabels[facture.statut] || facture.statut;
-                    
-                    // Badge de statut en lecture seule (pas de modification possible)
+                    // Deux badges : Envoyé + Échéance (Payé/En attente/En cours/En retard)
+                    const envoiLabel = (facture.statut_envoi === 'envoye') ? 'Envoyé' : 'Non envoyé';
+                    const envoiColor = (facture.statut_envoi === 'envoye') ? '#3b82f6' : '#6b7280';
+                    const echeanceLabels = { payee: 'Payé', en_attente: 'En attente', en_cours: 'En cours', en_retard: 'En retard', annulee: 'Annulée' };
+                    const echeanceColors = { payee: '#10b981', en_attente: '#6b7280', en_cours: '#f59e0b', en_retard: '#ef4444', annulee: '#000000' };
+                    const statutEcheance = facture.statut_echeance || facture.statut;
+                    const echeanceLabel = echeanceLabels[statutEcheance] || statutEcheance;
+                    const echeanceColor = echeanceColors[statutEcheance] || '#6b7280';
                     const statutBadge = `
-                        <span style="display: inline-block; padding: 0.5rem 1rem; border-radius: var(--radius-md); background: ${currentStatutColor}20; color: ${currentStatutColor}; font-size: 0.9rem; font-weight: 600; border: 1px solid ${currentStatutColor}40;">
-                            ${currentStatutLabel}
+                        <span style="display: inline-flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+                            <span style="display: inline-block; padding: 0.35rem 0.65rem; border-radius: var(--radius-md); background: ${envoiColor}20; color: ${envoiColor}; font-size: 0.8rem; font-weight: 600; border: 1px solid ${envoiColor}40;">${envoiLabel}</span>
+                            <span style="display: inline-block; padding: 0.35rem 0.65rem; border-radius: var(--radius-md); background: ${echeanceColor}20; color: ${echeanceColor}; font-size: 0.8rem; font-weight: 600; border: 1px solid ${echeanceColor}40;">${echeanceLabel}</span>
                         </span>
                     `;
                     
@@ -1981,9 +1957,17 @@
             
             let filtered = allPaiements;
             
-            // Filtrer par statut
+            // Filtrer par statut (statut_echeance pour payee/en_attente/en_cours/en_retard, statut_envoi pour envoyee/non_envoye)
             if (currentPaiementStatusFilter !== 'all') {
-                filtered = filtered.filter(f => f.statut === currentPaiementStatusFilter);
+                if (['payee', 'en_attente', 'en_cours', 'en_retard', 'annulee'].includes(currentPaiementStatusFilter)) {
+                    filtered = filtered.filter(f => (f.statut_echeance || f.statut) === currentPaiementStatusFilter);
+                } else if (currentPaiementStatusFilter === 'envoyee') {
+                    filtered = filtered.filter(f => f.statut_envoi === 'envoye');
+                } else if (currentPaiementStatusFilter === 'brouillon') {
+                    filtered = filtered.filter(f => f.statut_envoi === 'non_envoye');
+                } else {
+                    filtered = filtered.filter(f => f.statut === currentPaiementStatusFilter);
+                }
             }
             
             // Filtrer par recherche textuelle
@@ -2007,8 +1991,8 @@
         function filterPaiementsByStatus(status) {
             currentPaiementStatusFilter = status;
             
-            // Mettre à jour les boutons de filtre
-            document.querySelectorAll('.filter-btn').forEach(btn => {
+            // Mettre à jour les boutons de filtre (paiements modal uniquement)
+            document.querySelectorAll('#paiementsModal .filter-btn[data-status]').forEach(btn => {
                 btn.classList.remove('active');
                 if (btn.dataset.status === status) {
                     btn.classList.add('active');
