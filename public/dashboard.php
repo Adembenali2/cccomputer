@@ -1994,6 +1994,59 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
     })();
 
+    // === Import automatique SFTP + IONOS (toutes les 1 min) + notifications ===
+    (function() {
+        const AUTO_IMPORT_INTERVAL_MS = 60000; // 1 minute
+        const INITIAL_DELAY_MS = 3000; // 3 secondes après chargement
+        const DELAY_BETWEEN_IMPORTS_MS = 2000; // 2s entre SFTP et IONOS
+
+        async function triggerImport(url, name) {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
+                });
+                const data = await res.json();
+                if (data && data.ok) {
+                    const run = data.last_run;
+                    const durationSec = data.duration_ms ? (data.duration_ms / 1000).toFixed(1) : '?';
+                    if (run && run.error) {
+                        showNotificationToast('Import ' + name, run.error, 'error');
+                        return false;
+                    }
+                    if (name === 'SFTP') {
+                        const files = run && run.files_processed != null ? run.files_processed : 0;
+                        const text = files === 0 ? 'Aucun nouveau fichier' : (files === 1 ? '1 fichier importé' : files + ' fichiers importés');
+                        showNotificationToast('Import SFTP', text + ' en ' + durationSec + 's', files > 0 ? 'success' : 'info');
+                    } else {
+                        const rows = run && run.rows_inserted != null ? run.rows_inserted : (run && run.inserted_rows != null ? run.inserted_rows : 0);
+                        const text = rows === 0 ? 'Aucune nouvelle ligne' : (rows === 1 ? '1 ligne insérée' : rows + ' lignes insérées');
+                        showNotificationToast('Import IONOS', text + ' en ' + durationSec + 's', rows > 0 ? 'success' : 'info');
+                    }
+                    return true;
+                } else {
+                    const errMsg = (data && data.error) ? data.error : 'Erreur lors de l\'import';
+                    showNotificationToast('Import ' + name, errMsg, 'error');
+                }
+            } catch (e) {
+                showNotificationToast('Import ' + name, e.message || 'Erreur de connexion', 'error');
+            }
+            return false;
+        }
+
+        async function runAutoImports() {
+            if (document.hidden) return;
+            await triggerImport('/API/import/sftp_trigger.php', 'SFTP');
+            await new Promise(r => setTimeout(r, DELAY_BETWEEN_IMPORTS_MS));
+            await triggerImport('/API/import/ionos_trigger.php', 'IONOS');
+        }
+
+        setTimeout(runAutoImports, INITIAL_DELAY_MS);
+        setInterval(runAutoImports, AUTO_IMPORT_INTERVAL_MS);
+    })();
+
     </script>
 </body>
 </html>
