@@ -49,6 +49,7 @@ return [
         'reply_to_email' => $_ENV['SMTP_REPLY_TO'] ?? 'facture@camsongroup.fr',
     ],
     'auto_send_invoices' => (bool)($_ENV['AUTO_SEND_INVOICES'] ?? false),
+    'auto_send_receipts' => filter_var($_ENV['AUTO_SEND_RECEIPTS'] ?? true, FILTER_VALIDATE_BOOLEAN),
     'app_url' => rtrim($_ENV['APP_URL'] ?? '', '/'),
     'company' => [
         'name' => $_ENV['COMPANY_NAME'] ?? 'CC Computer',

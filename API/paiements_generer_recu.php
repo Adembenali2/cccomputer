@@ -114,18 +114,26 @@ function generateRecuPDF(PDO $pdo, int $paiementId): string {
     $pdf->setCellPaddings(1, 1, 1, 1);
     $pdf->setCellHeightRatio(1.1);
 
-    // LOGO
-    $logoPath = __DIR__ . '/../assets/logos/logo1.png';
+    // LOGO et config société
+    $config = require __DIR__ . '/../config/app.php';
+    $company = $config['company'] ?? [];
+    $companyName = $company['name'] ?? 'CC Computer';
+    $companyAddress = trim($company['address'] ?? '');
+    $logoPath = __DIR__ . '/../assets/logos/logo.png';
+    if (!file_exists($logoPath)) {
+        $logoPath = __DIR__ . '/../assets/logos/logo1.png';
+    }
     if (file_exists($logoPath)) {
         $pdf->Image($logoPath, 15, 10, 60, 0, 'PNG');
     }
 
-    // EXPÉDITEUR
+    // EXPÉDITEUR (config)
     $pdf->SetY(25);
     $pdf->SetFont('helvetica', '', 10);
-    $pdf->Cell(0, 5, 'SSS international', 0, 1, 'R');
-    $pdf->Cell(0, 5, '7, rue pierre brolet', 0, 1, 'R');
-    $pdf->Cell(0, 5, '93100 Stains', 0, 1, 'R');
+    $pdf->Cell(0, 5, $companyName, 0, 1, 'R');
+    if ($companyAddress) {
+        $pdf->Cell(0, 5, $companyAddress, 0, 1, 'R');
+    }
 
     // TITRE
     $pdf->SetY(50);

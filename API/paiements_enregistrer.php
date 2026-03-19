@@ -260,6 +260,21 @@ try {
 
         $details = sprintf('Facture #%s - Ref: %s - %.2f € - %s', $facture['numero'] ?? $factureId, $reference, $montant, $modePaiement);
         enregistrerAction($pdo, $userId, 'paiement_enregistre', $details);
+
+        // Envoi automatique du reçu par email au client (si PDF généré, pas de justificatif uploadé, et config activée)
+        $appConfig = require __DIR__ . '/../config/app.php';
+        if ($recuPath && !$justificatifPath && ($appConfig['auto_send_receipts'] ?? true)) {
+            try {
+                require_once __DIR__ . '/../vendor/autoload.php';
+                $receiptService = new \App\Services\PaymentReceiptEmailService($pdo, $appConfig);
+                $result = $receiptService->sendReceipt((int)$paiementId);
+                if (!$result['success']) {
+                    error_log('[paiements_enregistrer] Envoi auto reçu échoué: ' . ($result['message'] ?? ''));
+                }
+            } catch (Throwable $e) {
+                error_log('[paiements_enregistrer] Erreur envoi auto reçu: ' . $e->getMessage());
+            }
+        }
         
         jsonResponse([
             'ok' => true,
