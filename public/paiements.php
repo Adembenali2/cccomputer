@@ -121,30 +121,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
 
         <!-- Sections Grid -->
         <div class="sections-grid">
-            <!-- Section Paiements -->
-            <div class="section-card" id="sectionPaiements">
-                <div class="section-card-header">
-                    <div class="section-card-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                            <line x1="1" y1="10" x2="23" y2="10"></line>
-                        </svg>
-                    </div>
-                    <h3 class="section-card-title">Paiements</h3>
-                </div>
-                <div class="section-card-content">
-                    <p class="section-card-description">Consultez et gérez tous les paiements enregistrés</p>
-                    <button class="section-card-btn" onclick="openSection('paiements')">
-                        Voir les paiements
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14"></path>
-                            <path d="M12 5l7 7-7 7"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Section Factures -->
+            <!-- Section Factures (fusionnée avec paiements) -->
             <div class="section-card" id="sectionFactures">
                 <div class="section-card-header">
                     <div class="section-card-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
@@ -159,10 +136,10 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     <h3 class="section-card-title">Factures</h3>
                 </div>
                 <div class="section-card-content">
-                    <p class="section-card-description">Liste, modifier, supprimer et gérer toutes vos factures</p>
+                    <p class="section-card-description">Liste des factures, paiements, modifier, supprimer et gérer</p>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button class="section-card-btn" onclick="openSection('factures')">
-                            Gérer les factures
+                            Gérer les factures et paiements
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M5 12h14"></path>
                                 <path d="M12 5l7 7-7 7"></path>
@@ -339,11 +316,11 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
     </div>
 
 
-    <!-- Modal Liste Factures -->
+    <!-- Modal Factures (fusionné avec paiements) -->
     <div class="modal-overlay" id="facturesListModalOverlay" onclick="closeFacturesListModal()">
         <div class="modal" id="facturesListModal" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h2 class="modal-title">Liste des factures</h2>
+                <h2 class="modal-title">Factures et paiements</h2>
                 <button class="modal-close" onclick="closeFacturesListModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -359,6 +336,20 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         <button type="button" id="facturesTabArchive" onclick="switchFacturesTab('archive')" style="padding: 0.75rem 1.25rem; font-weight: 600; font-size: 0.95rem; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; background: none; color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">
                             Archive <span id="facturesTabArchiveCount"></span>
                         </button>
+                    </div>
+                    <!-- Recherche -->
+                    <div style="margin-bottom: 1rem;">
+                        <input type="text" id="facturesSearchInput" placeholder="Rechercher par numéro, client ou date..." style="width: 100%; padding: 0.75rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem;" oninput="filterFactures()">
+                    </div>
+                    <!-- Filtres par statut -->
+                    <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="filter-btn-factures active" data-status="all" onclick="filterFacturesByStatus('all')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--accent-primary); color: white; cursor: pointer; font-size: 0.9rem;">Tous</button>
+                        <button class="filter-btn-factures" data-status="payee" onclick="filterFacturesByStatus('payee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem;">Payé</button>
+                        <button class="filter-btn-factures" data-status="envoyee" onclick="filterFacturesByStatus('envoyee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem;">Envoyé</button>
+                        <button class="filter-btn-factures" data-status="brouillon" onclick="filterFacturesByStatus('brouillon')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem;">Non envoyé</button>
+                        <button class="filter-btn-factures" data-status="en_attente" onclick="filterFacturesByStatus('en_attente')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem;">En attente</button>
+                        <button class="filter-btn-factures" data-status="en_cours" onclick="filterFacturesByStatus('en_cours')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem;">En cours</button>
+                        <button class="filter-btn-factures" data-status="en_retard" onclick="filterFacturesByStatus('en_retard')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem;">En retard</button>
                     </div>
                     <!-- Barre de filtres -->
                     <div style="margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
@@ -383,6 +374,10 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         <span><span id="facturesCount">0</span> facture(s) trouvée(s)</span>
                         <span id="facturesFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button type="button" onclick="openHistoriquePaiementsModal()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                                Historique des paiements
+                            </button>
                             <button type="button" id="btnSupprimerSelection" onclick="supprimerFacturesSelection()" disabled style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem;" title="Supprimer les factures sélectionnées">
                                 Supprimer la sélection (<span id="facturesSelectedCount">0</span>)
                             </button>
@@ -472,108 +467,6 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         <button type="submit" class="btn btn-primary">Enregistrer</button>
                     </div>
                 </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Paiements -->
-    <div class="modal-overlay" id="paiementsModalOverlay" onclick="closePaiementsModal()">
-        <div class="modal" id="paiementsModal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h2 class="modal-title">Gestion des paiements</h2>
-                <button class="modal-close" onclick="closePaiementsModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="paiementsListLoading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                    Chargement des paiements...
-                </div>
-                <div id="paiementsListContainer" style="display: none;">
-                    <!-- Barre de recherche -->
-                    <div style="margin-bottom: 1.5rem;">
-                        <div style="position: relative;">
-                            <input 
-                                type="text" 
-                                id="paiementsSearchInput" 
-                                placeholder="Rechercher par numéro de facture, client ou date..." 
-                                style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
-                                oninput="filterPaiements()"
-                            />
-                            <svg 
-                                width="18" 
-                                height="18" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                stroke-width="2"
-                                style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none;"
-                            >
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <path d="m21 21-4.35-4.35"></path>
-                            </svg>
-                        </div>
-                    </div>
-                    
-                    <!-- Filtres par statut -->
-                    <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="filter-btn active" data-status="all" onclick="filterPaiementsByStatus('all')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--accent-primary); color: white; cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            Tous
-                        </button>
-                        <button class="filter-btn" data-status="payee" onclick="filterPaiementsByStatus('payee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            Payé
-                        </button>
-                        <button class="filter-btn" data-status="envoyee" onclick="filterPaiementsByStatus('envoyee')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            Envoyé
-                        </button>
-                        <button class="filter-btn" data-status="brouillon" onclick="filterPaiementsByStatus('brouillon')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            Non envoyé
-                        </button>
-                        <button class="filter-btn" data-status="en_attente" onclick="filterPaiementsByStatus('en_attente')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            En attente
-                        </button>
-                        <button class="filter-btn" data-status="en_cours" onclick="filterPaiementsByStatus('en_cours')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            En cours
-                        </button>
-                        <button class="filter-btn" data-status="en_retard" onclick="filterPaiementsByStatus('en_retard')" style="padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">
-                            En retard
-                        </button>
-                    </div>
-                    
-                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                        <span><span id="paiementsCount">0</span> facture(s) trouvée(s)</span>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <span id="paiementsFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
-                            <button onclick="openHistoriquePaiementsModal()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                </svg>
-                                Historique des paiements
-                            </button>
-                        </div>
-                    </div>
-                    <div style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <thead>
-                                <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
-                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant TTC</th>
-                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Statut</th>
-                                    <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="paiementsListTableBody">
-                                <!-- Les factures seront ajoutées ici dynamiquement -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div id="paiementsListError" style="display: none; text-align: center; padding: 2rem; color: #ef4444;">
-                    Erreur lors du chargement des paiements
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closePaiementsModal()">Fermer</button>
             </div>
         </div>
     </div>

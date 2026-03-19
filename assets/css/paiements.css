@@ -788,7 +788,8 @@
         }
 
         /* ====== Filtres Paiements ====== */
-        .filter-btn.active {
+        .filter-btn.active,
+        .filter-btn-factures.active {
             background: var(--accent-primary) !important;
             color: white !important;
             border-color: var(--accent-primary) !important;

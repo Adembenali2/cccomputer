@@ -28,10 +28,8 @@
             console.log('openSection appelé avec:', section);
             if (section === 'generer-facture') {
                 openFactureModal();
-            } else if (section === 'factures') {
+            } else if (section === 'factures' || section === 'paiements') {
                 openFacturesListModal();
-            } else if (section === 'paiements') {
-                openPaiementsModal();
             } else if (section === 'payer') {
                 openPayerModal();
             } else if (section === 'facture-mail') {
@@ -1289,6 +1287,7 @@
         // Variable globale pour stocker toutes les factures
         let allFactures = [];
         let facturesActiveTab = 'mois_en_cours'; // 'mois_en_cours' | 'archive'
+        let currentFactureStatusFilter = 'all';
 
         function getFacturesForCurrentTab() {
             const now = new Date();
@@ -1362,6 +1361,7 @@
                 if (data.ok && data.factures) {
                     // Stocker toutes les factures pour le filtrage
                     allFactures = data.factures;
+                    allPaiements = data.factures; // Alias pour compatibilité (bloc fusionné)
                     updateFacturesTabCounts();
                     // Afficher selon l'onglet actif (mois en cours par défaut)
                     filterFactures();
@@ -1730,30 +1730,70 @@
         /**
          * Filtre les factures selon nom, prénom, numéro (dans l'onglet actif)
          */
+        function filterFacturesByStatus(status) {
+            currentFactureStatusFilter = status;
+            document.querySelectorAll('#facturesListModal .filter-btn-factures[data-status]').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.status === status) {
+                    btn.classList.add('active');
+                    btn.style.background = 'var(--accent-primary)';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = 'var(--accent-primary)';
+                } else {
+                    btn.style.background = 'var(--bg-secondary)';
+                    btn.style.color = 'var(--text-primary)';
+                    btn.style.borderColor = 'var(--border-color)';
+                }
+            });
+            filterFactures();
+        }
+
         function filterFactures() {
-            const baseFactures = getFacturesForCurrentTab();
+            let baseFactures = getFacturesForCurrentTab();
             const filterNom = (document.getElementById('facturesFilterNom')?.value || '').toLowerCase().trim();
             const filterPrenom = (document.getElementById('facturesFilterPrenom')?.value || '').toLowerCase().trim();
             const filterNumero = (document.getElementById('facturesFilterNumero')?.value || '').toLowerCase().trim();
-            
-            if (!filterNom && !filterPrenom && !filterNumero) {
-                displayFactures(baseFactures);
-                return;
-            }
-            
-            const filtered = baseFactures.filter(facture => {
-                if (filterNumero && (!facture.numero || !facture.numero.toLowerCase().includes(filterNumero))) return false;
-                if (filterNom) {
-                    const matchNom = (facture.client_nom && facture.client_nom.toLowerCase().includes(filterNom)) ||
-                        (facture.client_nom_dirigeant && facture.client_nom_dirigeant.toLowerCase().includes(filterNom)) ||
-                        (facture.client_code && facture.client_code.toLowerCase().includes(filterNom));
-                    if (!matchNom) return false;
+            const searchTerm = (document.getElementById('facturesSearchInput')?.value || '').toLowerCase().trim();
+
+            // Filtre par statut
+            if (currentFactureStatusFilter !== 'all') {
+                if (['payee', 'en_attente', 'en_cours', 'en_retard', 'annulee'].includes(currentFactureStatusFilter)) {
+                    baseFactures = baseFactures.filter(f => (f.statut_echeance || f.statut) === currentFactureStatusFilter);
+                } else if (currentFactureStatusFilter === 'envoyee') {
+                    baseFactures = baseFactures.filter(f => f.statut_envoi === 'envoye');
+                } else if (currentFactureStatusFilter === 'brouillon') {
+                    baseFactures = baseFactures.filter(f => f.statut_envoi === 'non_envoye');
+                } else {
+                    baseFactures = baseFactures.filter(f => f.statut === currentFactureStatusFilter);
                 }
-                if (filterPrenom && (!facture.client_prenom_dirigeant || !facture.client_prenom_dirigeant.toLowerCase().includes(filterPrenom))) return false;
-                return true;
-            });
-            
-            displayFactures(filtered);
+            }
+
+            // Recherche globale
+            if (searchTerm) {
+                baseFactures = baseFactures.filter(f => {
+                    const num = (f.numero || '').toLowerCase();
+                    const client = (f.client_nom || '').toLowerCase();
+                    const date = (f.date_facture_formatted || f.date_facture || '').toLowerCase();
+                    return num.includes(searchTerm) || client.includes(searchTerm) || date.includes(searchTerm);
+                });
+            }
+
+            // Filtres Nom, Prénom, Numéro
+            if (filterNom || filterPrenom || filterNumero) {
+                baseFactures = baseFactures.filter(facture => {
+                    if (filterNumero && (!facture.numero || !facture.numero.toLowerCase().includes(filterNumero))) return false;
+                    if (filterNom) {
+                        const matchNom = (facture.client_nom && facture.client_nom.toLowerCase().includes(filterNom)) ||
+                            (facture.client_nom_dirigeant && facture.client_nom_dirigeant.toLowerCase().includes(filterNom)) ||
+                            (facture.client_code && facture.client_code.toLowerCase().includes(filterNom));
+                        if (!matchNom) return false;
+                    }
+                    if (filterPrenom && (!facture.client_prenom_dirigeant || !facture.client_prenom_dirigeant.toLowerCase().includes(filterPrenom))) return false;
+                    return true;
+                });
+            }
+
+            displayFactures(baseFactures);
         }
 
         function toggleFacturesSelectAll(checkbox) {
@@ -1808,144 +1848,31 @@
         let currentPaiementStatusFilter = 'all';
 
         /**
-         * Ouvre le modal des paiements
+         * Ouvre le modal des paiements (redirige vers Factures - fusionné)
          */
         function openPaiementsModal() {
-            const modal = document.getElementById('paiementsModal');
-            const overlay = document.getElementById('paiementsModalOverlay');
-            
-            if (!modal || !overlay) {
-                console.error('Modal paiements introuvable');
-                return;
-            }
-            
-            overlay.classList.add('active');
-            document.body.style.overflow = 'hidden';
-            
-            // Charger les factures
-            loadPaiementsList();
+            openFacturesListModal();
         }
 
         /**
-         * Ferme le modal des paiements
+         * Ferme le modal des paiements (redirige vers Factures - fusionné)
          */
         function closePaiementsModal() {
-            const modal = document.getElementById('paiementsModal');
-            const overlay = document.getElementById('paiementsModalOverlay');
-            
-            if (modal && overlay) {
-                overlay.classList.remove('active');
-                document.body.style.overflow = '';
-            }
+            closeFacturesListModal();
         }
 
         /**
-         * Charge la liste des factures pour les paiements
+         * Charge la liste des factures pour les paiements (alias - fusionné dans Factures)
          */
         async function loadPaiementsList() {
-            const loadingDiv = document.getElementById('paiementsListLoading');
-            const container = document.getElementById('paiementsListContainer');
-            const errorDiv = document.getElementById('paiementsListError');
-            
-            loadingDiv.style.display = 'block';
-            container.style.display = 'none';
-            errorDiv.style.display = 'none';
-            
-            try {
-                const response = await fetch('/API/factures_liste.php');
-                const result = await response.json();
-                
-                if (result.ok && result.factures) {
-                    allPaiements = result.factures;
-                    filteredPaiements = [...allPaiements];
-                    displayPaiements(allPaiements);
-                    
-                    // Mettre à jour le compteur
-                    document.getElementById('paiementsCount').textContent = allPaiements.length;
-                    
-                    loadingDiv.style.display = 'none';
-                    container.style.display = 'block';
-                } else {
-                    loadingDiv.style.display = 'none';
-                    errorDiv.style.display = 'block';
-                    errorDiv.textContent = result.error || 'Erreur lors du chargement des factures';
-                }
-            } catch (error) {
-                console.error('Erreur lors du chargement des paiements:', error);
-                loadingDiv.style.display = 'none';
-                errorDiv.style.display = 'block';
-                errorDiv.textContent = 'Erreur lors du chargement des factures';
-            }
+            loadFacturesList();
         }
 
         /**
-         * Affiche les factures dans le tableau des paiements
+         * Affiche les factures (alias - fusionné, redirige vers displayFactures)
          */
         function displayPaiements(factures) {
-            const tableBody = document.getElementById('paiementsListTableBody');
-            const filteredCountSpan = document.getElementById('paiementsFilteredCount');
-            
-            tableBody.innerHTML = '';
-            
-            if (factures.length === 0) {
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            Aucune facture trouvée
-                        </td>
-                    </tr>
-                `;
-                filteredCountSpan.textContent = '';
-            } else {
-                filteredCountSpan.textContent = `${factures.length} affichée(s)`;
-                
-                factures.forEach(facture => {
-                    const row = document.createElement('tr');
-                    row.style.borderBottom = '1px solid var(--border-color)';
-                    row.style.transition = 'background 0.2s';
-                    row.onmouseenter = function() { this.style.background = 'var(--bg-secondary)'; };
-                    row.onmouseleave = function() { this.style.background = ''; };
-                    
-                    // Deux badges : Envoyé + Échéance (Payé/En attente/En cours/En retard)
-                    const envoiLabel = (facture.statut_envoi === 'envoye') ? 'Envoyé' : 'Non envoyé';
-                    const envoiColor = (facture.statut_envoi === 'envoye') ? '#3b82f6' : '#6b7280';
-                    const echeanceLabels = { payee: 'Payé', en_attente: 'En attente', en_cours: 'En cours', en_retard: 'En retard', annulee: 'Annulée' };
-                    const echeanceColors = { payee: '#10b981', en_attente: '#6b7280', en_cours: '#f59e0b', en_retard: '#ef4444', annulee: '#000000' };
-                    const statutEcheance = facture.statut_echeance || facture.statut;
-                    const echeanceLabel = echeanceLabels[statutEcheance] || statutEcheance;
-                    const echeanceColor = echeanceColors[statutEcheance] || '#6b7280';
-                    const statutBadge = `
-                        <span style="display: inline-flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-                            <span style="display: inline-block; padding: 0.35rem 0.65rem; border-radius: var(--radius-md); background: ${envoiColor}20; color: ${envoiColor}; font-size: 0.8rem; font-weight: 600; border: 1px solid ${envoiColor}40;">${envoiLabel}</span>
-                            <span style="display: inline-block; padding: 0.35rem 0.65rem; border-radius: var(--radius-md); background: ${echeanceColor}20; color: ${echeanceColor}; font-size: 0.8rem; font-weight: 600; border: 1px solid ${echeanceColor}40;">${echeanceLabel}</span>
-                        </span>
-                    `;
-                    
-                    row.innerHTML = `
-                        <td style="padding: 0.75rem; color: var(--text-primary); font-weight: 600;">${facture.numero}</td>
-                        <td style="padding: 0.75rem; color: var(--text-primary);">${facture.date_facture_formatted}</td>
-                        <td style="padding: 0.75rem; color: var(--text-primary);">
-                            ${facture.client_nom || 'Client inconnu'}
-                            ${facture.client_code ? ` (${facture.client_code})` : ''}
-                        </td>
-                        <td style="padding: 0.75rem; text-align: right; color: var(--text-primary); font-weight: 600;">
-                            ${facture.montant_ttc.toFixed(2).replace('.', ',')} €
-                        </td>
-                        <td style="padding: 0.75rem; text-align: center;">
-                            ${statutBadge}
-                        </td>
-                        <td style="padding: 0.75rem; text-align: center;">
-                            ${facture.pdf_path ? `
-                                <button onclick="viewFacturePDFById(${facture.id}, '${facture.numero}')" style="padding: 0.4rem 0.75rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';" onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
-                                    PDF
-                                </button>
-                            ` : '<span style="color: var(--text-muted); font-size: 0.85rem;">N/A</span>'}
-                        </td>
-                    `;
-                    
-                    tableBody.appendChild(row);
-                });
-            }
+            displayFactures(factures);
         }
 
         /**
@@ -3911,8 +3838,8 @@
                     showMessage('Paiement enregistré avec succès !' + refMessage, 'success');
                     closePayerModal();
                     // Recharger la liste des paiements si le modal est ouvert
-                    if (document.getElementById('paiementsModalOverlay')?.classList.contains('active')) {
-                loadPaiementsList();
+                    if (document.getElementById('facturesListModalOverlay')?.classList.contains('active')) {
+                loadFacturesList();
                     }
                 } else {
                     const errorMsg = result.error || 'Erreur inconnue';
@@ -4603,6 +4530,7 @@
         window.closePDFViewer = closePDFViewer;
         window.openPDFInNewTab = openPDFInNewTab;
         window.filterFactures = filterFactures;
+        window.filterFacturesByStatus = filterFacturesByStatus;
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
         window.submitFactureForm = submitFactureForm;
@@ -4664,7 +4592,6 @@
                     const factureModalOverlay = document.getElementById('factureModalOverlay');
                     const facturesListModal = document.getElementById('facturesListModal');
                     const facturesListModalOverlay = document.getElementById('facturesListModalOverlay');
-                    const paiementsModalOverlay = document.getElementById('paiementsModalOverlay');
                     const pdfViewerModalOverlay = document.getElementById('pdfViewerModalOverlay');
                     const payerModalOverlay = document.getElementById('payerModalOverlay');
                     const historiquePaiementsModalOverlay = document.getElementById('historiquePaiementsModalOverlay');
@@ -4687,8 +4614,6 @@
                         closeHistoriquePaiementsModal();
                     } else if (payerModalOverlay && payerModalOverlay.classList.contains('active')) {
                         closePayerModal();
-                    } else if (paiementsModalOverlay && paiementsModalOverlay.classList.contains('active')) {
-                        closePaiementsModal();
                     } else if (factureModalOverlay && factureModalOverlay.classList.contains('active')) {
                         closeFactureModal();
                     } else if (facturesListModalOverlay && facturesListModalOverlay.classList.contains('active')) {
