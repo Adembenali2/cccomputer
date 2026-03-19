@@ -27,7 +27,14 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
             $pdo->query("SELECT 1 FROM factures LIMIT 1");
             $pdo->query("SELECT 1 FROM facture_lignes LIMIT 1");
         } catch (PDOException $e) {
-            jsonResponse(['ok' => false, 'error' => 'Tables introuvables ou erreur DB'], 500);
+            error_log('factures_generer DB: ' . $e->getMessage());
+            $msg = $e->getMessage();
+            if (strpos($msg, 'en_attente') !== false || strpos($msg, 'Data truncated') !== false) {
+                $msg = 'Migration requise: exécutez ALTER TABLE factures MODIFY COLUMN statut enum(\'brouillon\',\'en_attente\',\'envoyee\',\'en_cours\',\'en_retard\',\'payee\',\'annulee\')...';
+            } elseif (strpos($msg, "doesn't exist") !== false || strpos($msg, 'exist') !== false) {
+                $msg = 'Table manquante: ' . $msg;
+            }
+            jsonResponse(['ok' => false, 'error' => $msg], 500);
         }
 
         // Récupération des données
@@ -112,8 +119,8 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
         $pdo->beginTransaction();
 
         try {
-            // Insertion Facture
-            $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, 'en_attente', :created_by)");
+            // Insertion Facture (statut: en_attente si migration faite, brouillon sinon)
+            $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, :statut, :created_by)");
             $stmt->execute([
                 ':id_client' => $clientId,
                 ':numero' => $numeroFacture,
@@ -122,6 +129,7 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
                 ':montant_ht' => $montantHT,
                 ':tva' => $tva,
                 ':montant_ttc' => $montantTTC,
+                ':statut' => 'brouillon',
                 ':created_by' => currentUserId()
             ]);
             $factureId = $pdo->lastInsertId();
