@@ -608,11 +608,11 @@ try {
             ]
         ]);
         
-        // Enregistrer dans historique (user_id=null pour action système)
+        // Enregistrer dans historique (user_id=null = Système, IP du serveur)
         if ($runOk) {
-            enregistrerAction($pdo, null, 'import_sftp_ok', $message);
+            enregistrerAction($pdo, null, 'import_sftp_ok', $message, getServerIp());
         } else {
-            enregistrerAction($pdo, null, 'import_sftp_error', implode('; ', $stats['errors']));
+            enregistrerAction($pdo, null, 'import_sftp_error', implode('; ', $stats['errors']), getServerIp());
         }
         
         exit($runOk ? 0 : 1);
@@ -649,7 +649,7 @@ try {
                 'error' => $errorMsg
             ]
         ]);
-        enregistrerAction($pdoErr, null, 'import_sftp_error', $errorMsg);
+        enregistrerAction($pdoErr, null, 'import_sftp_error', $errorMsg, getServerIp());
         if (isset($lockAcquired) && $lockAcquired) {
             $pdoErr->query("SELECT RELEASE_LOCK('$lockName')");
         }

@@ -409,6 +409,43 @@
   background-color: rgba(59, 130, 246, 0.06);
 }
 
+.history-row-error {
+  background-color: rgba(220, 38, 38, 0.06);
+}
+
+.history-row-error:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+}
+
+/* Bloc spécial Historique des imports */
+.historique-imports-section {
+  margin-bottom: 2.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, var(--bg-primary, #fff) 0%, var(--bg-secondary, #f8fafc) 100%);
+  border: 2px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.historique-imports-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  margin: 0 0 1rem;
+}
+
+.historique-imports-table {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.historique-main-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  margin: 0 0 1rem;
+}
+
 .history-table time {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;

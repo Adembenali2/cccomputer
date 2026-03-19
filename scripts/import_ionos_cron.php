@@ -576,11 +576,11 @@ try {
             ]
         ]);
         
-        // Enregistrer dans historique
+        // Enregistrer dans historique (user_id=null = Système, IP du serveur)
         $ionosDetails = $hasError
             ? implode('; ', array_slice($stats['errors'], 0, 3))
             : "{$stats['rows_inserted']} lignes importées";
-        enregistrerAction($pdo, null, $hasError ? 'import_ionos_error' : 'import_ionos_ok', $ionosDetails);
+        enregistrerAction($pdo, null, $hasError ? 'import_ionos_error' : 'import_ionos_ok', $ionosDetails, getServerIp());
         
         logMessage("=== FIN IMPORT IONOS ===");
         logMessage("Durée totale: " . number_format($duration / 1000, 2) . "s");
@@ -624,7 +624,7 @@ try {
                 'error' => $e->getMessage()
             ]
         ]);
-        enregistrerAction($pdo, null, 'import_ionos_error', $e->getMessage());
+        enregistrerAction($pdo, null, 'import_ionos_error', $e->getMessage(), getServerIp());
     } catch (Throwable $logError) {
         // Ignorer les erreurs de log
     }

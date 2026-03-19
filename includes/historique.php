@@ -84,6 +84,22 @@ const AUDIT_ACTION_MAX_LENGTH = 64;
 // ====== FONCTIONS ======
 
 /**
+ * Retourne l'IP du serveur (machine où le site tourne).
+ * Utile pour les actions système (imports cron, etc.).
+ */
+function getServerIp(): string
+{
+    if (!empty($_SERVER['SERVER_ADDR'])) {
+        return $_SERVER['SERVER_ADDR'];
+    }
+    $hostname = gethostname();
+    if ($hostname && ($ip = gethostbyname($hostname)) && $ip !== $hostname) {
+        return $ip;
+    }
+    return '127.0.0.1';
+}
+
+/**
  * Détecte la meilleure IP client derrière un proxy (Railway).
  */
 function getClientIp(): string
@@ -166,17 +182,18 @@ function sanitizeAuditDetails(string $details): string
 /**
  * Enregistre une action dans l'historique (audit).
  *
- * @param PDO        $pdo     Connexion PDO
- * @param int|null   $userId  ID utilisateur (null pour action système)
- * @param string     $action  Code court (ex: "connexion_reussie", "client_ajoute")
- * @param string     $details Détails libres (sera nettoyé via sanitizeAuditDetails)
+ * @param PDO        $pdo       Connexion PDO
+ * @param int|null   $userId    ID utilisateur (null pour action système)
+ * @param string     $action    Code court (ex: "connexion_reussie", "client_ajoute")
+ * @param string     $details   Détails libres (sera nettoyé via sanitizeAuditDetails)
+ * @param string|null $ipOverride IP à enregistrer (null = client IP, ou passer getServerIp() pour actions cron)
  * @return bool
  */
-function enregistrerAction(PDO $pdo, ?int $userId, string $action, string $details = ''): bool
+function enregistrerAction(PDO $pdo, ?int $userId, string $action, string $details = '', ?string $ipOverride = null): bool
 {
     $action = mb_substr($action, 0, AUDIT_ACTION_MAX_LENGTH);
     $details = sanitizeAuditDetails($details);
-    $ipAddress = getClientIp();
+    $ipAddress = $ipOverride ?? getClientIp();
 
     $sql = "INSERT INTO historique (user_id, action, details, ip_address, date_action)
             VALUES (:user_id, :action, :details, :ip_address, NOW())";

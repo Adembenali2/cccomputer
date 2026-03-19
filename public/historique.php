@@ -128,6 +128,9 @@ if ($searchAction !== '') {
     $params[':action_filter'] = $searchAction;
 }
 
+// Exclure les imports du bloc principal (ils ont leur propre bloc)
+$whereConditions[] = "h.action NOT LIKE 'import_%'";
+
 $sqlBase = "
     SELECT h.id, h.date_action, h.action, h.details, h.ip_address, u.nom, u.prenom
     FROM historique h
@@ -211,6 +214,21 @@ try {
 }
 
 $filtersActive = ($searchUser !== '' || $searchDateDebut !== '' || $searchDateFin !== '' || $searchCategory !== '' || $searchAction !== '');
+
+// ====== Historique des imports (bloc séparé) ======
+$historiqueImports = [];
+try {
+    $importStmt = $pdo->query("
+        SELECT h.id, h.date_action, h.action, h.details, h.ip_address
+        FROM historique h
+        WHERE h.action LIKE 'import_%'
+        ORDER BY h.date_action DESC
+        LIMIT 50
+    ");
+    $historiqueImports = $importStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} catch (PDOException $e) {
+    error_log('historique.php imports: ' . $e->getMessage());
+}
 
 // ====== Cache formatDetails ======
 static $detailsCache = ['clients' => [], 'sav' => [], 'livraisons' => [], 'utilisateurs' => []];
@@ -446,6 +464,63 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
         </div>
     </form>
 
+    <!-- Bloc spécial : Historique des imports (séparé des autres) -->
+    <section class="historique-imports-section" role="region" aria-label="Historique des imports">
+        <h2 class="historique-imports-title">Historique des imports</h2>
+        <div class="table-responsive historique-imports-table">
+            <table class="history-table" role="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Date &amp; Heure</th>
+                        <th scope="col">Utilisateur</th>
+                        <th scope="col">Action</th>
+                        <th scope="col">Détails</th>
+                        <th scope="col">IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($historiqueImports)): ?>
+                    <tr>
+                        <td colspan="5" class="aucun">
+                            <span class="empty-icon" aria-hidden="true">📭</span>
+                            Aucun import enregistré.
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <?php foreach ($historiqueImports as $h): 
+                        $isError = in_array($h['action'], ['import_sftp_error', 'import_ionos_error'], true);
+                    ?>
+                    <tr class="<?= $isError ? 'history-row-error' : '' ?>">
+                        <td data-label="Date & Heure">
+                            <time datetime="<?= h($h['date_action']) ?>"><?= h(formatDate($h['date_action'], 'd/m/Y H:i')) ?></time>
+                        </td>
+                        <td data-label="Utilisateur">Système</td>
+                        <td data-label="Action">
+                            <span class="action-badge <?= $isError ? 'badge-system' : 'badge-system' ?>"><?= h(formatActionLabel($h['action'])) ?></span>
+                        </td>
+                        <td data-label="Détails">
+                            <?php if (!empty($h['details'])): ?>
+                                <span class="details-text"><?= h($h['details']) ?></span>
+                            <?php else: ?>
+                                <span class="text-muted">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <td data-label="IP">
+                            <?php if (!empty($h['ip_address'])): ?>
+                                <code class="ip-address"><?= h($h['ip_address']) ?></code>
+                            <?php else: ?>
+                                <span class="text-muted">—</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <h2 class="historique-main-title">Historique des actions</h2>
     <div class="table-responsive" role="region" aria-label="Tableau de l'historique">
         <table class="history-table" role="table">
             <thead>
