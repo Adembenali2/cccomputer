@@ -229,9 +229,7 @@ try {
             ]);
         }
         
-        // Mettre à jour le statut de la facture (brouillon = en attente de validation paiement)
-        $stmt = $pdo->prepare("UPDATE factures SET statut = :statut WHERE id = :id");
-        $stmt->execute([':statut' => 'brouillon', ':id' => $factureId]);
+        // Ne pas modifier le statut de la facture à l'enregistrement (en_attente, envoyee, en_cours, en_retard selon date)
         
         $pdo->commit();
 
@@ -259,7 +257,7 @@ try {
             'message' => 'Paiement enregistré avec succès',
             'paiement_id' => $paiementId,
             'facture_id' => $factureId,
-            'nouveau_statut' => 'brouillon',
+            'nouveau_statut' => $facture['statut'] ?? 'en_attente',
             'reference' => $reference,
             'recu_path' => $finalRecuPath ?? null,
             'recu_genere' => $recuPath ? true : false

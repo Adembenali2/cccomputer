@@ -66,9 +66,9 @@ try {
         $stmt->execute([':statut' => $newStatut, ':id' => $paiementId]);
 
         if ($factureId > 0) {
-            $factureStatut = ($newStatut === 'recu') ? 'payee' : 'brouillon';
-            $stmt = $pdo->prepare("UPDATE factures SET statut = :statut WHERE id = :id");
-            $stmt->execute([':statut' => $factureStatut, ':id' => $factureId]);
+            require_once __DIR__ . '/../vendor/autoload.php';
+            $statutService = new \App\Services\FactureStatutService($pdo);
+            $statutService->updateFactureStatutAfterPayment($factureId);
         }
 
         $pdo->commit();

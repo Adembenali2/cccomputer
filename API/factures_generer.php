@@ -113,7 +113,7 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
 
         try {
             // Insertion Facture
-            $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, 'brouillon', :created_by)");
+            $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, 'en_attente', :created_by)");
             $stmt->execute([
                 ':id_client' => $clientId,
                 ':numero' => $numeroFacture,
@@ -211,7 +211,7 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
             error_log('Vérification finale: Le fichier PDF existe bien: ' . $actualFilePath . ' (Taille: ' . filesize($actualFilePath) . ' bytes)');
 
             // Mise à jour chemin PDF (on stocke le chemin web relatif)
-            $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ?, statut = 'envoyee' WHERE id = ?")->execute([$pdfWebPath, $factureId]);
+            $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ? WHERE id = ?")->execute([$pdfWebPath, $factureId]);
 
             $pdo->commit();
 

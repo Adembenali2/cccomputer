@@ -1360,12 +1360,17 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         }
 
         /* Couleurs spécifiques pour les statuts de factures */
+        .factures-table .badge.statut-en-attente,
         .factures-table .badge.statut-brouillon {
             background: rgba(107, 114, 128, 0.15);
             color: #6b7280;
             border: 1px solid rgba(107, 114, 128, 0.3);
         }
 
+        .factures-table .badge.statut-en-cours {
+            background: #fef3c7;
+            color: #b45309;
+        }
         .factures-table .badge.statut-envoyee {
             background: rgba(59, 130, 246, 0.15);
             color: #3b82f6;

@@ -54,7 +54,7 @@ try {
     
     // Statut
     if (isset($data['statut'])) {
-        $statutsValides = ['brouillon', 'envoyee', 'payee', 'en_retard', 'annulee'];
+        $statutsValides = ['brouillon', 'en_attente', 'envoyee', 'en_cours', 'en_retard', 'payee', 'annulee'];
         if (!in_array($data['statut'], $statutsValides, true)) {
             jsonResponse(['ok' => false, 'error' => 'Statut invalide'], 400);
         }

@@ -28,7 +28,7 @@ try {
     $statut = trim($data['statut']);
     
     // Valider le statut
-    $statutsValides = ['brouillon', 'envoyee', 'payee', 'en_retard', 'annulee'];
+    $statutsValides = ['brouillon', 'en_attente', 'envoyee', 'en_cours', 'payee', 'en_retard', 'annulee'];
     if (!in_array($statut, $statutsValides, true)) {
         jsonResponse(['ok' => false, 'error' => 'Statut invalide'], 400);
     }

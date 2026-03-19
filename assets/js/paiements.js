@@ -1412,14 +1412,18 @@
                     // Badge de statut
                     const statutColors = {
                         'brouillon': '#6b7280',
+                        'en_attente': '#6b7280',
                         'envoyee': '#3b82f6',
+                        'en_cours': '#f59e0b',
                         'payee': '#10b981',
                         'en_retard': '#ef4444',
                         'annulee': '#000000'
                     };
                     const statutLabels = {
                         'brouillon': 'Brouillon',
+                        'en_attente': 'En attente',
                         'envoyee': 'Envoyée',
+                        'en_cours': 'En cours',
                         'payee': 'Payée',
                         'en_retard': 'En retard',
                         'annulee': 'Annulée'
@@ -1915,14 +1919,18 @@
                     // Couleurs et labels pour les statuts
                     const statutColors = {
                         'brouillon': '#6b7280',
+                        'en_attente': '#6b7280',
                         'envoyee': '#3b82f6',
+                        'en_cours': '#f59e0b',
                         'payee': '#10b981',
                         'en_retard': '#ef4444',
                         'annulee': '#000000'
                     };
                     const statutLabels = {
-                        'brouillon': 'En cours',
-                        'envoyee': 'En attente',
+                        'brouillon': 'Brouillon',
+                        'en_attente': 'En attente',
+                        'envoyee': 'Envoyée',
+                        'en_cours': 'En cours',
                         'payee': 'Payé',
                         'en_retard': 'En retard',
                         'annulee': 'Annulée'
@@ -2695,7 +2703,7 @@
             const emptyEl = document.getElementById(cfg.empty);
             if (!resultsEl || !emptyEl) return;
 
-            const statutLabels = { brouillon: 'Brouillon', envoyee: 'Envoyée', payee: 'Payée', en_retard: 'En retard', annulee: 'Annulée' };
+            const statutLabels = { brouillon: 'Brouillon', en_attente: 'En attente', envoyee: 'Envoyée', en_cours: 'En cours', payee: 'Payée', en_retard: 'En retard', annulee: 'Annulée' };
             resultsEl.innerHTML = '';
             results.forEach(r => {
                 const row = document.createElement('div');

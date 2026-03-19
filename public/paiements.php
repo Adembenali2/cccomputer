@@ -453,9 +453,11 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             <label for="modifierFactureStatut" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Statut</label>
                             <select id="modifierFactureStatut" name="statut" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
                                 <option value="brouillon">Brouillon</option>
+                                <option value="en_attente">En attente</option>
                                 <option value="envoyee">Envoyée</option>
-                                <option value="payee">Payée</option>
+                                <option value="en_cours">En cours</option>
                                 <option value="en_retard">En retard</option>
+                                <option value="payee">Payée</option>
                                 <option value="annulee">Annulée</option>
                             </select>
                         </div>
@@ -818,9 +820,11 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                                     <select id="factureSearchFilterStatut" class="facture-search-filter-select">
                                         <option value="">Tous les statuts</option>
                                         <option value="brouillon">Brouillon</option>
+                                        <option value="en_attente">En attente</option>
                                         <option value="envoyee">Envoyée</option>
-                                        <option value="payee">Payée</option>
+                                        <option value="en_cours">En cours</option>
                                         <option value="en_retard">En retard</option>
+                                        <option value="payee">Payée</option>
                                         <option value="annulee">Annulée</option>
                                     </select>
                                     <button type="button" class="btn btn-secondary" onclick="factureSearchApplyFilters('facture')">Filtrer</button>
@@ -1157,9 +1161,11 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                                 <select id="progFactureSearchFilterStatut" class="facture-search-filter-select">
                                     <option value="">Tous les statuts</option>
                                     <option value="brouillon">Brouillon</option>
+                                    <option value="en_attente">En attente</option>
                                     <option value="envoyee">Envoyée</option>
-                                    <option value="payee">Payée</option>
+                                    <option value="en_cours">En cours</option>
                                     <option value="en_retard">En retard</option>
+                                    <option value="payee">Payée</option>
                                     <option value="annulee">Annulée</option>
                                 </select>
                                 <button type="button" class="btn btn-secondary" onclick="factureSearchApplyFilters('prog')">Filtrer</button>

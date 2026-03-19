@@ -60,8 +60,9 @@ try {
         $stmt->execute([':id' => $paiementId]);
 
         if ($factureId > 0) {
-            $stmt = $pdo->prepare("UPDATE factures SET statut = 'payee' WHERE id = :id");
-            $stmt->execute([':id' => $factureId]);
+            require_once __DIR__ . '/../vendor/autoload.php';
+            $statutService = new \App\Services\FactureStatutService($pdo);
+            $statutService->updateFactureStatutAfterPayment($factureId);
         }
 
         $pdo->commit();

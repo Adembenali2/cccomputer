@@ -86,7 +86,7 @@ try {
         $conditions[] = 'f.numero LIKE :numero';
         $params[':numero'] = '%' . $numeroFacture . '%';
     }
-    if ($statut !== '' && in_array($statut, ['brouillon', 'envoyee', 'payee', 'en_retard', 'annulee'], true)) {
+    if ($statut !== '' && in_array($statut, ['brouillon', 'en_attente', 'envoyee', 'en_cours', 'en_retard', 'payee', 'annulee'], true)) {
         $conditions[] = 'f.statut = :statut';
         $params[':statut'] = $statut;
     }
