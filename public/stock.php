@@ -356,54 +356,19 @@ $sectionImages = [
     <title>Stock - CCComputer</title>
     <link rel="icon" type="image/png" href="/assets/logos/logo.png">
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/css/main.css" />
     <link rel="stylesheet" href="/assets/css/stock.css" />
     <style>
-        /* ===== STYLE COMME LIVRAISON.PHP/SAV.PHP ===== */
-        
-        .page-header {
-            margin-bottom: 1.25rem;
-        }
-        
-        .page-title {
-            margin: 0;
-            font-size: 1.4rem;
-            font-weight: 800;
-            color: var(--text-primary);
-        }
-        
-        .page-sub {
-            margin: 0.5rem 0 0 0;
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-        }
-        
-        /* Barre de recherche pleine largeur */
-        .search-bar-full {
-            width: 100%;
-            margin-bottom: 1.5rem;
-        }
-        
-        .search-input-full {
-            width: 100%;
-            padding: 0.875rem 1.25rem;
-            font-size: 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-md);
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            transition: all 0.2s;
-        }
-        
-        .search-input-full:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        .search-input-full::placeholder {
-            color: var(--text-muted);
-        }
+        /* Typographie professionnelle */
+        .page-stock .page-title { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .page-stock .page-sub { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .page-stock .dashboard-label,
+        .page-stock .dashboard-value,
+        .page-stock .stock-tab,
+        .page-stock .section-title { font-family: 'Plus Jakarta Sans', sans-serif; }
         
         /* Layout avec sidebar gauche */
         .stock-layout {
@@ -412,16 +377,16 @@ $sectionImages = [
             position: relative;
         }
         
-        /* Bouton caméra fixe à gauche */
+        /* Bouton caméra fixe — style professionnel */
         .camera-fixed-btn {
             position: fixed;
-            left: 1rem;
+            left: 1.25rem;
             top: 50%;
             transform: translateY(-50%);
-            width: 56px;
-            height: 56px;
+            width: 52px;
+            height: 52px;
             border-radius: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
             border: none;
             color: white;
             display: flex;
@@ -429,14 +394,14 @@ $sectionImages = [
             justify-content: center;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
             z-index: 100;
             text-decoration: none;
         }
         
         .camera-fixed-btn:hover {
-            transform: translateY(-50%) scale(1.1);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+            transform: translateY(-50%) scale(1.08);
+            box-shadow: 0 8px 30px rgba(37, 99, 235, 0.5);
         }
         
         .camera-fixed-btn svg {
@@ -537,7 +502,7 @@ $sectionImages = [
         
         .btn-modern:hover {
             background: var(--bg-secondary);
-            border-color: var(--accent-primary);
+            border-color: #2563eb;
         }
         
         .btn-modern svg {
@@ -636,142 +601,31 @@ $sectionImages = [
             -webkit-backface-visibility: hidden;
         }
         
-        /* ===== TABLEAUX STYLE DASHBOARD PROFESSIONNEL ===== */
-        .table-wrapper {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
-            overflow: hidden;
-            margin-top: 1rem;
-        }
-        
-        .tbl-stock {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            background: white;
-        }
-        
-        .tbl-stock thead {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        }
-        
-        .tbl-stock th {
-            padding: 1.25rem 1.5rem;
-            text-align: left;
-            font-weight: 700;
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #495057;
-            border-bottom: 2px solid #e9ecef;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        
-        .tbl-stock tbody tr {
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            border-bottom: 1px solid #f1f3f5;
-        }
-        
-        .tbl-stock tbody tr:hover {
-            background: linear-gradient(90deg, #f8f9ff 0%, #ffffff 100%);
-            transform: translateX(2px);
-            box-shadow: -4px 0 0 0 #667eea;
-            cursor: pointer;
-        }
-        
-        .tbl-stock tbody tr:last-child {
-            border-bottom: none;
-        }
-        
-        .tbl-stock td {
-            padding: 1.25rem 1.5rem;
-            font-size: 0.95rem;
-            color: #212529;
-            vertical-align: middle;
-        }
-        
-        .tbl-stock .col-number {
-            text-align: right;
-            font-variant-numeric: tabular-nums;
-            font-weight: 600;
-            color: #495057;
-        }
-        
-        .tbl-stock .col-text {
-            text-align: left;
-        }
-        
-        .tbl-stock .col-state {
-            text-align: center;
-        }
-        
+        /* Overrides tableaux — cohérence avec stock.css */
         .tbl-stock .td-metric {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-weight: 700;
-            color: #667eea;
+            color: #2563eb;
         }
         
         .tbl-stock .td-metric.is-zero {
-            color: #dc3545;
+            color: #dc2626;
         }
         
-        .tbl-stock .col-empty {
-            text-align: center;
-            padding: 3rem 1.5rem;
-            color: #6c757d;
-            font-style: italic;
-        }
-        
-        /* Sections de cartes modernisées */
-        .card-section {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .card-section:hover {
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 8px 32px rgba(0, 0, 0, 0.06);
-            transform: translateY(-2px);
-        }
-        
-        .section-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #f1f3f5;
-        }
-        
-        .head-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .section-title {
-            margin: 0;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #212529;
-        }
-        
-        .head-right {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        
-        /* Boutons dans les sections */
+        /* Boutons Ajouter — style call-to-action professionnel */
         .btn-modern.btn-add {
-            font-size: 0.95rem;
-            padding: 0.75rem 1.5rem;
+            font-size: 0.9rem;
+            padding: 0.65rem 1.25rem;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+            color: white !important;
+            border: none !important;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+        }
+        .btn-modern.btn-add:hover {
+            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            transform: translateY(-1px);
         }
         
         /* Bloc Mouvement dans modale détail */
