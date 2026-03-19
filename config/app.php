@@ -54,5 +54,9 @@ return [
         'billing_contact_email' => $_ENV['BILLING_CONTACT_EMAIL'] ?? 'facturemail@cccomputer.fr',
         'director_full_name' => $_ENV['DIRECTOR_FULL_NAME'] ?? 'NOM PRENOM DIRIGEANT',
     ],
+    'import' => [
+        'cron_secret_token' => $_ENV['CRON_SECRET_TOKEN'] ?? getenv('CRON_SECRET_TOKEN') ?: '',
+        'sftp_max_files' => (int)($_ENV['SFTP_IMPORT_MAX_FILES'] ?? getenv('SFTP_IMPORT_MAX_FILES') ?: 10),
+    ],
 ];
 

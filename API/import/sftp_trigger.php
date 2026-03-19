@@ -93,13 +93,13 @@ try {
         exit;
     }
     
-    // Exécuter le script via CLI avec le flag --all pour importer tous les fichiers
+    // Exécuter le script via CLI (10 fichiers par défaut)
     $startTime = microtime(true);
     $output = [];
     $returnCode = 0;
     
-    // Exécuter le script PHP en CLI avec --all pour importer tous les fichiers
-    $command = 'php ' . escapeshellarg($scriptPath) . ' --all 2>&1';
+    putenv('SFTP_IMPORT_MAX_FILES=' . (getenv('SFTP_IMPORT_MAX_FILES') ?: '10'));
+    $command = 'php ' . escapeshellarg($scriptPath) . ' 2>&1';
     exec($command, $output, $returnCode);
     
     $duration = round((microtime(true) - $startTime) * 1000); // ms

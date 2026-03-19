@@ -27,7 +27,8 @@ $projectRoot = dirname(__DIR__);
 // Limite de fichiers : si SFTP_IMPORT_ALL=1 ou si --all est passé en argument, pas de limite
 $importAll = !empty(getenv('SFTP_IMPORT_ALL')) && getenv('SFTP_IMPORT_ALL') === '1';
 $importAll = $importAll || (isset($argv[1]) && $argv[1] === '--all');
-$maxFiles = $importAll ? PHP_INT_MAX : 20;
+$defaultMax = (int)(getenv('SFTP_IMPORT_MAX_FILES') ?: 10);
+$maxFiles = $importAll ? PHP_INT_MAX : $defaultMax;
 $lockName = 'import_sftp';
 $startTime = microtime(true);
 $dryRun = !empty(getenv('SFTP_IMPORT_DRY_RUN')) && getenv('SFTP_IMPORT_DRY_RUN') === '1';
