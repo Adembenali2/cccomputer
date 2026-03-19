@@ -8,10 +8,21 @@
 
         /* ====== Tableau de bord financier ====== */
         .finance-dashboard {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            display: flex;
+            flex-direction: column;
             gap: 1rem;
             margin-bottom: 2rem;
+        }
+        .finance-dashboard-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .finance-dashboard-row.finance-row-ca {
+            grid-template-columns: 1fr 1fr;
+        }
+        @media (max-width: 600px) {
+            .finance-dashboard-row { grid-template-columns: 1fr; }
         }
         .finance-dashboard-card {
             padding: 1.25rem;
@@ -26,9 +37,10 @@
             transform: translateY(-2px);
             box-shadow: var(--shadow-md);
         }
-        .finance-ca { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border-color: #6ee7b7; }
-        .finance-impayees { background: linear-gradient(135deg, #fef3c7, #fde68a); border-color: #fcd34d; }
-        .finance-retard { background: linear-gradient(135deg, #fee2e2, #fecaca); border-color: #fca5a5; }
+        .finance-ca-annee { background: linear-gradient(135deg, #dbeafe, #bfdbfe); border-color: #93c5fd; }
+        .finance-ca-mois { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border-color: #6ee7b7; }
+        .finance-dettes { background: linear-gradient(135deg, #fef3c7, #fde68a); border-color: #fcd34d; }
+        .finance-total { background: linear-gradient(135deg, #e0e7ff, #c7d2fe); border-color: #a5b4fc; }
         .finance-card-icon { font-size: 2rem; }
         .finance-card-content { display: flex; flex-direction: column; gap: 0.25rem; }
         .finance-card-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }

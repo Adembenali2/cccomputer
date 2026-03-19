@@ -4918,11 +4918,15 @@
 
                 const fmt = (n) => typeof n === 'number' ? n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--';
                 const el = (id) => document.getElementById(id);
+                if (el('financeCaAnnee')) el('financeCaAnnee').textContent = fmt(data.ca_annee) + ' €';
+                if (el('financeCaAnneeYear')) el('financeCaAnneeYear').textContent = data.annee ? 'Année ' + data.annee : '';
                 if (el('financeCaMois')) el('financeCaMois').textContent = fmt(data.ca_mois) + ' €';
+                if (el('financeMoisPeriode')) el('financeMoisPeriode').textContent = data.mois_periode_label || '(20-19)';
                 if (el('financeNbImpayees')) el('financeNbImpayees').textContent = data.nb_impayees ?? '--';
                 if (el('financeMontantImpaye')) el('financeMontantImpaye').textContent = fmt(data.montant_impaye) + ' €';
-                if (el('financeNbRetard')) el('financeNbRetard').textContent = data.nb_en_retard ?? '--';
-                if (el('financeMontantRetard')) el('financeMontantRetard').textContent = fmt(data.montant_en_retard) + ' €';
+                if (el('financeTotalFactures')) el('financeTotalFactures').textContent = (data.total_factures ?? 0) + ' facture(s)';
+                if (el('financeNbPayees')) el('financeNbPayees').textContent = data.nb_payees ?? '--';
+                if (el('financeNbImpayeesTotal')) el('financeNbImpayeesTotal').textContent = data.nb_impayees ?? '--';
 
                 // Badges sur les sections
                 const badgeFactures = el('sectionFacturesBadge');

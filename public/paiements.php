@@ -41,27 +41,38 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
 
         <!-- Tableau de bord financier -->
         <div class="finance-dashboard" id="financeDashboard">
-            <div class="finance-dashboard-card finance-ca">
-                <div class="finance-card-icon">€</div>
-                <div class="finance-card-content">
-                    <span class="finance-card-value" id="financeCaMois">--</span>
-                    <span class="finance-card-label">CA du mois</span>
+            <div class="finance-dashboard-row finance-row-ca">
+                <div class="finance-dashboard-card finance-ca-annee">
+                    <div class="finance-card-icon">€</div>
+                    <div class="finance-card-content">
+                        <span class="finance-card-value" id="financeCaAnnee">--</span>
+                        <span class="finance-card-label">CA d'année</span>
+                        <span class="finance-card-sub" id="financeCaAnneeYear">--</span>
+                    </div>
+                </div>
+                <div class="finance-dashboard-card finance-ca-mois">
+                    <div class="finance-card-icon">€</div>
+                    <div class="finance-card-content">
+                        <span class="finance-card-value" id="financeCaMois">--</span>
+                        <span class="finance-card-label">CA du mois</span>
+                        <span class="finance-card-sub" id="financeMoisPeriode">--</span>
+                    </div>
                 </div>
             </div>
-            <div class="finance-dashboard-card finance-impayees">
+            <div class="finance-dashboard-card finance-dettes">
                 <div class="finance-card-icon">📄</div>
                 <div class="finance-card-content">
                     <span class="finance-card-value" id="financeNbImpayees">--</span>
-                    <span class="finance-card-label">Factures impayées</span>
+                    <span class="finance-card-label">Dettes clients (factures impayées)</span>
                     <span class="finance-card-sub" id="financeMontantImpaye">-- €</span>
                 </div>
             </div>
-            <div class="finance-dashboard-card finance-retard">
-                <div class="finance-card-icon">⚠️</div>
+            <div class="finance-dashboard-card finance-total">
+                <div class="finance-card-icon">📋</div>
                 <div class="finance-card-content">
-                    <span class="finance-card-value" id="financeNbRetard">--</span>
-                    <span class="finance-card-label">En retard</span>
-                    <span class="finance-card-sub" id="financeMontantRetard">-- €</span>
+                    <span class="finance-card-value" id="financeTotalFactures">--</span>
+                    <span class="finance-card-label">Factures totales</span>
+                    <span class="finance-card-sub"><span id="financeNbPayees">--</span> payées / <span id="financeNbImpayeesTotal">--</span> impayées</span>
                 </div>
             </div>
         </div>
