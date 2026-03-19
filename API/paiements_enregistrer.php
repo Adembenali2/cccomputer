@@ -237,11 +237,12 @@ try {
         enregistrerAction($pdo, $userId, 'paiement_enregistre', $details);
 
         // Envoi email "reçu, en attente de validation" pour tous les modes de paiement
-        $appConfig = require __DIR__ . '/../config/app.php';
-        $autoSend = $appConfig['auto_send_receipts'] ?? true;
+        require_once __DIR__ . '/../includes/parametres.php';
+        $autoSend = getAutoSendEmailsEnabled($pdo);
         if ($autoSend && !$justificatifPath) {
             try {
                 require_once __DIR__ . '/../vendor/autoload.php';
+                $appConfig = require __DIR__ . '/../config/app.php';
                 $receiptService = new \App\Services\PaymentReceiptEmailService($pdo, $appConfig);
                 $result = $receiptService->sendPendingValidationEmail((int)$paiementId);
                 if (isset($result['success']) && !$result['success']) {

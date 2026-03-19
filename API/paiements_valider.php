@@ -70,26 +70,29 @@ try {
         $details = sprintf('Paiement validé #%s - Ref: %s - %.2f €', $paiementId, $paiement['reference'], $paiement['montant']);
         enregistrerAction($pdo, $userId, 'paiement_valide', $details);
 
-        // Envoi du reçu ET de la facture par email au client
+        // Envoi du reçu ET de la facture par email au client (si activé dans les paramètres)
         $receiptResult = null;
         $invoiceResult = null;
-        try {
-            require_once __DIR__ . '/../vendor/autoload.php';
-            $config = require __DIR__ . '/../config/app.php';
-            $receiptService = new \App\Services\PaymentReceiptEmailService($pdo, $config);
-            $receiptResult = $receiptService->sendReceipt($paiementId);
-            if (!($receiptResult['success'] ?? false)) {
-                error_log('[paiements_valider] Envoi reçu échoué: ' . ($receiptResult['message'] ?? ''));
-            }
-            if ($factureId > 0) {
-                $invoiceService = new \App\Services\InvoiceEmailService($pdo, $config);
-                $invoiceResult = $invoiceService->sendInvoiceToEmail($factureId, null, null, 'Suite à la validation de votre paiement, veuillez trouver ci-joint votre facture.');
-                if (!($invoiceResult['success'] ?? false)) {
-                    error_log('[paiements_valider] Envoi facture échoué: ' . ($invoiceResult['message'] ?? ''));
+        require_once __DIR__ . '/../includes/parametres.php';
+        if (getAutoSendEmailsEnabled($pdo)) {
+            try {
+                require_once __DIR__ . '/../vendor/autoload.php';
+                $config = require __DIR__ . '/../config/app.php';
+                $receiptService = new \App\Services\PaymentReceiptEmailService($pdo, $config);
+                $receiptResult = $receiptService->sendReceipt($paiementId);
+                if (!($receiptResult['success'] ?? false)) {
+                    error_log('[paiements_valider] Envoi reçu échoué: ' . ($receiptResult['message'] ?? ''));
                 }
+                if ($factureId > 0) {
+                    $invoiceService = new \App\Services\InvoiceEmailService($pdo, $config);
+                    $invoiceResult = $invoiceService->sendInvoiceToEmail($factureId, null, null, 'Suite à la validation de votre paiement, veuillez trouver ci-joint votre facture.');
+                    if (!($invoiceResult['success'] ?? false)) {
+                        error_log('[paiements_valider] Envoi facture échoué: ' . ($invoiceResult['message'] ?? ''));
+                    }
+                }
+            } catch (Throwable $e) {
+                error_log('[paiements_valider] Erreur envoi: ' . $e->getMessage());
             }
-        } catch (Throwable $e) {
-            error_log('[paiements_valider] Erreur envoi: ' . $e->getMessage());
         }
 
         $recuOk = $receiptResult['success'] ?? false;

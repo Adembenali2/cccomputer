@@ -2024,6 +2024,7 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
     <?php if ($isAdminOrDirigeant): ?>
     <div class="panel-toggle-buttons">
         <button type="button" class="panel-toggle-btn" data-target="createUserPanel">Créer un utilisateur</button>
+        <button type="button" class="panel-toggle-btn" data-target="parametresPanel">Paramètres</button>
         <?php if ($editing): ?>
         <a href="/public/profil.php" class="panel-toggle-btn is-active">Utilisateurs</a>
         <?php else: ?>
@@ -2083,6 +2084,19 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
             </label>
             <button class="fiche-action-btn" type="submit">Créer</button>
         </form>
+    </div>
+
+    <div class="panel panel-toggle-target" id="parametresPanel">
+        <h2 class="panel-title">Paramètres de l'application</h2>
+        <div class="parametres-auto-send" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 1rem; background: var(--bg-secondary, #f5f5f5); border-radius: 8px; margin-bottom: 1rem;">
+            <div>
+                <strong>Envoi automatique des emails</strong>
+                <p style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-secondary, #666);">Reçus de paiement et factures envoyés automatiquement lors de l'enregistrement ou validation d'un paiement.</p>
+            </div>
+            <button type="button" id="btnToggleAutoSend" class="fiche-action-btn" style="margin-left: auto;">
+                <span id="autoSendStatus">Chargement...</span>
+            </button>
+        </div>
     </div>
     <?php endif; ?>
 
@@ -2792,16 +2806,17 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
     }
 })();
 
-/* Basculer entre les panneaux "Créer un utilisateur" et "Utilisateurs" */
+/* Basculer entre les panneaux "Créer un utilisateur", "Paramètres" et "Utilisateurs" */
 (function() {
     const toggleButtons = document.querySelectorAll('.panel-toggle-btn');
     const createPanel = document.getElementById('createUserPanel');
+    const parametresPanel = document.getElementById('parametresPanel');
     const usersPanel = document.getElementById('usersPanel');
 
     if (!toggleButtons.length || !usersPanel) return;
 
     function showPanel(targetId) {
-        const panels = [createPanel, usersPanel].filter(Boolean);
+        const panels = [createPanel, parametresPanel, usersPanel].filter(Boolean);
         panels.forEach(function(panel) {
             if (panel.id === targetId) {
                 panel.classList.remove('is-hidden');
@@ -2832,6 +2847,74 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
     if (createPanel) {
         showPanel('usersPanel');
     }
+})();
+
+/* Toggle envoi automatique des emails (reçus et factures) */
+(function() {
+    const btn = document.getElementById('btnToggleAutoSend');
+    const statusEl = document.getElementById('autoSendStatus');
+    if (!btn || !statusEl) return;
+
+    const csrfToken = <?= json_encode($CSRF ?? '') ?>;
+
+    function updateUI(enabled) {
+        statusEl.textContent = enabled ? 'Désactiver' : 'Activer';
+        btn.classList.toggle('btn-success', !enabled);
+        btn.classList.toggle('btn-danger', enabled);
+    }
+
+    function loadState() {
+        fetch('/API/parametres_auto_send.php', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    updateUI(data.enabled);
+                } else {
+                    statusEl.textContent = 'Erreur';
+                }
+            })
+            .catch(function() { statusEl.textContent = 'Erreur'; });
+    }
+
+    btn.addEventListener('click', function() {
+        const currentText = statusEl.textContent;
+        if (currentText === 'Chargement...' || currentText === 'Erreur') return;
+
+        const enabled = currentText === 'Désactiver';
+        const newEnabled = !enabled;
+
+        btn.disabled = true;
+        statusEl.textContent = '...';
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
+        };
+        const body = JSON.stringify({ enabled: newEnabled });
+
+        fetch('/API/parametres_auto_send.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: headers,
+            body: body
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    updateUI(data.enabled);
+                } else {
+                    statusEl.textContent = currentText;
+                    alert(data.message || 'Erreur lors de la mise à jour.');
+                }
+            })
+            .catch(function() {
+                statusEl.textContent = currentText;
+                alert('Erreur réseau.');
+            })
+            .finally(function() { btn.disabled = false; });
+    });
+
+    loadState();
 })();
 
 /* Gestion des permissions */
