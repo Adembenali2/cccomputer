@@ -2865,15 +2865,28 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
 
     function loadState() {
         fetch('/API/parametres_auto_send.php', { credentials: 'same-origin' })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.ok) {
-                    updateUI(data.enabled);
+            .then(function(r) {
+                return r.text().then(function(text) {
+                    try {
+                        return { data: JSON.parse(text), ok: r.ok };
+                    } catch (e) {
+                        return { data: { ok: false, error: r.status === 404 ? 'API introuvable' : 'Réponse invalide' }, ok: false };
+                    }
+                });
+            })
+            .then(function(result) {
+                if (result.ok && result.data.ok) {
+                    updateUI(result.data.enabled);
                 } else {
+                    var msg = result.data.error || result.data.message || 'Erreur';
                     statusEl.textContent = 'Erreur';
+                    statusEl.title = msg;
                 }
             })
-            .catch(function() { statusEl.textContent = 'Erreur'; });
+            .catch(function(err) {
+                statusEl.textContent = 'Erreur';
+                statusEl.title = 'Impossible de contacter l\'API. Exécutez la migration: php sql/run_migration_parametres.php';
+            });
     }
 
     btn.addEventListener('click', function() {
