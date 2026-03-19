@@ -38,14 +38,10 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Facture introuvable'], 404);
     }
     
-    // Vérifier qu'aucun paiement n'est lié
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM paiements WHERE id_facture = :id");
+    // Supprimer d'abord les paiements liés à cette facture
+    $stmt = $pdo->prepare("DELETE FROM paiements WHERE id_facture = :id");
     $stmt->execute([':id' => $factureId]);
-    $nbPaiements = (int)$stmt->fetchColumn();
-    
-    if ($nbPaiements > 0) {
-        jsonResponse(['ok' => false, 'error' => 'Impossible de supprimer : des paiements sont associés à cette facture.'], 400);
-    }
+    $nbPaiementsSupprimes = $stmt->rowCount();
     
     // Supprimer les lignes (CASCADE le fait automatiquement, mais on peut être explicite)
     $pdo->prepare("DELETE FROM facture_lignes WHERE id_facture = ?")->execute([$factureId]);
@@ -58,12 +54,17 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Erreur lors de la suppression'], 500);
     }
     
-    enregistrerAction($pdo, currentUserId(), 'facture_supprimee', "Facture {$facture['numero']} supprimée (ID: {$factureId})");
+    $details = "Facture {$facture['numero']} supprimée (ID: {$factureId})";
+    if ($nbPaiementsSupprimes > 0) {
+        $details .= " et {$nbPaiementsSupprimes} paiement(s) associé(s)";
+    }
+    enregistrerAction($pdo, currentUserId(), 'facture_supprimee', $details);
     
     jsonResponse([
         'ok' => true,
-        'message' => 'Facture supprimée avec succès',
-        'facture_id' => $factureId
+        'message' => 'Facture supprimée avec succès' . ($nbPaiementsSupprimes > 0 ? " ({$nbPaiementsSupprimes} paiement(s) supprimé(s))" : ''),
+        'facture_id' => $factureId,
+        'paiements_supprimes' => $nbPaiementsSupprimes
     ]);
     
 } catch (PDOException $e) {

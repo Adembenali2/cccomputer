@@ -42,19 +42,21 @@ try {
     
     foreach ($factures as $f) {
         $fid = (int)$f['id'];
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM paiements WHERE id_facture = ?");
+        // Supprimer d'abord les paiements liés à cette facture
+        $stmt = $pdo->prepare("DELETE FROM paiements WHERE id_facture = ?");
         $stmt->execute([$fid]);
-        if ((int)$stmt->fetchColumn() > 0) {
-            $erreurs[] = "Facture {$f['numero']} : des paiements sont associés";
-            continue;
-        }
+        $nbPaiements = $stmt->rowCount();
         
         $pdo->prepare("DELETE FROM facture_lignes WHERE id_facture = ?")->execute([$fid]);
         $stmt = $pdo->prepare("DELETE FROM factures WHERE id = ?");
         $stmt->execute([$fid]);
         if ($stmt->rowCount() > 0) {
             $supprimees[] = $fid;
-            enregistrerAction($pdo, currentUserId(), 'facture_supprimee', "Facture {$f['numero']} supprimée (ID: {$fid})");
+            $details = "Facture {$f['numero']} supprimée (ID: {$fid})";
+            if ($nbPaiements > 0) {
+                $details .= " et {$nbPaiements} paiement(s) associé(s)";
+            }
+            enregistrerAction($pdo, currentUserId(), 'facture_supprimee', $details);
         }
     }
     
