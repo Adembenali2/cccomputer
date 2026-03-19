@@ -162,13 +162,9 @@ class InvoiceCalculationService
         $descNB = "Copies noir et blanc · {$machineName}";
         $detailsNB = [];
         if ($compteurDebutNB > 0 || $compteurFinNB > 0) {
-            $detailsNB[] = sprintf(
-                "Période du %s au %s · Compteur : %s → %s",
-                $dateDebutFormatted,
-                $dateFinFormatted,
-                number_format($compteurDebutNB, 0, ',', ' '),
-                number_format($compteurFinNB, 0, ',', ' ')
-            );
+            $detailsNB[] = "Période du {$dateDebutFormatted} au {$dateFinFormatted}";
+            $detailsNB[] = "Compteur début " . number_format($compteurDebutNB, 0, ',', ' ');
+            $detailsNB[] = "Compteur fin " . number_format($compteurFinNB, 0, ',', ' ');
         }
         $descFinalNB = $descNB;
         if (!empty($detailsNB)) {
@@ -200,13 +196,9 @@ class InvoiceCalculationService
             $descCouleur = "Copies couleur · {$machineName}";
             $detailsCouleur = [];
             if ($compteurDebutCouleur > 0 || $compteurFinCouleur > 0) {
-                $detailsCouleur[] = sprintf(
-                    "Période du %s au %s · Compteur : %s → %s",
-                    $dateDebutFormatted,
-                    $dateFinFormatted,
-                    number_format($compteurDebutCouleur, 0, ',', ' '),
-                    number_format($compteurFinCouleur, 0, ',', ' ')
-                );
+                $detailsCouleur[] = "Période du {$dateDebutFormatted} au {$dateFinFormatted}";
+                $detailsCouleur[] = "Compteur début " . number_format($compteurDebutCouleur, 0, ',', ' ');
+                $detailsCouleur[] = "Compteur fin " . number_format($compteurFinCouleur, 0, ',', ' ');
             }
             $descFinalCouleur = $descCouleur;
             if (!empty($detailsCouleur)) {

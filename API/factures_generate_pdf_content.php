@@ -17,14 +17,23 @@ function formatInvoiceDescription(string $desc): string
     $desc = preg_replace('/\s*\|\s*Dépassement:\s*\d+\s*copies\s*x\s*[\d,]+€\s*/i', '', $desc);
     $desc = preg_replace('/\s*\d+\s*copies\s*x\s*[\d,]+€\s*/i', '', $desc);
     $desc = preg_replace('/\s*Dépassement:\s*\d+\s*copies\s*x\s*[\d,]+€\s*/i', '', $desc);
-    // Reformater "Début: X (date) | Fin: Y (date)" en "Période du date au date · Compteur : X → Y"
+    // Reformater "Début: X (date) | Fin: Y (date)" en 3 lignes : Période, Compteur début, Compteur fin
     if (preg_match('/Début:\s*([\d\s]+)\s*\(([^)]+)\)\s*\|\s*Fin:\s*([\d\s]+)\s*\(([^)]+)\)/u', $desc, $m)) {
-        $debut = preg_replace('/\s+/', ' ', trim($m[1]));
+        $debut = preg_replace('/\s+/', '', trim($m[1]));
         $dateDebut = trim($m[2]);
-        $fin = preg_replace('/\s+/', ' ', trim($m[3]));
+        $fin = preg_replace('/\s+/', '', trim($m[3]));
         $dateFin = trim($m[4]);
-        $replacement = "Période du {$dateDebut} au {$dateFin} · Compteur : {$debut} → {$fin}";
+        $replacement = "Période du {$dateDebut} au {$dateFin}\nCompteur début {$debut}\nCompteur fin {$fin}";
         $desc = preg_replace('/Début:\s*[\d\s]+\([^)]+\)\s*\|\s*Fin:\s*[\d\s]+\([^)]+\)\s*/u', "\n" . $replacement, $desc);
+    }
+    // Reformater "Période du X au Y · Compteur : A ? B" ou "A → B" (ancien format) en 3 lignes
+    if (preg_match('/Période du ([^·]+) au ([^·]+)\s*·\s*Compteur\s*:\s*([\d\s]+)\s*[?→]\s*([\d\s]+)/u', $desc, $m)) {
+        $dateDebut = trim($m[1]);
+        $dateFin = trim($m[2]);
+        $debut = preg_replace('/\s+/', '', trim($m[3]));
+        $fin = preg_replace('/\s+/', '', trim($m[4]));
+        $replacement = "Période du {$dateDebut} au {$dateFin}\nCompteur début {$debut}\nCompteur fin {$fin}";
+        $desc = preg_replace('/Période du [^·]+ au [^·]+\s*·\s*Compteur\s*:\s*[\d\s]+\s*[?→]\s*[\d\s]+/u', $replacement, $desc);
     }
     // Nettoyer les pipes restants
     $desc = str_replace(' | ', "\n", $desc);
