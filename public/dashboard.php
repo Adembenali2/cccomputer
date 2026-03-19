@@ -1999,6 +1999,28 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         const AUTO_IMPORT_INTERVAL_MS = 60000; // 1 minute
         const INITIAL_DELAY_MS = 3000; // 3 secondes après chargement
         const DELAY_BETWEEN_IMPORTS_MS = 2000; // 2s entre SFTP et IONOS
+        const POLL_STATUS_INTERVAL_MS = 30000; // 30s pour détecter imports externes (Profil, cron)
+
+        let lastSftpRunId = null;
+        let lastIonosRunId = null;
+        let initialPollDone = false;
+
+        function showImportNotification(name, run, durationMs) {
+            const durationSec = durationMs ? (durationMs / 1000).toFixed(1) : '?';
+            if (run && run.error) {
+                showNotificationToast('Import ' + name, run.error, 'error');
+                return;
+            }
+            if (name === 'SFTP') {
+                const files = run && run.files_processed != null ? run.files_processed : 0;
+                const text = files === 0 ? 'Aucun nouveau fichier' : (files === 1 ? '1 fichier importé' : files + ' fichiers importés');
+                showNotificationToast('Import SFTP', text + ' en ' + durationSec + 's', files > 0 ? 'success' : 'info');
+            } else {
+                const rows = run && run.rows_inserted != null ? run.rows_inserted : (run && run.inserted_rows != null ? run.inserted_rows : 0);
+                const text = rows === 0 ? 'Aucune nouvelle ligne' : (rows === 1 ? '1 ligne insérée' : rows + ' lignes insérées');
+                showNotificationToast('Import IONOS', text + ' en ' + durationSec + 's', rows > 0 ? 'success' : 'info');
+            }
+        }
 
         async function triggerImport(url, name) {
             try {
@@ -2011,20 +2033,13 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const data = await res.json();
                 if (data && data.ok) {
                     const run = data.last_run;
-                    const durationSec = data.duration_ms ? (data.duration_ms / 1000).toFixed(1) : '?';
                     if (run && run.error) {
                         showNotificationToast('Import ' + name, run.error, 'error');
                         return false;
                     }
-                    if (name === 'SFTP') {
-                        const files = run && run.files_processed != null ? run.files_processed : 0;
-                        const text = files === 0 ? 'Aucun nouveau fichier' : (files === 1 ? '1 fichier importé' : files + ' fichiers importés');
-                        showNotificationToast('Import SFTP', text + ' en ' + durationSec + 's', files > 0 ? 'success' : 'info');
-                    } else {
-                        const rows = run && run.rows_inserted != null ? run.rows_inserted : (run && run.inserted_rows != null ? run.inserted_rows : 0);
-                        const text = rows === 0 ? 'Aucune nouvelle ligne' : (rows === 1 ? '1 ligne insérée' : rows + ' lignes insérées');
-                        showNotificationToast('Import IONOS', text + ' en ' + durationSec + 's', rows > 0 ? 'success' : 'info');
-                    }
+                    showImportNotification(name, run, data.duration_ms);
+                    if (name === 'SFTP' && run) lastSftpRunId = run.id;
+                    if (name === 'IONOS' && run) lastIonosRunId = run.id;
                     return true;
                 } else {
                     const errMsg = (data && data.error) ? data.error : 'Erreur lors de l\'import';
@@ -2043,8 +2058,44 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             await triggerImport('/API/import/ionos_trigger.php', 'IONOS');
         }
 
+        async function pollImportStatus() {
+            if (document.hidden) return;
+            try {
+                const [sftpRes, ionosRes] = await Promise.all([
+                    fetch('/API/import/sftp_status.php', { credentials: 'include', cache: 'no-store' }),
+                    fetch('/API/import/ionos_status.php', { credentials: 'include', cache: 'no-store' })
+                ]);
+                const sftpData = await sftpRes.json();
+                const ionosData = await ionosRes.json();
+
+                if (sftpData && sftpData.ok && sftpData.has_run && sftpData.lastRun) {
+                    const run = sftpData.lastRun;
+                    const runId = run.id;
+                    if (!initialPollDone) {
+                        lastSftpRunId = runId;
+                    } else if (runId !== lastSftpRunId) {
+                        lastSftpRunId = runId;
+                        showImportNotification('SFTP', run, run.duration_ms);
+                    }
+                }
+                if (ionosData && ionosData.ok && ionosData.has_run && ionosData.lastRun) {
+                    const run = ionosData.lastRun;
+                    const runId = run.id;
+                    if (!initialPollDone) {
+                        lastIonosRunId = runId;
+                    } else if (runId !== lastIonosRunId) {
+                        lastIonosRunId = runId;
+                        showImportNotification('IONOS', run, run.duration_ms);
+                    }
+                }
+                initialPollDone = true;
+            } catch (e) { /* ignore */ }
+        }
+
         setTimeout(runAutoImports, INITIAL_DELAY_MS);
         setInterval(runAutoImports, AUTO_IMPORT_INTERVAL_MS);
+        setTimeout(pollImportStatus, 5000);
+        setInterval(pollImportStatus, POLL_STATUS_INTERVAL_MS);
     })();
 
     </script>
