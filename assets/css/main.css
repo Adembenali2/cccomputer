@@ -80,6 +80,24 @@ body {
   box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
 }
 
+/* Champs valides / erreur (feedback visuel) */
+.standard-form input.is-valid,
+.standard-form select.is-valid,
+.standard-form textarea.is-valid {
+  border-color: #22c55e;
+}
+.standard-form input.is-invalid,
+.standard-form select.is-invalid,
+.standard-form textarea.is-invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239,68,68,0.2);
+}
+.standard-form .field-error {
+  font-size: 0.8125rem;
+  color: #ef4444;
+  margin-top: 0.25rem;
+}
+
 .standard-form .fiche-action-btn {
   background-color: var(--accent-primary);
   color: #fff;
@@ -89,12 +107,19 @@ body {
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.2s ease, transform 0.15s ease;
   align-self: flex-start;
 }
 
 .standard-form .fiche-action-btn:hover {
   background-color: var(--accent-secondary);
+}
+.standard-form .fiche-action-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+.standard-form .fiche-action-btn:active {
+  transform: scale(0.98);
 }
 
 .standard-form label > input[type="checkbox"] {
@@ -370,6 +395,68 @@ body {
   .count-item { 
     font-size: 0.6875rem; 
   }
+}
+
+/* ====== Tableaux (améliorations globales) ====== */
+.table-wrapper table tbody tr:nth-child(even),
+.table-responsive table tbody tr:nth-child(even) {
+  background-color: var(--bg-secondary);
+}
+.table-wrapper table tbody tr:hover,
+.table-responsive table tbody tr:hover {
+  background-color: var(--bg-tertiary);
+}
+.table-wrapper table td[data-numeric],
+.table-responsive table td[data-numeric],
+.table-wrapper table .text-right,
+.table-responsive table .text-right {
+  text-align: right;
+}
+.table-responsive thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-primary);
+  z-index: 1;
+  box-shadow: 0 1px 0 var(--border-color);
+}
+
+/* ====== Boutons : focus visible + feedback clic ====== */
+button:focus-visible,
+a.btn:focus-visible,
+input[type="submit"]:focus-visible,
+input[type="button"]:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+button:not(:disabled),
+a.btn,
+input[type="submit"],
+input[type="button"] {
+  transition: transform 0.15s ease;
+}
+button:active:not(:disabled),
+.btn:active {
+  transform: scale(0.98);
+}
+
+/* ====== Typographie : hiérarchie ====== */
+.page-title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.page-subtitle {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+/* ====== Quick actions : cohérence ====== */
+.quick-action-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.6rem 1rem;
 }
 
 /* ====== Utilitaires ====== */

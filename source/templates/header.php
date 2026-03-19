@@ -22,6 +22,7 @@ if (!function_exists('h')) {
 ?>
 <link rel="stylesheet" href="/assets/css/header.css">
 
+<a href="#main-content" class="skip-link">Aller au contenu</a>
 <header class="main-header" data-csrf-token="<?= h($csrf) ?>">
   <a href="/public/dashboard.php" class="logo-header" id="logo-link">
     <img src="/assets/logos/logo.png" alt="Logo CCComputer" width="32" height="32" class="logo-animated" id="logo-img">
@@ -126,6 +127,21 @@ if (!function_exists('h')) {
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // --- INDICATEUR PAGE ACTIVE ---
+  const path = window.location.pathname.replace(/\/$/, '');
+  let bestLink = null, bestLen = 0;
+  document.querySelectorAll('.nav-header a[href]').forEach(link => {
+    const href = (link.getAttribute('href') || '').replace(/\/$/, '').split('?')[0];
+    if (href && (path === href || path.startsWith(href + '/')) && href.length > bestLen) {
+      bestLink = link; bestLen = href.length;
+    }
+  });
+  if (bestLink) bestLink.classList.add('nav-active');
+
+  // --- ANCRE SKIP LINK ---
+  const mainEl = document.querySelector('main, .dashboard-wrapper, .page-container');
+  if (mainEl && !mainEl.id) mainEl.id = 'main-content';
+
   // --- GESTION DU MENU MOBILE ---
   const header = document.querySelector('.main-header');
   const menuToggle = document.querySelector('.menu-toggle');

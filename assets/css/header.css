@@ -3,6 +3,25 @@
  * Il utilise les variables globales (--bg-primary, --accent-primary, etc.) définies dans ce dernier.
  */
 
+/* Skip link accessibilité */
+.skip-link {
+    position: absolute;
+    top: -100px;
+    left: 1rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--accent-primary);
+    color: #fff;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    z-index: 10001;
+    transition: top 0.2s ease;
+}
+.skip-link:focus {
+    top: 1rem;
+    outline: 2px solid var(--accent-secondary);
+    outline-offset: 2px;
+}
+
 /* AJOUT : Garde le body en dessous du header fixe */
 body {
     padding-top: 52px; /* Hauteur mobile par défaut */
@@ -66,6 +85,12 @@ body {
 .menu-toggle:hover {
     background-color: var(--bg-secondary);
 }
+.menu-toggle:focus-visible,
+.nav-header a:focus-visible,
+.nav-header .theme-toggle:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
 .menu-toggle .icon-close { display: none; }
 .main-header.nav-open .menu-toggle .icon-close { display: block; }
 .main-header.nav-open .menu-toggle .icon-menu { display: none; }
@@ -112,6 +137,16 @@ body {
 .notif-btn:hover {
     background-color: var(--bg-secondary);
     color: var(--text-primary);
+}
+
+/* Page active */
+.nav-header a.nav-active {
+    background-color: rgba(59, 130, 246, 0.12);
+    color: var(--accent-primary);
+   font-weight: 600;
+}
+.nav-header a.nav-active:hover {
+    background-color: rgba(59, 130, 246, 0.18);
 }
 
 .notif-wrap { width: 100%; }
@@ -174,9 +209,20 @@ body {
         flex-direction: column;
         justify-content: center;
         gap: 0;
-        padding: 0.75rem;
+        padding: 0.75rem 0.9rem;
         width: auto;
         min-width: 60px;
+    }
+    .nav-header a.nav-active::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 24px;
+        height: 3px;
+        background: var(--accent-primary);
+        border-radius: 2px;
     }
     
 
