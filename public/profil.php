@@ -2900,10 +2900,13 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                 } else {
                     var msg = result.data.error || result.data.message || 'Erreur';
                     showError(msg);
+                    console.error('Paramètres auto-send:', msg);
                 }
             })
             .catch(function(err) {
-                showError('Impossible de contacter l\'API. Vérifiez que la table parametres_app existe en base.');
+                var msg = 'Impossible de contacter l\'API. Vérifiez la table parametres_app et la console (F12).';
+                showError(msg);
+                console.error('Paramètres auto-send fetch failed:', err);
             });
     }
 
