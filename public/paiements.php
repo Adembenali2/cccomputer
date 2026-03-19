@@ -1146,7 +1146,15 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     </div>
                 </form>
                 <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border-color);">
-                <h3 style="margin: 0 0 1rem; font-size: 1rem;">Programmations existantes</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; font-size: 1rem;">Programmations existantes</h3>
+                    <button type="button" class="btn btn-secondary" id="btnExecuterEnvoisProgrammes" onclick="executerEnvoisProgrammes()" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        Exécuter les envois programmés
+                    </button>
+                </div>
                 <div id="programmerEnvoisListLoading" style="text-align: center; padding: 1rem; color: var(--text-secondary);">Chargement…</div>
                 <div id="programmerEnvoisListContainer" style="display: none;">
                     <div style="overflow-x: auto;">

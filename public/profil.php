@@ -1762,6 +1762,17 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                 margin-left: 0.5rem;
             }
         }
+
+        .page-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1rem;
+        }
+        .header-import-btns {
+            display: flex;
+            gap: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -1770,8 +1781,16 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
 <main class="page-container page-profil">
     <header class="page-header">
         <h1 class="page-title">Gestion des utilisateurs</h1>
-        
-        
+        <?php if ($isAdminOrDirigeant): ?>
+        <div class="header-import-btns" data-csrf="<?= h($CSRF) ?>">
+            <button type="button" id="btnImportSftp" class="btn btn-secondary" title="Lancer l'import SFTP manuellement">
+                Import SFTP
+            </button>
+            <button type="button" id="btnImportIonos" class="btn btn-secondary" title="Lancer l'import IONOS manuellement">
+                Import IONOS
+            </button>
+        </div>
+        <?php endif; ?>
     </header>
 
     <div class="quick-actions-bar">
@@ -2789,6 +2808,52 @@ function scrollToSection(event, sectionId) {
     }
 }
 
+    // Boutons Import SFTP et Import IONOS (Admin/Dirigeant uniquement)
+    (function() {
+        const btnSftp = document.getElementById('btnImportSftp');
+        const btnIonos = document.getElementById('btnImportIonos');
+        if (!btnSftp && !btnIonos) return;
+
+        function triggerImport(url, btn, label) {
+            if (!btn) return;
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = 'Import en cours...';
+
+            fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'csrf_token=' + encodeURIComponent((btn.parentElement && btn.parentElement.dataset && btn.parentElement.dataset.csrf) || '')
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.ok) {
+                    alert(label + ' : import réussi.');
+                } else {
+                    alert(label + ' : ' + (data && data.error ? data.error : 'Erreur lors de l\'import'));
+                }
+            })
+            .catch(function(err) {
+                alert(label + ' : ' + (err.message || 'Erreur de connexion'));
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            });
+        }
+
+        if (btnSftp) {
+            btnSftp.addEventListener('click', function() {
+                triggerImport('/API/import/sftp_trigger.php', btnSftp, 'Import SFTP');
+            });
+        }
+        if (btnIonos) {
+            btnIonos.addEventListener('click', function() {
+                triggerImport('/API/import/ionos_trigger.php', btnIonos, 'Import IONOS');
+            });
+        }
+    })();
 
 </script>
 

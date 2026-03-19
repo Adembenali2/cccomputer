@@ -4197,6 +4197,39 @@
             }
         }
 
+        /**
+         * Exécute les envois programmés dont la date est dépassée
+         * (Alternative au cron - utile en local ou sans cron configuré)
+         */
+        async function executerEnvoisProgrammes() {
+            const btn = document.getElementById('btnExecuterEnvoisProgrammes');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span> Exécution...</span>';
+            }
+            try {
+                const res = await fetch('/API/cron_execute_scheduled.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
+                    body: JSON.stringify({}),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast(data.message || 'Envois exécutés', 'success');
+                    loadProgrammerEnvoisList();
+                } else {
+                    showToast(data.error || 'Erreur', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur: ' + e.message, 'error');
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg> Exécuter les envois programmés`;
+            }
+        }
+
         function progRemoveFacture(id) {
             progFacturesMultiSelected = progFacturesMultiSelected.filter(x => x !== id);
             const listEl = document.getElementById('progFacturesMultiList');
@@ -4342,6 +4375,7 @@
         window.submitProgrammerEnvoisForm = submitProgrammerEnvoisForm;
         window.progAnnuler = progAnnuler;
         window.progEnvoyerMaintenant = progEnvoyerMaintenant;
+        window.executerEnvoisProgrammes = executerEnvoisProgrammes;
         window.progRemoveFacture = progRemoveFacture;
         window.openProgFacturesPicker = openProgFacturesPicker;
         window.factureSearchApplyFilters = factureSearchApplyFilters;
