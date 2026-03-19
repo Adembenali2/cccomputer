@@ -794,39 +794,46 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 <form id="generationFactureClientsForm" onsubmit="submitGenerationFactureClientsForm(event)">
                     <input type="hidden" name="csrf_token" id="generationFactureClientsFormCsrf" value="<?= h($_SESSION['csrf_token'] ?? '') ?>">
                     <div class="modal-form-group" style="padding: 1rem; background: #FEF3C7; border: 1px solid #FCD34D; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
-                        <div style="font-weight: 600; color: #92400E; margin-bottom: 0.5rem;">ℹ️Â Génération automatique</div>
-                        <div style="font-size: 0.875rem; color: #92400E;">
-                            Les factures seront générées automatiquement pour tous les clients valides de la période sélectionnée.
-                            Les clients sans imprimantes ou sans relevé depuis plus d'un mois seront exclus automatiquement.
+                        <div style="font-weight: 600; color: #92400E; margin-bottom: 0.5rem;">&#8505; Génération automatique</div>
+                        <div style="font-size: 0.875rem; color: #92400E; line-height: 1.4;">
+                            Une facture de consommation sera créée pour chaque client ayant des imprimantes et des relevés récents. Les clients sans imprimante ou sans relevé depuis plus d'un mois sont exclus.
                         </div>
                     </div>
 
-                    <div class="modal-form-row">
-                        <div class="modal-form-group">
-                            <label for="genFactureDate">Date de facture <span style="color: #ef4444;">*</span></label>
-                            <input type="date" id="genFactureDate" name="date_facture" required value="<?= date('Y-m-d') ?>">
-                        </div>
-                        <div class="modal-form-group">
-                            <label for="genFactureOffre">Offre <span style="color: #ef4444;">*</span></label>
-                            <select id="genFactureOffre" name="offre" required>
-                                <option value="1000">Offre 1000 (1 imprimante)</option>
-                                <option value="2000">Offre 2000 (2 imprimantes)</option>
-                            </select>
-                            <div class="input-hint">Sélectionnez l'offre à appliquer pour tous les clients</div>
+                    <div style="margin-bottom: 1.25rem;">
+                        <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem;">1. Paramètres de la facture</div>
+                        <div class="modal-form-row">
+                            <div class="modal-form-group">
+                                <label for="genFactureDate">Date de facture <span style="color: #ef4444;">*</span></label>
+                                <input type="date" id="genFactureDate" name="date_facture" required value="<?= date('Y-m-d') ?>">
+                                <div class="input-hint">Date qui apparaîtra sur les factures</div>
+                            </div>
+                            <div class="modal-form-group">
+                                <label for="genFactureOffre">Offre <span style="color: #ef4444;">*</span></label>
+                                <select id="genFactureOffre" name="offre" required>
+                                    <option value="1000">Offre 1000 (1 imprimante)</option>
+                                    <option value="2000">Offre 2000 (2 imprimantes)</option>
+                                </select>
+                                <div class="input-hint">Appliquée à tous les clients</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="modal-form-row">
-                        <div class="modal-form-group">
-                            <label for="genFactureDateDebut">Date début période <span style="color: #ef4444;">*</span></label>
-                            <input type="date" id="genFactureDateDebut" name="date_debut" required>
-                            <div class="input-hint">Si aucun relevé à cette date, le dernier relevé disponible sera utilisé</div>
+                    <div>
+                        <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem;">2. Période des relevés (compteurs)</div>
+                        <div class="modal-form-row">
+                            <div class="modal-form-group">
+                                <label for="genFactureDateDebut">Du <span style="color: #ef4444;">*</span></label>
+                                <input type="date" id="genFactureDateDebut" name="date_debut" required>
+                                <div class="input-hint">Début de la période de consommation</div>
+                            </div>
+                            <div class="modal-form-group">
+                                <label for="genFactureDateFin">Au <span style="color: #ef4444;">*</span></label>
+                                <input type="date" id="genFactureDateFin" name="date_fin" required>
+                                <div class="input-hint">Fin de la période de consommation</div>
+                            </div>
                         </div>
-                        <div class="modal-form-group">
-                            <label for="genFactureDateFin">Date fin période <span style="color: #ef4444;">*</span></label>
-                            <input type="date" id="genFactureDateFin" name="date_fin" required>
-                            <div class="input-hint">Si aucun relevé à cette date, le dernier relevé disponible sera utilisé</div>
-                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Si un relevé n'existe pas à la date exacte, le dernier disponible sera utilisé.</div>
                     </div>
 
                     <div id="genFactureNotifications" style="display: none; margin-bottom: 1rem;"></div>
