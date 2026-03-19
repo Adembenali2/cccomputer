@@ -32,6 +32,7 @@ $date = trim($_GET['date'] ?? '');
 $numeroFacture = trim($_GET['numero_facture'] ?? '');
 $numeroFacture = mb_substr($numeroFacture, 0, 50);
 $statut = trim($_GET['statut'] ?? '');
+$pourPaiement = isset($_GET['pour_paiement']) && $_GET['pour_paiement'] === '1';
 $limit = min(max((int)($_GET['limit'] ?? 25), 5), 100);
 
 try {
@@ -87,6 +88,11 @@ try {
         $params[':numero'] = '%' . $numeroFacture . '%';
     }
     $needPayeeSubquery = false;
+    if ($pourPaiement) {
+        $needPayeeSubquery = true;
+        $conditions[] = "f.statut != 'annulee'";
+        $conditions[] = "(COALESCE(p.total_paye, 0) < f.montant_ttc OR f.montant_ttc = 0)";
+    }
     if ($statut !== '' && in_array($statut, ['brouillon', 'en_attente', 'envoyee', 'en_cours', 'en_retard', 'payee', 'annulee'], true)) {
         if ($statut === 'payee') {
             $conditions[] = 'COALESCE(p.total_paye, 0) >= f.montant_ttc AND f.montant_ttc > 0';
@@ -100,7 +106,7 @@ try {
     $whereClause = implode(' AND ', $conditions);
     $params[':limit'] = $limit;
 
-    $joinPayee = $needPayeeSubquery ? "
+    $joinPayee = ($needPayeeSubquery || $pourPaiement) ? "
         LEFT JOIN (
             SELECT id_facture, SUM(montant) as total_paye 
             FROM paiements 
@@ -111,6 +117,7 @@ try {
     $sql = "
         SELECT 
             f.id,
+            f.id_client,
             f.numero,
             f.date_facture,
             f.montant_ttc,
@@ -154,6 +161,7 @@ try {
         }
         $results[] = [
             'id' => (int)$r['id'],
+            'client_id' => (int)($r['id_client'] ?? 0),
             'numero' => $r['numero'] ?? '',
             'client_nom' => $nomComplet,
             'client_code' => $r['client_code'] ?? '',

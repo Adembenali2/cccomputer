@@ -972,6 +972,23 @@
             color: white;
         }
 
+        /* Payer modal - facture search suggestions */
+        .payer-suggestions .payer-suggestion-item {
+            padding: 0.6rem 1rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .payer-suggestions .payer-suggestion-item:last-child {
+            border-bottom: none;
+        }
+        .payer-suggestions .payer-suggestion-item:hover,
+        .payer-suggestions .payer-suggestion-item.active {
+            background: var(--accent-primary);
+            color: white;
+        }
+
         /* ====== Facture Search Panel (grand bloc de recherche) ====== */
         .facture-search-wrap {
             position: relative;

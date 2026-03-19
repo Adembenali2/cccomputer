@@ -1163,11 +1163,19 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 <form id="payerForm" onsubmit="submitPayerForm(event)">
                     <input type="hidden" name="csrf_token" value="<?= h($_SESSION['csrf_token'] ?? '') ?>">
                     <div class="modal-form-group">
-                        <label for="payerFacture">Facture <span style="color: #ef4444;">*</span></label>
-                        <select id="payerFacture" name="facture_id" required>
-                            <option value="">Chargement des factures...</option>
-                        </select>
-                        <div class="input-hint">Sélectionnez la facture à payer</div>
+                        <label for="payerFactureSearch">Facture <span style="color: #ef4444;">*</span></label>
+                        <div style="position: relative;">
+                            <input type="text" id="payerFactureSearch" autocomplete="off" placeholder="Rechercher par nom, prénom, numéro de facture ou date..." style="width: 100%; padding: 0.75rem 1rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem;">
+                            <input type="hidden" id="payerFacture" name="facture_id" value="">
+                            <div id="payerFactureSuggestions" class="payer-suggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; margin-top: 0.25rem; max-height: 280px; overflow-y: auto; background: var(--bg-primary); border: 2px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); z-index: 1000;"></div>
+                        </div>
+                        <div id="payerFactureSelected" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span id="payerFactureSelectedLabel"></span>
+                                <button type="button" onclick="clearPayerFactureSelection()" style="padding: 0.25rem 0.5rem; background: #ef4444; color: white; border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8rem;">Changer</button>
+                            </div>
+                        </div>
+                        <div class="input-hint" id="payerFactureHint">Tapez pour rechercher par nom, prénom, numéro ou date</div>
                     </div>
 
                     <div class="modal-form-row">

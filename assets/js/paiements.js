@@ -3804,12 +3804,8 @@
             const form = document.getElementById('payerForm');
             if (form) {
                 form.reset();
-                // Réinitialiser la date à aujourd'hui
                 const dateInput = document.getElementById('payerDate');
-                if (dateInput) {
-                    dateInput.value = new Date().toISOString().split('T')[0];
-                }
-                // Réinitialiser la référence (sera générée automatiquement)
+                if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
                 const referenceInput = document.getElementById('payerReference');
                 if (referenceInput) {
                     referenceInput.value = '';
@@ -3817,8 +3813,12 @@
                 }
             }
             
-            // Charger les factures non payées
-            loadFacturesForPaiement();
+            clearPayerFactureSelection();
+            const searchInput = document.getElementById('payerFactureSearch');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
         }
 
         /**
@@ -3838,49 +3838,82 @@
             }
         }
 
-        /**
-         * Charge les factures pour le select de paiement
-         */
-        async function loadFacturesForPaiement() {
-            try {
-                const response = await fetch('/API/factures_liste.php', {
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                
-                if (data.ok && data.factures) {
-                    const factureSelect = document.getElementById('payerFacture');
-                    factureSelect.innerHTML = '<option value="">Sélectionner une facture</option>';
-                    
-                    // Filtrer les factures non payées et non annulées (statut_echeance = payee si total payé >= TTC)
-                    const facturesDisponibles = data.factures.filter(f => 
-                        f.statut_echeance !== 'payee' && f.statut !== 'annulee'
-                    );
-                    
-                    facturesDisponibles.forEach(facture => {
-                        const option = document.createElement('option');
-                        option.value = facture.id;
-                        option.textContent = `${facture.numero} - ${facture.client_nom} - ${facture.montant_ttc.toFixed(2)} € TTC`;
-                        option.setAttribute('data-montant', facture.montant_ttc);
-                        option.setAttribute('data-client-id', facture.client_id);
-                        factureSelect.appendChild(option);
-                    });
-                    
-                    // Écouter le changement pour pré-remplir le montant
-                    factureSelect.addEventListener('change', function() {
-                        const selectedOption = this.options[this.selectedIndex];
-                        if (selectedOption && selectedOption.value) {
-                            const montant = parseFloat(selectedOption.getAttribute('data-montant')) || 0;
-                            const montantInput = document.getElementById('payerMontant');
-                            if (montantInput) {
-                                montantInput.value = montant.toFixed(2);
-                            }
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error('Erreur lors du chargement des factures:', error);
+        let payerFactureSearchDebounce = null;
+
+        function clearPayerFactureSelection() {
+            document.getElementById('payerFacture').value = '';
+            document.getElementById('payerFactureSearch').value = '';
+            document.getElementById('payerFactureSearch').style.display = '';
+            document.getElementById('payerFactureSelected').style.display = 'none';
+            document.getElementById('payerFactureSuggestions').style.display = 'none';
+            document.getElementById('payerFactureSuggestions').innerHTML = '';
+            document.getElementById('payerMontant').value = '';
+            const hint = document.getElementById('payerFactureHint');
+            if (hint) hint.textContent = 'Tapez pour rechercher par nom, prénom, numéro ou date';
+        }
+
+        async function searchPayerFactures(q) {
+            const suggestions = document.getElementById('payerFactureSuggestions');
+            const hint = document.getElementById('payerFactureHint');
+            if (!q || q.trim().length < 2) {
+                suggestions.style.display = 'none';
+                suggestions.innerHTML = '';
+                if (hint) hint.textContent = 'Tapez au moins 2 caractères (nom, prénom, numéro ou date)';
+                return;
             }
+            try {
+                const params = new URLSearchParams({ q: q.trim(), pour_paiement: '1', limit: '15' });
+                const res = await fetch('/API/factures_search.php?' + params, { credentials: 'include' });
+                const data = await res.json();
+                if (data.ok && data.results && data.results.length > 0) {
+                    suggestions.innerHTML = data.results.map(f => {
+                        const dateStr = f.date_facture ? new Date(f.date_facture).toLocaleDateString('fr-FR') : '';
+                        return `<div class="payer-suggestion-item" data-id="${f.id}" data-montant="${f.montant_ttc || 0}" data-client-id="${f.client_id || 0}">
+                            <strong>${(f.numero || '').replace(/</g, '&lt;')}</strong> · ${(f.client_nom || '').replace(/</g, '&lt;')} · ${dateStr} · ${(f.montant_ttc || 0).toFixed(2)} € TTC
+                        </div>`;
+                    }).join('');
+                    suggestions.style.display = 'block';
+                    suggestions.querySelectorAll('.payer-suggestion-item').forEach(el => {
+                        el.addEventListener('click', () => {
+                            const id = el.dataset.id;
+                            const montant = el.dataset.montant || 0;
+                            document.getElementById('payerFacture').value = id;
+                            document.getElementById('payerFactureSearch').style.display = 'none';
+                            document.getElementById('payerFactureSelected').style.display = 'block';
+                            document.getElementById('payerFactureSelectedLabel').textContent = el.textContent.trim();
+                            document.getElementById('payerFactureSuggestions').style.display = 'none';
+                            document.getElementById('payerMontant').value = parseFloat(montant).toFixed(2);
+                            if (hint) hint.textContent = 'Facture sélectionnée';
+                        });
+                    });
+                } else {
+                    suggestions.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.9rem;">Aucune facture non payée trouvée</div>';
+                    suggestions.style.display = 'block';
+                }
+            } catch (e) {
+                suggestions.innerHTML = '<div style="padding: 1rem; color: #ef4444;">Erreur de recherche</div>';
+                suggestions.style.display = 'block';
+            }
+        }
+
+        function initPayerFactureSearch() {
+            const input = document.getElementById('payerFactureSearch');
+            if (!input) return;
+            input.addEventListener('input', () => {
+                clearTimeout(payerFactureSearchDebounce);
+                payerFactureSearchDebounce = setTimeout(() => searchPayerFactures(input.value), 250);
+            });
+            input.addEventListener('focus', () => {
+                if (input.value.trim().length >= 2 && document.getElementById('payerFacture').value === '') {
+                    searchPayerFactures(input.value);
+                }
+            });
+            document.addEventListener('click', (e) => {
+                const suggestions = document.getElementById('payerFactureSuggestions');
+                if (suggestions && !input.contains(e.target) && !suggestions.contains(e.target)) {
+                    suggestions.style.display = 'none';
+                }
+            });
         }
 
         /**
@@ -3898,7 +3931,7 @@
             const modePaiement = formData.get('mode_paiement');
             
             if (!factureId) {
-                showToast('Veuillez sélectionner une facture', 'error');
+                showToast('Veuillez rechercher et sélectionner une facture', 'error');
                 return;
             }
             
@@ -4657,6 +4690,7 @@
         window.openPayerModal = openPayerModal;
         window.closePayerModal = closePayerModal;
         window.submitPayerForm = submitPayerForm;
+        window.clearPayerFactureSelection = clearPayerFactureSelection;
         window.openHistoriquePaiementsModal = openHistoriquePaiementsModal;
         window.closeHistoriquePaiementsModal = closeHistoriquePaiementsModal;
         window.filterHistoriquePaiements = filterHistoriquePaiements;
@@ -4696,6 +4730,7 @@
 
             // Initialisation de la section statistiques
             initStatsSection();
+            initPayerFactureSearch();
 
             // Ne pas ajouter de ligne au chargement, seulement quand le modal s'ouvre
             // addFactureLigne() sera appelé dans openFactureModal()
