@@ -55,8 +55,17 @@ function logMessage(string $message, string $level = 'INFO'): void {
 }
 
 // Fonction pour normaliser MAC (identique à la colonne générée mac_norm)
+// La colonne mac_norm est CHAR(12), donc on doit limiter à 12 caractères hexadécimaux
 function normalizeMac(string $mac): string {
-    return strtoupper(str_replace(':', '', $mac));
+    // Supprimer tous les séparateurs possibles (:, -, espaces, points)
+    $normalized = strtoupper(str_replace([':', '-', ' ', '.'], '', trim($mac)));
+    // Extraire uniquement les caractères hexadécimaux (0-9, A-F)
+    $normalized = preg_replace('/[^0-9A-F]/', '', $normalized);
+    // Tronquer strictement à 12 caractères maximum (CHAR(12) en base)
+    if (strlen($normalized) > 12) {
+        $normalized = substr($normalized, 0, 12);
+    }
+    return $normalized;
 }
 
 // Fonction pour parser CSV clé/valeur
@@ -396,8 +405,28 @@ try {
                     throw new RuntimeException("Format Timestamp invalide: " . ($csvData['Timestamp'] ?? 'NULL'));
                 }
                 
+                // Si pas de caractères hex valides (ex: "NON DISPONIBLE"), utiliser un identifiant de repli
+                // pour éviter l'erreur "Data too long for column mac_norm" (CHAR(12))
                 if (empty($macNorm)) {
-                    throw new RuntimeException("MacAddress invalide ou vide");
+                    $originalMac = $macAddress;
+                    $fallback = substr(strtoupper(preg_replace('/[^0-9A-Za-z]/', '', $csvData['SerialNumber'] ?? '')), 0, 12);
+                    if (empty($fallback)) {
+                        $fallback = strtoupper(substr(md5($filename), 0, 12));
+                    }
+                    $macNorm = $fallback;
+                    $macAddress = $macNorm; // Pour l'insertion, utiliser la valeur qui génère mac_norm <= 12
+                    logMessage("  ⚠ MacAddress invalide ('$originalMac'), utilisation identifiant de repli: $macNorm", 'WARN');
+                } elseif (strlen($macNorm) > 12) {
+                    $macNorm = substr($macNorm, 0, 12);
+                    $macAddress = (strlen($macNorm) === 12 && preg_match('/^[0-9A-F]{12}$/', $macNorm))
+                        ? implode(':', str_split($macNorm, 2))
+                        : $macNorm;
+                    logMessage("  ⚠ MacAddress tronquée à 12 caractères: $macNorm", 'WARN');
+                } else {
+                    // MacAddress valide : s'assurer que ce qu'on insère génère mac_norm <= 12
+                    $macAddress = (strlen($macNorm) === 12 && preg_match('/^[0-9A-F]{12}$/', $macNorm))
+                        ? implode(':', str_split($macNorm, 2))
+                        : $macNorm;
                 }
                 
                 // Vérifier si déjà présent (anti-doublon)
