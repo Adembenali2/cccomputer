@@ -1,6 +1,37 @@
 <?php
 declare(strict_types=1);
 /**
+ * Reformate une description de facture (ancien format vers format professionnel)
+ * Supprime les tirets et pipes, organise le texte
+ */
+function formatInvoiceDescription(string $desc): string
+{
+    $desc = trim(preg_replace("/\r\n|\r/", "\n", $desc));
+    if ($desc === '') {
+        return '';
+    }
+    // Remplacer " - " par " · "
+    $desc = str_replace(' - ', ' · ', $desc);
+    // Supprimer les parties redondantes "X copies x 0.XX€" ou "Dépassement: X copies x 0.XX€"
+    $desc = preg_replace('/\s*\|\s*\d+\s*copies\s*x\s*[\d,]+€\s*/i', '', $desc);
+    $desc = preg_replace('/\s*\|\s*Dépassement:\s*\d+\s*copies\s*x\s*[\d,]+€\s*/i', '', $desc);
+    $desc = preg_replace('/\s*\d+\s*copies\s*x\s*[\d,]+€\s*/i', '', $desc);
+    $desc = preg_replace('/\s*Dépassement:\s*\d+\s*copies\s*x\s*[\d,]+€\s*/i', '', $desc);
+    // Reformater "Début: X (date) | Fin: Y (date)" en "Période du date au date · Compteur : X → Y"
+    if (preg_match('/Début:\s*([\d\s]+)\s*\(([^)]+)\)\s*\|\s*Fin:\s*([\d\s]+)\s*\(([^)]+)\)/u', $desc, $m)) {
+        $debut = preg_replace('/\s+/', ' ', trim($m[1]));
+        $dateDebut = trim($m[2]);
+        $fin = preg_replace('/\s+/', ' ', trim($m[3]));
+        $dateFin = trim($m[4]);
+        $replacement = "Période du {$dateDebut} au {$dateFin} · Compteur : {$debut} → {$fin}";
+        $desc = preg_replace('/Début:\s*[\d\s]+\([^)]+\)\s*\|\s*Fin:\s*[\d\s]+\([^)]+\)\s*/u', "\n" . $replacement, $desc);
+    }
+    // Nettoyer les pipes restants
+    $desc = str_replace(' | ', "\n", $desc);
+    return trim(preg_replace("/\n{2,}/", "\n", $desc));
+}
+
+/**
  * Fonction utilitaire pour générer le contenu PDF d'une facture
  * Peut être utilisée pour générer dans un répertoire spécifique (ex: /tmp)
  * 
@@ -76,10 +107,12 @@ function generateInvoicePdf(PDO $pdo, int $factureId, array $facture, array $cli
     $pdf->SetTitle('Facture ' . $facture['numero']);
     $pdf->setPrintHeader(false);
     $pdf->setPrintFooter(false);
-    $pdf->SetMargins(15, 10, 15);
+    $pdf->SetMargins(15, 12, 15);
     $pdf->SetAutoPageBreak(false);
     $pdf->AddPage();
-    $pdf->SetTextColor(0, 0, 0);
+    $pdf->SetTextColor(30, 41, 59); // Slate-800
+    $pdf->setCellPaddings(2, 2.5, 2, 2.5);
+    $pdf->setCellHeightRatio(1.2);
 
     // Logo
     $logoPath = __DIR__ . '/../assets/logos/logo1.png';
@@ -114,31 +147,35 @@ function generateInvoicePdf(PDO $pdo, int $factureId, array $facture, array $cli
     $pdf->Cell(0, 6, 'Facture N° : ' . $facture['numero'], 0, 1, 'R');
     $pdf->Ln(5);
 
-    // Tableau (même structure que l'original)
-    $pdf->SetFont('helvetica', 'B', 10);
-    $pdf->SetFillColor(240, 240, 240);
+    // Tableau — style professionnel
+    $pdf->SetDrawColor(226, 232, 240); // Bordure gris clair
+    $pdf->SetLineWidth(0.3);
     
     // Définition des largeurs (Total 180mm)
     $wDesc = 80; $wType = 25; $wQty = 20; $wPrix = 25; $wTotal = 30;
     
     $pdf->SetX(15);
+    $pdf->SetFont('helvetica', 'B', 9);
+    $pdf->SetFillColor(248, 250, 252); // Header gris très clair
+    $pdf->SetTextColor(71, 85, 105); // Slate-600
     
     // Header
-    $pdf->Cell($wDesc, 8, 'Description', 1, 0, 'L', true);
-    $pdf->Cell($wType, 8, 'Type', 1, 0, 'C', true);
-    $pdf->Cell($wQty, 8, 'Qté', 1, 0, 'C', true);
-    $pdf->Cell($wPrix, 8, 'Prix unit.', 1, 0, 'R', true);
-    $pdf->Cell($wTotal, 8, 'Total HT', 1, 1, 'R', true);
+    $pdf->Cell($wDesc, 9, 'Description', 1, 0, 'L', true);
+    $pdf->Cell($wType, 9, 'Type', 1, 0, 'C', true);
+    $pdf->Cell($wQty, 9, 'Qté', 1, 0, 'C', true);
+    $pdf->Cell($wPrix, 9, 'Prix unit.', 1, 0, 'R', true);
+    $pdf->Cell($wTotal, 9, 'Total HT', 1, 1, 'R', true);
     
     $pdf->SetFont('helvetica', '', 9);
+    $pdf->SetTextColor(30, 41, 59);
     
     // Lignes
     foreach ($lignes as $ligne) {
         $xStart = 15;
         $yStart = $pdf->GetY();
         
-        // Description avec MultiCell pour supporter les retours à la ligne
-        $desc = $ligne['description'];
+        // Description — formatage professionnel (supprime tirets, pipes, redondances)
+        $desc = formatInvoiceDescription((string)($ligne['description'] ?? ''));
         $lineHeight = 3.5; // Hauteur d'une ligne de texte
         
         // Calculer le nombre de lignes dans la description
@@ -158,33 +195,35 @@ function generateInvoicePdf(PDO $pdo, int $factureId, array $facture, array $cli
         // Autres colonnes avec la même hauteur que la description
         $pdf->Cell($wType, $cellHeight, $ligne['type'], 1, 0, 'C');
         $pdf->Cell($wQty, $cellHeight, number_format((float)($ligne['quantite'] ?? 0), 2, ',', ' '), 1, 0, 'C');
-        $pdf->Cell($wPrix, $cellHeight, number_format((float)($ligne['prix_unitaire_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 0, 'R');
+        $prixUnit = (float)($ligne['prix_unitaire_ht'] ?? $ligne['prix_unitaire'] ?? 0);
+        $pdf->Cell($wPrix, $cellHeight, number_format($prixUnit, 2, ',', ' ') . ' €', 1, 0, 'R');
         $pdf->Cell($wTotal, $cellHeight, number_format((float)($ligne['total_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
         
         // Ajuster la position Y pour la prochaine ligne (utiliser la hauteur calculée)
         $pdf->SetY($yStart + $cellHeight);
     }
     
-    // Totaux
+    // Totaux — style professionnel
     $wMerged = $wDesc + $wType + $wQty + $wPrix;
     
     $pdf->SetFont('helvetica', '', 10);
     
     // Total HT
     $pdf->SetX(15);
-    $pdf->Cell($wMerged, 6, 'Total HT', 1, 0, 'R');
-    $pdf->Cell($wTotal, 6, number_format((float)($facture['montant_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wMerged, 7, 'Total HT', 1, 0, 'R');
+    $pdf->Cell($wTotal, 7, number_format((float)($facture['montant_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     
     // TVA
     $pdf->SetX(15);
-    $pdf->Cell($wMerged, 6, 'TVA (20%)', 1, 0, 'R');
-    $pdf->Cell($wTotal, 6, number_format((float)($facture['tva'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wMerged, 7, 'TVA (20 %)', 1, 0, 'R');
+    $pdf->Cell($wTotal, 7, number_format((float)($facture['tva'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
     
-    // Total TTC
+    // Total TTC — mise en gras
     $pdf->SetFont('helvetica', 'B', 11);
+    $pdf->SetFillColor(248, 250, 252);
     $pdf->SetX(15);
-    $pdf->Cell($wMerged, 8, 'Total TTC', 1, 0, 'R');
-    $pdf->Cell($wTotal, 8, number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wMerged, 9, 'Total TTC', 1, 0, 'R', true);
+    $pdf->Cell($wTotal, 9, number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R', true);
 
     // IBAN & Footer
     $pdf->Ln(5);

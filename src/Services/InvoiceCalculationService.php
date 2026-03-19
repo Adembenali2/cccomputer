@@ -137,7 +137,7 @@ class InvoiceCalculationService
         if ($calculation['forfait_ht'] > 0) {
             if ($offre === 1000) {
                 $lines[] = [
-                    'description' => "Forfait mensuel (Offre {$offre} copies) - {$machineName}",
+                    'description' => "Forfait mensuel (Offre {$offre} copies) · {$machineName}",
                     'type' => 'Service',
                     'quantite' => 1.0,
                     'prix_unitaire' => $calculation['forfait_ht'],
@@ -159,27 +159,25 @@ class InvoiceCalculationService
         
         // Ligne 2: Noir & Blanc (toujours affichée, même si consommation <= seuil)
         $consoNB = $calculation['conso_nb'] ?? 0;
-        $descNB = "Copies N&B - {$machineName}";
-        $descNBLine2 = "";
+        $descNB = "Copies noir et blanc · {$machineName}";
+        $detailsNB = [];
         if ($compteurDebutNB > 0 || $compteurFinNB > 0) {
-            $descNBLine2 = sprintf(
-                "Début: %s (%s) | Fin: %s (%s)",
-                number_format($compteurDebutNB, 0, ',', ' '),
+            $detailsNB[] = sprintf(
+                "Période du %s au %s · Compteur : %s → %s",
                 $dateDebutFormatted,
-                number_format($compteurFinNB, 0, ',', ' '),
-                $dateFinFormatted
+                $dateFinFormatted,
+                number_format($compteurDebutNB, 0, ',', ' '),
+                number_format($compteurFinNB, 0, ',', ' ')
             );
+        }
+        $descFinalNB = $descNB;
+        if (!empty($detailsNB)) {
+            $descFinalNB .= "\n" . implode("\n", $detailsNB);
         }
         
         if ($calculation['excess_nb'] > 0) {
-            // Dépassement : on affiche avec le prix
-            if ($descNBLine2) {
-                $descNBLine2 .= sprintf(" | Dépassement: %d copies x %.2f€", (int)$calculation['excess_nb'], self::PRIX_EXCESS_NB_HT);
-            } else {
-                $descNBLine2 = sprintf("Dépassement: %d copies x %.2f€", (int)$calculation['excess_nb'], self::PRIX_EXCESS_NB_HT);
-            }
             $lines[] = [
-                'description' => $descNB . "\n" . $descNBLine2,
+                'description' => $descFinalNB,
                 'type' => 'N&B',
                 'quantite' => $calculation['excess_nb'],
                 'prix_unitaire' => self::PRIX_EXCESS_NB_HT,
@@ -187,13 +185,8 @@ class InvoiceCalculationService
                 'ordre' => $ordre++
             ];
         } else {
-            // Pas de dépassement : on affiche quand même avec consommation = 0€
-            $descFinal = $descNB;
-            if ($descNBLine2) {
-                $descFinal .= "\n" . $descNBLine2;
-            }
             $lines[] = [
-                'description' => $descFinal,
+                'description' => $descFinalNB,
                 'type' => 'N&B',
                 'quantite' => $consoNB,
                 'prix_unitaire' => 0.0,
@@ -204,25 +197,24 @@ class InvoiceCalculationService
         
         // Ligne 3: Couleur (si consommation > 0)
         if ($calculation['conso_couleur'] > 0) {
-            $descCouleur = "Copies couleur - {$machineName}";
-            $descCouleurLine2 = "";
+            $descCouleur = "Copies couleur · {$machineName}";
+            $detailsCouleur = [];
             if ($compteurDebutCouleur > 0 || $compteurFinCouleur > 0) {
-                $descCouleurLine2 = sprintf(
-                    "Début: %s (%s) | Fin: %s (%s)",
-                    number_format($compteurDebutCouleur, 0, ',', ' '),
+                $detailsCouleur[] = sprintf(
+                    "Période du %s au %s · Compteur : %s → %s",
                     $dateDebutFormatted,
-                    number_format($compteurFinCouleur, 0, ',', ' '),
-                    $dateFinFormatted
+                    $dateFinFormatted,
+                    number_format($compteurDebutCouleur, 0, ',', ' '),
+                    number_format($compteurFinCouleur, 0, ',', ' ')
                 );
             }
-            if ($descCouleurLine2) {
-                $descCouleurLine2 .= sprintf(" | %d copies x %.2f€", (int)$calculation['conso_couleur'], self::PRIX_COULEUR_HT);
-            } else {
-                $descCouleurLine2 = sprintf("%d copies x %.2f€", (int)$calculation['conso_couleur'], self::PRIX_COULEUR_HT);
+            $descFinalCouleur = $descCouleur;
+            if (!empty($detailsCouleur)) {
+                $descFinalCouleur .= "\n" . implode("\n", $detailsCouleur);
             }
             
             $lines[] = [
-                'description' => $descCouleur . "\n" . $descCouleurLine2,
+                'description' => $descFinalCouleur,
                 'type' => 'Couleur',
                 'quantite' => $calculation['conso_couleur'],
                 'prix_unitaire' => self::PRIX_COULEUR_HT,

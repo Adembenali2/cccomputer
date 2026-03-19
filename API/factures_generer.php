@@ -275,6 +275,7 @@ function generateFactureNumber($pdo, $type) {
  */
 function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data): string {
     require_once __DIR__ . '/../vendor/autoload.php';
+    require_once __DIR__ . '/factures_generate_pdf_content.php';
 
     // Données
     $lignes = $pdo->query("SELECT * FROM facture_lignes WHERE id_facture = $factureId ORDER BY ordre ASC")->fetchAll(PDO::FETCH_ASSOC);
@@ -387,22 +388,27 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
     $pdf->Cell(0, 6, 'Facture N° : ' . $facture['numero'], 0, 1, 'R');
     $pdf->Ln(5);
 
-    // TABLEAU
-    $pdf->SetFont('helvetica', 'B', 10);
-    $pdf->SetFillColor(240, 240, 240);
+    // TABLEAU — style professionnel
+    $pdf->SetDrawColor(226, 232, 240);
+    $pdf->SetLineWidth(0.3);
+    $pdf->SetFont('helvetica', 'B', 9);
+    $pdf->SetFillColor(248, 250, 252);
+    $pdf->SetTextColor(71, 85, 105);
 
     $wDesc = 80; $wType = 25; $wQty = 20; $wPrix = 25; $wTotal = 30;
 
     $printTableHeader = function() use ($pdf, $wDesc, $wType, $wQty, $wPrix, $wTotal) {
-        $pdf->SetFont('helvetica', 'B', 10);
-        $pdf->SetFillColor(240, 240, 240);
+        $pdf->SetFont('helvetica', 'B', 9);
+        $pdf->SetFillColor(248, 250, 252);
+        $pdf->SetTextColor(71, 85, 105);
         $pdf->SetX(15);
-        $pdf->Cell($wDesc, 8, 'Description', 1, 0, 'L', true);
-        $pdf->Cell($wType, 8, 'Type', 1, 0, 'C', true);
-        $pdf->Cell($wQty, 8, 'Qté', 1, 0, 'C', true);
-        $pdf->Cell($wPrix, 8, 'Prix unit.', 1, 0, 'R', true);
-        $pdf->Cell($wTotal, 8, 'Total HT', 1, 1, 'R', true);
+        $pdf->Cell($wDesc, 9, 'Description', 1, 0, 'L', true);
+        $pdf->Cell($wType, 9, 'Type', 1, 0, 'C', true);
+        $pdf->Cell($wQty, 9, 'Qté', 1, 0, 'C', true);
+        $pdf->Cell($wPrix, 9, 'Prix unit.', 1, 0, 'R', true);
+        $pdf->Cell($wTotal, 9, 'Total HT', 1, 1, 'R', true);
         $pdf->SetFont('helvetica', '', 9);
+        $pdf->SetTextColor(30, 41, 59);
     };
 
     $printTableHeader();
@@ -412,7 +418,7 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
         $xStart = 15;
         $yStart = $pdf->GetY();
 
-        $desc = trim(preg_replace("/\r\n|\r/", "\n", (string)($ligne['description'] ?? '')));
+        $desc = formatInvoiceDescription((string)($ligne['description'] ?? ''));
         $type = (string)($ligne['type'] ?? '');
 
         $qty = (float)($ligne['quantite'] ?? 0);
@@ -465,22 +471,24 @@ function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data
         $pdf->SetY($yStart + $cellHeight);
     }
 
-    // TOTAUX INTÉGRÉS
+    // TOTAUX INTÉGRÉS — style professionnel
     $wMerged = $wDesc + $wType + $wQty + $wPrix;
 
     $pdf->SetFont('helvetica', '', 10);
+    $pdf->SetTextColor(30, 41, 59);
     $pdf->SetX(15);
-    $pdf->Cell($wMerged, 6, 'Total HT', 1, 0, 'R');
-    $pdf->Cell($wTotal, 6, number_format((float)($facture['montant_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wMerged, 7, 'Total HT', 1, 0, 'R');
+    $pdf->Cell($wTotal, 7, number_format((float)($facture['montant_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
 
     $pdf->SetX(15);
-    $pdf->Cell($wMerged, 6, 'TVA (20%)', 1, 0, 'R');
-    $pdf->Cell($wTotal, 6, number_format((float)($facture['tva'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wMerged, 7, 'TVA (20 %)', 1, 0, 'R');
+    $pdf->Cell($wTotal, 7, number_format((float)($facture['tva'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
 
     $pdf->SetFont('helvetica', 'B', 11);
+    $pdf->SetFillColor(248, 250, 252);
     $pdf->SetX(15);
-    $pdf->Cell($wMerged, 8, 'Total TTC', 1, 0, 'R');
-    $pdf->Cell($wTotal, 8, number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+    $pdf->Cell($wMerged, 9, 'Total TTC', 1, 0, 'R', true);
+    $pdf->Cell($wTotal, 9, number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R', true);
 
     // IBAN
     $pdf->Ln(5);
