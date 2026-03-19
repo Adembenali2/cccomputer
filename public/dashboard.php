@@ -2729,6 +2729,36 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         });
     })();
 
+    // === Déclenchement automatique des imports (backend, sans clic) ===
+    (function() {
+        const AUTO_IMPORT_INTERVAL_MS = 60000; // 1 minute
+        const INITIAL_DELAY_MS = 3000; // 3 secondes après chargement
+        
+        async function triggerImport(url, name) {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
+                });
+                const data = await res.json();
+                if (data && data.ok) return true;
+            } catch (e) { console.debug('[Auto-import ' + name + ']', e.message); }
+            return false;
+        }
+        
+        async function runAutoImports() {
+            if (document.hidden) return;
+            await triggerImport('/API/import/sftp_trigger.php', 'SFTP');
+            await new Promise(r => setTimeout(r, 2000)); // 2s entre SFTP et IONOS
+            await triggerImport('/API/import/ionos_trigger.php', 'IONOS');
+        }
+        
+        setTimeout(runAutoImports, INITIAL_DELAY_MS);
+        setInterval(runAutoImports, AUTO_IMPORT_INTERVAL_MS);
+    })();
+
     </script>
 </body>
 </html>
