@@ -1,7 +1,6 @@
-# Crontab pour CCComputer - Import SFTP
-# 
-# Ce fichier montre comment configurer le cron pour l'import SFTP
-# Exécute le script toutes les minutes
+# Crontab pour CCComputer - Imports automatiques
+#
+# Exécute les imports SFTP et IONOS toutes les minutes
 #
 # Installation:
 # 1. Copier ce fichier: cp crontab.example /tmp/crontab_current
@@ -13,8 +12,8 @@
 # Import SFTP - Toutes les minutes
 * * * * * cd /var/www/html && /usr/bin/php scripts/import_sftp_cron.php >> /var/www/html/logs/sftp_import.log 2>&1
 
-# Alternative avec variables d'environnement explicites (si nécessaire):
-# * * * * * cd /var/www/html && /usr/bin/env PHP_PATH=/usr/bin/php /usr/bin/php scripts/import_sftp_cron.php >> /var/www/html/logs/sftp_import.log 2>&1
+# Import IONOS - Toutes les minutes
+* * * * * cd /var/www/html && /usr/bin/php scripts/import_ionos_cron.php >> /var/www/html/logs/ionos_import.log 2>&1
 
 # Note: Assurez-vous que le dossier logs/ existe:
 # mkdir -p /var/www/html/logs && chmod 755 /var/www/html/logs

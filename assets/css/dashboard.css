@@ -1059,6 +1059,73 @@ body {
   }
 }
 
+/* ====== Bannière notification import (en haut du dashboard) ====== */
+.import-banner-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-md);
+  border-left: 4px solid #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  animation: importBannerSlideIn 0.3s ease;
+}
+
+.import-banner-top.import-banner-error {
+  border-left-color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.import-banner-top.import-banner-info {
+  border-left-color: var(--accent-primary);
+  background: rgba(var(--accent-rgb, 59, 130, 246), 0.1);
+}
+
+.import-banner-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.import-banner-text {
+  flex: 1;
+}
+
+.import-banner-close {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.import-banner-close:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+@keyframes importBannerSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ====== Responsive du contenu principal ====== */
 @media (max-width: 768px) {
   .dashboard-wrapper {

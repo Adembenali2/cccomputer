@@ -286,6 +286,13 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             <h2 class="dashboard-title">Tableau de Bord</h2>
         </div>
 
+        <!-- Bannière notification import (en haut du dashboard) -->
+        <div id="importBannerTop" class="import-banner-top" role="alert" aria-live="polite" style="display: none;">
+            <span class="import-banner-icon"></span>
+            <span class="import-banner-text" id="importBannerText"></span>
+            <button type="button" class="import-banner-close" id="importBannerClose" aria-label="Fermer la notification">&times;</button>
+        </div>
+
         <div class="dashboard-grid">
             <div class="dash-card" data-href="/public/sav.php" tabindex="0" role="button" aria-label="Accéder au SAV">
                 <div class="card-icon sav" aria-hidden="true">
@@ -986,6 +993,37 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             }
         }, 300);
     }
+    
+    // Bannière en haut du dashboard pour les imports (SFTP / IONOS)
+    let importBannerTimeout = null;
+    function showImportBannerAtTop(message, type = 'success') {
+        const banner = document.getElementById('importBannerTop');
+        const textEl = document.getElementById('importBannerText');
+        const iconEl = banner ? banner.querySelector('.import-banner-icon') : null;
+        if (!banner || !textEl) return;
+        
+        if (importBannerTimeout) clearTimeout(importBannerTimeout);
+        
+        banner.className = 'import-banner-top';
+        if (type === 'error') banner.classList.add('import-banner-error');
+        else if (type === 'info') banner.classList.add('import-banner-info');
+        
+        const icons = { success: '✅', error: '❌', info: '⚠️' };
+        if (iconEl) iconEl.textContent = icons[type] || icons.success;
+        textEl.textContent = message;
+        banner.style.display = 'flex';
+        
+        importBannerTimeout = setTimeout(() => {
+            banner.style.display = 'none';
+            importBannerTimeout = null;
+        }, 6000);
+    }
+    
+    document.getElementById('importBannerClose')?.addEventListener('click', () => {
+        const banner = document.getElementById('importBannerTop');
+        if (banner) banner.style.display = 'none';
+        if (importBannerTimeout) { clearTimeout(importBannerTimeout); importBannerTimeout = null; }
+    });
     
     // Note: On utilise showNotificationToast directement pour éviter les conflits avec window.showNotification de api.js
 
@@ -2131,7 +2169,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
         let isFetching = false;
         let refreshInterval = null;
-        const REFRESH_INTERVAL_MS = 30000; // 30 secondes
+        const REFRESH_INTERVAL_MS = 60000; // 1 minute (aligné avec le cron)
         let lastRunId = null; // Pour détecter les nouveaux runs
         
         function setStatusBadge(statusValue) {
@@ -2289,35 +2327,30 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 const isNewRun = lastRunId !== null && currentRunId !== lastRunId;
                 
                 if (isNewRun && run.files_processed > 0) {
-                    // Nouveau run détecté - afficher notification avec nombre de fichiers et temps
+                    // Nouveau run détecté - afficher bannière en haut avec nombre de fichiers
                     const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
                     const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
                     
                     if (displayStatus === 'RUN_OK') {
-                        showNotificationToast(
-                            '✅ Import réussi',
-                            `${run.files_processed} ${filesText} importé(s) en ${durationSeconds}s`,
+                        showImportBannerAtTop(
+                            `Import SFTP réussi : ${run.files_processed} ${filesText} importé(s) en ${durationSeconds}s`,
                             'success'
                         );
                     } else if (displayStatus === 'PARTIAL') {
-                        showNotificationToast(
-                            '⚠️ Import partiel',
-                            `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
+                        showImportBannerAtTop(
+                            `Import SFTP partiel : ${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
                             'info'
                         );
                     } else if (displayStatus === 'RUN_FAILED') {
-                        showNotificationToast(
-                            '❌ Erreur import',
-                            `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import SFTP'}`,
+                        showImportBannerAtTop(
+                            `Import SFTP échoué : ${run.error || 'Erreur lors de l\'import'}`,
                             'error'
                         );
                     }
                 } else if (isNewRun && displayStatus === 'RUN_FAILED') {
-                    // Notification même si aucun fichier traité mais erreur
                     const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
-                    showNotificationToast(
-                        '❌ Erreur import',
-                        `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import SFTP'}`,
+                    showImportBannerAtTop(
+                        `Import SFTP échoué : ${run.error || 'Erreur lors de l\'import'}`,
                         'error'
                     );
                 }
@@ -2378,9 +2411,8 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
                         const filesText = run.files_processed === 1 ? 'fichier' : 'fichiers';
                         
-                        showNotificationToast(
-                            '✅ Import terminé',
-                            `${run.files_processed} ${filesText} traité(s) en ${durationSeconds}s`,
+                        showImportBannerAtTop(
+                            `Import SFTP réussi : ${run.files_processed} ${filesText} importé(s) en ${durationSeconds}s`,
                             'success'
                         );
                         
@@ -2391,19 +2423,11 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         }, 1000);
                     } else {
                         const errorMsg = result && result.error ? result.error : 'Erreur lors de l\'import';
-                        showNotificationToast(
-                            '❌ Erreur',
-                            errorMsg,
-                            'error'
-                        );
+                        showImportBannerAtTop('Import SFTP échoué : ' + errorMsg, 'error');
                     }
                 } catch (error) {
                     console.error('[SFTP] Erreur trigger:', error);
-                    showNotificationToast(
-                        '❌ Erreur',
-                        'Impossible de lancer l\'import: ' + error.message,
-                        'error'
-                    );
+                    showImportBannerAtTop('Import SFTP : ' + (error.message || 'Erreur de connexion'), 'error');
                 } finally {
                     // Réactiver le bouton
                     triggerBtn.disabled = false;
@@ -2449,7 +2473,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         
         let isFetching = false;
         let refreshInterval = null;
-        const REFRESH_INTERVAL_MS = 30000; // 30 secondes
+        const REFRESH_INTERVAL_MS = 60000; // 1 minute (aligné avec le cron)
         let lastRunId = null; // Pour détecter les nouveaux runs
         
         function setStatusBadge(statusValue) {
@@ -2582,29 +2606,24 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
                     
                     if (displayStatus === 'RUN_OK') {
-                        showNotificationToast(
-                            '✅ Import IONOS réussi',
-                            `${run.rows_processed} ${rowsText} importée(s) en ${durationSeconds}s`,
+                        showImportBannerAtTop(
+                            `Import IONOS réussi : ${run.rows_processed} ${rowsText} importée(s) en ${durationSeconds}s`,
                             'success'
                         );
                     } else if (displayStatus === 'PARTIAL') {
-                        showNotificationToast(
-                            '⚠️ Import IONOS partiel',
-                            `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
+                        showImportBannerAtTop(
+                            `Import IONOS partiel : ${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
                             'info'
                         );
                     } else if (displayStatus === 'RUN_FAILED') {
-                        showNotificationToast(
-                            '❌ Erreur import IONOS',
-                            `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import IONOS'}`,
+                        showImportBannerAtTop(
+                            `Import IONOS échoué : ${run.error || 'Erreur lors de l\'import'}`,
                             'error'
                         );
                     }
                 } else if (isNewRun && displayStatus === 'RUN_FAILED') {
-                    const durationSeconds = run.duration_ms ? (run.duration_ms / 1000).toFixed(1) : '?';
-                    showNotificationToast(
-                        '❌ Erreur import IONOS',
-                        `Échec après ${durationSeconds}s: ${run.error || 'Erreur lors de l\'import IONOS'}`,
+                    showImportBannerAtTop(
+                        `Import IONOS échoué : ${run.error || 'Erreur lors de l\'import'}`,
                         'error'
                     );
                 }
@@ -2662,9 +2681,8 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         const durationSeconds = result.duration_ms ? (result.duration_ms / 1000).toFixed(1) : '?';
                         const rowsText = run.rows_processed === 1 ? 'ligne' : 'lignes';
                         
-                        showNotificationToast(
-                            '✅ Import IONOS terminé',
-                            `${run.rows_processed} ${rowsText} traitée(s) en ${durationSeconds}s`,
+                        showImportBannerAtTop(
+                            `Import IONOS réussi : ${run.rows_processed} ${rowsText} importée(s) en ${durationSeconds}s`,
                             'success'
                         );
                         
@@ -2674,19 +2692,11 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                         }, 1000);
                     } else {
                         const errorMsg = result && result.error ? result.error : 'Erreur lors de l\'import IONOS';
-                        showNotificationToast(
-                            '❌ Erreur',
-                            errorMsg,
-                            'error'
-                        );
+                        showImportBannerAtTop('Import IONOS échoué : ' + errorMsg, 'error');
                     }
                 } catch (error) {
                     console.error('[IONOS] Erreur trigger:', error);
-                    showNotificationToast(
-                        '❌ Erreur',
-                        'Impossible de lancer l\'import IONOS: ' + error.message,
-                        'error'
-                    );
+                    showImportBannerAtTop('Import IONOS : ' + (error.message || 'Erreur de connexion'), 'error');
                 } finally {
                     triggerBtn.disabled = false;
                     triggerBtn.innerHTML = originalText;
