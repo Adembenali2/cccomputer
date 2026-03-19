@@ -2635,7 +2635,8 @@
                     showToast('Sélectionnez une facture', 'error');
                 }
             } else {
-                progFacturesMultiSelected = checked;
+                // Fusionner avec la sélection existante (évite de perdre les factures des recherches précédentes)
+                progFacturesMultiSelected = [...new Set([...progFacturesMultiSelected, ...checked])];
                 const listEl = document.getElementById('progFacturesMultiList');
                 if (listEl) {
                     listEl.innerHTML = progFacturesMultiSelected.length ? progFacturesMultiSelected.map(fid => `<span style="display:inline-block; margin:0.25rem; padding:0.25rem 0.5rem; background:var(--bg-secondary); border-radius:4px;">#${fid} <button type="button" style="margin-left:0.25rem; border:none; background:none; cursor:pointer; color:#ef4444;" onclick="progRemoveFacture(${fid})">&times;</button></span>`).join('') : '<em style="color:var(--text-secondary);">Aucune facture sélectionnée</em>';
@@ -4046,8 +4047,10 @@
             if (!modal || !overlay) return;
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('progDateEnvoi').value = today;
+            // Date par défaut : demain à 09:00 pour éviter "date doit être dans le futur"
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('progDateEnvoi').value = tomorrow.toISOString().split('T')[0];
             document.getElementById('progHeureEnvoi').value = '09:00';
             document.getElementById('progFactureId').value = '';
             document.getElementById('progFactureSearch').value = '';
@@ -4274,6 +4277,14 @@
                     document.getElementById('progFactureId').value = '';
                     document.getElementById('progFactureSearch').value = '';
                     progFacturesMultiSelected = [];
+                    // Réinitialiser la date pour la prochaine programmation
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    document.getElementById('progDateEnvoi').value = tomorrow.toISOString().split('T')[0];
+                    document.getElementById('progHeureEnvoi').value = '09:00';
+                    document.getElementById('progUseClientEmail').checked = true;
+                    document.getElementById('progAllClients').checked = false;
+                    onProgEmailOptionChange();
                     loadProgrammerEnvoisList();
                 } else {
                     showToast(data.error || 'Erreur', 'error');

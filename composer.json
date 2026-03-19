@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "scheduled-factures": "php cron/send_scheduled_factures.php"
+    "scheduled-factures": "php cron/send_scheduled_factures.php",
+    "migrate-programmer": "php scripts/run_programmer_migration.php"
   },
   "require": {
     "php": ">=8.0",
