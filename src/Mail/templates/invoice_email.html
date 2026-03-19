@@ -103,6 +103,11 @@
             margin: 12px 0;
             display: block;
         }
+        .invoice-amount-inline {
+            font-size: 18px;
+            font-weight: bold;
+            color: #067d62;
+        }
 
         .signature {
             margin-top: 32px;
@@ -172,7 +177,7 @@
                                     <strong>Date de facturation :</strong> {{invoice_date}}
                                 </div>
                                 <div class="invoice-detail">
-                                    <strong>Montant TTC :</strong> <span class="invoice-amount">{{invoice_total_ttc}}</span>
+                                    <strong>Montant TTC :</strong> <span class="invoice-amount-inline">{{invoice_total_ttc}}</span>
                                 </div>
                             </div>
 
@@ -182,8 +187,7 @@
 
                             <p class="signature">
                                 Cordialement,<br>
-                                <strong>{{header_title}}</strong><br>
-                                <span style="color:#565959;">{{company_name}}</span>
+                                <strong>{{company_name}}</strong>
                             </p>
                         </td>
                     </tr>
