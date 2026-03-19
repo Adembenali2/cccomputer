@@ -64,11 +64,24 @@ class PaymentReceiptEmailService
             return ['success' => false, 'message' => 'Email destinataire invalide ou manquant', 'message_id' => null];
         }
 
-        if (empty($paiement['recu_path'])) {
-            return ['success' => false, 'message' => 'Aucun reçu disponible pour ce paiement', 'message_id' => null];
+        $recuPath = $paiement['recu_path'];
+        $pdfPath = $recuPath ? $this->findRecuPath($recuPath) : null;
+
+        // Si pas de reçu ou fichier introuvable : régénérer le PDF
+        if (!$pdfPath) {
+            try {
+                require_once dirname(__DIR__, 2) . '/API/paiements_generer_recu.php';
+                $newRecuPath = generateRecuPDF($this->pdo, $paiementId);
+                $stmt = $this->pdo->prepare("UPDATE paiements SET recu_path = :recu_path, recu_genere = 1 WHERE id = :id");
+                $stmt->execute([':recu_path' => $newRecuPath, ':id' => $paiementId]);
+                $pdfPath = $this->findRecuPath($newRecuPath);
+                $recuPath = $newRecuPath;
+            } catch (\Throwable $e) {
+                error_log('[PaymentReceiptEmailService] Régénération reçu échouée: ' . $e->getMessage());
+                return ['success' => false, 'message' => 'Impossible de générer le reçu: ' . $e->getMessage(), 'message_id' => null];
+            }
         }
 
-        $pdfPath = $this->findRecuPath($paiement['recu_path']);
         if (!$pdfPath) {
             return ['success' => false, 'message' => 'Fichier reçu introuvable sur le serveur', 'message_id' => null];
         }
@@ -76,7 +89,7 @@ class PaymentReceiptEmailService
         $sujet = 'Reçu de paiement ' . $paiement['reference'] . ' - ' . ($this->config['company']['name'] ?? 'CC Computer');
         $textBody = $this->buildTextBody($paiement);
         $htmlBody = $this->buildHtmlBody($paiement);
-        $fileName = basename($paiement['recu_path']);
+        $fileName = basename($recuPath ?: 'recu.pdf');
         $fileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName);
 
         try {

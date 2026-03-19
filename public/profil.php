@@ -2977,6 +2977,10 @@ function scrollToSection(event, sectionId) {
                     if (data.ok) {
                         if (data.recu_envoye) {
                             alert('Paiement validé. Reçu envoyé au client.');
+                        } else if (newStatut === 'recu' && data.recu_error) {
+                            alert('Paiement validé mais le reçu n\'a pas pu être envoyé : ' + data.recu_error);
+                        } else if (newStatut === 'recu') {
+                            alert('Paiement validé. (Reçu non envoyé - vérifiez que le client a un email et qu\'un reçu existe)');
                         }
                         if (sel.dataset) sel.dataset.prevValue = newStatut;
                     } else {

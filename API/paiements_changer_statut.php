@@ -84,17 +84,26 @@ try {
                 $config = require __DIR__ . '/../config/app.php';
                 $receiptService = new \App\Services\PaymentReceiptEmailService($pdo, $config);
                 $receiptResult = $receiptService->sendReceipt($paiementId);
+                if (!($receiptResult['success'] ?? false)) {
+                    error_log('[paiements_changer_statut] Envoi reçu échoué: ' . ($receiptResult['message'] ?? ''));
+                }
             } catch (Throwable $e) {
                 error_log('[paiements_changer_statut] Erreur envoi reçu: ' . $e->getMessage());
+                $receiptResult = ['success' => false, 'message' => $e->getMessage()];
             }
         }
 
+        $msg = $newStatut === 'recu'
+            ? (($receiptResult['success'] ?? false) ? 'Paiement validé. Reçu envoyé au client.' : 'Paiement validé. Reçu non envoyé: ' . ($receiptResult['message'] ?? 'Erreur inconnue'))
+            : 'Paiement mis en attente.';
+
         jsonResponse([
             'ok' => true,
-            'message' => $newStatut === 'recu' ? 'Paiement validé. Reçu envoyé au client.' : 'Paiement mis en attente.',
+            'message' => $msg,
             'paiement_id' => $paiementId,
             'statut' => $newStatut,
             'recu_envoye' => $receiptResult['success'] ?? false,
+            'recu_error' => ($receiptResult['success'] ?? true) ? null : ($receiptResult['message'] ?? null),
         ]);
 
     } catch (Exception $e) {
