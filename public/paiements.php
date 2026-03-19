@@ -159,39 +159,16 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     <h3 class="section-card-title">Factures</h3>
                 </div>
                 <div class="section-card-content">
-                    <p class="section-card-description">Liste de toutes les factures générées</p>
+                    <p class="section-card-description">Liste, modifier, supprimer et gérer toutes vos factures</p>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button class="section-card-btn" onclick="openSection('factures')">
-                            Voir les factures
+                            Gérer les factures
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M5 12h14"></path>
                                 <path d="M12 5l7 7-7 7"></path>
                             </svg>
                         </button>
                     </div>
-                </div>
-            </div>
-
-            <!-- Section Gestion des factures -->
-            <div class="section-card" id="sectionGestionFactures">
-                <div class="section-card-header">
-                    <div class="section-card-icon" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </div>
-                    <h3 class="section-card-title">Gestion des factures</h3>
-                </div>
-                <div class="section-card-content">
-                    <p class="section-card-description">Modifier, supprimer et gérer toutes vos factures</p>
-                    <button class="section-card-btn" onclick="openSection('factures')">
-                        Gérer les factures
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14"></path>
-                            <path d="M12 5l7 7-7 7"></path>
-                        </svg>
-                    </button>
                 </div>
             </div>
 
