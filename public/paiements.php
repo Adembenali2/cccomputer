@@ -39,6 +39,33 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         <!-- Message Container -->
         <div id="messageContainer" class="message-container"></div>
 
+        <!-- Tableau de bord financier -->
+        <div class="finance-dashboard" id="financeDashboard">
+            <div class="finance-dashboard-card finance-ca">
+                <div class="finance-card-icon">€</div>
+                <div class="finance-card-content">
+                    <span class="finance-card-value" id="financeCaMois">--</span>
+                    <span class="finance-card-label">CA du mois</span>
+                </div>
+            </div>
+            <div class="finance-dashboard-card finance-impayees">
+                <div class="finance-card-icon">📄</div>
+                <div class="finance-card-content">
+                    <span class="finance-card-value" id="financeNbImpayees">--</span>
+                    <span class="finance-card-label">Factures impayées</span>
+                    <span class="finance-card-sub" id="financeMontantImpaye">-- €</span>
+                </div>
+            </div>
+            <div class="finance-dashboard-card finance-retard">
+                <div class="finance-card-icon">⚠️</div>
+                <div class="finance-card-content">
+                    <span class="finance-card-value" id="financeNbRetard">--</span>
+                    <span class="finance-card-label">En retard</span>
+                    <span class="finance-card-sub" id="financeMontantRetard">-- €</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Statistics Section with Graph -->
         <div class="stats-section">
             <div class="stats-header">
@@ -121,6 +148,8 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
 
         <!-- Sections Grid -->
         <div class="sections-grid">
+            <!-- Groupe : Gestion -->
+            <div class="section-group-label">Gestion</div>
             <!-- Section Factures (fusionnée avec paiements) -->
             <div class="section-card" id="sectionFactures">
                 <div class="section-card-header">
@@ -134,6 +163,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         </svg>
                     </div>
                     <h3 class="section-card-title">Factures</h3>
+                    <span class="section-card-badge" id="sectionFacturesBadge" style="display: none;"></span>
                 </div>
                 <div class="section-card-content">
                     <p class="section-card-description">Liste des factures, paiements, modifier, supprimer et gérer</p>
@@ -149,6 +179,8 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 </div>
             </div>
 
+            <!-- Groupe : Création -->
+            <div class="section-group-label">Création</div>
             <!-- Section Générer facture -->
             <div class="section-card" id="sectionGenererFacture">
                 <div class="section-card-header">
@@ -184,6 +216,7 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         </svg>
                     </div>
                     <h3 class="section-card-title">Payer</h3>
+                    <span class="section-card-badge" id="sectionPayerBadge" style="display: none;"></span>
                 </div>
                 <div class="section-card-content">
                     <p class="section-card-description">Enregistrez un nouveau paiement</p>
@@ -197,6 +230,8 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                 </div>
             </div>
 
+            <!-- Groupe : Envoi -->
+            <div class="section-group-label">Envoi</div>
             <!-- Section Facture Mail -->
             <div class="section-card" id="sectionFactureMail">
                 <div class="section-card-header">
@@ -355,7 +390,11 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                         <span><span id="facturesCount">0</span> facture(s) trouvée(s)</span>
                         <span id="facturesFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <button type="button" onclick="exportFacturesExcel()" style="padding: 0.5rem 1rem; background: #059669; color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem;" title="Exporter la liste en Excel">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Exporter Excel
+                            </button>
                             <button type="button" onclick="openHistoriquePaiementsModal()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                                 Historique des paiements
@@ -372,13 +411,13 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                                     <th style="padding: 0.75rem; text-align: center; width: 40px;">
                                         <input type="checkbox" id="facturesSelectAll" onchange="toggleFacturesSelectAll(this)" title="Tout sélectionner">
                                     </th>
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
-                                    <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Type</th>
-                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Montant HT</th>
-                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">TVA</th>
-                                    <th style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary);">Total TTC</th>
+                                    <th class="factures-sortable" data-sort="numero" onclick="sortFacturesBy('numero')" style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;" title="Trier">Numéro</th>
+                                    <th class="factures-sortable" data-sort="date_facture" onclick="sortFacturesBy('date_facture')" style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;" title="Trier">Date</th>
+                                    <th class="factures-sortable" data-sort="client_nom" onclick="sortFacturesBy('client_nom')" style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;" title="Trier">Client</th>
+                                    <th class="factures-sortable" data-sort="type" onclick="sortFacturesBy('type')" style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;" title="Trier">Type</th>
+                                    <th class="factures-sortable" data-sort="montant_ht" onclick="sortFacturesBy('montant_ht')" style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;" title="Trier">Montant HT</th>
+                                    <th class="factures-sortable" data-sort="tva" onclick="sortFacturesBy('tva')" style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;" title="Trier">TVA</th>
+                                    <th class="factures-sortable" data-sort="montant_ttc" onclick="sortFacturesBy('montant_ttc')" style="padding: 0.75rem; text-align: right; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;" title="Trier">Total TTC</th>
                                     <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Statut</th>
                                     <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--text-primary);">Actions</th>
                                 </tr>
@@ -834,6 +873,9 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             </div>
                         </div>
                         <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Si un relevé n'existe pas à la date exacte, le dernier disponible sera utilisé.</div>
+                        <div id="genFacturePreviewEligibles" style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color); font-size: 0.9rem; display: none;">
+                            <span id="genFacturePreviewText">--</span> client(s) éligible(s) pour la génération
+                        </div>
                     </div>
 
                     <div id="genFactureNotifications" style="display: none; margin-bottom: 1rem;"></div>
@@ -1177,10 +1219,11 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                             <div id="payerFactureSuggestions" class="payer-suggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; margin-top: 0.25rem; max-height: 280px; overflow-y: auto; background: var(--bg-primary); border: 2px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); z-index: 1000;"></div>
                         </div>
                         <div id="payerFactureSelected" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                                 <span id="payerFactureSelectedLabel"></span>
                                 <button type="button" onclick="clearPayerFactureSelection()" style="padding: 0.25rem 0.5rem; background: #ef4444; color: white; border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8rem;">Changer</button>
                             </div>
+                            <div id="payerFactureRestant" style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary); display: none;">Reste à payer : <strong id="payerFactureRestantValue" style="color: var(--accent-primary);">0,00 €</strong></div>
                         </div>
                         <div class="input-hint" id="payerFactureHint">Tapez pour rechercher par nom, prénom, numéro ou date</div>
                     </div>

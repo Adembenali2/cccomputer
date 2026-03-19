@@ -6,6 +6,57 @@
             min-height: calc(100vh - 200px);
         }
 
+        /* ====== Tableau de bord financier ====== */
+        .finance-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .finance-dashboard-card {
+            padding: 1.25rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .finance-dashboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .finance-ca { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border-color: #6ee7b7; }
+        .finance-impayees { background: linear-gradient(135deg, #fef3c7, #fde68a); border-color: #fcd34d; }
+        .finance-retard { background: linear-gradient(135deg, #fee2e2, #fecaca); border-color: #fca5a5; }
+        .finance-card-icon { font-size: 2rem; }
+        .finance-card-content { display: flex; flex-direction: column; gap: 0.25rem; }
+        .finance-card-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
+        .finance-card-label { font-size: 0.875rem; color: var(--text-secondary); }
+        .finance-card-sub { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* ====== Section groups ====== */
+        .section-group-label {
+            grid-column: 1 / -1;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin: 1rem 0 0.5rem;
+            padding-bottom: 0.25rem;
+        }
+        .section-group-label:first-child { margin-top: 0; }
+        .section-card-badge {
+            margin-left: auto;
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: #ef4444;
+            color: white;
+        }
+
         /* ====== Header Section ====== */
         .paiement-header {
             margin-bottom: 2.5rem;

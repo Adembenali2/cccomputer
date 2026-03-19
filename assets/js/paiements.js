@@ -1238,6 +1238,7 @@
                         window.open(result.pdf_url, '_blank');
                     }
                     closeFactureModal();
+                    loadFinanceStats();
                 } else {
                     const errorMsg = result.error || 'Erreur inconnue';
                     console.error('Erreur API:', errorMsg);
@@ -1288,6 +1289,9 @@
         let allFactures = [];
         let facturesActiveTab = 'mois_en_cours'; // 'mois_en_cours' | 'archive'
         let currentFactureStatusFilter = 'all';
+        let facturesDisplayed = [];
+        let facturesSortColumn = null;
+        let facturesSortAsc = true;
 
         function getFacturesForCurrentTab() {
             // Mois en cours : factures non payées OU non envoyées
@@ -1732,6 +1736,7 @@
                 if (data.ok) {
                     closeModifierFactureModal();
                     loadFacturesList();
+                    loadFinanceStats();
                     showToast(isConsommation ? 'Facture régénérée avec succès' : 'Facture modifiée avec succès', 'success');
                 } else {
                     errorDiv.textContent = data.error || 'Erreur inconnue';
@@ -1762,6 +1767,7 @@
                 const data = await res.json();
                 if (data.ok) {
                     loadFacturesList();
+                    loadFinanceStats();
                     showToast('Facture supprimée avec succès', 'success');
                 } else {
                     showToast(data.error || 'Erreur lors de la suppression', 'error');
@@ -1904,7 +1910,35 @@
                 });
             }
 
+            facturesDisplayed = baseFactures;
             displayFactures(baseFactures);
+        }
+
+        function sortFacturesBy(column) {
+            if (facturesDisplayed.length === 0) return;
+            const asc = facturesSortColumn === column ? !facturesSortAsc : true;
+            facturesSortColumn = column;
+            facturesSortAsc = asc;
+            const sorted = [...facturesDisplayed].sort((a, b) => {
+                let va = a[column];
+                let vb = b[column];
+                if (column === 'date_facture') {
+                    va = va || '';
+                    vb = vb || '';
+                    return asc ? (va.localeCompare(vb)) : (vb.localeCompare(va));
+                }
+                if (['montant_ht', 'tva', 'montant_ttc'].includes(column)) {
+                    va = parseFloat(va) || 0;
+                    vb = parseFloat(vb) || 0;
+                    return asc ? (va - vb) : (vb - va);
+                }
+                va = String(va || '').toLowerCase();
+                vb = String(vb || '').toLowerCase();
+                const cmp = va.localeCompare(vb);
+                return asc ? cmp : -cmp;
+            });
+            facturesDisplayed = sorted;
+            displayFactures(sorted);
         }
 
         function toggleFacturesSelectAll(checkbox) {
@@ -1939,6 +1973,7 @@
                 const data = await res.json();
                 if (data.ok) {
                     loadFacturesList();
+                    loadFinanceStats();
                     const nb = data.supprimees?.length || ids.length;
                     const errs = data.erreurs?.length || 0;
                     showToast(errs > 0 ? `${nb} supprimée(s), ${errs} non supprimée(s) (paiements liés)` : `${nb} facture(s) supprimée(s)`, 'success');
@@ -3248,11 +3283,16 @@
             if (form) {
                 form.reset();
                 form.style.display = 'block';
-                // Réinitialiser la date à aujourd'hui
                 const dateInput = document.getElementById('genFactureDate');
-                if (dateInput) {
-                    dateInput.value = new Date().toISOString().split('T')[0];
-                }
+                if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+                const d = new Date();
+                const firstDay = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+                const lastDay = new Date(d.getFullYear(), d.getMonth(), 0);
+                const dateDebutEl = document.getElementById('genFactureDateDebut');
+                const dateFinEl = document.getElementById('genFactureDateFin');
+                if (dateDebutEl) dateDebutEl.value = firstDay.toISOString().split('T')[0];
+                if (dateFinEl) dateFinEl.value = lastDay.toISOString().split('T')[0];
+                loadGenFacturePreview();
                 // Masquer les notifications
                 const notificationsDiv = document.getElementById('genFactureNotifications');
                 if (notificationsDiv) {
@@ -3309,7 +3349,31 @@
                 logContainer.style.display = 'none';
             }
         }
-        
+
+        async function loadGenFacturePreview() {
+            const dateDebut = document.getElementById('genFactureDateDebut')?.value;
+            const dateFin = document.getElementById('genFactureDateFin')?.value;
+            const el = document.getElementById('genFacturePreviewEligibles');
+            const textEl = document.getElementById('genFacturePreviewText');
+            if (!el || !textEl) return;
+            if (!dateDebut || !dateFin) {
+                el.style.display = 'none';
+                return;
+            }
+            try {
+                const res = await fetch(`/API/factures_generer_clients_preview.php?date_debut=${encodeURIComponent(dateDebut)}&date_fin=${encodeURIComponent(dateFin)}`, { credentials: 'include' });
+                const data = await res.json();
+                if (data.ok) {
+                    textEl.textContent = data.nb_eligibles ?? '--';
+                    el.style.display = 'block';
+                } else {
+                    el.style.display = 'none';
+                }
+            } catch (e) {
+                el.style.display = 'none';
+            }
+        }
+
         /**
          * Met à jour l'affichage de la progression
          */
@@ -3848,6 +3912,8 @@
             document.getElementById('payerFactureSuggestions').style.display = 'none';
             document.getElementById('payerFactureSuggestions').innerHTML = '';
             document.getElementById('payerMontant').value = '';
+            const restantEl = document.getElementById('payerFactureRestant');
+            if (restantEl) restantEl.style.display = 'none';
             const hint = document.getElementById('payerFactureHint');
             if (hint) hint.textContent = 'Tapez pour rechercher par nom, prénom, numéro ou date';
         }
@@ -3868,21 +3934,32 @@
                 if (data.ok && data.results && data.results.length > 0) {
                     suggestions.innerHTML = data.results.map(f => {
                         const dateStr = f.date_facture ? new Date(f.date_facture).toLocaleDateString('fr-FR') : '';
-                        return `<div class="payer-suggestion-item" data-id="${f.id}" data-montant="${f.montant_ttc || 0}" data-client-id="${f.client_id || 0}">
-                            <strong>${(f.numero || '').replace(/</g, '&lt;')}</strong> · ${(f.client_nom || '').replace(/</g, '&lt;')} · ${dateStr} · ${(f.montant_ttc || 0).toFixed(2)} € TTC
+                        const restant = f.montant_restant ?? Math.max(0, (f.montant_ttc || 0) - (f.total_paye || 0));
+                        return `<div class="payer-suggestion-item" data-id="${f.id}" data-montant="${f.montant_ttc || 0}" data-restant="${restant}" data-client-id="${f.client_id || 0}">
+                            <strong>${(f.numero || '').replace(/</g, '&lt;')}</strong> · ${(f.client_nom || '').replace(/</g, '&lt;')} · ${dateStr} · ${(f.montant_ttc || 0).toFixed(2)} € TTC${restant > 0 && restant < (f.montant_ttc || 0) ? ' (reste ' + restant.toFixed(2) + ' €)' : ''}
                         </div>`;
                     }).join('');
                     suggestions.style.display = 'block';
                     suggestions.querySelectorAll('.payer-suggestion-item').forEach(el => {
                         el.addEventListener('click', () => {
                             const id = el.dataset.id;
-                            const montant = el.dataset.montant || 0;
+                            const restant = parseFloat(el.dataset.restant) || parseFloat(el.dataset.montant) || 0;
                             document.getElementById('payerFacture').value = id;
                             document.getElementById('payerFactureSearch').style.display = 'none';
                             document.getElementById('payerFactureSelected').style.display = 'block';
                             document.getElementById('payerFactureSelectedLabel').textContent = el.textContent.trim();
                             document.getElementById('payerFactureSuggestions').style.display = 'none';
-                            document.getElementById('payerMontant').value = parseFloat(montant).toFixed(2);
+                            document.getElementById('payerMontant').value = restant.toFixed(2);
+                            const restantEl = document.getElementById('payerFactureRestant');
+                            const restantVal = document.getElementById('payerFactureRestantValue');
+                            if (restantEl && restantVal) {
+                                if (restant > 0) {
+                                    restantVal.textContent = restant.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+                                    restantEl.style.display = 'block';
+                                } else {
+                                    restantEl.style.display = 'none';
+                                }
+                            }
                             if (hint) hint.textContent = 'Facture sélectionnée';
                         });
                     });
@@ -3981,9 +4058,9 @@
                     const refMessage = result.reference ? ` Référence: ${result.reference}` : '';
                     showMessage('Paiement enregistré avec succès !' + refMessage, 'success');
                     closePayerModal();
-                    // Recharger la liste des paiements si le modal est ouvert
+                    loadFinanceStats();
                     if (document.getElementById('facturesListModalOverlay')?.classList.contains('active')) {
-                loadFacturesList();
+                        loadFacturesList();
                     }
                 } else {
                     const errorMsg = result.error || 'Erreur inconnue';
@@ -4679,6 +4756,7 @@
         window.openPDFInNewTab = openPDFInNewTab;
         window.filterFactures = filterFactures;
         window.filterFacturesByStatus = filterFacturesByStatus;
+        window.sortFacturesBy = sortFacturesBy;
         window.addFactureLigne = addFactureLigne;
         window.removeFactureLigne = removeFactureLigne;
         window.submitFactureForm = submitFactureForm;
@@ -4724,6 +4802,7 @@
         window.progFactureSelectAll = progFactureSelectAll;
         window.progFactureDeselectAll = progFactureDeselectAll;
         window.progFactureValidateSelection = progFactureValidateSelection;
+        window.exportFacturesExcel = exportFacturesExcel;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
@@ -4731,6 +4810,15 @@
             // Initialisation de la section statistiques
             initStatsSection();
             initPayerFactureSearch();
+
+            // Tableau de bord financier et badges
+            loadFinanceStats();
+
+            // Prévisualisation clients éligibles (génération factures)
+            const genDateDebut = document.getElementById('genFactureDateDebut');
+            const genDateFin = document.getElementById('genFactureDateFin');
+            if (genDateDebut) genDateDebut.addEventListener('change', loadGenFacturePreview);
+            if (genDateFin) genDateFin.addEventListener('change', loadGenFacturePreview);
 
             // Ne pas ajouter de ligne au chargement, seulement quand le modal s'ouvre
             // addFactureLigne() sera appelé dans openFactureModal()
@@ -4817,6 +4905,67 @@
             
             // Bouton export Excel
             document.getElementById('btnExportExcel').addEventListener('click', exportToExcel);
+        }
+
+        /**
+         * Charge les statistiques financières et met à jour le tableau de bord + badges
+         */
+        async function loadFinanceStats() {
+            try {
+                const res = await fetch('/API/paiements_finance_stats.php', { credentials: 'include' });
+                const data = await res.json();
+                if (!data.ok) return;
+
+                const fmt = (n) => typeof n === 'number' ? n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--';
+                const el = (id) => document.getElementById(id);
+                if (el('financeCaMois')) el('financeCaMois').textContent = fmt(data.ca_mois) + ' €';
+                if (el('financeNbImpayees')) el('financeNbImpayees').textContent = data.nb_impayees ?? '--';
+                if (el('financeMontantImpaye')) el('financeMontantImpaye').textContent = fmt(data.montant_impaye) + ' €';
+                if (el('financeNbRetard')) el('financeNbRetard').textContent = data.nb_en_retard ?? '--';
+                if (el('financeMontantRetard')) el('financeMontantRetard').textContent = fmt(data.montant_en_retard) + ' €';
+
+                // Badges sur les sections
+                const badgeFactures = el('sectionFacturesBadge');
+                const badgePayer = el('sectionPayerBadge');
+                const nbRetard = data.nb_en_retard ?? 0;
+                const nbImpayees = data.nb_impayees ?? 0;
+                if (badgeFactures) {
+                    if (nbRetard > 0) {
+                        badgeFactures.textContent = nbRetard;
+                        badgeFactures.style.display = 'inline-block';
+                    } else {
+                        badgeFactures.style.display = 'none';
+                    }
+                }
+                if (badgePayer) {
+                    if (nbImpayees > 0) {
+                        badgePayer.textContent = nbImpayees;
+                        badgePayer.style.display = 'inline-block';
+                    } else {
+                        badgePayer.style.display = 'none';
+                    }
+                }
+            } catch (e) {
+                console.error('loadFinanceStats:', e);
+            }
+        }
+
+        /**
+         * Exporte les factures en Excel (depuis le modal factures)
+         * Utilise les filtres actuels : statut
+         */
+        function exportFacturesExcel() {
+            const statut = typeof currentFactureStatusFilter !== 'undefined' ? currentFactureStatusFilter : 'all';
+            const params = new URLSearchParams();
+            if (statut && statut !== 'all') params.append('statut', statut);
+            const url = `/API/factures_export_excel.php?${params.toString()}`;
+            const link = document.createElement('a');
+            link.href = url;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('Export Excel lancé', 'success');
         }
 
         /**

@@ -114,6 +114,7 @@ try {
             GROUP BY id_facture
         ) p ON p.id_facture = f.id" : "";
 
+    $selectPayee = $needPayeeSubquery ? ", COALESCE(p.total_paye, 0) as total_paye" : "";
     $sql = "
         SELECT 
             f.id,
@@ -159,6 +160,9 @@ try {
         if ($statut === 'payee') {
             $rowStatut = 'payee'; // Filtre payee : toutes les lignes retournées sont payées
         }
+        $montantTtc = isset($r['montant_ttc']) ? (float)$r['montant_ttc'] : 0;
+        $totalPaye = isset($r['total_paye']) ? (float)$r['total_paye'] : 0;
+        $montantRestant = max(0, $montantTtc - $totalPaye);
         $results[] = [
             'id' => (int)$r['id'],
             'client_id' => (int)($r['id_client'] ?? 0),
@@ -168,7 +172,9 @@ try {
             'client_email' => $r['client_email'] ?? '',
             'date_emission' => $dateEmission,
             'date_facture' => $dateEmission,
-            'montant_ttc' => isset($r['montant_ttc']) ? (float)$r['montant_ttc'] : null,
+            'montant_ttc' => $montantTtc,
+            'total_paye' => $totalPaye,
+            'montant_restant' => $montantRestant,
             'statut' => $rowStatut,
             'email_envoye' => (int)($r['email_envoye'] ?? 0),
             'date_envoi_email' => $r['date_envoi_email'] ?? ''
