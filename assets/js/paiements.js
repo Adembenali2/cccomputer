@@ -1295,18 +1295,17 @@
             const loadingDiv = document.getElementById('facturesListLoading');
             const container = document.getElementById('facturesListContainer');
             const errorDiv = document.getElementById('facturesListError');
-            const tableBody = document.getElementById('facturesListTableBody');
             const countSpan = document.getElementById('facturesCount');
-            const searchInput = document.getElementById('facturesSearchInput');
             
             loadingDiv.style.display = 'block';
             container.style.display = 'none';
             errorDiv.style.display = 'none';
             
-            // Réinitialiser la recherche
-            if (searchInput) {
-                searchInput.value = '';
-            }
+            // Réinitialiser les filtres
+            ['facturesFilterNom', 'facturesFilterPrenom', 'facturesFilterNumero'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
             
             try {
                 const response = await fetch('/API/factures_liste.php', {
@@ -1350,12 +1349,13 @@
             if (factures.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                        <td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
                             Aucune facture trouvée
                         </td>
                     </tr>
                 `;
                 filteredCountSpan.textContent = '';
+                updateFacturesSelectionCount();
             } else {
                 factures.forEach(facture => {
                     const row = document.createElement('tr');
@@ -1393,7 +1393,7 @@
                                 PDF
                             </button>
                             ` : ''}
-                            <button onclick="openModifierFactureModal(${facture.id}, '${safeNumero}', '${dateForInput}', '${facture.statut}', '${facture.type}')" style="padding: 0.35rem 0.6rem; background: #6366f1; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;" title="Modifier">
+                            <button onclick="openModifierFactureModal(${facture.id}, '${safeNumero}', '${dateForInput}', '${facture.statut}', '${facture.type}', '${facture.date_debut_periode || ''}', '${facture.date_fin_periode || ''}', ${facture.client_id || 0})" style="padding: 0.35rem 0.6rem; background: #6366f1; color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;" title="Modifier">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                 Modifier
                             </button>
@@ -1405,6 +1405,9 @@
                     `;
                     
                     row.innerHTML = `
+                        <td style="padding: 0.75rem; text-align: center;">
+                            <input type="checkbox" class="facture-select-cb" data-facture-id="${facture.id}" onchange="updateFacturesSelectionCount()">
+                        </td>
                         <td style="padding: 0.75rem; font-weight: 600; color: var(--text-primary);">${facture.numero}</td>
                         <td style="padding: 0.75rem; color: var(--text-secondary);">${facture.date_facture_formatted}</td>
                         <td style="padding: 0.75rem; color: var(--text-primary);">${facture.client_nom}${facture.client_code ? ' (' + facture.client_code + ')' : ''}</td>
@@ -1426,6 +1429,7 @@
                 } else {
                     filteredCountSpan.textContent = '';
                 }
+                updateFacturesSelectionCount();
             }
         }
 
@@ -1440,17 +1444,75 @@
             window.open(pdfUrl, '_blank');
         }
 
+        let modifierFactureClientId = 0;
+
         /**
          * Ouvre le modal de modification d'une facture
          */
-        function openModifierFactureModal(factureId, factureNumero, dateFacture, statut, type) {
+        function openModifierFactureModal(factureId, factureNumero, dateFacture, statut, type, dateDebutPeriode, dateFinPeriode, clientId) {
+            modifierFactureClientId = clientId || 0;
             document.getElementById('modifierFactureId').value = factureId;
             document.getElementById('modifierFactureDate').value = dateFacture || '';
-            document.getElementById('modifierFactureStatut').value = statut || 'brouillon';
             document.getElementById('modifierFactureType').value = type || 'Consommation';
+            document.getElementById('modifierFactureDateDebut').value = dateDebutPeriode || '';
+            document.getElementById('modifierFactureDateFin').value = dateFinPeriode || '';
+            document.getElementById('modifierFactureStatut').value = statut || 'brouillon';
             document.getElementById('modifierFactureError').style.display = 'none';
+            const isConsommation = (type || '') === 'Consommation';
+            document.getElementById('modifierFactureConsommation').style.display = isConsommation ? 'block' : 'none';
+            document.getElementById('modifierFactureSimple').style.display = isConsommation ? 'none' : 'block';
+            document.getElementById('modifierFactureMachinesContainer').innerHTML = '';
+            if (isConsommation && modifierFactureClientId && dateDebutPeriode && dateFinPeriode) {
+                refreshModifierFactureCompteurs();
+            }
             document.getElementById('modifierFactureModalOverlay').classList.add('active');
             document.body.style.overflow = 'hidden';
+        }
+
+        async function refreshModifierFactureCompteurs() {
+            const dateDebut = document.getElementById('modifierFactureDateDebut')?.value;
+            const dateFin = document.getElementById('modifierFactureDateFin')?.value;
+            const container = document.getElementById('modifierFactureMachinesContainer');
+            if (!modifierFactureClientId || !dateDebut || !dateFin || !container) return;
+            container.innerHTML = '<p style="color: var(--text-secondary);">Chargement des compteurs...</p>';
+            try {
+                const res = await fetch(`/API/factures_get_consommation.php?client_id=${modifierFactureClientId}&offre=1000&date_debut=${encodeURIComponent(dateDebut)}&date_fin=${encodeURIComponent(dateFin)}`, { credentials: 'include' });
+                const data = await res.json();
+                if (data.ok && data.machines && data.machines.length > 0) {
+                    let html = '';
+                    data.machines.forEach((m, i) => {
+                        const nom = (m.nom || 'Imprimante ' + (i + 1)).replace(/"/g, '&quot;');
+                        html += `
+                            <div class="modifier-facture-machine-block" data-machine-nom="${nom}" style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                <strong style="display: block; margin-bottom: 0.75rem;">${m.nom || 'Imprimante ' + (i + 1)}</strong>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                    <div>
+                                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Compteur début N&B</label>
+                                        <input type="number" min="0" class="modifier-facture-compteur" data-field="compteur_debut_nb" value="${m.compteur_debut_nb || 0}" style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Compteur début Couleur</label>
+                                        <input type="number" min="0" class="modifier-facture-compteur" data-field="compteur_debut_couleur" value="${m.compteur_debut_couleur || 0}" style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Compteur fin N&B</label>
+                                        <input type="number" min="0" class="modifier-facture-compteur" data-field="compteur_fin_nb" value="${m.compteur_fin_nb || 0}" style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Compteur fin Couleur</label>
+                                        <input type="number" min="0" class="modifier-facture-compteur" data-field="compteur_fin_couleur" value="${m.compteur_fin_couleur || 0}" style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<p style="color: #ef4444;">' + (data.error || 'Aucune donnée de consommation pour cette période') + '</p>';
+                }
+            } catch (e) {
+                container.innerHTML = '<p style="color: #ef4444;">Erreur de chargement</p>';
+            }
         }
 
         function closeModifierFactureModal() {
@@ -1464,21 +1526,48 @@
             const dateFacture = document.getElementById('modifierFactureDate').value;
             const statut = document.getElementById('modifierFactureStatut').value;
             const type = document.getElementById('modifierFactureType').value;
+            const dateDebut = document.getElementById('modifierFactureDateDebut').value;
+            const dateFin = document.getElementById('modifierFactureDateFin').value;
             const errorDiv = document.getElementById('modifierFactureError');
             errorDiv.style.display = 'none';
             const csrf = document.body.dataset.csrfToken || document.querySelector('[data-csrf-token]')?.dataset?.csrfToken || '';
+            const isConsommation = type === 'Consommation';
             try {
-                const res = await fetch('/API/factures_modifier.php', {
+                let url, body;
+                if (isConsommation && dateDebut && dateFin) {
+                    const machines = [];
+                    document.querySelectorAll('.modifier-facture-machine-block').forEach(block => {
+                        const nom = block.dataset.machineNom || 'Imprimante';
+                        const inputs = block.querySelectorAll('.modifier-facture-compteur');
+                        const m = { nom };
+                        inputs.forEach(inp => {
+                            m[inp.dataset.field] = parseInt(inp.value, 10) || 0;
+                        });
+                        if (m.compteur_debut_nb !== undefined || m.compteur_fin_nb !== undefined) machines.push(m);
+                    });
+                    url = '/API/factures_regenerer.php';
+                    body = JSON.stringify({
+                        facture_id: parseInt(factureId),
+                        date_debut_periode: dateDebut,
+                        date_fin_periode: dateFin,
+                        date_facture: dateFacture,
+                        machines: machines.length > 0 ? machines : undefined
+                    });
+                } else {
+                    url = '/API/factures_modifier.php';
+                    body = JSON.stringify({ facture_id: parseInt(factureId), date_facture: dateFacture, statut, type });
+                }
+                const res = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-                    body: JSON.stringify({ facture_id: parseInt(factureId), date_facture: dateFacture, statut, type }),
+                    body,
                     credentials: 'include'
                 });
                 const data = await res.json();
                 if (data.ok) {
                     closeModifierFactureModal();
                     loadFacturesList();
-                    showToast('Facture modifiée avec succès', 'success');
+                    showToast(isConsommation ? 'Facture régénérée avec succès' : 'Facture modifiée avec succès', 'success');
                 } else {
                     errorDiv.textContent = data.error || 'Erreur inconnue';
                     errorDiv.style.display = 'block';
@@ -1599,63 +1688,74 @@
 
 
         /**
-         * Filtre les factures selon le terme de recherche
+         * Filtre les factures selon nom, prénom, numéro
          */
         function filterFactures() {
-            const searchInput = document.getElementById('facturesSearchInput');
-            const searchTerm = (searchInput.value || '').toLowerCase().trim();
+            const filterNom = (document.getElementById('facturesFilterNom')?.value || '').toLowerCase().trim();
+            const filterPrenom = (document.getElementById('facturesFilterPrenom')?.value || '').toLowerCase().trim();
+            const filterNumero = (document.getElementById('facturesFilterNumero')?.value || '').toLowerCase().trim();
             
-            if (!searchTerm) {
-                // Afficher toutes les factures si la recherche est vide
+            if (!filterNom && !filterPrenom && !filterNumero) {
                 displayFactures(allFactures);
                 return;
             }
             
-            // Filtrer les factures
             const filtered = allFactures.filter(facture => {
-                // Rechercher dans le numéro de facture
-                if (facture.numero && facture.numero.toLowerCase().includes(searchTerm)) {
-                    return true;
+                if (filterNumero && (!facture.numero || !facture.numero.toLowerCase().includes(filterNumero))) return false;
+                if (filterNom) {
+                    const matchNom = (facture.client_nom && facture.client_nom.toLowerCase().includes(filterNom)) ||
+                        (facture.client_nom_dirigeant && facture.client_nom_dirigeant.toLowerCase().includes(filterNom)) ||
+                        (facture.client_code && facture.client_code.toLowerCase().includes(filterNom));
+                    if (!matchNom) return false;
                 }
-                
-                // Rechercher dans la date (format français et format ISO)
-                if (facture.date_facture_formatted && facture.date_facture_formatted.includes(searchTerm)) {
-                    return true;
-                }
-                if (facture.date_facture && facture.date_facture.includes(searchTerm)) {
-                    return true;
-                }
-                
-                // Rechercher dans le nom du client (raison sociale)
-                if (facture.client_nom && facture.client_nom.toLowerCase().includes(searchTerm)) {
-                    return true;
-                }
-                
-                // Rechercher dans le code client
-                if (facture.client_code && facture.client_code.toLowerCase().includes(searchTerm)) {
-                    return true;
-                }
-                
-                // Rechercher dans le nom du dirigeant
-                if (facture.client_nom_dirigeant && facture.client_nom_dirigeant.toLowerCase().includes(searchTerm)) {
-                    return true;
-                }
-                
-                // Rechercher dans le prénom du dirigeant
-                if (facture.client_prenom_dirigeant && facture.client_prenom_dirigeant.toLowerCase().includes(searchTerm)) {
-                    return true;
-                }
-                
-                // Rechercher dans le type
-                if (facture.type && facture.type.toLowerCase().includes(searchTerm)) {
-                    return true;
-                }
-                
-                return false;
+                if (filterPrenom && (!facture.client_prenom_dirigeant || !facture.client_prenom_dirigeant.toLowerCase().includes(filterPrenom))) return false;
+                return true;
             });
             
-            // Afficher les factures filtrées
             displayFactures(filtered);
+        }
+
+        function toggleFacturesSelectAll(checkbox) {
+            document.querySelectorAll('.facture-select-cb').forEach(cb => { cb.checked = checkbox.checked; });
+            updateFacturesSelectionCount();
+        }
+
+        function updateFacturesSelectionCount() {
+            const checked = document.querySelectorAll('.facture-select-cb:checked');
+            const count = checked.length;
+            const btn = document.getElementById('btnSupprimerSelection');
+            const span = document.getElementById('facturesSelectedCount');
+            if (btn) btn.disabled = count === 0;
+            if (span) span.textContent = count;
+            const selectAll = document.getElementById('facturesSelectAll');
+            if (selectAll) selectAll.checked = count > 0 && count === document.querySelectorAll('.facture-select-cb').length;
+        }
+
+        async function supprimerFacturesSelection() {
+            const checked = document.querySelectorAll('.facture-select-cb:checked');
+            const ids = Array.from(checked).map(cb => parseInt(cb.dataset.factureId)).filter(id => id > 0);
+            if (ids.length === 0) return;
+            if (!confirm(`Supprimer ${ids.length} facture(s) ?\n\nCette action est irréversible.`)) return;
+            const csrf = document.body.dataset.csrfToken || document.querySelector('[data-csrf-token]')?.dataset?.csrfToken || '';
+            try {
+                const res = await fetch('/API/factures_supprimer_masse.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                    body: JSON.stringify({ facture_ids: ids }),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    loadFacturesList();
+                    const nb = data.supprimees?.length || ids.length;
+                    const errs = data.erreurs?.length || 0;
+                    showToast(errs > 0 ? `${nb} supprimée(s), ${errs} non supprimée(s) (paiements liés)` : `${nb} facture(s) supprimée(s)`, 'success');
+                } else {
+                    showToast(data.error || 'Erreur', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur de connexion', 'error');
+            }
         }
 
         // ============================================
@@ -4408,6 +4508,10 @@
         window.openModifierFactureModal = openModifierFactureModal;
         window.closeModifierFactureModal = closeModifierFactureModal;
         window.confirmSupprimerFacture = confirmSupprimerFacture;
+        window.toggleFacturesSelectAll = toggleFacturesSelectAll;
+        window.updateFacturesSelectionCount = updateFacturesSelectionCount;
+        window.supprimerFacturesSelection = supprimerFacturesSelection;
+        window.refreshModifierFactureCompteurs = refreshModifierFactureCompteurs;
         window.viewFacturePDF = viewFacturePDF;
         window.viewFacturePDFById = viewFacturePDFById;
         window.closePDFViewer = closePDFViewer;

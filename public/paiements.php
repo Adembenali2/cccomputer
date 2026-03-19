@@ -374,39 +374,41 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                     Chargement des factures...
                 </div>
                 <div id="facturesListContainer" style="display: none;">
-                    <!-- Barre de recherche -->
-                    <div style="margin-bottom: 1.5rem;">
-                        <div style="position: relative;">
-                            <input 
-                                type="text" 
-                                id="facturesSearchInput" 
-                                placeholder="Rechercher par nom, prénom, raison sociale, numéro de facture ou date..." 
-                                style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.95rem; color: var(--text-primary); background-color: var(--bg-secondary); transition: all 0.2s;"
-                                oninput="filterFactures()"
-                            />
-                            <svg 
-                                width="18" 
-                                height="18" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                stroke-width="2"
-                                style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none;"
-                            >
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <path d="m21 21-4.35-4.35"></path>
-                            </svg>
+                    <!-- Barre de filtres -->
+                    <div style="margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+                        <div>
+                            <label for="facturesFilterNom" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">Nom / Raison sociale</label>
+                            <input type="text" id="facturesFilterNom" placeholder="Filtrer par nom..." style="width: 100%; padding: 0.6rem 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem;" oninput="filterFactures()">
+                        </div>
+                        <div>
+                            <label for="facturesFilterPrenom" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">Prénom</label>
+                            <input type="text" id="facturesFilterPrenom" placeholder="Filtrer par prénom..." style="width: 100%; padding: 0.6rem 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem;" oninput="filterFactures()">
+                        </div>
+                        <div>
+                            <label for="facturesFilterNumero" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">Numéro de facture</label>
+                            <input type="text" id="facturesFilterNumero" placeholder="Ex: P202603002" style="width: 100%; padding: 0.6rem 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.9rem;" oninput="filterFactures()">
+                        </div>
+                        <div style="display: flex; align-items: flex-end;">
+                            <button type="button" onclick="document.getElementById('facturesFilterNom').value=''; document.getElementById('facturesFilterPrenom').value=''; document.getElementById('facturesFilterNumero').value=''; filterFactures();" style="padding: 0.6rem 1rem; background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; font-size: 0.9rem;">Réinitialiser</button>
                         </div>
                     </div>
                     
-                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="margin-bottom: 1rem; font-weight: 600; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                         <span><span id="facturesCount">0</span> facture(s) trouvée(s)</span>
                         <span id="facturesFilteredCount" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;"></span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button type="button" id="btnSupprimerSelection" onclick="supprimerFacturesSelection()" disabled style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 0.9rem;" title="Supprimer les factures sélectionnées">
+                                Supprimer la sélection (<span id="facturesSelectedCount">0</span>)
+                            </button>
+                        </div>
                     </div>
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse;">
                             <thead>
                                 <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                                    <th style="padding: 0.75rem; text-align: center; width: 40px;">
+                                        <input type="checkbox" id="facturesSelectAll" onchange="toggleFacturesSelectAll(this)" title="Tout sélectionner">
+                                    </th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Numéro</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Date</th>
                                     <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--text-primary);">Client</th>
@@ -444,27 +446,37 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
             <div class="modal-body">
                 <form id="modifierFactureForm" onsubmit="return submitModifierFacture(event)">
                     <input type="hidden" id="modifierFactureId" name="facture_id">
+                    <input type="hidden" id="modifierFactureType" name="type">
+                    <div id="modifierFactureConsommation" style="display: none;">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">Régénération : modifiez les dates et les compteurs de consommation. Le PDF sera régénéré avec le même numéro.</p>
+                        <div style="margin-bottom: 1rem;">
+                            <label for="modifierFactureDateDebut" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Date début période</label>
+                            <input type="date" id="modifierFactureDateDebut" name="date_debut_periode" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);" onchange="refreshModifierFactureCompteurs()">
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label for="modifierFactureDateFin" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Date fin période</label>
+                            <input type="date" id="modifierFactureDateFin" name="date_fin_periode" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);" onchange="refreshModifierFactureCompteurs()">
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <button type="button" onclick="refreshModifierFactureCompteurs()" style="padding: 0.5rem 1rem; background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 0.9rem;">Récupérer les compteurs</button>
+                        </div>
+                        <div id="modifierFactureMachinesContainer" style="margin-top: 1rem;"></div>
+                    </div>
+                    <div id="modifierFactureSimple" style="display: none;">
+                        <div style="margin-bottom: 1rem;">
+                            <label for="modifierFactureStatut" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Statut</label>
+                            <select id="modifierFactureStatut" name="statut" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
+                                <option value="brouillon">Brouillon</option>
+                                <option value="envoyee">Envoyée</option>
+                                <option value="payee">Payée</option>
+                                <option value="en_retard">En retard</option>
+                                <option value="annulee">Annulée</option>
+                            </select>
+                        </div>
+                    </div>
                     <div style="margin-bottom: 1rem;">
                         <label for="modifierFactureDate" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Date de facture</label>
                         <input type="date" id="modifierFactureDate" name="date_facture" required style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
-                    </div>
-                    <div style="margin-bottom: 1rem;">
-                        <label for="modifierFactureStatut" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Statut</label>
-                        <select id="modifierFactureStatut" name="statut" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
-                            <option value="brouillon">Brouillon</option>
-                            <option value="envoyee">Envoyée</option>
-                            <option value="payee">Payée</option>
-                            <option value="en_retard">En retard</option>
-                            <option value="annulee">Annulée</option>
-                        </select>
-                    </div>
-                    <div style="margin-bottom: 1rem;">
-                        <label for="modifierFactureType" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Type</label>
-                        <select id="modifierFactureType" name="type" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: var(--radius-md);">
-                            <option value="Consommation">Consommation</option>
-                            <option value="Achat">Achat</option>
-                            <option value="Service">Service</option>
-                        </select>
                     </div>
                     <div id="modifierFactureError" style="display: none; padding: 0.75rem; background: rgba(239,68,68,0.1); border-radius: var(--radius-md); color: #dc2626; margin-bottom: 1rem;"></div>
                     <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
