@@ -128,8 +128,11 @@ if ($searchAction !== '') {
     $params[':action_filter'] = $searchAction;
 }
 
-// Exclure les imports du bloc principal (ils ont leur propre bloc)
-$whereConditions[] = "h.action NOT LIKE 'import_%'";
+// Filtre "Historique import" (uniquement les imports)
+$importsOnly = isset($_GET['imports']) && $_GET['imports'] === '1';
+if ($importsOnly) {
+    $whereConditions[] = "h.action LIKE 'import_%'";
+}
 
 $sqlBase = "
     SELECT h.id, h.date_action, h.action, h.details, h.ip_address, u.nom, u.prenom
@@ -213,22 +216,7 @@ try {
     $firstActivity = $historiqueCount > 0 ? ($historique[$historiqueCount - 1]['date_action'] ?? null) : null;
 }
 
-$filtersActive = ($searchUser !== '' || $searchDateDebut !== '' || $searchDateFin !== '' || $searchCategory !== '' || $searchAction !== '');
-
-// ====== Historique des imports (bloc séparé) ======
-$historiqueImports = [];
-try {
-    $importStmt = $pdo->query("
-        SELECT h.id, h.date_action, h.action, h.details, h.ip_address
-        FROM historique h
-        WHERE h.action LIKE 'import_%'
-        ORDER BY h.date_action DESC
-        LIMIT 50
-    ");
-    $historiqueImports = $importStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-} catch (PDOException $e) {
-    error_log('historique.php imports: ' . $e->getMessage());
-}
+$filtersActive = ($searchUser !== '' || $searchDateDebut !== '' || $searchDateFin !== '' || $searchCategory !== '' || $searchAction !== '' || $importsOnly);
 
 // ====== Cache formatDetails ======
 static $detailsCache = ['clients' => [], 'sav' => [], 'livraisons' => [], 'utilisateurs' => []];
@@ -337,6 +325,7 @@ if ($searchDateDebut !== '') $queryParts['date_debut'] = $searchDateDebut;
 if ($searchDateFin !== '') $queryParts['date_fin'] = $searchDateFin;
 if ($searchCategory !== '') $queryParts['categorie'] = $searchCategory;
 if ($searchAction !== '') $queryParts['action_filter'] = $searchAction;
+if ($importsOnly) $queryParts['imports'] = '1';
 $queryString = http_build_query($queryParts);
 $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl;
 ?>
@@ -370,6 +359,9 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
             </div>
         </div>
         <div class="page-header-actions">
+            <a href="historique.php?imports=1" class="btn-historique-import" title="Voir uniquement les imports">
+                <span aria-hidden="true">📂</span> Historique import
+            </a>
             <a href="/API/historique_export.php?<?= h($queryString) ?>" class="btn-export" title="Exporter en CSV" target="_blank">
                 <span aria-hidden="true">📥</span> Export CSV
             </a>
@@ -416,6 +408,9 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
         <?php endif; ?>
         <?php if ($searchAction !== ''): ?>
             <span class="pill"><?= h(formatActionLabel($searchAction)) ?></span>
+        <?php endif; ?>
+        <?php if ($importsOnly): ?>
+            <span class="pill">Historique import</span>
         <?php endif; ?>
         <a class="pill pill-clear" href="historique.php" aria-label="Réinitialiser les filtres">✕ Réinitialiser</a>
     </div>
@@ -464,63 +459,6 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
         </div>
     </form>
 
-    <!-- Bloc spécial : Historique des imports (séparé des autres) -->
-    <section class="historique-imports-section" role="region" aria-label="Historique des imports">
-        <h2 class="historique-imports-title">Historique des imports</h2>
-        <div class="table-responsive historique-imports-table">
-            <table class="history-table" role="table">
-                <thead>
-                    <tr>
-                        <th scope="col">Date &amp; Heure</th>
-                        <th scope="col">Utilisateur</th>
-                        <th scope="col">Action</th>
-                        <th scope="col">Détails</th>
-                        <th scope="col">IP</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($historiqueImports)): ?>
-                    <tr>
-                        <td colspan="5" class="aucun">
-                            <span class="empty-icon" aria-hidden="true">📭</span>
-                            Aucun import enregistré.
-                        </td>
-                    </tr>
-                    <?php else: ?>
-                    <?php foreach ($historiqueImports as $h): 
-                        $isError = in_array($h['action'], ['import_sftp_error', 'import_ionos_error'], true);
-                    ?>
-                    <tr class="<?= $isError ? 'history-row-error' : '' ?>">
-                        <td data-label="Date & Heure">
-                            <time datetime="<?= h($h['date_action']) ?>"><?= h(formatDate($h['date_action'], 'd/m/Y H:i')) ?></time>
-                        </td>
-                        <td data-label="Utilisateur">Système</td>
-                        <td data-label="Action">
-                            <span class="action-badge <?= $isError ? 'badge-system' : 'badge-system' ?>"><?= h(formatActionLabel($h['action'])) ?></span>
-                        </td>
-                        <td data-label="Détails">
-                            <?php if (!empty($h['details'])): ?>
-                                <span class="details-text"><?= h($h['details']) ?></span>
-                            <?php else: ?>
-                                <span class="text-muted">—</span>
-                            <?php endif; ?>
-                        </td>
-                        <td data-label="IP">
-                            <?php if (!empty($h['ip_address'])): ?>
-                                <code class="ip-address"><?= h($h['ip_address']) ?></code>
-                            <?php else: ?>
-                                <span class="text-muted">—</span>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <h2 class="historique-main-title">Historique des actions</h2>
     <div class="table-responsive" role="region" aria-label="Tableau de l'historique">
         <table class="history-table" role="table">
             <thead>
@@ -554,12 +492,14 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
                         $cat = getActionCategory($entree['action']);
                         $badgeClass = getBadgeClassForCategory($cat);
                         $detailsFormatted = formatDetails($pdo, $entree['details']);
+                        $isImportError = in_array($entree['action'], ['import_sftp_error', 'import_ionos_error'], true);
+                        $userDisplay = ($entree['nom'] === null && $entree['prenom'] === null && str_starts_with($entree['action'] ?? '', 'import_')) ? 'Système' : formatFullName($entree['nom'], $entree['prenom']);
                     ?>
-                        <tr class="history-row" data-id="<?= h((string)($entree['id'] ?? '')) ?>" data-date="<?= h($entree['date_action']) ?>" data-user="<?= h(formatFullName($entree['nom'], $entree['prenom'])) ?>" data-category="<?= h($cat) ?>" data-action="<?= h($entree['action']) ?>" data-details="<?= h($detailsFormatted) ?>" data-ip="<?= h($entree['ip_address'] ?? '') ?>">
+                        <tr class="history-row <?= $isImportError ? 'history-row-error' : '' ?>" data-id="<?= h((string)($entree['id'] ?? '')) ?>" data-date="<?= h($entree['date_action']) ?>" data-user="<?= h($userDisplay) ?>" data-category="<?= h($cat) ?>" data-action="<?= h($entree['action']) ?>" data-details="<?= h($detailsFormatted) ?>" data-ip="<?= h($entree['ip_address'] ?? '') ?>">
                             <td data-label="Date & Heure">
                                 <time datetime="<?= h($entree['date_action']) ?>"><?= h(formatDate($entree['date_action'], 'd/m/Y H:i')) ?></time>
                             </td>
-                            <td data-label="Utilisateur"><?= h(formatFullName($entree['nom'], $entree['prenom'])) ?></td>
+                            <td data-label="Utilisateur"><?= h($userDisplay) ?></td>
                             <td data-label="Catégorie">
                                 <span class="badge-categorie <?= h($badgeClass) ?>"><?= h($cat) ?></span>
                             </td>
@@ -600,10 +540,11 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
                 $cat = getActionCategory($entree['action']);
                 $badgeClass = getBadgeClassForCategory($cat);
                 $detailsFormatted = formatDetails($pdo, $entree['details']);
+                $userDisplayCard = ($entree['nom'] === null && $entree['prenom'] === null && str_starts_with($entree['action'] ?? '', 'import_')) ? 'Système' : formatFullName($entree['nom'], $entree['prenom']);
             ?>
-                <li class="history-item" data-id="<?= h((string)($entree['id'] ?? '')) ?>" data-date="<?= h($entree['date_action']) ?>" data-user="<?= h(formatFullName($entree['nom'], $entree['prenom'])) ?>" data-category="<?= h($cat) ?>" data-action="<?= h($entree['action']) ?>" data-details="<?= h($detailsFormatted) ?>" data-ip="<?= h($entree['ip_address'] ?? '') ?>">
+                <li class="history-item" data-id="<?= h((string)($entree['id'] ?? '')) ?>" data-date="<?= h($entree['date_action']) ?>" data-user="<?= h($userDisplayCard) ?>" data-category="<?= h($cat) ?>" data-action="<?= h($entree['action']) ?>" data-details="<?= h($detailsFormatted) ?>" data-ip="<?= h($entree['ip_address'] ?? '') ?>">
                     <div class="item-header">
-                        <span class="item-title"><?= h(formatFullName($entree['nom'], $entree['prenom'])) ?></span>
+                        <span class="item-title"><?= h($userDisplayCard) ?></span>
                         <time class="item-date" datetime="<?= h($entree['date_action']) ?>"><?= h(formatDate($entree['date_action'], 'd/m/Y H:i')) ?></time>
                     </div>
                     <div class="item-body">

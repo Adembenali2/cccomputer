@@ -108,6 +108,11 @@ if ($searchAction !== '') {
     $params[':action_filter'] = $searchAction;
 }
 
+$importsOnly = isset($_GET['imports']) && $_GET['imports'] === '1';
+if ($importsOnly) {
+    $whereConditions[] = "h.action LIKE 'import_%'";
+}
+
 $sqlWhere = !empty($whereConditions) ? ' WHERE ' . implode(' AND ', $whereConditions) : '';
 $sql = "SELECT h.id, h.date_action, h.action, h.details, h.ip_address, u.nom, u.prenom
         FROM historique h
@@ -146,7 +151,8 @@ foreach ($rows as $r) {
     $datePart = $dt ? substr($dt, 0, 10) : '';
     $timePart = $dt ? substr($dt, 11, 5) : '';
     $user = trim(($r['nom'] ?? '') . ' ' . ($r['prenom'] ?? ''));
-    if ($user === '') $user = '—';
+    if ($user === '' && str_starts_with($r['action'] ?? '', 'import_')) $user = 'Système';
+    elseif ($user === '') $user = '—';
     $cat = getActionCategory($r['action'] ?? '');
     $actionLabel = formatActionLabel($r['action'] ?? '');
     $details = $r['details'] ?? '';
