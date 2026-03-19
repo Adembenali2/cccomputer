@@ -165,6 +165,8 @@ class PaymentReceiptEmailService
         $modes = [
             'virement' => 'virement bancaire',
             'cheque' => 'chèque',
+            'cb' => 'paiement par carte bancaire',
+            'especes' => 'paiement en espèces',
             'autre' => 'paiement',
         ];
         $modeLabel = $modes[$paiement['mode_paiement']] ?? 'paiement';
@@ -232,6 +234,8 @@ class PaymentReceiptEmailService
         $modes = [
             'virement' => 'Virement bancaire',
             'cheque' => 'Chèque',
+            'cb' => 'Carte bancaire',
+            'especes' => 'Espèces',
             'autre' => 'Autre',
         ];
         $modeLibelle = $modes[$paiement['mode_paiement']] ?? $modeLabelCap;

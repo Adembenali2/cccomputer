@@ -169,22 +169,8 @@ try {
         $justificatifPath = '/uploads/paiements/' . $fileName;
     }
     
-    // Déterminer le statut du paiement selon le mode de paiement
-    // Espèce ou CB → "recu" (reçu), autres → "en_cours" (en attente)
+    // Tous les modes de paiement : en attente de validation (reçu envoyé à la validation)
     $statutPaiement = 'en_cours';
-    if (in_array($modePaiement, ['especes', 'cb'], true)) {
-        $statutPaiement = 'recu';
-    }
-    
-    // Déterminer le nouveau statut de la facture selon le mode de paiement
-    // Espèce ou CB → "payee", autres → "brouillon" (en cours)
-    $nouveauStatutFacture = null;
-    if (in_array($modePaiement, ['especes', 'cb'], true)) {
-        $nouveauStatutFacture = 'payee';
-    } else {
-        // Virement, chèque, autre → en cours
-        $nouveauStatutFacture = 'brouillon';
-    }
     
     // Démarrer la transaction
     $pdo->beginTransaction();
@@ -243,48 +229,23 @@ try {
             ]);
         }
         
-        // Mettre à jour le statut de la facture
-        if ($nouveauStatutFacture) {
-            $stmt = $pdo->prepare("
-                UPDATE factures 
-                SET statut = :statut 
-                WHERE id = :id
-            ");
-            $stmt->execute([
-                ':statut' => $nouveauStatutFacture,
-                ':id' => $factureId
-            ]);
-        }
+        // Mettre à jour le statut de la facture (brouillon = en attente de validation paiement)
+        $stmt = $pdo->prepare("UPDATE factures SET statut = :statut WHERE id = :id");
+        $stmt->execute([':statut' => 'brouillon', ':id' => $factureId]);
         
         $pdo->commit();
 
         $details = sprintf('Facture #%s - Ref: %s - %.2f € - %s', $facture['numero'] ?? $factureId, $reference, $montant, $modePaiement);
         enregistrerAction($pdo, $userId, 'paiement_enregistre', $details);
 
-        // Envoi automatique d'email au client selon le mode de paiement
+        // Envoi email "reçu, en attente de validation" pour tous les modes de paiement
         $appConfig = require __DIR__ . '/../config/app.php';
         $autoSend = $appConfig['auto_send_receipts'] ?? true;
         if ($autoSend && !$justificatifPath) {
             try {
                 require_once __DIR__ . '/../vendor/autoload.php';
                 $receiptService = new \App\Services\PaymentReceiptEmailService($pdo, $appConfig);
-                $modesEnAttente = ['virement', 'cheque', 'autre'];
-                if (in_array($modePaiement, $modesEnAttente, true)) {
-                    // Virement/chèque/autre : email "reçu, en attente de validation" (reçu + facture à la validation)
-                    $result = $receiptService->sendPendingValidationEmail((int)$paiementId);
-                } elseif ($recuPath && in_array($modePaiement, ['especes', 'cb'], true)) {
-                    // Espèces/CB : envoi immédiat du reçu ET de la facture
-                    $result = $receiptService->sendReceipt((int)$paiementId);
-                    if ($result['success'] && $factureId > 0) {
-                        $invoiceService = new \App\Services\InvoiceEmailService($pdo, $appConfig);
-                        $invoiceResult = $invoiceService->sendInvoiceToEmail($factureId, null, null, 'Suite à votre paiement, veuillez trouver ci-joint votre facture.');
-                        if (!$invoiceResult['success']) {
-                            error_log('[paiements_enregistrer] Envoi facture échoué: ' . ($invoiceResult['message'] ?? ''));
-                        }
-                    }
-                } else {
-                    $result = ['success' => false];
-                }
+                $result = $receiptService->sendPendingValidationEmail((int)$paiementId);
                 if (isset($result['success']) && !$result['success']) {
                     error_log('[paiements_enregistrer] Envoi email échoué: ' . ($result['message'] ?? ''));
                 }
@@ -298,7 +259,7 @@ try {
             'message' => 'Paiement enregistré avec succès',
             'paiement_id' => $paiementId,
             'facture_id' => $factureId,
-            'nouveau_statut' => $nouveauStatutFacture,
+            'nouveau_statut' => 'brouillon',
             'reference' => $reference,
             'recu_path' => $finalRecuPath ?? null,
             'recu_genere' => $recuPath ? true : false
