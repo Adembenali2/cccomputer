@@ -78,6 +78,7 @@ try {
         enregistrerAction($pdo, $userId, $action, $details);
 
         $receiptResult = null;
+        $invoiceResult = null;
         if ($newStatut === 'recu') {
             try {
                 require_once __DIR__ . '/../vendor/autoload.php';
@@ -87,22 +88,37 @@ try {
                 if (!($receiptResult['success'] ?? false)) {
                     error_log('[paiements_changer_statut] Envoi reçu échoué: ' . ($receiptResult['message'] ?? ''));
                 }
+                // Envoi de la facture en même temps que le reçu
+                if ($factureId > 0) {
+                    $invoiceService = new \App\Services\InvoiceEmailService($pdo, $config);
+                    $invoiceResult = $invoiceService->sendInvoiceToEmail($factureId, null, null, 'Suite à la validation de votre paiement, veuillez trouver ci-joint votre facture.');
+                    if (!($invoiceResult['success'] ?? false)) {
+                        error_log('[paiements_changer_statut] Envoi facture échoué: ' . ($invoiceResult['message'] ?? ''));
+                    }
+                }
             } catch (Throwable $e) {
-                error_log('[paiements_changer_statut] Erreur envoi reçu: ' . $e->getMessage());
+                error_log('[paiements_changer_statut] Erreur envoi: ' . $e->getMessage());
                 $receiptResult = ['success' => false, 'message' => $e->getMessage()];
             }
         }
 
-        $msg = $newStatut === 'recu'
-            ? (($receiptResult['success'] ?? false) ? 'Paiement validé. Reçu envoyé au client.' : 'Paiement validé. Reçu non envoyé: ' . ($receiptResult['message'] ?? 'Erreur inconnue'))
-            : 'Paiement mis en attente.';
+        $recuOk = $receiptResult['success'] ?? false;
+        $factureOk = $invoiceResult['success'] ?? false;
+        if ($newStatut === 'recu') {
+            $msg = $recuOk && $factureOk ? 'Paiement validé. Reçu et facture envoyés au client.'
+                : ($recuOk ? 'Paiement validé. Reçu envoyé.' . (!$factureOk ? ' Facture non envoyée.' : '')
+                : 'Paiement validé. Reçu non envoyé: ' . ($receiptResult['message'] ?? 'Erreur'));
+        } else {
+            $msg = 'Paiement mis en attente.';
+        }
 
         jsonResponse([
             'ok' => true,
             'message' => $msg,
             'paiement_id' => $paiementId,
             'statut' => $newStatut,
-            'recu_envoye' => $receiptResult['success'] ?? false,
+            'recu_envoye' => $recuOk,
+            'facture_envoyee' => $factureOk,
             'recu_error' => ($receiptResult['success'] ?? true) ? null : ($receiptResult['message'] ?? null),
         ]);
 

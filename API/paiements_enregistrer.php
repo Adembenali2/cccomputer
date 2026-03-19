@@ -270,11 +270,18 @@ try {
                 $receiptService = new \App\Services\PaymentReceiptEmailService($pdo, $appConfig);
                 $modesEnAttente = ['virement', 'cheque', 'autre'];
                 if (in_array($modePaiement, $modesEnAttente, true)) {
-                    // Virement/chèque/autre : email "reçu, en attente de validation" (pas de reçu)
+                    // Virement/chèque/autre : email "reçu, en attente de validation" (reçu + facture à la validation)
                     $result = $receiptService->sendPendingValidationEmail((int)$paiementId);
                 } elseif ($recuPath && in_array($modePaiement, ['especes', 'cb'], true)) {
-                    // Espèces/CB : envoi du reçu immédiatement
+                    // Espèces/CB : envoi immédiat du reçu ET de la facture
                     $result = $receiptService->sendReceipt((int)$paiementId);
+                    if ($result['success'] && $factureId > 0) {
+                        $invoiceService = new \App\Services\InvoiceEmailService($pdo, $appConfig);
+                        $invoiceResult = $invoiceService->sendInvoiceToEmail($factureId, null, null, 'Suite à votre paiement, veuillez trouver ci-joint votre facture.');
+                        if (!$invoiceResult['success']) {
+                            error_log('[paiements_enregistrer] Envoi facture échoué: ' . ($invoiceResult['message'] ?? ''));
+                        }
+                    }
                 } else {
                     $result = ['success' => false];
                 }
