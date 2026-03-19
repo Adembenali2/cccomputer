@@ -2093,9 +2093,12 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                 <strong>Envoi automatique des emails</strong>
                 <p style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-secondary, #666);">Reçus de paiement et factures envoyés automatiquement lors de l'enregistrement ou validation d'un paiement.</p>
             </div>
-            <button type="button" id="btnToggleAutoSend" class="fiche-action-btn" style="margin-left: auto;">
-                <span id="autoSendStatus">Chargement...</span>
-            </button>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+                <button type="button" id="btnToggleAutoSend" class="fiche-action-btn">
+                    <span id="autoSendStatus">Chargement...</span>
+                </button>
+                <button type="button" id="btnRetryAutoSend" class="fiche-action-btn btn-primary" style="display: none;" title="Réessayer le chargement">Réessayer</button>
+            </div>
         </div>
     </div>
     <?php endif; ?>
@@ -2852,6 +2855,7 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
 /* Toggle envoi automatique des emails (reçus et factures) */
 (function() {
     const btn = document.getElementById('btnToggleAutoSend');
+    const retryBtn = document.getElementById('btnRetryAutoSend');
     const statusEl = document.getElementById('autoSendStatus');
     if (!btn || !statusEl) return;
 
@@ -2861,16 +2865,32 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         statusEl.textContent = enabled ? 'Désactiver' : 'Activer';
         btn.classList.toggle('btn-success', !enabled);
         btn.classList.toggle('btn-danger', enabled);
+        btn.disabled = false;
+        if (retryBtn) retryBtn.style.display = 'none';
+    }
+
+    function showError(msg) {
+        statusEl.textContent = 'Erreur';
+        statusEl.title = msg;
+        btn.disabled = true;
+        if (retryBtn) {
+            retryBtn.style.display = 'inline-block';
+            retryBtn.title = msg;
+        }
     }
 
     function loadState() {
+        if (retryBtn) retryBtn.style.display = 'none';
+        statusEl.textContent = 'Chargement...';
+        btn.disabled = true;
+
         fetch('/API/parametres_auto_send.php', { credentials: 'same-origin' })
             .then(function(r) {
                 return r.text().then(function(text) {
                     try {
                         return { data: JSON.parse(text), ok: r.ok };
                     } catch (e) {
-                        return { data: { ok: false, error: r.status === 404 ? 'API introuvable' : 'Réponse invalide' }, ok: false };
+                        return { data: { ok: false, error: r.status === 404 ? 'API introuvable (404)' : 'Réponse invalide (vérifiez la table parametres_app)' }, ok: false };
                     }
                 });
             })
@@ -2879,15 +2899,15 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                     updateUI(result.data.enabled);
                 } else {
                     var msg = result.data.error || result.data.message || 'Erreur';
-                    statusEl.textContent = 'Erreur';
-                    statusEl.title = msg;
+                    showError(msg);
                 }
             })
             .catch(function(err) {
-                statusEl.textContent = 'Erreur';
-                statusEl.title = 'Impossible de contacter l\'API. Exécutez la migration: php sql/run_migration_parametres.php';
+                showError('Impossible de contacter l\'API. Vérifiez que la table parametres_app existe en base.');
             });
     }
+
+    if (retryBtn) retryBtn.addEventListener('click', loadState);
 
     btn.addEventListener('click', function() {
         const currentText = statusEl.textContent;
