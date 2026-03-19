@@ -50,9 +50,10 @@ return [
     ],
     'auto_send_invoices' => (bool)($_ENV['AUTO_SEND_INVOICES'] ?? false),
     'company' => [
-        'address' => $_ENV['COMPANY_ADDRESS'] ?? '7 Rue Fraizier, 93210 Saint-Denis',
-        'billing_contact_email' => $_ENV['BILLING_CONTACT_EMAIL'] ?? 'facturemail@cccomputer.fr',
-        'director_full_name' => $_ENV['DIRECTOR_FULL_NAME'] ?? 'NOM PRENOM DIRIGEANT',
+        'name' => $_ENV['COMPANY_NAME'] ?? 'CC Computer',
+        'address' => trim($_ENV['COMPANY_ADDRESS'] ?? '7 Rue Fraizier, 93210 Saint-Denis'),
+        'billing_contact_email' => trim($_ENV['BILLING_CONTACT_EMAIL'] ?? 'facturemail@cccomputer.fr'),
+        'director_full_name' => trim($_ENV['DIRECTOR_FULL_NAME'] ?? ''),
     ],
     'import' => [
         'cron_secret_token' => $_ENV['CRON_SECRET_TOKEN'] ?? getenv('CRON_SECRET_TOKEN') ?: '',

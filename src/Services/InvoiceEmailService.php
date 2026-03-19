@@ -607,65 +607,95 @@ class InvoiceEmailService
     }
     
     /**
+     * Récupère le nom du dirigeant : config > BDD (premier Dirigeant actif) > nom société
+     */
+    private function getDirectorFullName(): string
+    {
+        $companyConfig = $this->config['company'] ?? [];
+        $fromConfig = trim($companyConfig['director_full_name'] ?? '');
+        $placeholder = 'NOM PRENOM DIRIGEANT';
+
+        if ($fromConfig !== '' && stripos($fromConfig, $placeholder) === false) {
+            return $fromConfig;
+        }
+
+        // Récupérer depuis la BDD : premier utilisateur Dirigeant ou Admin actif
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT CONCAT(COALESCE(prenom,''), ' ', COALESCE(nom,'')) AS full_name
+                FROM utilisateurs
+                WHERE Emploi IN ('Dirigeant', 'Admin') AND statut = 'actif'
+                ORDER BY FIELD(Emploi, 'Dirigeant', 'Admin')
+                LIMIT 1
+            ");
+            $stmt->execute();
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row && trim($row['full_name'] ?? '') !== '') {
+                return trim($row['full_name']);
+            }
+        } catch (Throwable $e) {
+            error_log("[InvoiceEmailService] Erreur récupération dirigeant: " . $e->getMessage());
+        }
+
+        return $companyConfig['name'] ?? 'CC Computer';
+    }
+
+    /**
      * Construit le corps de l'email de facture (version HTML)
-     * 
+     *
      * @param array $facture Données de la facture
      * @return string Corps de l'email (HTML)
      */
     private function buildEmailHtmlBody(array $facture): string
     {
         $templatePath = __DIR__ . '/../Mail/templates/invoice_email.html';
-        
+
         if (!file_exists($templatePath)) {
             error_log("[InvoiceEmailService] Template HTML introuvable: {$templatePath}, utilisation du texte brut");
             return '';
         }
-        
+
         $template = file_get_contents($templatePath);
-        
-        // Données pour le template
-        $clientNom = htmlspecialchars($facture['client_nom'] ?? 'Client', ENT_QUOTES, 'UTF-8');
+
+        $companyConfig = $this->config['company'] ?? [];
+        $companyName = $companyConfig['name'] ?? 'CC Computer';
+        $companyAddress = trim($companyConfig['address'] ?? '');
+        $billingContactEmail = trim($companyConfig['billing_contact_email'] ?? '');
+
+        // Données facture
+        $clientNom = htmlspecialchars(trim($facture['client_nom'] ?? '') ?: 'Client', ENT_QUOTES, 'UTF-8');
         $numero = htmlspecialchars($facture['numero'] ?? 'N/A', ENT_QUOTES, 'UTF-8');
-        $montantTTC = htmlspecialchars(
-            number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €',
-            ENT_QUOTES,
-            'UTF-8'
-        );
+        $montantFormatted = number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ');
+        $montantTTC = htmlspecialchars($montantFormatted . ' €', ENT_QUOTES, 'UTF-8');
         $dateFacture = htmlspecialchars(
             date('d/m/Y', strtotime($facture['date_facture'] ?? 'now')),
             ENT_QUOTES,
             'UTF-8'
         );
-        
-        // Variables de configuration pour le template
-        $companyConfig = $this->config['company'] ?? [];
-        $directorFullName = htmlspecialchars(
-            $companyConfig['director_full_name'] ?? 'NOM PRENOM DIRIGEANT',
-            ENT_QUOTES,
-            'UTF-8'
-        );
-        $companyAddress = htmlspecialchars(
-            $companyConfig['address'] ?? '7 Rue Fraizier, 93210 Saint-Denis',
-            ENT_QUOTES,
-            'UTF-8'
-        );
-        $billingContactEmail = htmlspecialchars(
-            $companyConfig['billing_contact_email'] ?? 'facturemail@cccomputer.fr',
-            ENT_QUOTES,
-            'UTF-8'
-        );
-        
-        // Remplacement des placeholders
+
+        // Dirigeant : config ou BDD (jamais de placeholder)
+        $directorFullName = htmlspecialchars($this->getDirectorFullName(), ENT_QUOTES, 'UTF-8');
+        $companyNameEsc = htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8');
+
+        // Blocs conditionnels : n'afficher que si la valeur est renseignée
+        $addressBlock = $companyAddress
+            ? '<p class="footer-line">' . htmlspecialchars($companyAddress, ENT_QUOTES, 'UTF-8') . '</p>'
+            : '';
+        $contactBlock = $billingContactEmail
+            ? '<p class="footer-line"><strong>Contact :</strong> <a href="mailto:' . htmlspecialchars($billingContactEmail, ENT_QUOTES, 'UTF-8') . '" style="color:#2563eb;text-decoration:none;">' . htmlspecialchars($billingContactEmail, ENT_QUOTES, 'UTF-8') . '</a></p>'
+            : '';
+
         $replacements = [
-            '{{director_full_name}}' => $directorFullName,
+            '{{header_title}}' => $directorFullName,
+            '{{company_name}}' => $companyNameEsc,
             '{{client_name}}' => $clientNom,
             '{{invoice_number}}' => $numero,
             '{{invoice_date}}' => $dateFacture,
             '{{invoice_total_ttc}}' => $montantTTC,
-            '{{company_address}}' => $companyAddress,
-            '{{billing_contact_email}}' => $billingContactEmail,
+            '{{address_block}}' => $addressBlock,
+            '{{contact_block}}' => $contactBlock,
         ];
-        
+
         return str_replace(array_keys($replacements), array_values($replacements), $template);
     }
     

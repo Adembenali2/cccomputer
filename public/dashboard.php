@@ -810,14 +810,8 @@ $nbClients = is_array($clients) ? count($clients) : 0;
     }
 
     // Fonction pour afficher une notification toast (partagée entre SFTP et IONOS)
-    // Utilise window.showNotification si disponible (défini dans api.js), sinon définit une version locale
+    // Toujours utiliser le toast visible (api.js showNotification ne fait que console.error)
     function showNotificationToast(title, message, type = 'info') {
-        // Si window.showNotification existe déjà (défini dans api.js), l'utiliser
-        if (typeof window.showNotification === 'function') {
-            window.showNotification(title + ': ' + message, type);
-            return;
-        }
-        // Sinon, créer une notification toast personnalisée
         const notification = document.createElement('div');
         notification.className = `sftp-notification sftp-notification-${type}`;
         notification.innerHTML = `
