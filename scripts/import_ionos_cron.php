@@ -35,8 +35,9 @@ if (!file_exists($autoloadPath)) {
 }
 require_once $autoloadPath;
 
-// Charger DatabaseConnection
+// Charger DatabaseConnection et historique
 require_once $projectRoot . '/includes/db_connection.php';
+require_once $projectRoot . '/includes/historique.php';
 
 // Fonction de logging
 function logMessage(string $message, string $level = 'INFO'): void {
@@ -575,6 +576,12 @@ try {
             ]
         ]);
         
+        // Enregistrer dans historique
+        $ionosDetails = $hasError
+            ? implode('; ', array_slice($stats['errors'], 0, 3))
+            : "{$stats['rows_inserted']} lignes importées";
+        enregistrerAction($pdo, null, $hasError ? 'import_ionos_error' : 'import_ionos_ok', $ionosDetails);
+        
         logMessage("=== FIN IMPORT IONOS ===");
         logMessage("Durée totale: " . number_format($duration / 1000, 2) . "s");
         logMessage("Lignes vues: {$stats['rows_seen']}");
@@ -601,7 +608,7 @@ try {
     logMessage("ERREUR FATALE: " . $e->getMessage(), 'ERROR');
     logMessage("Stack trace: " . $e->getTraceAsString(), 'ERROR');
     
-    // Logger l'erreur dans import_run
+    // Logger l'erreur dans import_run et historique
     try {
         $pdo = DatabaseConnection::getInstance();
         logToImportRun($pdo, [
@@ -617,6 +624,7 @@ try {
                 'error' => $e->getMessage()
             ]
         ]);
+        enregistrerAction($pdo, null, 'import_ionos_error', $e->getMessage());
     } catch (Throwable $logError) {
         // Ignorer les erreurs de log
     }

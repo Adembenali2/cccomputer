@@ -41,8 +41,9 @@ if (!file_exists($autoloadPath)) {
 }
 require_once $autoloadPath;
 
-// Charger DatabaseConnection
+// Charger DatabaseConnection et historique
 require_once $projectRoot . '/includes/db_connection.php';
+require_once $projectRoot . '/includes/historique.php';
 
 use phpseclib3\Net\SFTP;
 
@@ -607,6 +608,13 @@ try {
             ]
         ]);
         
+        // Enregistrer dans historique (user_id=null pour action système)
+        if ($runOk) {
+            enregistrerAction($pdo, null, 'import_sftp_ok', $message);
+        } else {
+            enregistrerAction($pdo, null, 'import_sftp_error', implode('; ', $stats['errors']));
+        }
+        
         exit($runOk ? 0 : 1);
         
     } finally {
@@ -623,9 +631,10 @@ try {
     logMessage("ERREUR: $errorMsg", 'ERROR');
     logMessage("=== FIN IMPORT SFTP (ERREUR) ===");
     
-    // Logger l'erreur dans import_run
-    if (isset($pdo)) {
-        logToImportRun($pdo, [
+    // Logger l'erreur dans import_run et historique
+    try {
+        $pdoErr = $pdo ?? DatabaseConnection::getInstance();
+        logToImportRun($pdoErr, [
             'imported' => 0,
             'skipped' => 0,
             'ok' => false,
@@ -640,11 +649,12 @@ try {
                 'error' => $errorMsg
             ]
         ]);
-        
-        // Release lock si acquis
+        enregistrerAction($pdoErr, null, 'import_sftp_error', $errorMsg);
         if (isset($lockAcquired) && $lockAcquired) {
-            $pdo->query("SELECT RELEASE_LOCK('$lockName')");
+            $pdoErr->query("SELECT RELEASE_LOCK('$lockName')");
         }
+    } catch (Throwable $logEx) {
+        logMessage("Erreur lors du log: " . $logEx->getMessage(), 'WARN');
     }
     
     exit(1);

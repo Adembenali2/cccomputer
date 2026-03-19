@@ -116,6 +116,24 @@ if ($clients === null) {
 }
 
 $nbClients = is_array($clients) ? count($clients) : 0;
+
+// ==================================================================
+// Historique des imports (pour le bloc dashboard)
+// ==================================================================
+require_once __DIR__ . '/../includes/historique.php';
+$historiqueImports = safeFetchAll(
+    $pdo,
+    "SELECT id, action, details, date_action FROM historique 
+     WHERE action LIKE 'import_%' 
+     ORDER BY date_action DESC 
+     LIMIT 15",
+    [],
+    'historique_imports'
+) ?? [];
+$derniereErreurImport = null;
+if (!empty($historiqueImports) && in_array($historiqueImports[0]['action'], ['import_sftp_error', 'import_ionos_error'], true)) {
+    $derniereErreurImport = $historiqueImports[0];
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -518,6 +536,41 @@ $nbClients = is_array($clients) ? count($clients) : 0;
             </div>
         </div>
         <?php // endif; ?>
+
+        <!-- Bloc Historique des imports -->
+        <div class="import-historique-card">
+            <div class="import-historique-header">
+                <h3 class="import-historique-title">Historique des imports</h3>
+                <a href="/public/historique.php?categorie=Système" class="import-historique-link" aria-label="Voir tout l'historique">Voir tout</a>
+            </div>
+            <div id="importHistoriqueAlert" class="import-historique-alert" role="alert" <?= !$derniereErreurImport ? 'style="display: none;"' : '' ?>>
+                <span class="import-historique-alert-icon">⚠️</span>
+                <div class="import-historique-alert-content">
+                    <strong>Dernière erreur d'import</strong>
+                    <span><?= $derniereErreurImport ? htmlspecialchars($derniereErreurImport['details'] ?? '', ENT_QUOTES, 'UTF-8') : '' ?></span>
+                    <small><?= $derniereErreurImport ? htmlspecialchars(date('d/m/Y H:i', strtotime($derniereErreurImport['date_action'] ?? '')), ENT_QUOTES, 'UTF-8') : '' ?></small>
+                </div>
+            </div>
+            <div id="importHistoriqueList" class="import-historique-list">
+                <?php if (empty($historiqueImports)): ?>
+                <p class="import-historique-empty">Aucun import enregistré</p>
+                <?php else: ?>
+                <?php foreach ($historiqueImports as $h): 
+                    $isError = in_array($h['action'], ['import_sftp_error', 'import_ionos_error'], true);
+                    $label = formatActionLabel($h['action']);
+                ?>
+                <div class="import-historique-item <?= $isError ? 'import-historique-item-error' : '' ?>">
+                    <span class="import-historique-item-icon"><?= $isError ? '❌' : '✅' ?></span>
+                    <div class="import-historique-item-content">
+                        <span class="import-historique-item-action"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="import-historique-item-details"><?= htmlspecialchars($h['details'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="import-historique-item-date"><?= htmlspecialchars(date('d/m H:i', strtotime($h['date_action'] ?? '')), ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 
     <!-- Popup Support -->
@@ -1024,6 +1077,39 @@ $nbClients = is_array($clients) ? count($clients) : 0;
         if (banner) banner.style.display = 'none';
         if (importBannerTimeout) { clearTimeout(importBannerTimeout); importBannerTimeout = null; }
     });
+    
+    // Rafraîchir le bloc Historique des imports
+    async function refreshImportHistorique() {
+        const container = document.getElementById('importHistoriqueList');
+        if (!container) return;
+        try {
+            const res = await fetch('/API/import/historique_imports.php', { credentials: 'include', cache: 'no-store' });
+            const data = await res.json();
+            if (!data.ok || !data.items) return;
+            const alertEl = document.getElementById('importHistoriqueAlert');
+            if (data.has_error && data.last_error && alertEl) {
+                alertEl.style.display = 'flex';
+                const detailsEl = alertEl.querySelector('.import-historique-alert-content span');
+                const dateEl = alertEl.querySelector('.import-historique-alert-content small');
+                if (detailsEl) detailsEl.textContent = data.last_error.details || '';
+                if (dateEl) dateEl.textContent = new Date(data.last_error.date_action).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } else if (alertEl) {
+                alertEl.style.display = 'none';
+            }
+            container.innerHTML = data.items.length === 0
+                ? '<p class="import-historique-empty">Aucun import enregistré</p>'
+                : data.items.map(h => `
+                    <div class="import-historique-item ${h.is_error ? 'import-historique-item-error' : ''}">
+                        <span class="import-historique-item-icon">${h.is_error ? '❌' : '✅'}</span>
+                        <div class="import-historique-item-content">
+                            <span class="import-historique-item-action">${escapeHtml(h.label)}</span>
+                            <span class="import-historique-item-details">${escapeHtml(h.details)}</span>
+                            <span class="import-historique-item-date">${escapeHtml(h.date_formatted)}</span>
+                        </div>
+                    </div>
+                `).join('');
+        } catch (e) { /* ignore */ }
+    }
     
     // Note: On utilise showNotificationToast directement pour éviter les conflits avec window.showNotification de api.js
 
@@ -2378,6 +2464,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 setStatusBadge('UNKNOWN');
             } finally {
                 isFetching = false;
+                refreshImportHistorique();
             }
         }
         
@@ -2650,6 +2737,7 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 setStatusBadge('UNKNOWN');
             } finally {
                 isFetching = false;
+                refreshImportHistorique();
             }
         }
         

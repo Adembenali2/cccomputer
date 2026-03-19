@@ -56,6 +56,10 @@ const AUDIT_ACTION_LABELS = [
     'rdv_cree' => 'RDV créé',
     'rdv_modifie' => 'RDV modifié',
     'rdv_supprime' => 'RDV supprimé',
+    'import_sftp_ok' => 'Import SFTP réussi',
+    'import_sftp_error' => 'Import SFTP en erreur',
+    'import_ionos_ok' => 'Import IONOS réussi',
+    'import_ionos_error' => 'Import IONOS en erreur',
 ];
 
 /** Classes CSS des badges par catégorie */
