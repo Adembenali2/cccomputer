@@ -202,6 +202,17 @@ if (!function_exists('h')) {
     </a>
     <?php endif; ?>
 
+    <?php
+    // [Fonctionnalité C] Dernière connexion (session précédente)
+    $lastLoginNav = $_SESSION['last_login_at'] ?? null;
+    if ($lastLoginNav !== null && $lastLoginNav !== '' && !empty($_SESSION['user_id'])):
+        $lastLoginTs = strtotime((string)$lastLoginNav);
+    ?>
+    <span class="nav-last-login" style="font-size:0.78rem;color:#9ca3af;line-height:1.2;text-align:right;max-width:160px;align-self:center;">
+      Dernière connexion : <?= $lastLoginTs ? h(date('d/m/Y à H:i', $lastLoginTs)) : '—' ?>
+    </span>
+    <?php endif; ?>
+
     <a href="/includes/logout.php" id="logout-link" aria-label="Déconnexion">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -214,6 +225,45 @@ if (!function_exists('h')) {
 </header>
 
 <div id="alert-container" class="alert-container" role="region" aria-label="Notifications"></div>
+<?php if (!empty($_SESSION['user_id'])): ?>
+<div id="inactivity-warning" style="display:none;position:fixed;bottom:20px;right:20px;background:#f59e0b;color:#fff;padding:12px 18px;border-radius:8px;font-size:0.9rem;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.2);"></div>
+<script nonce="<?= $GLOBALS['csp_nonce'] ?? '' ?>">
+(function() {
+  // [Fonctionnalité B] Avertissement client avant déconnexion inactivité (aligné sur 30 min serveur)
+  const INACTIVITY_LIMIT = 1800;
+  const WARNING_BEFORE = 300;
+  let lastActivity = Date.now();
+  let warningShown = false;
+
+  function resetTimer() {
+    lastActivity = Date.now();
+    warningShown = false;
+    const banner = document.getElementById('inactivity-warning');
+    if (banner) banner.style.display = 'none';
+  }
+
+  ['mousemove','keydown','click','scroll','touchstart'].forEach(function(e) {
+    document.addEventListener(e, resetTimer, { passive: true });
+  });
+
+  setInterval(function() {
+    const elapsed = Math.floor((Date.now() - lastActivity) / 1000);
+    const remaining = INACTIVITY_LIMIT - elapsed;
+    if (remaining <= WARNING_BEFORE && !warningShown) {
+      warningShown = true;
+      const banner = document.getElementById('inactivity-warning');
+      if (banner) {
+        banner.textContent = 'Vous serez déconnecté dans ' + Math.ceil(remaining / 60) + ' minute(s) pour inactivité.';
+        banner.style.display = 'block';
+      }
+    }
+    if (remaining <= 0) {
+      window.location.href = '/includes/logout.php';
+    }
+  }, 10000);
+})();
+</script>
+<?php endif; ?>
 <script src="/assets/js/form-helpers.js"></script>
 
 <script nonce="<?= $GLOBALS['csp_nonce'] ?? '' ?>">

@@ -97,6 +97,27 @@ function logProfilAction(PDO $pdo, ?int $userId, string $action, string $details
     }
 }
 
+/** [Fonctionnalité D] Libellé navigateur à partir du User-Agent */
+function profilBrowserLabel(?string $ua): string {
+    $ua = (string)$ua;
+    if ($ua === '') {
+        return 'Autre';
+    }
+    if (stripos($ua, 'Firefox') !== false) {
+        return 'Firefox';
+    }
+    if (stripos($ua, 'Edg') !== false) {
+        return 'Edge';
+    }
+    if (stripos($ua, 'Chrome') !== false) {
+        return 'Chrome';
+    }
+    if (stripos($ua, 'Safari') !== false) {
+        return 'Safari';
+    }
+    return 'Autre';
+}
+
 /**
  * Valide les données utilisateur pour création/mise à jour
  */
@@ -543,6 +564,25 @@ $currentUserInfo = safeFetch($pdo,
     'current_user_info'
 );
 
+// [Fonctionnalité D] Sessions actives (multi-appareils)
+$profileActiveSessions = safeFetchAll(
+    $pdo,
+    'SELECT ip_address, user_agent, last_activity, created_at, session_token
+     FROM user_sessions WHERE user_id = ? ORDER BY last_activity DESC',
+    [$currentUser['id']],
+    'profile_user_sessions'
+);
+
+// [Fonctionnalité F] Historique des connexions sur le profil
+$profileLoginHistory = safeFetchAll(
+    $pdo,
+    "SELECT action, details, ip_address, date_action FROM historique
+     WHERE user_id = ? AND action IN ('connexion_reussie', 'connexion_echouee', 'deconnexion')
+     ORDER BY date_action DESC LIMIT 10",
+    [$currentUser['id']],
+    'profile_login_history'
+);
+
 // Utilisateurs en ligne (activité récente dans les 5 dernières minutes)
 // Utilise le champ last_activity si disponible, sinon utilise date_modification comme fallback
 $onlineUsersList = safeFetchAll($pdo, "
@@ -679,6 +719,10 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
         .page-header > div:first-child {
             flex: 1;
         }
+        /* [Fonctionnalité F] Lignes historique connexions */
+        tr.hist-row-ok { background: #dcfce7 !important; }
+        tr.hist-row-fail { background: #fee2e2 !important; }
+        tr.hist-row-deconnexion { background: #f3f4f6 !important; }
         .import-mini {
             display: flex;
             align-items: center;
@@ -1955,6 +1999,14 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
             <?php if ($currentUserInfo): ?>
                 <span class="meta-sub"><?= h($currentUserInfo['Email']) ?></span>
             <?php endif; ?>
+            <?php // [Fonctionnalité C] Rappel discret (doublon possible avec le bandeau du menu)
+            if (!empty($_SESSION['last_login_at'])):
+                $llMeta = strtotime((string)$_SESSION['last_login_at']);
+            ?>
+                <span class="meta-sub" style="font-size:0.78rem;color:#9ca3af;">
+                    Dernière connexion : <?= $llMeta ? h(date('d/m/Y à H:i', $llMeta)) : '—' ?>
+                </span>
+            <?php endif; ?>
         </div>
         <div class="meta-card">
             <div class="meta-card-icon">
@@ -1983,6 +2035,94 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                 </div>
                 <?php endif; ?>
             </div>
+        </div>
+    </section>
+
+    <section class="panel" style="margin-top:1.5rem;">
+        <h2 class="panel-title">Sessions actives</h2>
+        <p class="panel-subtitle">Appareils récemment connectés à votre compte. La session en cours n’est pas fermable depuis ici.</p>
+        <?php // [Fonctionnalité D] ?>
+        <div class="table-responsive">
+            <table class="users-table" role="table" aria-label="Sessions actives">
+                <thead>
+                    <tr>
+                        <th scope="col">IP</th>
+                        <th scope="col">Navigateur</th>
+                        <th scope="col">Dernière activité</th>
+                        <th scope="col">Connexion</th>
+                        <th scope="col">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($profileActiveSessions)): ?>
+                    <tr><td colspan="5" class="aucun">Aucune session enregistrée (exécutez la migration <code>create_user_sessions.sql</code> si besoin).</td></tr>
+                <?php else: ?>
+                    <?php foreach ($profileActiveSessions as $sess): ?>
+                        <?php
+                        $tok = (string)($sess['session_token'] ?? '');
+                        $isCurrent = $tok !== '' && hash_equals(session_id(), $tok);
+                        ?>
+                        <tr>
+                            <td><?= h((string)($sess['ip_address'] ?? '')) ?></td>
+                            <td><?= h(profilBrowserLabel($sess['user_agent'] ?? null)) ?></td>
+                            <td><?= h((string)($sess['last_activity'] ?? '')) ?></td>
+                            <td><?= h((string)($sess['created_at'] ?? '')) ?></td>
+                            <td>
+                                <?php if ($isCurrent): ?>
+                                    <span class="text-muted">Session actuelle</span>
+                                <?php else: ?>
+                                    <button type="button" class="btn btn-danger btn-sm btn-revoke-session" data-session-token="<?= h($tok) ?>">Fermer</button>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel" style="margin-top:1rem;">
+        <h2 class="panel-title">Mes dernières connexions</h2>
+        <?php // [Fonctionnalité F] ?>
+        <div class="table-responsive">
+            <table class="users-table" role="table" aria-label="Historique connexions">
+                <thead>
+                    <tr>
+                        <th scope="col">Date / heure</th>
+                        <th scope="col">Action</th>
+                        <th scope="col">Adresse IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($profileLoginHistory)): ?>
+                    <tr><td colspan="3" class="aucun">Aucun historique récent.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($profileLoginHistory as $hrow): ?>
+                        <?php
+                        $act = (string)($hrow['action'] ?? '');
+                        $rowClass = 'hist-row-deconnexion';
+                        if ($act === 'connexion_reussie') {
+                            $rowClass = 'hist-row-ok';
+                        } elseif ($act === 'connexion_echouee') {
+                            $rowClass = 'hist-row-fail';
+                        }
+                        $actLabel = match ($act) {
+                            'connexion_reussie' => 'Connexion',
+                            'connexion_echouee' => 'Tentative échouée',
+                            'deconnexion' => 'Déconnexion',
+                            default => $act,
+                        };
+                        ?>
+                        <tr class="<?= h($rowClass) ?>">
+                            <td><?= h((string)($hrow['date_action'] ?? '')) ?></td>
+                            <td><?= h($actLabel) ?></td>
+                            <td><?= h((string)($hrow['ip_address'] ?? '')) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
         </div>
     </section>
 
@@ -2276,6 +2416,11 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
                 <label for="reset-password">Nouveau mot de passe (min. 8) <span aria-label="requis">*</span>
                     <input type="password" id="reset-password" name="new_password" minlength="8" required aria-required="true">
                 </label>
+                <?php // [Fonctionnalité E] ?>
+                <div id="password-strength-bar" style="height:6px;border-radius:3px;margin-top:6px;background:#e5e7eb;overflow:hidden;">
+                    <div id="password-strength-fill" style="height:100%;width:0%;transition:width 0.3s,background 0.3s;"></div>
+                </div>
+                <span id="password-strength-label" style="font-size:0.78rem;color:#6b7280;"></span>
                 <button class="btn-danger btn-compact" type="submit">Réinitialiser</button>
             </form>
         </section>
@@ -3194,6 +3339,72 @@ function scrollToSection(event, sectionId) {
                 });
         });
     })();
+
+    // [Fonctionnalité E] Indicateur de force du mot de passe (réinit. admin)
+    (function() {
+        const field = document.querySelector('input[name="new_password"]');
+        if (!field) return;
+        field.addEventListener('input', function() {
+            const val = this.value;
+            let score = 0;
+            if (val.length >= 8) score++;
+            if (val.length >= 12) score++;
+            if (/[A-Z]/.test(val)) score++;
+            if (/[0-9]/.test(val)) score++;
+            if (/[^A-Za-z0-9]/.test(val)) score++;
+            const fill = document.getElementById('password-strength-fill');
+            const label = document.getElementById('password-strength-label');
+            const levels = [
+                { pct: '10%', color: '#ef4444', text: 'Très faible' },
+                { pct: '30%', color: '#f97316', text: 'Faible' },
+                { pct: '55%', color: '#eab308', text: 'Moyen' },
+                { pct: '80%', color: '#84cc16', text: 'Fort' },
+                { pct: '100%', color: '#22c55e', text: 'Très fort' },
+            ];
+            const lvl = levels[Math.min(score, 4)];
+            if (fill) {
+                fill.style.width = val.length === 0 ? '0%' : lvl.pct;
+                fill.style.background = lvl.color;
+            }
+            if (label) {
+                label.textContent = val.length === 0 ? '' : lvl.text;
+                label.style.color = lvl.color;
+            }
+        });
+    })();
+
+    // [Fonctionnalité D] Révoquer une session depuis le tableau
+    document.body.addEventListener('click', function(ev) {
+        const btn = ev.target.closest('.btn-revoke-session');
+        if (!btn) return;
+        const token = btn.getAttribute('data-session-token');
+        if (!token) return;
+        if (!confirm('Fermer cette session sur l’autre appareil ?')) return;
+        const csrf = document.body.dataset.csrfToken || '';
+        btn.disabled = true;
+        fetch('/API/sessions_revoke.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrf
+            },
+            body: JSON.stringify({ session_token: token }),
+            credentials: 'include'
+        })
+            .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+            .then(function(res) {
+                if (res.data && res.data.success) {
+                    window.location.reload();
+                } else {
+                    alert(res.data && res.data.error ? res.data.error : 'Action impossible');
+                    btn.disabled = false;
+                }
+            })
+            .catch(function() {
+                alert('Erreur réseau');
+                btn.disabled = false;
+            });
+    });
 
 </script>
 

@@ -4,6 +4,9 @@ require_once __DIR__ . '/../includes/session_config.php';
 
 $error = $_SESSION['login_error'] ?? '';
 unset($_SESSION['login_error']);
+// [Fonctionnalité A] Message après réinitialisation du mot de passe
+$success = $_SESSION['login_success'] ?? '';
+unset($_SESSION['login_success']);
 
 // Protection brute-force : lecture seule du compteur (sans appeler checkRateLimit, pour ne pas incrémenter au chargement de la page)
 $loginRateLimitKey = 'login_attempt_' . md5($_SERVER['REMOTE_ADDR'] ?? 'unknown');
@@ -61,8 +64,12 @@ if ($csrf === '') {
       <button type="submit" class="login-btn">Connexion</button>
     </form>
 
+    <a href="/public/forgot_password.php" class="forgot-link">Mot de passe oublié ?</a>
+
     <?php if ($loginIpBlocked): ?>
       <div class="login-error">Trop de tentatives. Réessayez dans 10 minutes.</div>
+    <?php elseif ($success): ?>
+      <div class="login-error login-success"><?= htmlspecialchars($success, ENT_QUOTES, 'UTF-8') ?></div>
     <?php elseif ($error): ?>
       <div class="login-error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>

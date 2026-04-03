@@ -47,7 +47,8 @@ $stmt = $pdo->prepare("
         date_debut,
         date_creation,
         date_modification,
-        last_activity
+        last_activity,
+        last_login_at
     FROM utilisateurs 
     WHERE Email = :email 
     LIMIT 1
@@ -80,6 +81,33 @@ if (password_needs_rehash($user['password'], PASSWORD_BCRYPT, ['cost' => 10])) {
 
 // Écritures session
 session_regenerate_id(true);
+
+// [Fonctionnalité C] Ancienne date de dernière connexion (affichage) puis mise à jour en base
+$_SESSION['last_login_at'] = $user['last_login_at'] ?? null;
+try {
+    $stmtLogin = $pdo->prepare('UPDATE utilisateurs SET last_login_at = NOW() WHERE id = ?');
+    $stmtLogin->execute([(int)$user['id']]);
+} catch (PDOException $e) {
+    error_log('[Fonctionnalité C] last_login_at update: ' . $e->getMessage());
+}
+
+// [Fonctionnalité D] Enregistrer la session active (table optionnelle jusqu’à migration)
+try {
+    $stmtSess = $pdo->prepare('
+        INSERT INTO user_sessions (user_id, session_token, ip_address, user_agent)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE last_activity = NOW()
+    ');
+    $stmtSess->execute([
+        (int)$user['id'],
+        session_id(),
+        $_SERVER['REMOTE_ADDR'] ?? '',
+        substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
+    ]);
+} catch (PDOException $e) {
+    /* table pas encore créée */
+}
+
 $_SESSION['user_id']     = (int)$user['id'];
 $_SESSION['user_email']  = $user['Email'];
 $_SESSION['user_nom']    = $user['nom'];
@@ -88,6 +116,7 @@ $_SESSION['emploi']      = $user['Emploi'];
 $_SESSION['csrf_token']  = bin2hex(random_bytes(32));
 $_SESSION['last_regenerate'] = time();
 $_SESSION['last_activity_update'] = time();
+$_SESSION['last_db_activity_sync'] = time();
 
 // Mise à jour de last_activity lors de la connexion
 try {

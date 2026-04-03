@@ -116,6 +116,25 @@ body {
     transform: translateY(-2px) scale(1.025);
 }
 
+.forgot-link {
+    display: block;
+    text-align: center;
+    margin-top: 12px;
+    color: #6b7280;
+    font-size: 0.85rem;
+    text-decoration: none;
+}
+.forgot-link:hover {
+    color: #111827;
+    text-decoration: underline;
+}
+
+.login-success {
+    color: #166534 !important;
+    background: #ecfdf5 !important;
+    border-color: #bbf7d0 !important;
+}
+
 .login-error {
     margin-top: 0.8rem;
     color: #dc2626;
