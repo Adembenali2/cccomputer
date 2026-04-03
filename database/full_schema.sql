@@ -1,0 +1,794 @@
+-- Consolidated full schema for CCComputer
+-- Generated from sql/railway.sql + required migrations
+-- Target: MySQL/MariaDB
+
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS=0;
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+DROP TABLE IF EXISTS `app_kv`;
+CREATE TABLE `app_kv` (
+  `k` varchar(64) NOT NULL,
+  `v` text,
+  PRIMARY KEY (`k`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `chatroom_messages`;
+CREATE TABLE `chatroom_messages` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_user` int NOT NULL COMMENT 'ID de l''utilisateur qui a envoyé le message',
+  `message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Contenu du message',
+  `date_envoi` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date et heure d''envoi du message',
+  `mentions` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT 'JSON array des IDs utilisateurs mentionnés (@username)',
+  `image_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Chemin relatif vers l''image uploadée (ex: /uploads/chatroom/filename.jpg)',
+  `type_lien` enum('client','livraison','sav') COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Type de lien associé',
+  `id_lien` int DEFAULT NULL COMMENT 'ID du client/livraison/SAV lié',
+  PRIMARY KEY (`id`),
+  KEY `idx_id_user` (`id_user`),
+  KEY `idx_date_envoi` (`date_envoi`),
+  KEY `idx_type_lien` (`type_lien`,`id_lien`),
+  KEY `idx_date_envoi_desc` (`date_envoi` DESC),
+  CONSTRAINT `fk_chatroom_messages_user` FOREIGN KEY (`id_user`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `chatroom_notifications`;
+CREATE TABLE `chatroom_notifications` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_user` int NOT NULL COMMENT 'Utilisateur qui reçoit la notification',
+  `id_message` int NOT NULL COMMENT 'Message qui a déclenché la notification',
+  `type` enum('mention','message') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'message' COMMENT 'Type de notification',
+  `lu` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0 = non lu, 1 = lu',
+  `date_creation` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_id_user` (`id_user`),
+  KEY `idx_id_message` (`id_message`),
+  KEY `idx_lu` (`lu`),
+  KEY `idx_date_creation` (`date_creation`),
+  CONSTRAINT `fk_chatroom_notif_message` FOREIGN KEY (`id_message`) REFERENCES `chatroom_messages` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_chatroom_notif_user` FOREIGN KEY (`id_user`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=126 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `private_messages`;
+CREATE TABLE `private_messages` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_sender` int NOT NULL COMMENT 'Utilisateur expéditeur',
+  `id_receiver` int NOT NULL COMMENT 'Utilisateur destinataire',
+  `message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Contenu du message',
+  `image_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Chemin relatif vers l''image (/uploads/chatroom/...)',
+  `date_envoi` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date d''envoi',
+  PRIMARY KEY (`id`),
+  KEY `idx_sender_receiver` (`id_sender`, `id_receiver`),
+  KEY `idx_receiver_sender` (`id_receiver`, `id_sender`),
+  KEY `idx_date_envoi` (`date_envoi`),
+  CONSTRAINT `fk_private_messages_sender` FOREIGN KEY (`id_sender`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_private_messages_receiver` FOREIGN KEY (`id_receiver`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `client_geocode`;
+CREATE TABLE `client_geocode` (
+  `id_client` int NOT NULL,
+  `address_hash` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Hash MD5 de l''adresse géocodée',
+  `lat` decimal(10,8) DEFAULT NULL COMMENT 'Latitude',
+  `lng` decimal(11,8) DEFAULT NULL COMMENT 'Longitude',
+  `display_name` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Nom d''affichage retourné par le géocodage',
+  `geocoded_at` datetime DEFAULT NULL COMMENT 'Date du premier géocodage',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Date de dernière mise à jour',
+  PRIMARY KEY (`id_client`),
+  KEY `idx_address_hash` (`address_hash`),
+  CONSTRAINT `fk_client_geocode_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `client_stock`;
+CREATE TABLE `client_stock` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_client` int NOT NULL,
+  `product_type` enum('papier','toner','lcd','pc') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `product_id` int NOT NULL,
+  `qty_stock` int NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_client_stock` (`id_client`,`product_type`,`product_id`),
+  KEY `idx_client_stock_client` (`id_client`),
+  KEY `idx_client_stock_product` (`product_type`,`product_id`),
+  CONSTRAINT `fk_client_stock_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `clients`;
+CREATE TABLE `clients` (
+  `id` int NOT NULL,
+  `numero_client` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `raison_sociale` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `adresse` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `code_postal` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `ville` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `adresse_livraison` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `livraison_identique` tinyint(1) DEFAULT '0',
+  `siret` varchar(14) COLLATE utf8mb4_general_ci NOT NULL,
+  `numero_tva` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `depot_mode` enum('espece','cheque','virement','paiement_carte') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'espece',
+  `nom_dirigeant` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `prenom_dirigeant` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `telephone1` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `telephone2` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `parrain` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `offre` enum('packbronze','packargent') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'packbronze',
+  `date_creation` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `date_dajout` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `pdf1` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pdf2` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pdf3` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pdf4` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pdf5` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pdfcontrat` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `iban` varchar(34) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_clients_numero` (`numero_client`),
+  KEY `idx_clients_email` (`email`),
+  KEY `idx_clients_raison_sociale` (`raison_sociale`(100)),
+  KEY `idx_clients_ville` (`ville`),
+  KEY `idx_clients_code_postal` (`code_postal`),
+  KEY `idx_clients_raison_ville` (`raison_sociale`(50),`ville`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `compteur_relevee`;
+CREATE TABLE `compteur_relevee` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `Timestamp` datetime DEFAULT NULL,
+  `IpAddress` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Nom` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Model` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `SerialNumber` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `MacAddress` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `TonerBlack` int DEFAULT NULL,
+  `TonerCyan` int DEFAULT NULL,
+  `TonerMagenta` int DEFAULT NULL,
+  `TonerYellow` int DEFAULT NULL,
+  `TotalPages` int DEFAULT NULL,
+  `FaxPages` int DEFAULT NULL,
+  `CopiedPages` int DEFAULT NULL,
+  `PrintedPages` int DEFAULT NULL,
+  `BWCopies` int DEFAULT NULL,
+  `ColorCopies` int DEFAULT NULL,
+  `MonoCopies` int DEFAULT NULL,
+  `BichromeCopies` int DEFAULT NULL,
+  `BWPrinted` int DEFAULT NULL,
+  `BichromePrinted` int DEFAULT NULL,
+  `MonoPrinted` int DEFAULT NULL,
+  `ColorPrinted` int DEFAULT NULL,
+  `TotalColor` int DEFAULT NULL,
+  `TotalBW` int DEFAULT NULL,
+  `DateInsertion` datetime DEFAULT NULL,
+  `mac_norm` char(12) COLLATE utf8mb4_general_ci GENERATED ALWAYS AS (replace(upper(`MacAddress`),_utf8mb4':',_utf8mb4'')) STORED,
+  PRIMARY KEY (`id`),
+  KEY `ix_compteur_date` (`Timestamp`),
+  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`),
+  KEY `idx_compteur_mac_ts_desc` (`mac_norm`,`Timestamp` DESC)
+) ENGINE=InnoDB AUTO_INCREMENT=112710 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `compteur_relevee_ancien`;
+CREATE TABLE `compteur_relevee_ancien` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `Timestamp` datetime DEFAULT NULL,
+  `IpAddress` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Nom` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Model` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `SerialNumber` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `MacAddress` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Status` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `TonerBlack` int DEFAULT NULL,
+  `TonerCyan` int DEFAULT NULL,
+  `TonerMagenta` int DEFAULT NULL,
+  `TonerYellow` int DEFAULT NULL,
+  `TotalPages` int DEFAULT NULL,
+  `FaxPages` int DEFAULT NULL,
+  `CopiedPages` int DEFAULT NULL,
+  `PrintedPages` int DEFAULT NULL,
+  `BWCopies` int DEFAULT NULL,
+  `ColorCopies` int DEFAULT NULL,
+  `MonoCopies` int DEFAULT NULL,
+  `BichromeCopies` int DEFAULT NULL,
+  `BWPrinted` int DEFAULT NULL,
+  `BichromePrinted` int DEFAULT NULL,
+  `MonoPrinted` int DEFAULT NULL,
+  `ColorPrinted` int DEFAULT NULL,
+  `TotalColor` int DEFAULT NULL,
+  `TotalBW` int DEFAULT NULL,
+  `DateInsertion` datetime DEFAULT NULL,
+  `mac_norm` char(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci GENERATED ALWAYS AS (replace(upper(`MacAddress`),_utf8mb4':',_utf8mb4'')) STORED,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_mac_ts_ancien` (`mac_norm`,`Timestamp`),
+  KEY `ix_compteur_date` (`Timestamp`),
+  KEY `ix_compteur_mac_ts` (`mac_norm`,`Timestamp`),
+  KEY `idx_compteur_ancien_mac_ts_desc` (`mac_norm`,`Timestamp` DESC)
+) ENGINE=InnoDB AUTO_INCREMENT=150544 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `email_logs`;
+CREATE TABLE `email_logs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `facture_id` int DEFAULT NULL COMMENT 'ID de la facture liée (peut être NULL pour autres types)',
+  `type_email` enum('facture','paiement','autre') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'facture' COMMENT 'Type d''email envoyé',
+  `destinataire` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Adresse email du destinataire',
+  `sujet` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Sujet de l''email',
+  `statut` enum('pending','sent','failed') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending' COMMENT 'Statut de l''envoi',
+  `message_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Message ID retourné par le serveur SMTP (pour traçabilité)',
+  `error_message` text COLLATE utf8mb4_general_ci COMMENT 'Message d''erreur en cas d''échec',
+  `sent_at` datetime DEFAULT NULL COMMENT 'Date et heure d''envoi effectif',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date de création de l''entrée',
+  PRIMARY KEY (`id`),
+  KEY `idx_email_logs_facture` (`facture_id`),
+  KEY `idx_email_logs_statut` (`statut`),
+  KEY `idx_email_logs_created_at` (`created_at`),
+  KEY `idx_email_logs_destinataire` (`destinataire`),
+  CONSTRAINT `fk_email_logs_facture` FOREIGN KEY (`facture_id`) REFERENCES `factures` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Journal des envois d''emails (factures, paiements, etc.)';
+
+DROP TABLE IF EXISTS `facture_lignes`;
+CREATE TABLE `facture_lignes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_facture` int NOT NULL,
+  `description` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `type` enum('N&B','Couleur','Service','Produit') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `quantite` decimal(10,2) NOT NULL DEFAULT '1.00',
+  `prix_unitaire_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `total_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `ordre` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_facture_lignes_facture` (`id_facture`),
+  CONSTRAINT `fk_facture_lignes_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=80 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `factures`;
+CREATE TABLE `factures` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_client` int NOT NULL,
+  `numero` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `date_facture` date NOT NULL,
+  `date_debut_periode` date DEFAULT NULL COMMENT 'Date de début de période de consommation (20 du mois)',
+  `date_fin_periode` date DEFAULT NULL COMMENT 'Date de fin de période de consommation (20 du mois suivant)',
+  `type` enum('Consommation','Achat','Service') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Consommation',
+  `montant_ht` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `tva` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `montant_ttc` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `statut` enum('brouillon','envoyee','payee','en_retard','annulee') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'brouillon',
+  `pdf_genere` tinyint(1) NOT NULL DEFAULT '0',
+  `pdf_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email_envoye` tinyint(1) NOT NULL DEFAULT '0',
+  `date_envoi_email` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL COMMENT 'ID de l''utilisateur qui a créé la facture',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_factures_numero` (`numero`),
+  KEY `idx_factures_client` (`id_client`),
+  KEY `idx_factures_date` (`date_facture`),
+  KEY `idx_factures_statut` (`statut`),
+  KEY `idx_factures_created_by` (`created_by`),
+  CONSTRAINT `fk_factures_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_factures_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `historique`;
+CREATE TABLE `historique` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `action` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `details` text COLLATE utf8mb4_general_ci,
+  `ip_address` varchar(45) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `date_action` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_date_action` (`date_action`),
+  KEY `idx_historique_user_date` (`user_id`,`date_action` DESC),
+  KEY `idx_historique_date_action` (`date_action` DESC)
+) ENGINE=InnoDB AUTO_INCREMENT=805 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `import_run`;
+CREATE TABLE `import_run` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `ran_at` datetime NOT NULL,
+  `imported` int NOT NULL,
+  `skipped` int NOT NULL,
+  `ok` tinyint(1) NOT NULL,
+  `msg` text,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6150 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `import_run_item`;
+CREATE TABLE `import_run_item` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `run_id` int NOT NULL COMMENT 'Référence vers import_run.id',
+  `filename` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Nom du fichier traité',
+  `status` enum('success','error','skipped') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'error' COMMENT 'Statut du traitement',
+  `inserted_rows` int NOT NULL DEFAULT '0' COMMENT 'Nombre de lignes insérées (0 ou 1)',
+  `error` text COLLATE utf8mb4_general_ci COMMENT 'Message d''erreur si status=error',
+  `duration_ms` decimal(10,2) DEFAULT NULL COMMENT 'Durée du traitement en millisecondes',
+  `processed_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date/heure de traitement',
+  PRIMARY KEY (`id`),
+  KEY `idx_run_id` (`run_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_processed_at` (`processed_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=6219 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Logs détaillés par fichier pour les imports SFTP';
+
+DROP TABLE IF EXISTS `lcd_catalog`;
+CREATE TABLE `lcd_catalog` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `marque` varchar(100) NOT NULL,
+  `reference` varchar(100) NOT NULL,
+  `etat` char(1) NOT NULL DEFAULT 'A',
+  `modele` varchar(100) NOT NULL,
+  `taille` tinyint unsigned NOT NULL,
+  `resolution` varchar(20) NOT NULL,
+  `connectique` varchar(100) NOT NULL,
+  `prix` decimal(10,2) DEFAULT NULL,
+  `barcode` varchar(50) DEFAULT NULL,
+  `qr_code_path` varchar(255) DEFAULT NULL,
+  `qty_stock` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_lcd` (`marque`,`reference`),
+  UNIQUE KEY `uq_lcd_barcode` (`barcode`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `lcd_moves`;
+CREATE TABLE `lcd_moves` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `lcd_id` int NOT NULL,
+  `qty_delta` int NOT NULL,
+  `reason` enum('ajustement','achat','retour','correction') NOT NULL,
+  `reference` varchar(255) DEFAULT NULL,
+  `user_id` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_lcd_time` (`lcd_id`,`created_at`),
+  CONSTRAINT `fk_lcd_moves_catalog` FOREIGN KEY (`lcd_id`) REFERENCES `lcd_catalog` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `livraisons`;
+CREATE TABLE `livraisons` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_client` int DEFAULT NULL,
+  `id_livreur` int DEFAULT NULL,
+  `reference` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `adresse_livraison` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `objet` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `date_prevue` date NOT NULL,
+  `date_reelle` date DEFAULT NULL,
+  `statut` enum('planifiee','en_cours','livree','annulee') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'planifiee',
+  `commentaire` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `product_type` enum('papier','toner','lcd','pc','autre') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `product_id` int DEFAULT NULL,
+  `product_qty` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_livraisons_reference` (`reference`),
+  KEY `idx_livraisons_client` (`id_client`),
+  KEY `idx_livraisons_livreur` (`id_livreur`),
+  KEY `idx_livraisons_date_prevue` (`date_prevue`),
+  KEY `idx_livraisons_date_reelle` (`date_reelle`),
+  KEY `idx_livraisons_statut` (`statut`),
+  KEY `idx_livraisons_date_statut` (`date_prevue`,`statut`),
+  KEY `idx_livraisons_livreur_statut` (`id_livreur`,`statut`),
+  KEY `idx_livraisons_reference` (`reference`),
+  CONSTRAINT `fk_livraisons_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_livraisons_livreur` FOREIGN KEY (`id_livreur`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `messagerie`;
+CREATE TABLE `messagerie` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_expediteur` int NOT NULL,
+  `id_destinataire` int DEFAULT NULL,
+  `sujet` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `type_lien` enum('client','livraison','sav') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `id_lien` int DEFAULT NULL,
+  `id_message_parent` int DEFAULT NULL,
+  `type_reponse` enum('text','emoji') COLLATE utf8mb4_general_ci DEFAULT 'text',
+  `emoji_code` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `lu` tinyint(1) NOT NULL DEFAULT '0',
+  `date_envoi` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `date_lecture` datetime DEFAULT NULL,
+  `supprime_expediteur` tinyint(1) NOT NULL DEFAULT '0',
+  `supprime_destinataire` tinyint(1) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_expediteur` (`id_expediteur`),
+  KEY `idx_destinataire` (`id_destinataire`),
+  KEY `idx_lu` (`lu`),
+  KEY `idx_date_envoi` (`date_envoi`),
+  KEY `idx_type_lien` (`type_lien`,`id_lien`),
+  KEY `idx_destinataire_lu` (`id_destinataire`,`lu`,`date_envoi`),
+  KEY `idx_expediteur_supprime` (`id_expediteur`,`supprime_expediteur`,`date_envoi`),
+  KEY `idx_message_parent` (`id_message_parent`),
+  CONSTRAINT `fk_messagerie_destinataire` FOREIGN KEY (`id_destinataire`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_messagerie_expediteur` FOREIGN KEY (`id_expediteur`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_messagerie_parent` FOREIGN KEY (`id_message_parent`) REFERENCES `messagerie` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `messagerie_lectures`;
+CREATE TABLE `messagerie_lectures` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_message` int NOT NULL,
+  `id_utilisateur` int NOT NULL,
+  `date_lecture` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_message_user` (`id_message`,`id_utilisateur`),
+  KEY `idx_utilisateur` (`id_utilisateur`),
+  KEY `idx_message` (`id_message`),
+  CONSTRAINT `fk_lecture_message` FOREIGN KEY (`id_message`) REFERENCES `messagerie` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_lecture_utilisateur` FOREIGN KEY (`id_utilisateur`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `paiements`;
+CREATE TABLE `paiements` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_facture` int DEFAULT NULL COMMENT 'ID de la facture liée (peut être NULL pour paiement sans facture)',
+  `id_client` int NOT NULL COMMENT 'ID du client',
+  `montant` decimal(10,2) NOT NULL,
+  `date_paiement` date NOT NULL,
+  `mode_paiement` enum('virement','cb','cheque','especes','autre') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'virement',
+  `reference` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Référence du paiement (ex: VIR-2025-001)',
+  `commentaire` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `statut` enum('en_cours','recu','refuse','annule') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'en_cours',
+  `recu_genere` tinyint(1) NOT NULL DEFAULT '0',
+  `recu_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `email_envoye` tinyint(1) NOT NULL DEFAULT '0',
+  `date_envoi_email` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL COMMENT 'ID de l''utilisateur qui a créé le paiement',
+  PRIMARY KEY (`id`),
+  KEY `idx_paiements_facture` (`id_facture`),
+  KEY `idx_paiements_client` (`id_client`),
+  KEY `idx_paiements_date` (`date_paiement`),
+  KEY `idx_paiements_statut` (`statut`),
+  KEY `idx_paiements_created_by` (`created_by`),
+  CONSTRAINT `fk_paiements_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_paiements_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_paiements_facture` FOREIGN KEY (`id_facture`) REFERENCES `factures` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `paper_catalog`;
+CREATE TABLE `paper_catalog` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `marque` varchar(100) NOT NULL,
+  `modele` varchar(100) NOT NULL,
+  `poids` varchar(20) NOT NULL,
+  `barcode` varchar(50) DEFAULT NULL,
+  `qr_code_path` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_paper` (`marque`,`modele`,`poids`),
+  UNIQUE KEY `uq_paper_barcode` (`barcode`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `paper_moves`;
+CREATE TABLE `paper_moves` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `paper_id` int NOT NULL,
+  `qty_delta` int NOT NULL,
+  `reason` enum('ajustement','achat','retour','correction') NOT NULL,
+  `reference` varchar(255) DEFAULT NULL,
+  `user_id` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_paper_time` (`paper_id`,`created_at`),
+  CONSTRAINT `fk_paper_moves_catalog` FOREIGN KEY (`paper_id`) REFERENCES `paper_catalog` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `pc_catalog`;
+CREATE TABLE `pc_catalog` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `etat` char(1) NOT NULL DEFAULT 'A',
+  `reference` varchar(100) NOT NULL,
+  `marque` varchar(100) NOT NULL,
+  `modele` varchar(100) NOT NULL,
+  `cpu` varchar(100) NOT NULL,
+  `ram` varchar(50) NOT NULL,
+  `stockage` varchar(100) NOT NULL,
+  `os` varchar(100) NOT NULL,
+  `gpu` varchar(100) DEFAULT NULL,
+  `reseau` varchar(100) DEFAULT NULL,
+  `ports` varchar(255) DEFAULT NULL,
+  `prix` decimal(10,2) DEFAULT NULL,
+  `barcode` varchar(50) DEFAULT NULL,
+  `qr_code_path` varchar(255) DEFAULT NULL,
+  `qty_stock` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pc` (`reference`),
+  UNIQUE KEY `uq_pc_barcode` (`barcode`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `pc_moves`;
+CREATE TABLE `pc_moves` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `pc_id` int NOT NULL,
+  `qty_delta` int NOT NULL,
+  `reason` enum('ajustement','achat','retour','correction') NOT NULL,
+  `reference` varchar(255) DEFAULT NULL,
+  `user_id` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_pc_time` (`pc_id`,`created_at`),
+  CONSTRAINT `fk_pc_moves_catalog` FOREIGN KEY (`pc_id`) REFERENCES `pc_catalog` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `photocopieurs_clients`;
+CREATE TABLE `photocopieurs_clients` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_client` int DEFAULT NULL,
+  `SerialNumber` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `MacAddress` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `mac_norm` char(12) COLLATE utf8mb4_general_ci GENERATED ALWAYS AS (replace(upper(`MacAddress`),_utf8mb4':',_utf8mb4'')) STORED,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `u_serial` (`SerialNumber`),
+  UNIQUE KEY `u_mac` (`mac_norm`),
+  KEY `idx_pc_client` (`id_client`),
+  CONSTRAINT `fk_pc_client__clients_id` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `sav`;
+CREATE TABLE `sav` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_client` int DEFAULT NULL,
+  `mac_norm` char(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `id_technicien` int DEFAULT NULL,
+  `reference` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `date_ouverture` date NOT NULL,
+  `date_intervention_prevue` date DEFAULT NULL,
+  `temps_intervention_estime` decimal(4,2) DEFAULT NULL COMMENT 'Temps estimé en heures',
+  `temps_intervention_reel` decimal(4,2) DEFAULT NULL COMMENT 'Temps réel en heures',
+  `cout_intervention` decimal(10,2) DEFAULT NULL COMMENT 'Coût de l''intervention en euros',
+  `date_fermeture` date DEFAULT NULL,
+  `satisfaction_client` tinyint DEFAULT NULL COMMENT 'Note de satisfaction de 1 à 5',
+  `commentaire_client` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT 'Commentaire du client sur l''intervention',
+  `statut` enum('ouvert','en_cours','resolu','annule') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'ouvert',
+  `priorite` enum('basse','normale','haute','urgente') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'normale',
+  `type_panne` enum('logiciel','materiel','piece_rechangeable') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `commentaire` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `notes_techniques` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT 'Notes techniques réservées aux techniciens',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_sav_reference` (`reference`),
+  KEY `idx_sav_client` (`id_client`),
+  KEY `idx_sav_technicien` (`id_technicien`),
+  KEY `idx_sav_date_ouverture` (`date_ouverture`),
+  KEY `idx_sav_date_fermeture` (`date_fermeture`),
+  KEY `idx_sav_statut` (`statut`),
+  KEY `idx_sav_priorite` (`priorite`),
+  KEY `idx_sav_mac_norm` (`mac_norm`),
+  KEY `idx_sav_date_intervention` (`date_intervention_prevue`),
+  KEY `idx_sav_date_statut` (`date_ouverture`,`statut`),
+  KEY `idx_sav_technicien_statut` (`id_technicien`,`statut`),
+  KEY `idx_sav_reference` (`reference`),
+  CONSTRAINT `fk_sav_client` FOREIGN KEY (`id_client`) REFERENCES `clients` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_sav_technicien` FOREIGN KEY (`id_technicien`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `sav_pieces_utilisees`;
+CREATE TABLE `sav_pieces_utilisees` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `id_sav` int NOT NULL,
+  `product_type` enum('papier','toner','lcd','pc') COLLATE utf8mb4_general_ci NOT NULL,
+  `product_id` int NOT NULL,
+  `quantite` int NOT NULL DEFAULT '1',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_sav_pieces_sav` (`id_sav`),
+  KEY `idx_sav_pieces_product` (`product_type`,`product_id`),
+  CONSTRAINT `fk_sav_pieces_sav` FOREIGN KEY (`id_sav`) REFERENCES `sav` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `sftp_jobs`;
+CREATE TABLE `sftp_jobs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `status` enum('pending','running','done','failed') NOT NULL DEFAULT 'pending',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `started_at` datetime DEFAULT NULL,
+  `finished_at` datetime DEFAULT NULL,
+  `summary` json DEFAULT NULL,
+  `error` text,
+  `triggered_by` int DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `toner_catalog`;
+CREATE TABLE `toner_catalog` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `marque` varchar(100) NOT NULL,
+  `modele` varchar(100) NOT NULL,
+  `couleur` varchar(20) NOT NULL,
+  `barcode` varchar(50) DEFAULT NULL,
+  `qr_code_path` varchar(255) DEFAULT NULL,
+  `qty_stock` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_toner` (`marque`,`modele`,`couleur`),
+  UNIQUE KEY `uq_toner_barcode` (`barcode`)
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `toner_moves`;
+CREATE TABLE `toner_moves` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `toner_id` int NOT NULL,
+  `qty_delta` int NOT NULL,
+  `reason` enum('ajustement','achat','retour','correction') NOT NULL,
+  `reference` varchar(255) DEFAULT NULL,
+  `user_id` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_toner_time` (`toner_id`,`created_at`),
+  CONSTRAINT `fk_toner_moves_catalog` FOREIGN KEY (`toner_id`) REFERENCES `toner_catalog` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `user_permissions`;
+CREATE TABLE `user_permissions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `page` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `allowed` tinyint(1) NOT NULL DEFAULT '1' COMMENT '1 = autorisé, 0 = interdit',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_page` (`user_id`,`page`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_page` (`page`),
+  CONSTRAINT `fk_user_permissions_user` FOREIGN KEY (`user_id`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=181 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `utilisateurs`;
+CREATE TABLE `utilisateurs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `Email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `password` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `nom` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `prenom` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `telephone` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Emploi` enum('Chargé relation clients','Livreur','Technicien','Secrétaire','Dirigeant','Admin') COLLATE utf8mb4_general_ci NOT NULL,
+  `statut` enum('actif','inactif') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'actif',
+  `date_debut` date NOT NULL,
+  `date_creation` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `date_modification` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `last_activity` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_email_unique` (`Email`),
+  KEY `idx_last_activity` (`last_activity`),
+  KEY `idx_utilisateurs_email` (`Email`),
+  KEY `idx_utilisateurs_nom_prenom` (`nom`,`prenom`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+-- Removed broken dump view section from railway.sql and replaced below.
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- =============================
+-- Consolidated additions from migrations
+-- =============================
+
+CREATE TABLE IF NOT EXISTS `parametres_app` (
+  `cle` VARCHAR(80) NOT NULL PRIMARY KEY,
+  `valeur` VARCHAR(255) NOT NULL DEFAULT '',
+  `updated_at` DATETIME NULL ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `parametres_app` (`cle`, `valeur`) VALUES
+  ('auto_send_emails', '0'),
+  ('module_dashboard', '1'), ('module_agenda', '1'), ('module_historique', '1'),
+  ('module_clients', '1'), ('module_paiements', '1'), ('module_messagerie', '1'),
+  ('module_sav', '1'), ('module_livraison', '1'), ('module_stock', '1'),
+  ('module_photocopieurs', '1'), ('module_maps', '1'), ('module_profil', '1'),
+  ('module_commercial', '1'), ('module_import_sftp', '1'), ('module_import_ionos', '1');
+
+CREATE TABLE IF NOT EXISTS `factures_envois_programmes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `type_envoi` enum('une_facture','plusieurs_factures','toutes_selectionnees','tous_clients') NOT NULL DEFAULT 'une_facture',
+  `facture_id` int DEFAULT NULL,
+  `factures_json` text DEFAULT NULL,
+  `client_id` int DEFAULT NULL,
+  `email_destination` varchar(255) DEFAULT NULL,
+  `use_client_email` tinyint(1) NOT NULL DEFAULT 1,
+  `all_clients` tinyint(1) NOT NULL DEFAULT 0,
+  `all_selected_factures` tinyint(1) NOT NULL DEFAULT 0,
+  `sujet` varchar(255) DEFAULT NULL,
+  `message` text DEFAULT NULL,
+  `date_envoi_programmee` datetime NOT NULL,
+  `statut` enum('en_attente','envoye','annule','echoue') NOT NULL DEFAULT 'en_attente',
+  `erreur_message` text DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `sent_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_fep_statut` (`statut`),
+  KEY `idx_fep_date_envoi` (`date_envoi_programmee`),
+  KEY `idx_fep_created_by` (`created_by`),
+  KEY `idx_fep_facture` (`facture_id`),
+  CONSTRAINT `fk_fep_facture` FOREIGN KEY (`facture_id`) REFERENCES `factures` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_fep_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_fep_created_by` FOREIGN KEY (`created_by`) REFERENCES `utilisateurs` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `sessions` (
+  `id` varchar(128) NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` varchar(255) DEFAULT NULL,
+  `last_activity` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_sessions_last_activity` (`last_activity`),
+  KEY `idx_sessions_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Add private_messages read status columns when missing
+SET @db := DATABASE();
+SET @s := (SELECT IF(COUNT(*)=0, 'ALTER TABLE `private_messages` ADD COLUMN `lu` TINYINT(1) NOT NULL DEFAULT 0', 'SELECT 1') FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=''private_messages'' AND COLUMN_NAME=''lu''); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := (SELECT IF(COUNT(*)=0, 'ALTER TABLE `private_messages` ADD COLUMN `delivered_at` DATETIME NULL DEFAULT NULL', 'SELECT 1') FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=''private_messages'' AND COLUMN_NAME=''delivered_at''); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := (SELECT IF(COUNT(*)=0, 'ALTER TABLE `private_messages` ADD COLUMN `read_at` DATETIME NULL DEFAULT NULL', 'SELECT 1') FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=''private_messages'' AND COLUMN_NAME=''read_at''); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := (SELECT IF(COUNT(*)=0, 'CREATE INDEX `idx_private_messages_receiver_lu` ON `private_messages` (`id_receiver`, `lu`)', 'SELECT 1') FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=''private_messages'' AND INDEX_NAME=''idx_private_messages_receiver_lu''); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := (SELECT IF(COUNT(*)=0, 'CREATE INDEX `idx_historique_action` ON `historique` (`action`)', 'SELECT 1') FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=''historique'' AND INDEX_NAME=''idx_historique_action''); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := (SELECT IF(COUNT(*)=0, 'ALTER TABLE `compteur_relevee_ancien` ADD UNIQUE KEY `uniq_mac_ts` (`mac_norm`, `Timestamp`)', 'SELECT 1') FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=''compteur_relevee_ancien'' AND INDEX_NAME=''uniq_mac_ts''); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Runtime views used by stock, clients and dashboard APIs
+DROP VIEW IF EXISTS `v_compteur_last`;
+CREATE VIEW `v_compteur_last` AS
+SELECT * FROM (
+  SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.mac_norm ORDER BY r.`Timestamp` DESC) AS rn
+  FROM `compteur_relevee` r
+  WHERE r.mac_norm IS NOT NULL AND r.mac_norm <> ''
+ ) x WHERE x.rn = 1;
+
+DROP VIEW IF EXISTS `v_paper_stock`;
+CREATE VIEW `v_paper_stock` AS
+SELECT c.id AS paper_id, c.marque, c.modele, c.poids, COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+FROM `paper_catalog` c
+LEFT JOIN `paper_moves` m ON m.paper_id = c.id
+GROUP BY c.id, c.marque, c.modele, c.poids;
+
+DROP VIEW IF EXISTS `v_toner_stock`;
+CREATE VIEW `v_toner_stock` AS
+SELECT t.id AS toner_id, t.marque, t.modele, t.couleur, COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+FROM `toner_catalog` t
+LEFT JOIN `toner_moves` m ON m.toner_id = t.id
+GROUP BY t.id, t.marque, t.modele, t.couleur;
+
+DROP VIEW IF EXISTS `v_lcd_stock`;
+CREATE VIEW `v_lcd_stock` AS
+SELECT l.id AS lcd_id, l.marque, l.reference, l.etat, l.modele, l.taille, l.resolution, l.connectique, l.prix, COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+FROM `lcd_catalog` l
+LEFT JOIN `lcd_moves` m ON m.lcd_id = l.id
+GROUP BY l.id, l.marque, l.reference, l.etat, l.modele, l.taille, l.resolution, l.connectique, l.prix;
+
+DROP VIEW IF EXISTS `v_pc_stock`;
+CREATE VIEW `v_pc_stock` AS
+SELECT p.id AS pc_id, p.etat, p.reference, p.marque, p.modele, p.cpu, p.ram, p.stockage, p.os, p.gpu, p.reseau, p.ports, p.prix, COALESCE(SUM(m.qty_delta), 0) AS qty_stock
+FROM `pc_catalog` p
+LEFT JOIN `pc_moves` m ON m.pc_id = p.id
+GROUP BY p.id, p.etat, p.reference, p.marque, p.modele, p.cpu, p.ram, p.stockage, p.os, p.gpu, p.reseau, p.ports, p.prix;
+
+DROP VIEW IF EXISTS `v_photocopieurs_clients_last`;
+CREATE VIEW `v_photocopieurs_clients_last` AS
+SELECT COALESCE(pc.mac_norm, v.mac_norm) AS mac_norm, pc.id_client AS client_id, pc.SerialNumber, pc.MacAddress,
+       v.Model, v.Nom, v.`Timestamp` AS last_ts, v.TonerBlack, v.TonerCyan, v.TonerMagenta, v.TonerYellow,
+       v.TotalBW, v.TotalColor, v.TotalPages, v.Status, v.IpAddress
+FROM `photocopieurs_clients` pc
+LEFT JOIN `v_compteur_last` v ON v.mac_norm = pc.mac_norm
+WHERE pc.id_client IS NOT NULL;
+
+SET FOREIGN_KEY_CHECKS=1;
