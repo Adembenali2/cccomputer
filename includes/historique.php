@@ -60,6 +60,9 @@ const AUDIT_ACTION_LABELS = [
     'import_sftp_error' => 'Import SFTP en erreur',
     'import_ionos_ok' => 'Import IONOS réussi',
     'import_ionos_error' => 'Import IONOS en erreur',
+    'facture_relance_envoyee' => 'Relance de facture envoyée',
+    'facture_recurrente_generee' => 'Facture récurrente générée',
+    'opportunites_sync' => 'Recalcul des opportunités commerciales',
 ];
 
 /** Classes CSS des badges par catégorie */

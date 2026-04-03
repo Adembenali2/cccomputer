@@ -1,7 +1,10 @@
 {
   "scripts": {
     "scheduled-factures": "php cron/send_scheduled_factures.php",
-    "migrate-programmer": "php scripts/run_programmer_migration.php"
+    "migrate-programmer": "php scripts/run_programmer_migration.php",
+    "invoice-reminders": "php cron/run_invoice_reminders.php",
+    "recurring-invoices": "php cron/run_recurring_invoices.php",
+    "commercial-opportunities": "php cron/run_commercial_opportunities.php"
   },
   "require": {
     "php": ">=8.0",

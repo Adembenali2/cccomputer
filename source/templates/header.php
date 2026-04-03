@@ -9,6 +9,10 @@ $canCommercial   = in_array($emploi, ['Chargé relation clients', 'Admin'], true
 
 // Modules activés (parametres_app) - masquer les liens des modules désactivés
 $modEnabled = ['dashboard' => true, 'messagerie' => true, 'agenda' => true, 'commercial' => true, 'maps' => true, 'profil' => true];
+$pdoNav = null;
+$navBizDash = false;
+$navBizRec = false;
+$navBizOpp = false;
 if (function_exists('getPdo')) {
     try {
         require_once __DIR__ . '/../../includes/parametres.php';
@@ -19,6 +23,18 @@ if (function_exists('getPdo')) {
         $modEnabled['commercial']  = isModuleEnabled($pdoNav, 'commercial');
         $modEnabled['maps']        = isModuleEnabled($pdoNav, 'maps');
         $modEnabled['profil']      = isModuleEnabled($pdoNav, 'profil');
+        $autoload = __DIR__ . '/../../vendor/autoload.php';
+        if (is_file($autoload)) {
+            require_once $autoload;
+            if (class_exists(\App\Services\ProductTier::class)) {
+                $navBizDash = in_array($emploi, ['Admin', 'Dirigeant'], true)
+                    && \App\Services\ProductTier::canUseFeature($pdoNav, 'module_dashboard_business');
+                $navBizRec = in_array($emploi, ['Admin', 'Dirigeant'], true)
+                    && \App\Services\ProductTier::canUseFeature($pdoNav, 'module_factures_recurrentes');
+                $navBizOpp = in_array($emploi, ['Admin', 'Dirigeant', 'Chargé relation clients'], true)
+                    && \App\Services\ProductTier::canUseFeature($pdoNav, 'module_opportunites');
+            }
+        }
     } catch (Throwable $e) {
         // Table parametres_app peut ne pas exister
     }
@@ -84,6 +100,34 @@ if (!function_exists('h')) {
         <polyline points="9,22 9,12 15,12 15,22"/>
       </svg>
       <span class="nav-label">Accueil</span>
+    </a>
+    <?php endif; ?>
+
+    <?php if ($navBizDash): ?>
+    <a href="/public/dashboard_business.php" aria-label="Pilotage">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+      <span class="nav-label">Pilotage</span>
+    </a>
+    <?php endif; ?>
+
+    <?php if ($navBizRec): ?>
+    <a href="/public/factures_recurrentes.php" aria-label="Factures récurrentes">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+      </svg>
+      <span class="nav-label">Récurrent</span>
+    </a>
+    <?php endif; ?>
+
+    <?php if ($navBizOpp): ?>
+    <a href="/public/opportunites.php" aria-label="Opportunités">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      <span class="nav-label">Opportunités</span>
     </a>
     <?php endif; ?>
 

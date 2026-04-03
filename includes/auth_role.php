@@ -73,6 +73,19 @@ function checkPagePermission(string $page, array $allowed_roles = []): bool {
         if (!isModuleEnabled($pdo, $page)) {
             return false;
         }
+        // Offre « standard » : modules business désactivés même si flag DB à 1 (ProductTier)
+        $productGated = [
+            'dashboard_business' => 'module_dashboard_business',
+            'factures_recurrentes' => 'module_factures_recurrentes',
+            'opportunites' => 'module_opportunites',
+        ];
+        if (isset($productGated[$page]) && is_file(__DIR__ . '/../vendor/autoload.php')) {
+            require_once __DIR__ . '/../vendor/autoload.php';
+            if (class_exists(\App\Services\ProductTier::class)
+                && !\App\Services\ProductTier::canUseFeature($pdo, $productGated[$page])) {
+                return false;
+            }
+        }
     } catch (Throwable $e) {
         // Table parametres_app peut ne pas exister
     }

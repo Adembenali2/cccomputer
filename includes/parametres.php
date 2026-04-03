@@ -29,6 +29,10 @@ const PARAMETRES_DEF = [
     'module_commercial' => ['label' => 'Espace commercial', 'desc' => 'Espace commercial (Chargé relation clients)', 'default' => '1', 'category' => 'modules'],
     'module_import_sftp' => ['label' => 'Import SFTP', 'desc' => 'Import automatique des relevés via SFTP', 'default' => '1', 'category' => 'imports'],
     'module_import_ionos' => ['label' => 'Import IONOS', 'desc' => 'Import automatique des relevés via IONOS', 'default' => '1', 'category' => 'imports'],
+    'module_relances_auto' => ['label' => 'Relances factures (automatique)', 'desc' => 'Envoi progressif des relances pour factures impayées après échéance (cron).', 'default' => '1', 'category' => 'business'],
+    'module_factures_recurrentes' => ['label' => 'Facturation récurrente', 'desc' => 'Génération automatique de factures périodiques (cron).', 'default' => '1', 'category' => 'business'],
+    'module_dashboard_business' => ['label' => 'Dashboard business', 'desc' => 'Vue dirigeant : KPI cash, impayés, SAV, stock.', 'default' => '1', 'category' => 'business'],
+    'module_opportunites' => ['label' => 'Opportunités commerciales', 'desc' => 'Suggestions upsell / contrats basées sur l’activité client.', 'default' => '1', 'category' => 'business'],
 ];
 
 /** Mapping page -> clé paramètre (pour authorize_page) */
@@ -47,6 +51,9 @@ const PAGE_TO_PARAM = [
     'maps' => 'module_maps',
     'profil' => 'module_profil',
     'commercial' => 'module_commercial',
+    'dashboard_business' => 'module_dashboard_business',
+    'factures_recurrentes' => 'module_factures_recurrentes',
+    'opportunites' => 'module_opportunites',
 ];
 
 /**
@@ -67,6 +74,34 @@ function getParametre(PDO $pdo, string $cle): bool
         // Table peut ne pas exister
     }
     return filter_var($default, FILTER_VALIDATE_BOOLEAN);
+}
+
+/**
+ * Valeur brute d'un paramètre (texte / nombre en chaîne). Pour product_tier, délais de relance, etc.
+ */
+function getParametreBrut(PDO $pdo, string $cle, string $default = ''): string
+{
+    try {
+        $stmt = $pdo->prepare("SELECT valeur FROM parametres_app WHERE cle = ? LIMIT 1");
+        $stmt->execute([$cle]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row !== false && array_key_exists('valeur', $row)) {
+            return (string)$row['valeur'];
+        }
+    } catch (PDOException $e) {
+        // Table peut ne pas exister
+    }
+    return $default;
+}
+
+/**
+ * Entier positif depuis parametres_app (ex. relance_jours_1).
+ */
+function getParametreInt(PDO $pdo, string $cle, int $default): int
+{
+    $raw = getParametreBrut($pdo, $cle, (string)$default);
+    $n = filter_var($raw, FILTER_VALIDATE_INT);
+    return ($n !== false && $n >= 0) ? $n : $default;
 }
 
 /**

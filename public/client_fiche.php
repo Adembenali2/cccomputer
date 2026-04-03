@@ -148,6 +148,28 @@ if (!$client) {
   exit;
 }
 
+$clientOpps = [];
+try {
+  if (is_file(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+    require_once __DIR__ . '/../includes/parametres.php';
+    if (class_exists(\App\Services\ProductTier::class)
+        && \App\Services\ProductTier::canUseFeature($pdo, 'module_opportunites')) {
+      $oppSt = $pdo->prepare("
+        SELECT id, rule_code, titre, detail, statut, created_at
+        FROM commercial_opportunites
+        WHERE id_client = ? AND statut IN ('nouveau', 'vu')
+        ORDER BY FIELD(statut, 'nouveau', 'vu'), created_at DESC
+        LIMIT 12
+      ");
+      $oppSt->execute([$id]);
+      $clientOpps = $oppSt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+  }
+} catch (Throwable $e) {
+  error_log('client_fiche opportunites: ' . $e->getMessage());
+}
+
 // --------- Enregistrer ----------
 $flash = ['type'=>null,'msg'=>null];
 $csrfToken = ensureCsrfToken();
@@ -285,7 +307,7 @@ if (($_GET['saved'] ?? '') === '1') {
   <link rel="stylesheet" href="/assets/css/main.css" />
   <link rel="stylesheet" href="/assets/css/client_fiche.css" />
 </head>
-<body class="page-client-fiche">
+<body class="page-client-fiche" data-csrf-token="<?= h($_SESSION['csrf_token'] ?? '') ?>">
   <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
   <div class="page-container">
@@ -327,6 +349,46 @@ if (($_GET['saved'] ?? '') === '1') {
         </div>
       </div>
     </div>
+
+    <?php if (!empty($clientOpps)): ?>
+    <div class="section-card" style="margin-bottom:1rem;border-left:4px solid #2563eb;">
+      <div class="section-title">Opportunités commerciales</div>
+      <p class="sub" style="margin:0 0 .75rem;">Suggestions automatiques — <a href="/public/opportunites.php">Voir toutes</a></p>
+      <ul style="margin:0;padding-left:1.1rem;line-height:1.5;">
+        <?php foreach ($clientOpps as $opp): ?>
+        <li style="margin-bottom:.6rem;">
+          <strong><?= h($opp['titre']) ?></strong>
+          <span class="muted" style="font-size:.85rem;"> (<?= h($opp['statut']) ?>)</span><br>
+          <?= h($opp['detail']) ?>
+          <div style="margin-top:.35rem;">
+            <button type="button" class="opp-fiche-btn" data-opp-id="<?= (int)$opp['id'] ?>" data-opp-st="vu">Vu</button>
+            <button type="button" class="opp-fiche-btn" data-opp-id="<?= (int)$opp['id'] ?>" data-opp-st="converti">Converti</button>
+          </div>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+    <script>
+    (function(){
+      var csrf = document.body.getAttribute('data-csrf-token') || '';
+      document.querySelectorAll('.opp-fiche-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var id = btn.getAttribute('data-opp-id');
+          var st = btn.getAttribute('data-opp-st');
+          fetch('/API/opportunites_statut.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+            body: JSON.stringify({ id: parseInt(id, 10), statut: st })
+          }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.ok) location.reload();
+            else alert(d.error || 'Erreur');
+          }).catch(function(){ alert('Erreur réseau'); });
+        });
+      });
+    })();
+    </script>
+    <?php endif; ?>
 
     <?php if ($flash['type']): ?>
       <div class="flash <?= $flash['type']==='error'?'flash-error':'flash-success' ?>" style="margin-bottom:.75rem;">

@@ -119,6 +119,17 @@ function require_login(): void {
     requireApiAuth();
 }
 
+/**
+ * Restreint l’API aux rôles métier listés (valeurs ENUM emploi).
+ */
+function apiRequireEmploi(array $allowed_roles): void
+{
+    $emploi = $_SESSION['emploi'] ?? '';
+    if (!in_array($emploi, $allowed_roles, true)) {
+        jsonResponse(['ok' => false, 'error' => 'Accès refusé'], 403);
+    }
+}
+
 
 /**
  * Vérifie le token CSRF pour les requêtes POST/PUT/DELETE
