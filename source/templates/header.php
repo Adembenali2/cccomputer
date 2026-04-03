@@ -52,6 +52,15 @@ if (!function_exists('h')) {
         function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
     }
 }
+if (!function_exists('csp_nonce')) {
+    function csp_nonce(): string {
+        $nonce = $GLOBALS['csp_nonce'] ?? '';
+        if ($nonce === '') {
+            return '';
+        }
+        return 'nonce="' . htmlspecialchars($nonce, ENT_QUOTES, 'UTF-8') . '"';
+    }
+}
 ?>
 <link rel="stylesheet" href="/assets/css/header.css">
 <link rel="stylesheet" href="/assets/css/form-helpers.css">
@@ -227,7 +236,7 @@ if (!function_exists('h')) {
 <div id="alert-container" class="alert-container" role="region" aria-label="Notifications"></div>
 <?php if (!empty($_SESSION['user_id'])): ?>
 <div id="inactivity-warning" style="display:none;position:fixed;bottom:20px;right:20px;background:#f59e0b;color:#fff;padding:12px 18px;border-radius:8px;font-size:0.9rem;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.2);"></div>
-<script nonce="<?= $GLOBALS['csp_nonce'] ?? '' ?>">
+<script <?= csp_nonce() ?>>
 (function() {
   // [Fonctionnalité B] Avertissement client avant déconnexion inactivité (aligné sur 30 min serveur)
   const INACTIVITY_LIMIT = 1800;
@@ -266,7 +275,7 @@ if (!function_exists('h')) {
 <?php endif; ?>
 <script src="/assets/js/form-helpers.js"></script>
 
-<script nonce="<?= $GLOBALS['csp_nonce'] ?? '' ?>">
+<script <?= csp_nonce() ?>>
 document.addEventListener('DOMContentLoaded', () => {
   // --- INDICATEUR PAGE ACTIVE ---
   const path = window.location.pathname.replace(/\/$/, '');

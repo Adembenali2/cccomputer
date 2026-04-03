@@ -288,7 +288,7 @@ $machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
             }
         }
     </style>
-    <script>
+    <script <?= csp_nonce() ?>>
         // CSRF token pour les requêtes AJAX
         window.CSRF_TOKEN = '<?= htmlspecialchars(ensureCsrfToken(), ENT_QUOTES, 'UTF-8') ?>';
         <?php
@@ -938,7 +938,7 @@ $machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
         <span class="support-badge"><?= htmlspecialchars($nbClients, ENT_QUOTES, 'UTF-8') ?></span>
     </button>
 
-    <script>
+    <script <?= csp_nonce() ?>>
     // Données clients fournies côté serveur
     const CLIENTS_DATA = <?= json_encode($clients, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
 
@@ -2243,7 +2243,7 @@ $machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
     })();
 
     </script>
-    <script>
+    <script <?= csp_nonce() ?>>
     (function () {
         var container = document.getElementById('alerts-container');
         if (!container) return;

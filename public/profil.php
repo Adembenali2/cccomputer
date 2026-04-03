@@ -2750,7 +2750,7 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
 </main>
 
 <?php if ($editing): ?>
-<script>
+<script <?= csp_nonce() ?>>
     // Scroll automatique vers le panneau d'édition
     (function() {
         const panel = document.getElementById('editPanel');
@@ -2761,7 +2761,7 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
 </script>
 <?php endif; ?>
 
-<script>
+<script <?= csp_nonce() ?>>
 
 /* Recherche intelligente en temps réel avec AJAX */
 (function() {

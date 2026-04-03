@@ -609,7 +609,7 @@ if (($_GET['saved'] ?? '') === '1') {
         <?php endforeach; ?>
       </ul>
     </div>
-    <script>
+    <script <?= csp_nonce() ?>>
     (function(){
       var csrf = document.body.getAttribute('data-csrf-token') || '';
       document.querySelectorAll('.opp-fiche-btn').forEach(function(btn){
@@ -796,7 +796,7 @@ if (($_GET['saved'] ?? '') === '1') {
     </form>
   </div>
 
-  <script>
+  <script <?= csp_nonce() ?>>
     // Sync adresse livraison si "identique"
     (function(){
       const cb = document.getElementById('livraison_identique');

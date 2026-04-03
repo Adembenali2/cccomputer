@@ -964,7 +964,7 @@ if (!empty($flash['type']) && ($flash['msg'] ?? '') !== '') {
 <!-- JS -->
 <script src="/assets/js/clients.js"></script>
 
-<script>
+<script <?= csp_nonce() ?>>
   // Données clients pour la recherche
   window.__CLIENTS_DATA__ = <?= json_encode($clientsList, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   

@@ -754,7 +754,7 @@ $pdfExportDateFinDefault = $today;
   </div>
 </div>
 
-<script>
+<script <?= csp_nonce() ?>>
 // Gestion modale
 (function(){
   const overlay   = document.getElementById('deliveryModalOverlay');

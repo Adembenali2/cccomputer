@@ -1353,7 +1353,7 @@ $sectionImages = [
 </div>
 
 <!-- Bibliothèque html5-qrcode via CDN avec fallback -->
-<script>
+<script <?= csp_nonce() ?>>
 (function() {
     'use strict';
     
@@ -1460,7 +1460,7 @@ $sectionImages = [
 })();
 </script>
 
-<script>
+<script <?= csp_nonce() ?>>
 // S'assurer que le DOM est chargé avant d'exécuter les scripts
 (function() {
     'use strict';

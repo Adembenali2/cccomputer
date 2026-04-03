@@ -143,7 +143,7 @@ try {
     </div>
 </main>
 
-<script>
+<script <?= csp_nonce() ?>>
 const CONFIG = {
     currentUserId: <?= $currentUserId ?>,
     currentUserName: <?= json_encode($currentUserName) ?>,
