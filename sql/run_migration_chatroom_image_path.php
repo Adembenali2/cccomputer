@@ -1,4 +1,5 @@
 <?php
+//test
 /**
  * Script de migration pour ajouter la colonne image_path à chatroom_messages
  * À exécuter une seule fois via navigateur ou ligne de commande
