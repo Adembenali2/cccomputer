@@ -64,8 +64,6 @@ if ($csrf === '') {
       <button type="submit" class="login-btn">Connexion</button>
     </form>
 
-    <a href="/public/forgot_password.php" class="forgot-link">Mot de passe oublié ?</a>
-
     <?php if ($loginIpBlocked): ?>
       <div class="login-error">Trop de tentatives. Réessayez dans 10 minutes.</div>
     <?php elseif ($success): ?>
