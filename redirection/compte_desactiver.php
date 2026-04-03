@@ -2,6 +2,7 @@
 // /redirection/compte_desactiver.php
 // Statut 403 : accès refusé (compte inactif)
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/security_headers.php';
 http_response_code(403);
 ?>
 <!DOCTYPE html>

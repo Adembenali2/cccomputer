@@ -3,6 +3,7 @@
 // Page d'attente après échec de connexion
 // 401 = non authentifié
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/security_headers.php';
 http_response_code(401);
 ?>
 <!DOCTYPE html>

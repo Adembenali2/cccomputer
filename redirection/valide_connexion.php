@@ -3,6 +3,7 @@
 // Page d'attente après succès de connexion
 // 200 OK suffit (pas d'en-têtes supplémentaires)
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/security_headers.php';
 ?>
 <!DOCTYPE html>
 <html lang="fr">

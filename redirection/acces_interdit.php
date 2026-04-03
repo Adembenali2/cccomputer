@@ -2,6 +2,7 @@
 // /redirection/acces_interdit.php
 // On renvoie un statut HTTP 403 (Accès interdit) AVANT tout output.
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/security_headers.php';
 http_response_code(403);
 ?>
 <!DOCTYPE html>
