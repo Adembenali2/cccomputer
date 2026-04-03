@@ -8,7 +8,6 @@ header_remove('X-Powered-By');
 if (empty($GLOBALS['csp_nonce'])) {
     $GLOBALS['csp_nonce'] = bin2hex(random_bytes(16));
 }
-$cspNonce = $GLOBALS['csp_nonce'];
 
 // Empêcher le MIME type sniffing
 header('X-Content-Type-Options: nosniff');
@@ -38,7 +37,7 @@ if ($isSecure) {
 // Content Security Policy stricte (nonce pour scripts inline)
 $csp = implode('; ', [
     "default-src 'self'",
-    "script-src 'self' 'nonce-{$cspNonce}' 'unsafe-inline'",
+    "script-src 'self' 'nonce-" . $GLOBALS['csp_nonce'] . "'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",

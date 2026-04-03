@@ -2,6 +2,7 @@
 // /redirection/erreur_connexion.php
 // Page d'attente après échec de connexion
 // 401 = non authentifié
+require_once __DIR__ . '/../includes/helpers.php';
 http_response_code(401);
 ?>
 <!DOCTYPE html>
@@ -51,7 +52,7 @@ http_response_code(401);
     @keyframes fadeIn { from { opacity: 0; transform: translateY(30px);} to { opacity: 1; transform: translateY(0);} }
   </style>
 
-  <script>
+  <script <?= csp_nonce() ?>>
     // Redirection après 3 secondes vers la page de connexion
     setTimeout(function () {
       window.location.href = "/public/login.php";
