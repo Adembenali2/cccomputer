@@ -580,6 +580,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         ?>
         <tr
           data-id="<?= (int)$liv['id'] ?>"
+          data-client-id="<?= (int)($liv['id_client'] ?? 0) ?>"
           data-search="<?= h($searchText) ?>"
           data-client="<?= h($clientNom) ?>"
           data-ref="<?= h($ref) ?>"
@@ -810,19 +811,25 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     });
   });
 
-  // Filtre rapide
+  // Filtre rapide (+ option client_id depuis la timeline / fiche)
   const q = document.getElementById('q');
   const clear = document.getElementById('clearQ');
+  const urlParamsLiv = new URLSearchParams(window.location.search);
+  const initialClientIdLiv = urlParamsLiv.get('client_id');
   if (q) {
     const lines = Array.from(document.querySelectorAll('table#tbl tbody tr'));
     function apply(){
       const v = (q.value || '').trim().toLowerCase();
       lines.forEach(tr => {
         const t = (tr.getAttribute('data-search') || '').toLowerCase();
-        tr.style.display = !v || t.includes(v) ? '' : 'none';
+        const okSearch = !v || t.includes(v);
+        const okClient = !initialClientIdLiv || (tr.getAttribute('data-client-id') || '') === initialClientIdLiv;
+        tr.style.display = okSearch && okClient ? '' : 'none';
       });
     }
+    if (initialClientIdLiv && !q.value) q.placeholder = 'Filtré client #' + initialClientIdLiv;
     q.addEventListener('input', apply);
+    apply();
     if (clear) {
       clear.addEventListener('click', () => {
         q.value = '';
@@ -832,26 +839,19 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     }
   }
 
-  // Ouvrir automatiquement la livraison si un paramètre ref est présent dans l'URL
   (function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const refParam = urlParams.get('ref');
+    const refParam = urlParamsLiv.get('ref');
     if (refParam) {
-      // Chercher la ligne correspondante
       const rows = document.querySelectorAll('table#tbl tbody tr[data-ref]');
       for (const tr of rows) {
+        if (tr.style.display === 'none') continue;
         const rowRef = tr.getAttribute('data-ref');
         if (rowRef && rowRef.trim() === refParam.trim()) {
-          // Simuler un clic sur la ligne pour ouvrir le modal
           setTimeout(() => {
             tr.click();
-            // Faire défiler jusqu'à la ligne
             tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Mettre en surbrillance la ligne
             tr.style.backgroundColor = '#fef3c7';
-            setTimeout(() => {
-              tr.style.backgroundColor = '';
-            }, 2000);
+            setTimeout(() => { tr.style.backgroundColor = ''; }, 2000);
           }, 100);
           break;
         }

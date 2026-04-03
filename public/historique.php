@@ -53,6 +53,7 @@ $rawDateFin = $_GET['date_fin'] ?? '';
 $rawCategory = $_GET['categorie'] ?? '';
 $rawAction = $_GET['action_filter'] ?? '';
 $rawPage = $_GET['page'] ?? '1';
+$filterClientHistorique = isset($_GET['client_id']) ? max(0, (int)$_GET['client_id']) : 0;
 
 $searchUser = sanitizeUserSearch(is_string($rawUser) ? $rawUser : '');
 $dateDebutFilter = parseDateFilter(is_string($rawDateDebut) ? $rawDateDebut : '');
@@ -126,6 +127,13 @@ if ($searchCategory !== '' && isset(AUDIT_CATEGORY_PATTERNS[$searchCategory])) {
 if ($searchAction !== '') {
     $whereConditions[] = "h.action = :action_filter";
     $params[':action_filter'] = $searchAction;
+}
+
+// Filtre client (convention « Client #id » dans details, alignée sur la timeline)
+if ($filterClientHistorique > 0) {
+    $whereConditions[] = '(h.details LIKE :hist_cli_like1 OR h.details LIKE :hist_cli_like2)';
+    $params[':hist_cli_like1'] = 'Client #' . $filterClientHistorique . ' %';
+    $params[':hist_cli_like2'] = 'Client #' . $filterClientHistorique . ' -%';
 }
 
 // Filtre "Historique import" (uniquement les imports)
@@ -216,7 +224,7 @@ try {
     $firstActivity = $historiqueCount > 0 ? ($historique[$historiqueCount - 1]['date_action'] ?? null) : null;
 }
 
-$filtersActive = ($searchUser !== '' || $searchDateDebut !== '' || $searchDateFin !== '' || $searchCategory !== '' || $searchAction !== '' || $importsOnly);
+$filtersActive = ($searchUser !== '' || $searchDateDebut !== '' || $searchDateFin !== '' || $searchCategory !== '' || $searchAction !== '' || $importsOnly || $filterClientHistorique > 0);
 
 // ====== Cache formatDetails ======
 static $detailsCache = ['clients' => [], 'sav' => [], 'livraisons' => [], 'utilisateurs' => []];

@@ -116,6 +116,20 @@ if ($clients === null) {
 }
 
 $nbClients = is_array($clients) ? count($clients) : 0;
+
+$opsSummary = null;
+if (is_file(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+    try {
+        $opsSummary = (new \App\Services\OperationsDashboardService($pdo))->getSummary();
+    } catch (Throwable $e) {
+        error_log('dashboard ops summary: ' . $e->getMessage());
+    }
+}
+$opsC = is_array($opsSummary) ? ($opsSummary['counts'] ?? []) : [];
+$stockLowLines = (int)($opsC['stock_lignes_basses'] ?? 0);
+$machinesStale = (int)($opsC['machines_releve_stale'] ?? 0);
+$machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -339,32 +353,32 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                     </svg>
                 </div>
                 <h3 class="card-title">Stock</h3>
-                <div class="card-multi-count" aria-label="Indicateurs stock">
-                    <div class="count-item" title="Catégories">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                            <line x1="8" y1="21" x2="16" y2="21"/>
-                            <line x1="12" y1="17" x2="12" y2="21"/>
-                        </svg>
-                        <span>3</span>
-                    </div>
-                    <div class="count-item" title="Références actives">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <circle cx="12" cy="12" r="10"/>
-                            <circle cx="12" cy="12" r="6"/>
-                            <circle cx="12" cy="12" r="2"/>
-                        </svg>
-                        <span>124</span>
-                    </div>
-                    <div class="count-item" title="Alertes stock">
+                <div class="card-multi-count" aria-label="Indicateurs stock et parc">
+                    <div class="count-item" title="Lignes papier/toner sous seuil (vues stock)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                             <polyline points="14,2 14,8 20,8"/>
                             <line x1="16" y1="13" x2="8" y2="13"/>
                             <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10,9 9,9 8,9"/>
                         </svg>
-                        <span>89</span>
+                        <span><?= htmlspecialchars((string)$stockLowLines, ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                    <div class="count-item" title="Machines attribuées avec relevé obsolète">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        <span><?= htmlspecialchars((string)$machinesStale, ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                    <div class="count-item" title="Photocopieurs sans client">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <line x1="19" y1="8" x2="19" y2="14"/>
+                            <line x1="22" y1="11" x2="16" y2="11"/>
+                        </svg>
+                        <span><?= htmlspecialchars((string)$machinesOrphan, ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
                 </div>
             </div>
@@ -392,6 +406,128 @@ $nbClients = is_array($clients) ? count($clients) : 0;
                 <p class="card-count"><?= htmlspecialchars($nHistorique, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
         </div>
+
+        <?php if (is_array($opsSummary)): ?>
+        <section class="dashboard-ops" aria-labelledby="dashboard-ops-title">
+            <div class="dashboard-ops-header">
+                <h3 id="dashboard-ops-title" class="dashboard-ops-title">Priorités opérationnelles</h3>
+                <p class="dashboard-ops-sub">Files à traiter, impayés critiques après échéance, derniers paiements et activité.</p>
+            </div>
+            <div class="dashboard-ops-grid">
+                <div class="dashboard-ops-col">
+                    <h4 class="dashboard-ops-h">SAV à traiter</h4>
+                    <p class="dashboard-ops-meta"><?= (int)($opsC['sav_ouvert'] ?? 0) ?> ouvert(s) / en cours</p>
+                    <?php if (empty($opsSummary['sav_queue'])): ?>
+                        <p class="dashboard-ops-empty">Aucun ticket en file.</p>
+                    <?php else: ?>
+                        <ul class="dashboard-ops-list">
+                            <?php foreach ($opsSummary['sav_queue'] as $row):
+                                $cid = (int)($row['id_client'] ?? 0);
+                                $ref = (string)($row['reference'] ?? '');
+                                $href = $cid > 0 ? '/public/sav.php?client_id=' . $cid . '&ref=' . rawurlencode($ref) : '/public/sav.php';
+                            ?>
+                            <li>
+                                <a href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') ?></a>
+                                <span class="dashboard-ops-li-sub"><?= htmlspecialchars((string)($row['client_nom'] ?? '—'), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($row['priorite'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($row['date_ouverture'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                    <a class="dashboard-ops-more" href="/public/sav.php">Tout le SAV →</a>
+                </div>
+                <div class="dashboard-ops-col">
+                    <h4 class="dashboard-ops-h">Livraisons</h4>
+                    <p class="dashboard-ops-meta"><?= (int)($opsC['livraisons_actives'] ?? 0) ?> planifiée(s) / en cours</p>
+                    <?php if (empty($opsSummary['livraisons_queue'])): ?>
+                        <p class="dashboard-ops-empty">Aucune livraison active en tête de liste.</p>
+                    <?php else: ?>
+                        <ul class="dashboard-ops-list">
+                            <?php foreach ($opsSummary['livraisons_queue'] as $row):
+                                $cid = (int)($row['id_client'] ?? 0);
+                                $ref = (string)($row['reference'] ?? '');
+                                $href = $cid > 0 ? '/public/livraison.php?client_id=' . $cid . '&ref=' . rawurlencode($ref) : '/public/livraison.php';
+                                $late = !empty($row['en_retard']);
+                            ?>
+                            <li>
+                                <a href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') ?></a>
+                                <?php if ($late): ?><span class="dashboard-ops-badge">retard</span><?php endif; ?>
+                                <span class="dashboard-ops-li-sub"><?= htmlspecialchars((string)($row['client_nom'] ?? '—'), ENT_QUOTES, 'UTF-8') ?> · prévue <?= htmlspecialchars((string)($row['date_prevue'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                    <a class="dashboard-ops-more" href="/public/livraison.php">Toutes les livraisons →</a>
+                </div>
+                <div class="dashboard-ops-col">
+                    <h4 class="dashboard-ops-h">Factures impayées en retard</h4>
+                    <p class="dashboard-ops-meta"><?= (int)($opsC['factures_impayees_retard'] ?? 0) ?> facture(s) (échéance 25 du mois, solde dû)</p>
+                    <?php if (empty($opsSummary['factures_critiques'])): ?>
+                        <p class="dashboard-ops-empty">Aucune facture en retard détectée sur la fenêtre récente.</p>
+                    <?php else: ?>
+                        <ul class="dashboard-ops-list">
+                            <?php foreach ($opsSummary['factures_critiques'] as $row):
+                                $fid = (int)($row['id'] ?? 0);
+                                $href = $fid > 0 ? '/public/view_facture.php?id=' . $fid : '/public/paiements.php';
+                            ?>
+                            <li>
+                                <a href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($row['numero'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
+                                <span class="dashboard-ops-li-sub"><?= htmlspecialchars((string)($row['client_nom'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · reste <?= htmlspecialchars(number_format((float)($row['reste'] ?? 0), 2, ',', ' '), ENT_QUOTES, 'UTF-8') ?> €</span>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                    <a class="dashboard-ops-more" href="/public/paiements.php">Paiements &amp; factures →</a>
+                </div>
+                <div class="dashboard-ops-col">
+                    <h4 class="dashboard-ops-h">Paiements récents</h4>
+                    <?php if (empty($opsSummary['paiements_recents'])): ?>
+                        <p class="dashboard-ops-empty">Aucun paiement récent.</p>
+                    <?php else: ?>
+                        <ul class="dashboard-ops-list">
+                            <?php foreach ($opsSummary['paiements_recents'] as $row): ?>
+                            <li>
+                                <span class="dashboard-ops-li-strong"><?= htmlspecialchars(number_format((float)($row['montant'] ?? 0), 2, ',', ' '), ENT_QUOTES, 'UTF-8') ?> €</span>
+                                <span class="dashboard-ops-li-sub"><?= htmlspecialchars((string)($row['date_paiement'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($row['mode_paiement'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($row['client_nom'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+                <div class="dashboard-ops-col dashboard-ops-col--wide">
+                    <h4 class="dashboard-ops-h">Activité récente (historique)</h4>
+                    <?php if (empty($opsSummary['historique_recents'])): ?>
+                        <p class="dashboard-ops-empty">Historique indisponible.</p>
+                    <?php else: ?>
+                        <ul class="dashboard-ops-list dashboard-ops-list--compact">
+                            <?php foreach ($opsSummary['historique_recents'] as $row):
+                                $det = (string)($row['details'] ?? '');
+                                if (function_exists('mb_substr')) {
+                                    $detShort = mb_substr($det, 0, 120);
+                                } else {
+                                    $detShort = strlen($det) > 120 ? substr($det, 0, 117) . '…' : $det;
+                                }
+                            ?>
+                            <li>
+                                <span class="dashboard-ops-li-strong"><?= htmlspecialchars((string)($row['action'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="dashboard-ops-li-sub"><?= htmlspecialchars((string)($row['date_action'] ?? ''), ENT_QUOTES, 'UTF-8') ?> — <?= htmlspecialchars($detShort, ENT_QUOTES, 'UTF-8') ?></span>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                    <a class="dashboard-ops-more" href="/public/historique.php">Historique complet →</a>
+                </div>
+                <div class="dashboard-ops-col">
+                    <h4 class="dashboard-ops-h">Parc &amp; stock</h4>
+                    <ul class="dashboard-ops-list">
+                        <li><span class="dashboard-ops-li-strong"><?= (int)$machinesOrphan ?></span> <span class="dashboard-ops-li-sub">photocopieur(s) sans client</span></li>
+                        <li><span class="dashboard-ops-li-strong"><?= (int)$machinesStale ?></span> <span class="dashboard-ops-li-sub">machine(s) avec relevé obsolète (vue compteurs)</span></li>
+                        <li><span class="dashboard-ops-li-strong"><?= (int)$stockLowLines ?></span> <span class="dashboard-ops-li-sub">ligne(s) stock bas (papier ≤5 / toner ≤3)</span></li>
+                    </ul>
+                    <a class="dashboard-ops-more" href="/public/stock.php">Stock →</a>
+                </div>
+            </div>
+        </section>
+        <?php endif; ?>
     </div>
 
     <!-- Popup Support -->

@@ -1319,3 +1319,114 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ====== Dashboard — priorités opérationnelles ====== */
+.dashboard-ops {
+  margin-top: 1.75rem;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+}
+.dashboard-ops-header {
+  margin-bottom: 1rem;
+}
+.dashboard-ops-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.dashboard-ops-sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.dashboard-ops-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+@media (max-width: 900px) {
+  .dashboard-ops-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.dashboard-ops-col {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  background: var(--bg-secondary);
+}
+.dashboard-ops-col--wide {
+  grid-column: 1 / -1;
+}
+.dashboard-ops-h {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.dashboard-ops-meta {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.dashboard-ops-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.88rem;
+}
+.dashboard-ops-list li {
+  margin-bottom: 0.55rem;
+  line-height: 1.35;
+}
+.dashboard-ops-list--compact li {
+  margin-bottom: 0.4rem;
+}
+.dashboard-ops-list a {
+  font-weight: 700;
+  color: var(--accent-secondary);
+  text-decoration: none;
+}
+.dashboard-ops-list a:hover {
+  text-decoration: underline;
+}
+.dashboard-ops-li-sub {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.dashboard-ops-li-strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.dashboard-ops-empty {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.dashboard-ops-more {
+  display: inline-block;
+  margin-top: 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent-secondary);
+  text-decoration: none;
+}
+.dashboard-ops-more:hover {
+  text-decoration: underline;
+}
+.dashboard-ops-badge {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  vertical-align: middle;
+}

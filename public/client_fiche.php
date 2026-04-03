@@ -170,6 +170,26 @@ try {
   error_log('client_fiche opportunites: ' . $e->getMessage());
 }
 
+$clientOverview = [
+  'printers' => [],
+  'sav' => [],
+  'livraisons' => [],
+  'factures' => [],
+  'paiements' => [],
+  'alerts' => [],
+  'counts' => ['sav_ouvert' => 0, 'livraisons_actives' => 0, 'impayees' => 0],
+];
+$clientTimeline = [];
+if (is_file(__DIR__ . '/../vendor/autoload.php')) {
+  require_once __DIR__ . '/../vendor/autoload.php';
+  try {
+    $clientOverview = (new \App\Services\ClientOverviewService($pdo))->getSnapshot($id);
+    $clientTimeline = (new \App\Services\ClientTimelineService($pdo))->fetchEvents($id, 60);
+  } catch (Throwable $e) {
+    error_log('client_fiche overview: ' . $e->getMessage());
+  }
+}
+
 // --------- Enregistrer ----------
 $flash = ['type'=>null,'msg'=>null];
 $csrfToken = ensureCsrfToken();
@@ -350,6 +370,190 @@ if (($_GET['saved'] ?? '') === '1') {
       </div>
     </div>
 
+    <section class="ccf-hub" id="ccf-top" aria-label="Vue d'ensemble client">
+      <div class="ccf-hub-head">
+        <h2 class="ccf-hub-title">Centre de contrôle</h2>
+        <p class="ccf-hub-sub">Synthèse parc, SAV, livraisons, facturation et activité récente.</p>
+      </div>
+
+      <div class="ccf-quick-actions" role="navigation" aria-label="Actions rapides">
+        <a class="ccf-btn" href="#ccf-parc">Parc machines</a>
+        <a class="ccf-btn" href="/public/sav.php?client_id=<?= (int)$id ?>">SAV du client</a>
+        <a class="ccf-btn" href="/public/livraison.php?client_id=<?= (int)$id ?>">Livraisons</a>
+        <a class="ccf-btn" href="/public/paiements.php">Paiements / factures</a>
+        <a class="ccf-btn" href="/public/historique.php?client_id=<?= (int)$id ?>">Historique (audit)</a>
+        <a class="ccf-btn ccf-btn--secondary" href="#client-form-edit">Modifier la fiche</a>
+      </div>
+
+      <div class="ccf-kpis" role="group" aria-label="Indicateurs">
+        <div class="ccf-kpi"><span class="ccf-kpi-val"><?= (int)($clientOverview['counts']['sav_ouvert'] ?? 0) ?></span><span class="ccf-kpi-lbl">SAV ouverts / en cours</span></div>
+        <div class="ccf-kpi"><span class="ccf-kpi-val"><?= (int)($clientOverview['counts']['livraisons_actives'] ?? 0) ?></span><span class="ccf-kpi-lbl">Livraisons actives</span></div>
+        <div class="ccf-kpi"><span class="ccf-kpi-val"><?= (int)($clientOverview['counts']['impayees'] ?? 0) ?></span><span class="ccf-kpi-lbl">Factures impayées (aperçu)</span></div>
+      </div>
+
+      <?php if (!empty($clientOverview['alerts'])): ?>
+      <div class="ccf-alerts" role="alert">
+        <?php foreach ($clientOverview['alerts'] as $a):
+          $lvl = $a['level'] ?? 'info';
+          $cls = 'ccf-alert--' . ($lvl === 'danger' ? 'danger' : ($lvl === 'warn' ? 'warn' : 'info'));
+        ?>
+        <div class="ccf-alert <?= h($cls) ?>"><?= h($a['message'] ?? '') ?></div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <div class="ccf-main-grid">
+        <div class="ccf-panel" id="ccf-parc">
+          <div class="ccf-panel-title">Parc imprimantes / photocopieurs</div>
+          <?php if (empty($clientOverview['printers'])): ?>
+            <p class="ccf-muted">Aucune machine rattachée. Attribution possible depuis le stock ou le détail machine.</p>
+          <?php else: ?>
+            <div class="ccf-table-wrap">
+              <table class="ccf-table">
+                <thead>
+                  <tr>
+                    <th>Modèle</th>
+                    <th>Série / MAC</th>
+                    <th>Dernier relevé</th>
+                    <th>Compteurs</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($clientOverview['printers'] as $p):
+                    $mac = (string)($p['mac_norm'] ?? '');
+                    $det = $mac !== '' ? '/public/photocopieurs_details.php?mac=' . rawurlencode($mac) : '#';
+                    $last = $p['last_ts'] ?? null;
+                    $lastLabel = $last ? date('d/m/Y H:i', strtotime((string)$last)) : '—';
+                    $stale = !empty($p['stale']);
+                    $model = trim((string)($p['Model'] ?? $p['Nom'] ?? '')) ?: '—';
+                    $bw = $p['TotalBW'] ?? '—';
+                    $co = $p['TotalColor'] ?? '—';
+                  ?>
+                  <tr class="<?= $stale ? 'ccf-row-warn' : '' ?>">
+                    <td><?= h($model) ?><?php if ($stale): ?> <span class="ccf-badge-warn" title="Relevé absent ou &gt; <?= (int)\App\Services\OperationalStatusService::STALE_RELEVE_DAYS ?> j.">!</span><?php endif; ?></td>
+                    <td><span class="ccf-mono"><?= h((string)($p['SerialNumber'] ?? '—')) ?></span><br><span class="ccf-mono ccf-small"><?= h($mac ?: '—') ?></span></td>
+                    <td><?= h($lastLabel) ?></td>
+                    <td class="ccf-small">NB <?= h((string)$bw) ?> / C <?= h((string)$co) ?></td>
+                    <td><a class="ccf-link" href="<?= h($det) ?>">Détail</a></td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
+        </div>
+
+        <div class="ccf-panel ccf-panel--timeline">
+          <div class="ccf-panel-title">Timeline</div>
+          <p class="ccf-muted ccf-small">Événements liés au client (relevés, SAV, livraisons, factures, paiements, audit « Client #<?= (int)$id ?> »).</p>
+          <?php if (empty($clientTimeline)): ?>
+            <p class="ccf-muted">Aucun événement indexé pour le moment.</p>
+          <?php else: ?>
+            <ol class="ccf-timeline">
+              <?php foreach ($clientTimeline as $ev):
+                $type = (string)($ev['type'] ?? '');
+                $typeLbl = [
+                  'releve' => 'Relevé',
+                  'releve_ancien' => 'Relevé arch.',
+                  'sav' => 'SAV',
+                  'livraison' => 'Livraison',
+                  'facture' => 'Facture',
+                  'paiement' => 'Paiement',
+                  'historique' => 'Audit',
+                ][$type] ?? $type;
+                $at = (string)($ev['at'] ?? '');
+                $atShow = $at !== '' ? date('d/m/Y H:i', strtotime($at)) : '—';
+                $href = (string)($ev['href'] ?? '');
+              ?>
+              <li class="ccf-tl-item">
+                <div class="ccf-tl-meta">
+                  <span class="ccf-tl-type"><?= h($typeLbl) ?></span>
+                  <time class="ccf-tl-time" datetime="<?= h($at) ?>"><?= h($atShow) ?></time>
+                </div>
+                <div class="ccf-tl-title"><?= h((string)($ev['title'] ?? '')) ?></div>
+                <div class="ccf-tl-sum"><?= h((string)($ev['summary'] ?? '')) ?></div>
+                <?php if ($href !== ''): ?><a class="ccf-link" href="<?= h($href) ?>">Ouvrir</a><?php endif; ?>
+              </li>
+              <?php endforeach; ?>
+            </ol>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <div class="ccf-four-grid">
+        <div class="ccf-panel">
+          <div class="ccf-panel-title">SAV récents</div>
+          <?php if (empty($clientOverview['sav'])): ?>
+            <p class="ccf-muted">Aucun ticket.</p>
+          <?php else: ?>
+            <ul class="ccf-list">
+              <?php foreach ($clientOverview['sav'] as $s):
+                $ref = (string)($s['reference'] ?? '');
+                $href = '/public/sav.php?client_id=' . (int)$id . '&ref=' . rawurlencode($ref);
+              ?>
+              <li>
+                <a class="ccf-link" href="<?= h($href) ?>"><?= h($ref) ?></a>
+                <span class="ccf-small"> — <?= h((string)($s['statut'] ?? '')) ?> · <?= h((string)($s['date_ouverture'] ?? '')) ?></span>
+              </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        </div>
+        <div class="ccf-panel">
+          <div class="ccf-panel-title">Livraisons récentes</div>
+          <?php if (empty($clientOverview['livraisons'])): ?>
+            <p class="ccf-muted">Aucune livraison.</p>
+          <?php else: ?>
+            <ul class="ccf-list">
+              <?php foreach ($clientOverview['livraisons'] as $l):
+                $ref = (string)($l['reference'] ?? '');
+                $href = '/public/livraison.php?client_id=' . (int)$id . '&ref=' . rawurlencode($ref);
+              ?>
+              <li>
+                <a class="ccf-link" href="<?= h($href) ?>"><?= h($ref) ?></a>
+                <span class="ccf-small"> — <?= h((string)($l['statut'] ?? '')) ?> · <?= h((string)($l['date_prevue'] ?? '')) ?></span>
+              </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        </div>
+        <div class="ccf-panel">
+          <div class="ccf-panel-title">Factures récentes</div>
+          <?php if (empty($clientOverview['factures'])): ?>
+            <p class="ccf-muted">Aucune facture.</p>
+          <?php else: ?>
+            <ul class="ccf-list">
+              <?php foreach ($clientOverview['factures'] as $f):
+                $fid = (int)($f['id'] ?? 0);
+                $hrefF = $fid > 0 ? '/public/view_facture.php?id=' . $fid : '/public/paiements.php';
+              ?>
+              <li>
+                <a class="ccf-link" href="<?= h($hrefF) ?>"><?= h((string)($f['numero'] ?? '')) ?></a>
+                <span class="ccf-small"> — <?= h(number_format((float)($f['montant_ttc'] ?? 0), 2, ',', ' ')) ?> € · <?= h((string)($f['paiement_label'] ?? '')) ?><?php if (!empty($f['en_retard'])): ?> <span class="ccf-badge-warn">retard</span><?php endif; ?></span>
+              </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        </div>
+        <div class="ccf-panel">
+          <div class="ccf-panel-title">Paiements récents</div>
+          <?php if (empty($clientOverview['paiements'])): ?>
+            <p class="ccf-muted">Aucun paiement.</p>
+          <?php else: ?>
+            <ul class="ccf-list">
+              <?php foreach ($clientOverview['paiements'] as $py): ?>
+              <li>
+                <span class="ccf-small"><?= h((string)($py['date_paiement'] ?? '')) ?> — <?= h(number_format((float)($py['montant'] ?? 0), 2, ',', ' ')) ?> € <?= h((string)($py['mode_paiement'] ?? '')) ?></span>
+                <?php if (!empty($py['facture_numero'])): ?><span class="ccf-small"> (fact. <?= h((string)$py['facture_numero']) ?>)</span><?php endif; ?>
+              </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        </div>
+      </div>
+    </section>
+
     <?php if (!empty($clientOpps)): ?>
     <div class="section-card" style="margin-bottom:1rem;border-left:4px solid #2563eb;">
       <div class="section-title">Opportunités commerciales</div>
@@ -396,7 +600,7 @@ if (($_GET['saved'] ?? '') === '1') {
       </div>
     <?php endif; ?>
 
-    <form class="standard-form client-form" method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" enctype="multipart/form-data" novalidate>
+    <form id="client-form-edit" class="standard-form client-form" method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" enctype="multipart/form-data" novalidate>
       <input type="hidden" name="action" value="save_client" />
       <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>" />
 
