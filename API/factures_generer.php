@@ -7,6 +7,10 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
+require_once __DIR__ . '/../includes/Validator.php';
+require_once __DIR__ . '/../includes/NotificationService.php';
+require_once __DIR__ . '/../includes/ErrorHandler.php';
+ErrorHandler::register();
 require_once __DIR__ . '/../vendor/autoload.php';
 
 // Vérifier que c'est une requête POST seulement si le fichier est appelé directement
@@ -20,6 +24,23 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
     requireCsrfToken();
 
     try {
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+
+        if (!$data || !is_array($data)) {
+            jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
+        }
+
+        Validator::requireFields(['factureClient', 'factureDate'], $data);
+        $clientId = Validator::int($data['factureClient'], 1);
+        $factureType = Validator::enum($data['factureType'] ?? 'Consommation', ['Consommation', 'Achat', 'Service']);
+        $factureDateRaw = trim((string) $data['factureDate']);
+        $factureDateDt = DateTime::createFromFormat('Y-m-d', $factureDateRaw);
+        if (!$factureDateDt || $factureDateDt->format('Y-m-d') !== $factureDateRaw) {
+            throw new InvalidArgumentException('Date de facture invalide');
+        }
+        $data['factureDate'] = $factureDateRaw;
+
         $pdo = getPdo();
 
         // Vérification basique des tables
@@ -35,19 +56,6 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
                 $msg = 'Table manquante: ' . $msg;
             }
             jsonResponse(['ok' => false, 'error' => $msg], 500);
-        }
-
-        // Récupération des données
-        $input = file_get_contents('php://input');
-        $data = json_decode($input, true);
-
-        if (!$data || empty($data['factureClient']) || empty($data['factureDate'])) {
-            jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
-        }
-
-        $clientId = (int)$data['factureClient'];
-        if ($clientId <= 0) {
-            jsonResponse(['ok' => false, 'error' => 'Veuillez sélectionner un client valide dans la liste.'], 400);
         }
 
         // Client
@@ -107,20 +115,15 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
         }
 
         // Calculs et Sauvegarde DB
-        // Déterminer le préfixe selon le type de facture
-        $factureType = $data['factureType'] ?? 'Consommation';
-        // Validation du type de facture (ENUM: 'Consommation','Achat','Service')
-        $validTypes = ['Consommation', 'Achat', 'Service'];
-        if (!in_array($factureType, $validTypes, true)) {
-            $factureType = 'Consommation'; // Valeur par défaut
-        }
+        // Type de facture déjà validé (Consommation / Achat / Service)
         $numeroFacture = generateFactureNumber($pdo, $factureType);
 
         $pdo->beginTransaction();
 
         try {
-            // Insertion Facture : statut initial = en_attente (puis en_cours le 25, en_retard après)
+            // Insertion Facture : statut envoyee à la génération (PDF joint) — suivi recouvrement côté créateur
             $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, :statut, :created_by)");
+            $creatorId = (int) currentUserId();
             $stmt->execute([
                 ':id_client' => $clientId,
                 ':numero' => $numeroFacture,
@@ -129,8 +132,8 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
                 ':montant_ht' => $montantHT,
                 ':tva' => $tva,
                 ':montant_ttc' => $montantTTC,
-                ':statut' => 'en_attente',
-                ':created_by' => currentUserId()
+                ':statut' => 'envoyee',
+                ':created_by' => $creatorId ?: null
             ]);
             $factureId = $pdo->lastInsertId();
 
@@ -223,6 +226,22 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
 
             $pdo->commit();
 
+            if ($creatorId > 0) {
+                NotificationService::create(
+                    $creatorId,
+                    'facture_impayee',
+                    'Facture générée — suivi recouvrement',
+                    sprintf(
+                        'La facture n° %s (%s) a été créée avec le statut « envoyée ». Montant TTC : %.2f €.',
+                        $numeroFacture,
+                        $client['raison_sociale'] ?? ('Client #' . $clientId),
+                        $montantTTC
+                    ),
+                    (int) $factureId,
+                    'facture'
+                );
+            }
+
             $details = sprintf('Facture #%s - Client %s - %.2f € TTC', $numeroFacture, $client['raison_sociale'] ?? $clientId, $montantTTC);
             enregistrerAction($pdo, currentUserId(), 'facture_generee', $details);
 
@@ -238,9 +257,10 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
             throw $e;
         }
 
+    } catch (InvalidArgumentException $e) {
+        jsonResponse(['ok' => false, 'error' => $e->getMessage()], 400);
     } catch (Throwable $e) {
-        error_log($e->getMessage());
-        jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
+        ErrorHandler::apiError($e);
     }
 }
 

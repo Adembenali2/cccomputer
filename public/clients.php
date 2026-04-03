@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('clients', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
+require_once __DIR__ . '/../includes/CacheHelper.php';
 
 // Récupérer PDO via la fonction centralisée
 $pdo = getPdo();
@@ -83,6 +84,7 @@ function isNoDefaultIdError(PDOException $e): bool {
 // Traitement du formulaire POST pour ajouter un client
 $flash = ['type' => null, 'msg' => null];
 $shouldOpenModal = false;
+$addClientFieldErrors = [];
 $CSRF = ensureCsrfToken();
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'add_client') {
@@ -116,53 +118,53 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         $adresse_livraison = $adresse;
     }
 
-    // Validation des champs obligatoires
-    $errors = [];
+    // Validation des champs obligatoires (clés = name des champs pour le JS)
+    $addClientFieldErrors = [];
     if ($raison_sociale === '') {
-        $errors[] = "La raison sociale est obligatoire.";
+        $addClientFieldErrors['raison_sociale'] = "La raison sociale est obligatoire.";
     }
     if ($adresse === '') {
-        $errors[] = "L'adresse est obligatoire.";
+        $addClientFieldErrors['adresse'] = "L'adresse est obligatoire.";
     }
     if ($code_postal === '') {
-        $errors[] = "Le code postal est obligatoire.";
+        $addClientFieldErrors['code_postal'] = "Le code postal est obligatoire.";
     }
     if ($ville === '') {
-        $errors[] = "La ville est obligatoire.";
+        $addClientFieldErrors['ville'] = "La ville est obligatoire.";
     }
     if ($nom_dirigeant === '') {
-        $errors[] = "Le nom du dirigeant est obligatoire.";
+        $addClientFieldErrors['nom_dirigeant'] = "Le nom du dirigeant est obligatoire.";
     }
     if ($prenom_dirigeant === '') {
-        $errors[] = "Le prénom du dirigeant est obligatoire.";
+        $addClientFieldErrors['prenom_dirigeant'] = "Le prénom du dirigeant est obligatoire.";
     }
     if ($telephone1 === '') {
-        $errors[] = "Le téléphone est obligatoire.";
+        $addClientFieldErrors['telephone1'] = "Le téléphone est obligatoire.";
     }
     if ($email === '') {
-        $errors[] = "L'email est obligatoire.";
+        $addClientFieldErrors['email'] = "L'email est obligatoire.";
     }
     if ($siret === '') {
-        $errors[] = "Le SIRET est obligatoire.";
+        $addClientFieldErrors['siret'] = "Le SIRET est obligatoire.";
     }
     if ($email && !validateEmailBool($email)) {
-        $errors[] = "L'email est invalide.";
+        $addClientFieldErrors['email'] = "L'email est invalide.";
     }
     if ($telephone1 && !validatePhone($telephone1)) {
-        $errors[] = "Le téléphone doit contenir au moins 6 caractères valides.";
+        $addClientFieldErrors['telephone1'] = "Le téléphone doit contenir au moins 6 caractères valides.";
     }
     if ($telephone2 && !validatePhone($telephone2)) {
-        $errors[] = "Le téléphone 2 doit contenir au moins 6 caractères valides.";
+        $addClientFieldErrors['telephone2'] = "Le téléphone 2 doit contenir au moins 6 caractères valides.";
     }
     if ($code_postal && !validatePostalCode($code_postal)) {
-        $errors[] = "Code postal invalide.";
+        $addClientFieldErrors['code_postal'] = "Code postal invalide.";
     }
     if ($siret && !validateSiret($siret)) {
-        $errors[] = "Le SIRET doit contenir 14 chiffres.";
+        $addClientFieldErrors['siret'] = "Le SIRET doit contenir 14 chiffres.";
     }
 
     // Insertion en base de données si validation OK
-    if (empty($errors) && !$shouldOpenModal) {
+    if (empty($addClientFieldErrors) && !$shouldOpenModal) {
         $numero = generateClientNumber($pdo);
         $sqlInsert = "INSERT INTO clients
             (numero_client, raison_sociale, adresse, code_postal, ville,
@@ -205,6 +207,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             enregistrerAction($pdo, $userId, 'client_ajoute', $details);
             $pdo->commit();
 
+            CacheHelper::invalidateTag('clients');
+
             header('Location: /public/clients.php?added=1');
             exit;
         } catch (PDOException $e) {
@@ -245,6 +249,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     enregistrerAction($pdo, currentUserId(), 'client_ajoute', $details);
                     
                     $pdo->commit();
+
+                    CacheHelper::invalidateTag('clients');
+
                     header('Location: /public/clients.php?added=1');
                     exit;
                 } catch (PDOException $eId) {
@@ -303,8 +310,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             }
         }
     } else {
-        $flash = ['type' => 'error', 'msg' => implode('<br>', array_map('htmlspecialchars', $errors))];
-        $shouldOpenModal = true;
+        if (!empty($addClientFieldErrors)) {
+            $flash = ['type' => 'error', 'msg' => 'Veuillez corriger les champs du formulaire.'];
+            $shouldOpenModal = true;
+        }
     }
 }
 
@@ -577,6 +586,18 @@ foreach ($rows as $row) {
 }
 $uniqueClientsCount = count($uniqueClients);
 $lastRefreshLabel = date('d/m/Y à H:i');
+
+$clientsJsAlert = null;
+if (!empty($flash['type']) && ($flash['msg'] ?? '') !== '') {
+    $clientsJsAlert = [
+        'type' => $flash['type'],
+        'msg' => html_entity_decode(
+            strip_tags(str_replace(['<br>', '<br/>', '<br />'], ' ', (string) $flash['msg'])),
+            ENT_QUOTES,
+            'UTF-8'
+        ),
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -824,7 +845,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     </div>
   <?php endif; ?>
 
-  <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form" novalidate>
+  <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" id="form-add-client" class="standard-form modal-form" novalidate>
     <input type="hidden" name="action" value="add_client">
     <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
 
@@ -885,7 +906,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
 
     <div class="modal-actions">
       <div class="modal-hint">* obligatoires — numéro client généré automatiquement (ex : C12345)</div>
-      <button type="submit" class="fiche-action-btn">Enregistrer</button>
+      <button type="submit" class="fiche-action-btn" id="btn-submit-add-client">Enregistrer</button>
     </div>
   </form>
 </div>
@@ -950,8 +971,40 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   // Ouverture auto si erreurs validation
   window.__CLIENT_MODAL_INIT_OPEN__ = <?= json_encode($shouldOpenModal) ?>;
   window.__ATTACH_MODAL_INIT_OPEN__ = <?= json_encode($shouldOpenAttachModal) ?>;
+  window.__ADD_CLIENT_FIELD_ERRORS__ = <?= json_encode($addClientFieldErrors ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
+  window.__CLIENTS_JS_ALERT__ = <?= json_encode($clientsJsAlert, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
 
   (function(){
+    const formAdd = document.getElementById('form-add-client');
+    const btnSubmitAdd = document.getElementById('btn-submit-add-client');
+    if (formAdd && btnSubmitAdd) {
+      formAdd.addEventListener('submit', function () {
+        if (typeof clearFieldErrors === 'function') clearFieldErrors(formAdd);
+        if (typeof setLoading === 'function') setLoading(btnSubmitAdd, true, 'Enregistrement…');
+      });
+    }
+
+    const alertPayload = window.__CLIENTS_JS_ALERT__;
+    if (alertPayload && alertPayload.msg && typeof showAlert === 'function') {
+      const t = alertPayload.type === 'success' ? 'success' : (alertPayload.type === 'error' ? 'error' : 'info');
+      showAlert(alertPayload.msg, t);
+      document.querySelectorAll('.page-container > .flash').forEach(function (el) {
+        el.style.display = 'none';
+      });
+      document.querySelectorAll('#clientModal .flash').forEach(function (el) {
+        el.style.display = 'none';
+      });
+    }
+
+    const fieldErr = window.__ADD_CLIENT_FIELD_ERRORS__;
+    if (fieldErr && typeof fieldErr === 'object' && formAdd && typeof showFieldError === 'function') {
+      Object.keys(fieldErr).forEach(function (name) {
+        const safe = String(name).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const el = formAdd.querySelector('[name="' + safe + '"]');
+        if (el) showFieldError(el, fieldErr[name]);
+      });
+    }
+
     const overlay = document.getElementById('clientModalOverlay');
     const modal = document.getElementById('clientModal');
     const openBtn = document.getElementById('btnAddClient');
@@ -972,7 +1025,11 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     }
 
     if (openBtn) {
-      openBtn.addEventListener('click', openModal);
+      openBtn.addEventListener('click', function () {
+        if (formAdd && typeof clearFieldErrors === 'function') clearFieldErrors(formAdd);
+        if (btnSubmitAdd && typeof setLoading === 'function') setLoading(btnSubmitAdd, false);
+        openModal();
+      });
     }
     if (closeBtn) {
       closeBtn.addEventListener('click', closeModal);

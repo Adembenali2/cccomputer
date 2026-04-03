@@ -2107,6 +2107,16 @@ if ($permissionTargetUserId > 0 && $isAdminOrDirigeant) {
             <div id="parametresList" style="display: none;"></div>
             <button type="button" id="btnRetryParametres" class="fiche-action-btn btn-primary" style="display: none; margin-top: 1rem;">Réessayer</button>
         </div>
+        <?php if (($currentUser['emploi'] ?? '') === 'Admin'): ?>
+        <div class="admin-cache-flush" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color, #e5e7eb);">
+            <h3 class="panel-subtitle" style="margin-bottom: 0.5rem;">Cache serveur (APCu)</h3>
+            <p style="font-size: 0.9rem; color: var(--text-secondary, #6b7280); margin-bottom: 0.75rem;">
+                Vide le cache mémoire partagé utilisé par PHP. Les listes clients et statistiques dashboard se reconstruiront à la prochaine requête.
+            </p>
+            <button type="button" class="fiche-action-btn" id="btnFlushApcuCache">Vider le cache</button>
+            <span id="flushApcuCacheMsg" style="margin-left: 0.75rem; font-size: 0.9rem;" role="status" aria-live="polite"></span>
+        </div>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -3150,6 +3160,38 @@ function scrollToSection(event, sectionId) {
                 });
             });
             if (sel.dataset) sel.dataset.prevValue = sel.value;
+        });
+    })();
+
+    (function() {
+        const btnFlush = document.getElementById('btnFlushApcuCache');
+        const msgFlush = document.getElementById('flushApcuCacheMsg');
+        if (!btnFlush || !msgFlush) return;
+        const csrfFlush = document.body.dataset.csrfToken || '';
+        btnFlush.addEventListener('click', function() {
+            if (!confirm('Vider tout le cache APCu sur ce serveur ?')) return;
+            msgFlush.textContent = 'Patience…';
+            msgFlush.style.color = '';
+            fetch('/API/cache_flush.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfFlush },
+                body: JSON.stringify({}),
+                credentials: 'include'
+            })
+                .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+                .then(function(res) {
+                    if (res.data && res.data.success) {
+                        msgFlush.textContent = res.data.message || 'Cache vidé';
+                        msgFlush.style.color = 'var(--success-color, #16a34a)';
+                    } else {
+                        msgFlush.textContent = (res.data && (res.data.message || res.data.error)) ? (res.data.message || res.data.error) : 'Échec';
+                        msgFlush.style.color = '#dc2626';
+                    }
+                })
+                .catch(function() {
+                    msgFlush.textContent = 'Erreur réseau';
+                    msgFlush.style.color = '#dc2626';
+                });
         });
     })();
 

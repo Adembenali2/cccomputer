@@ -94,7 +94,8 @@ function requireApiAuth(): void {
         $endpoint = $_SERVER['REQUEST_URI'] ?? 'unknown';
         $isPollingEndpoint = strpos($endpoint, 'chatroom_get_notifications') !== false 
                           || strpos($endpoint, 'messagerie_get_unread_count') !== false
-                          || strpos($endpoint, 'chatroom_get.php') !== false;
+                          || strpos($endpoint, 'chatroom_get.php') !== false
+                          || strpos($endpoint, 'notifications_get.php') !== false;
         
         // Logger seulement si ce n'est pas un endpoint de polling (pour éviter le spam)
         if (!$isPollingEndpoint && session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION)) {

@@ -201,6 +201,33 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                             }
 
                             $pdo->commit();
+
+                            if ($newStatut === 'planifiee' && $oldStatut !== 'planifiee') {
+                                $notifyLivreurId = (int) ($liv['id_livreur'] ?? 0);
+                                if ($notifyLivreurId > 0) {
+                                    require_once __DIR__ . '/../includes/NotificationService.php';
+                                    $datePrevLabel = !empty($datePrevue) ? (string) $datePrevue : '';
+                                    NotificationService::create(
+                                        $notifyLivreurId,
+                                        'livraison_planifiee',
+                                        'Livraison planifiée',
+                                        $datePrevLabel !== ''
+                                            ? sprintf(
+                                                'La livraison #%d (%s) est planifiée (date prévue : %s).',
+                                                $livraisonId,
+                                                $liv['reference'] ?? 'N/A',
+                                                $datePrevLabel
+                                            )
+                                            : sprintf(
+                                                'La livraison #%d (%s) est planifiée.',
+                                                $livraisonId,
+                                                $liv['reference'] ?? 'N/A'
+                                            ),
+                                        $livraisonId,
+                                        'livraison'
+                                    );
+                                }
+                            }
                         
                         // Enregistrer dans l'historique
                         try {
@@ -411,6 +438,8 @@ $filteredLivraisons = array_values(array_filter($rows, function($l) use ($view, 
 
 $listedCount      = count($filteredLivraisons);
 $lastRefreshLabel = date('d/m/Y à H:i');
+$pdfExportDateDebutDefault = date('Y-m-01');
+$pdfExportDateFinDefault = $today;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -507,6 +536,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       <a href="/public/livraison.php?view=archive"
          class="btn <?= $view === 'archive' ? 'btn-primary' : 'btn-outline' ?>">📦 Archive</a>
       <?php endif; ?>
+      <button type="button" class="btn btn-outline" id="btnOpenPdfExportLiv">Exporter PDF</button>
     </div>
   </div>
 
@@ -707,6 +737,23 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   </form>
 </div>
 
+<div id="pdfExportLivOverlay" class="popup-overlay" style="display:none;" aria-hidden="true"></div>
+<div id="pdfExportLivModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="pdfExportLivTitle" style="display:none;">
+  <div class="modal-header">
+    <h3 id="pdfExportLivTitle">Exporter le rapport livraisons (PDF)</h3>
+    <button type="button" id="btnClosePdfExportLiv" class="icon-btn icon-btn--close" aria-label="Fermer"><span aria-hidden="true">×</span></button>
+  </div>
+  <div class="standard-form modal-form" style="padding:1rem 1.25rem 1.25rem;">
+    <label for="pdfLivDateDebut">Date début</label>
+    <input type="date" id="pdfLivDateDebut" class="filter-input" value="<?= h($pdfExportDateDebutDefault) ?>" required>
+    <label for="pdfLivDateFin" style="margin-top:0.75rem;">Date fin</label>
+    <input type="date" id="pdfLivDateFin" class="filter-input" value="<?= h($pdfExportDateFinDefault) ?>" required>
+    <div class="modal-actions" style="margin-top:1rem;">
+      <button type="button" class="btn btn-primary" id="btnPdfLivGo">Télécharger le PDF</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // Gestion modale
 (function(){
@@ -862,6 +909,62 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       }
     }
   })();
+
+  (function() {
+    const lid = urlParamsLiv.get('livraison_id');
+    if (!lid || !/^\d+$/.test(lid)) return;
+    const trLiv = document.querySelector('table#tbl tbody tr[data-id="' + lid + '"]');
+    if (trLiv) {
+      setTimeout(() => {
+        trLiv.click();
+        trLiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        trLiv.style.backgroundColor = '#fef3c7';
+        setTimeout(() => { trLiv.style.backgroundColor = ''; }, 2000);
+      }, 120);
+    }
+  })();
+
+  const pdfLivOv = document.getElementById('pdfExportLivOverlay');
+  const pdfLivMd = document.getElementById('pdfExportLivModal');
+  const btnOpenPdfLiv = document.getElementById('btnOpenPdfExportLiv');
+  const btnClosePdfLiv = document.getElementById('btnClosePdfExportLiv');
+  const btnPdfLivGo = document.getElementById('btnPdfLivGo');
+  const pdfLivD1 = document.getElementById('pdfLivDateDebut');
+  const pdfLivD2 = document.getElementById('pdfLivDateFin');
+  function openPdfLivModal() {
+    if (!pdfLivOv || !pdfLivMd) return;
+    document.body.classList.add('modal-open');
+    pdfLivOv.style.display = 'block';
+    pdfLivOv.setAttribute('aria-hidden', 'false');
+    pdfLivMd.style.display = 'block';
+  }
+  function closePdfLivModal() {
+    if (!pdfLivOv || !pdfLivMd) return;
+    document.body.classList.remove('modal-open');
+    pdfLivOv.style.display = 'none';
+    pdfLivOv.setAttribute('aria-hidden', 'true');
+    pdfLivMd.style.display = 'none';
+  }
+  if (btnOpenPdfLiv) btnOpenPdfLiv.addEventListener('click', openPdfLivModal);
+  if (btnClosePdfLiv) btnClosePdfLiv.addEventListener('click', closePdfLivModal);
+  if (pdfLivOv) pdfLivOv.addEventListener('click', closePdfLivModal);
+  if (btnPdfLivGo && pdfLivD1 && pdfLivD2) {
+    btnPdfLivGo.addEventListener('click', function () {
+      const d1 = pdfLivD1.value;
+      const d2 = pdfLivD2.value;
+      if (!d1 || !d2) {
+        alert('Veuillez renseigner les deux dates.');
+        return;
+      }
+      if (d1 > d2) {
+        alert('La date de début doit être antérieure ou égale à la date de fin.');
+        return;
+      }
+      const url = '/API/export_pdf_livraisons.php?date_debut=' + encodeURIComponent(d1) + '&date_fin=' + encodeURIComponent(d2);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      closePdfLivModal();
+    });
+  }
 })();
 </script>
 </body>

@@ -13,6 +13,9 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
+require_once __DIR__ . '/../includes/Validator.php';
+require_once __DIR__ . '/../includes/ErrorHandler.php';
+ErrorHandler::register();
 
 // Vérifier que c'est une requête POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -36,36 +39,37 @@ if ($csrfSession === '' || $csrfToken === '' || !hash_equals($csrfSession, $csrf
 }
 
 try {
+    $hasFactureId = isset($inputData['facture_id']) && trim((string) ($inputData['facture_id'] ?? '')) !== '';
+    $hasClientId = isset($inputData['id_client']) && trim((string) ($inputData['id_client'] ?? '')) !== '';
+    if (!$hasFactureId && !$hasClientId) {
+        apiFail('Champ requis manquant : facture_id ou id_client', 400);
+    }
+    if ($hasFactureId) {
+        $factureId = Validator::int($inputData['facture_id'], 1);
+    } else {
+        Validator::int($inputData['id_client'], 1);
+        apiFail('Facture non sélectionnée', 400);
+    }
+
+    $montant = Validator::float($inputData['montant'] ?? 0, 0.0);
+    if ($montant <= 0) {
+        throw new InvalidArgumentException('Le montant doit être supérieur à 0');
+    }
+
+    $modePaiement = Validator::enum(trim((string) ($inputData['mode_paiement'] ?? '')), ['virement', 'cheque', 'especes', 'carte', 'prelevement']);
+
+    $datePaiement = trim((string) ($inputData['date_paiement'] ?? date('Y-m-d')));
+    $datePaiementDt = DateTime::createFromFormat('Y-m-d', $datePaiement);
+    if (!$datePaiementDt || $datePaiementDt->format('Y-m-d') !== $datePaiement) {
+        throw new InvalidArgumentException('Date de paiement invalide');
+    }
+
     $pdo = getPdo();
     $userId = currentUserId();
-    
-    // Récupération des données (FormData ou JSON)
-    $factureId = !empty($inputData['facture_id']) ? (int)$inputData['facture_id'] : null;
-    $montant = !empty($inputData['montant']) ? (float)$inputData['montant'] : 0;
-    $datePaiement = !empty($inputData['date_paiement']) ? trim((string)$inputData['date_paiement']) : date('Y-m-d');
-    $modePaiement = !empty($inputData['mode_paiement']) ? trim((string)$inputData['mode_paiement']) : '';
-    $reference = !empty($inputData['reference']) ? trim((string)$inputData['reference']) : null;
-    $commentaire = !empty($inputData['commentaire']) ? trim((string)$inputData['commentaire']) : null;
-    
-    // Validation
-    if (!$factureId) {
-        jsonResponse(['ok' => false, 'error' => 'Facture non sélectionnée'], 400);
-    }
-    
-    if ($montant <= 0) {
-        jsonResponse(['ok' => false, 'error' => 'Le montant doit être supérieur à 0'], 400);
-    }
-    
-    $modesValides = ['virement', 'cb', 'cheque', 'especes', 'autre'];
-    if (!in_array($modePaiement, $modesValides, true)) {
-        jsonResponse(['ok' => false, 'error' => 'Mode de paiement invalide'], 400);
-    }
-    
-    // Validation de la date
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $datePaiement)) {
-        jsonResponse(['ok' => false, 'error' => 'Date de paiement invalide'], 400);
-    }
-    
+
+    $reference = !empty($inputData['reference']) ? trim((string) $inputData['reference']) : null;
+    $commentaire = !empty($inputData['commentaire']) ? trim((string) $inputData['commentaire']) : null;
+
     // Générer automatiquement la référence si elle n'est pas fournie
     if (empty($reference)) {
         // Extraire année, mois, jour de la date de paiement
@@ -275,11 +279,9 @@ try {
         throw $e;
     }
     
-} catch (PDOException $e) {
-    error_log('paiements_enregistrer.php SQL error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+} catch (InvalidArgumentException $e) {
+    jsonResponse(['ok' => false, 'error' => $e->getMessage()], 400);
 } catch (Throwable $e) {
-    error_log('paiements_enregistrer.php error: ' . $e->getMessage());
-    jsonResponse(['ok' => false, 'error' => 'Erreur inattendue: ' . $e->getMessage()], 500);
+    ErrorHandler::apiError($e);
 }
 

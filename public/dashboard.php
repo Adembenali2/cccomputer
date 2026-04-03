@@ -140,6 +140,7 @@ $machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
     <title>Dashboard - CCComputer</title>
     <link rel="icon" type="image/png" href="/assets/logos/logo.png">
     <link rel="stylesheet" href="/assets/css/dashboard.css" />
+    <link rel="stylesheet" href="/assets/css/dashboard_alerts.css" />
     <script src="/assets/js/api.js"></script>
     <script src="/assets/js/dashboard.js" defer></script>
     <style>
@@ -301,6 +302,8 @@ $machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
 </head>
 <body class="page-dashboard">
     <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+
+    <div id="alerts-container" class="alerts-section" aria-live="polite" aria-busy="false"></div>
 
     <div class="dashboard-wrapper">
         <div class="dashboard-header">
@@ -2239,6 +2242,72 @@ $machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
         setInterval(pollImportStatus, POLL_STATUS_INTERVAL_MS);
     })();
 
+    </script>
+    <script>
+    (function () {
+        var container = document.getElementById('alerts-container');
+        if (!container) return;
+
+        var ALERTS_INTERVAL_MS = 60000;
+
+        function renderAlerts(alerts) {
+            container.innerHTML = '';
+            container.setAttribute('aria-busy', 'false');
+            if (!alerts || !alerts.length) return;
+
+            var title = document.createElement('h2');
+            title.className = 'alerts-section-title';
+            title.textContent = 'Alertes';
+            container.appendChild(title);
+
+            alerts.forEach(function (a) {
+                var type = a.type || 'info';
+                if (type !== 'danger' && type !== 'warning' && type !== 'info') type = 'info';
+                var div = document.createElement('div');
+                div.className = 'dashboard-alert alert-' + type;
+                div.setAttribute('role', 'link');
+                div.tabIndex = 0;
+                var link = a.link || '#';
+                div.addEventListener('click', function () { window.location.href = link; });
+                div.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        window.location.href = link;
+                    }
+                });
+                var icon = document.createElement('span');
+                icon.className = 'dashboard-alert-icon';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.textContent = a.icon || '';
+                var msg = document.createElement('span');
+                msg.className = 'dashboard-alert-message';
+                msg.textContent = a.message || '';
+                div.appendChild(icon);
+                div.appendChild(msg);
+                container.appendChild(div);
+            });
+        }
+
+        function loadAlerts() {
+            container.setAttribute('aria-busy', 'true');
+            fetch('/API/dashboard_get_alerts.php', { credentials: 'same-origin', cache: 'no-store' })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data && data.success && Array.isArray(data.alerts)) {
+                        renderAlerts(data.alerts);
+                    } else {
+                        renderAlerts([]);
+                    }
+                })
+                .catch(function () {
+                    container.innerHTML = '';
+                    container.setAttribute('aria-busy', 'false');
+                });
+        }
+
+        loadAlerts();
+        setInterval(loadAlerts, ALERTS_INTERVAL_MS);
+    })();
     </script>
 </body>
 </html>

@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/CacheHelper.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
 try {
@@ -18,8 +19,13 @@ try {
         error_log('factures_liste updateStatuts: ' . $e->getMessage());
     }
 
-    // Récupérer toutes les factures avec les informations du client et le total payé (paiements validés)
-    $sql = "
+    $statutService = new \App\Services\FactureStatutService($pdo);
+
+    // Ajouter les informations de diagnostic si demandé
+    $includeDiagnostic = isset($_GET['diagnostic']) && $_GET['diagnostic'] === '1';
+
+    if ($includeDiagnostic) {
+        $sql = "
         SELECT 
             f.id,
             f.numero,
@@ -49,53 +55,126 @@ try {
         LEFT JOIN clients c ON f.id_client = c.id
         ORDER BY f.date_facture DESC, f.created_at DESC
     ";
-    
-    $stmt = $pdo->query($sql);
-    $factures = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Formater les données pour le frontend
-    $statutService = new \App\Services\FactureStatutService($pdo);
-    $formatted = [];
-    foreach ($factures as $facture) {
-        $statut = $facture['statut'] ?? '';
-        $emailEnvoye = (bool)($facture['email_envoye'] ?? false);
-        $totalPaye = (float)($facture['total_paye'] ?? 0);
-        $montantTtc = (float)($facture['montant_ttc'] ?? 0);
-        $estPayee = $totalPaye >= $montantTtc && $montantTtc > 0;
-        // Envoyé : si email envoyé ou statut envoyee ou facture payée
-        $statutEnvoi = ($emailEnvoye || in_array($statut, ['envoyee'], true) || $estPayee) ? 'envoye' : 'non_envoye';
-        // Échéance : annulée si annulee, payé si total payé >= TTC (calculé), sinon en_attente/en_cours/en_retard selon date
-        $statutEcheance = ($statut === 'annulee') ? 'annulee' : ($estPayee ? 'payee' : $statutService->computeStatutFromDate($facture['date_facture']));
+        $stmt = $pdo->query($sql);
+        $factures = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formatted = [];
+        foreach ($factures as $facture) {
+            $statut = $facture['statut'] ?? '';
+            $emailEnvoye = (bool) ($facture['email_envoye'] ?? false);
+            $totalPaye = (float) ($facture['total_paye'] ?? 0);
+            $montantTtc = (float) ($facture['montant_ttc'] ?? 0);
+            $estPayee = $totalPaye >= $montantTtc && $montantTtc > 0;
+            $statutEnvoi = ($emailEnvoye || in_array($statut, ['envoyee'], true) || $estPayee) ? 'envoye' : 'non_envoye';
+            $statutEcheance = ($statut === 'annulee') ? 'annulee' : ($estPayee ? 'payee' : $statutService->computeStatutFromDate($facture['date_facture']));
 
-        $formatted[] = [
-            'id' => (int)$facture['id'],
-            'numero' => $facture['numero'],
-            'date_facture' => $facture['date_facture'],
-            'date_facture_formatted' => date('d/m/Y', strtotime($facture['date_facture'])),
-            'date_debut_periode' => $facture['date_debut_periode'] ?? null,
-            'date_fin_periode' => $facture['date_fin_periode'] ?? null,
-            'type' => $facture['type'],
-            'montant_ht' => (float)$facture['montant_ht'],
-            'tva' => (float)$facture['tva'],
-            'montant_ttc' => (float)$facture['montant_ttc'],
-            'statut' => $statut,
-            'statut_envoi' => $statutEnvoi,
-            'statut_echeance' => $statutEcheance,
-            'pdf_path' => $facture['pdf_path'],
-            'client_id' => (int)$facture['client_id'],
-            'client_nom' => $facture['client_nom'] ?? 'Client inconnu',
-            'client_code' => $facture['client_code'] ?? '',
-            'client_nom_dirigeant' => $facture['client_nom_dirigeant'] ?? '',
-            'client_prenom_dirigeant' => $facture['client_prenom_dirigeant'] ?? '',
-            'client_email' => $facture['client_email'] ?? '',
-            'email_envoye' => $emailEnvoye,
-            'date_envoi_email' => $facture['date_envoi_email'] ?? null,
-            'created_at' => $facture['created_at']
-        ];
+            $formatted[] = [
+                'id' => (int) $facture['id'],
+                'numero' => $facture['numero'],
+                'date_facture' => $facture['date_facture'],
+                'date_facture_formatted' => date('d/m/Y', strtotime($facture['date_facture'])),
+                'date_debut_periode' => $facture['date_debut_periode'] ?? null,
+                'date_fin_periode' => $facture['date_fin_periode'] ?? null,
+                'type' => $facture['type'],
+                'montant_ht' => (float) $facture['montant_ht'],
+                'tva' => (float) $facture['tva'],
+                'montant_ttc' => (float) $facture['montant_ttc'],
+                'statut' => $statut,
+                'statut_envoi' => $statutEnvoi,
+                'statut_echeance' => $statutEcheance,
+                'pdf_path' => $facture['pdf_path'],
+                'client_id' => (int) $facture['client_id'],
+                'client_nom' => $facture['client_nom'] ?? 'Client inconnu',
+                'client_code' => $facture['client_code'] ?? '',
+                'client_nom_dirigeant' => $facture['client_nom_dirigeant'] ?? '',
+                'client_prenom_dirigeant' => $facture['client_prenom_dirigeant'] ?? '',
+                'client_email' => $facture['client_email'] ?? '',
+                'email_envoye' => $emailEnvoye,
+                'date_envoi_email' => $facture['date_envoi_email'] ?? null,
+                'created_at' => $facture['created_at'],
+            ];
+        }
+    } else {
+        $bucketTs = (int) (floor(time() / 120) * 120);
+        $bucket = date('Y-m-d-H-i', $bucketTs);
+        $cacheKey = 'factures:list:' . (int) currentUserId() . ':' . $bucket;
+
+        $formatted = CacheHelper::remember(
+            $cacheKey,
+            function () use ($pdo, $statutService) {
+                $sql = "
+        SELECT 
+            f.id,
+            f.numero,
+            f.date_facture,
+            f.date_debut_periode,
+            f.date_fin_periode,
+            f.type,
+            f.montant_ht,
+            f.tva,
+            f.montant_ttc,
+            f.statut,
+            f.pdf_path,
+            f.created_at,
+            c.id as client_id,
+            c.raison_sociale as client_nom,
+            c.numero_client as client_code,
+            c.nom_dirigeant as client_nom_dirigeant,
+            c.prenom_dirigeant as client_prenom_dirigeant,
+            c.email as client_email,
+            f.email_envoye,
+            f.date_envoi_email,
+            COALESCE((
+                SELECT SUM(p.montant) FROM paiements p 
+                WHERE p.id_facture = f.id AND p.statut = 'recu'
+            ), 0) as total_paye
+        FROM factures f
+        LEFT JOIN clients c ON f.id_client = c.id
+        ORDER BY f.date_facture DESC, f.created_at DESC
+    ";
+                $stmt = $pdo->query($sql);
+                $factures = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $out = [];
+                foreach ($factures as $facture) {
+                    $statut = $facture['statut'] ?? '';
+                    $emailEnvoye = (bool) ($facture['email_envoye'] ?? false);
+                    $totalPaye = (float) ($facture['total_paye'] ?? 0);
+                    $montantTtc = (float) ($facture['montant_ttc'] ?? 0);
+                    $estPayee = $totalPaye >= $montantTtc && $montantTtc > 0;
+                    $statutEnvoi = ($emailEnvoye || in_array($statut, ['envoyee'], true) || $estPayee) ? 'envoye' : 'non_envoye';
+                    $statutEcheance = ($statut === 'annulee') ? 'annulee' : ($estPayee ? 'payee' : $statutService->computeStatutFromDate($facture['date_facture']));
+
+                    $out[] = [
+                        'id' => (int) $facture['id'],
+                        'numero' => $facture['numero'],
+                        'date_facture' => $facture['date_facture'],
+                        'date_facture_formatted' => date('d/m/Y', strtotime($facture['date_facture'])),
+                        'date_debut_periode' => $facture['date_debut_periode'] ?? null,
+                        'date_fin_periode' => $facture['date_fin_periode'] ?? null,
+                        'type' => $facture['type'],
+                        'montant_ht' => (float) $facture['montant_ht'],
+                        'tva' => (float) $facture['tva'],
+                        'montant_ttc' => (float) $facture['montant_ttc'],
+                        'statut' => $statut,
+                        'statut_envoi' => $statutEnvoi,
+                        'statut_echeance' => $statutEcheance,
+                        'pdf_path' => $facture['pdf_path'],
+                        'client_id' => (int) $facture['client_id'],
+                        'client_nom' => $facture['client_nom'] ?? 'Client inconnu',
+                        'client_code' => $facture['client_code'] ?? '',
+                        'client_nom_dirigeant' => $facture['client_nom_dirigeant'] ?? '',
+                        'client_prenom_dirigeant' => $facture['client_prenom_dirigeant'] ?? '',
+                        'client_email' => $facture['client_email'] ?? '',
+                        'email_envoye' => $emailEnvoye,
+                        'date_envoi_email' => $facture['date_envoi_email'] ?? null,
+                        'created_at' => $facture['created_at'],
+                    ];
+                }
+
+                return $out;
+            },
+            120
+        );
     }
-    
-    // Ajouter les informations de diagnostic si demandé
-    $includeDiagnostic = isset($_GET['diagnostic']) && $_GET['diagnostic'] === '1';
     
     $response = [
         'ok' => true,

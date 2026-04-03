@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/auth_role.php';
 authorize_page('sav', []); // Accessible à tous les utilisateurs connectés
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
+require_once __DIR__ . '/../includes/NotificationService.php';
 
 // Récupérer PDO via la fonction centralisée
 $pdo = getPdo();
@@ -96,6 +97,33 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                 } elseif (!canEditSav($sav)) {
                     $flash = ['type'=>'error','msg'=>"Vous n'êtes pas autorisé à modifier ce SAV."];
                 } else {
+                    $oldTechId = (int) ($sav['id_technicien'] ?? 0);
+                    $newTechId = $oldTechId;
+                    $isAdminOrDirigeantPost = in_array(currentUserRole(), ['Admin', 'Dirigeant'], true);
+                    if ($isAdminOrDirigeantPost && array_key_exists('id_technicien', $_POST)) {
+                        $rawTech = $_POST['id_technicien'];
+                        $parsed = ($rawTech === '' || $rawTech === null) ? 0 : (int) $rawTech;
+                        if ($parsed < 0) {
+                            $parsed = 0;
+                        }
+                        if ($parsed > 0) {
+                            $chkTech = $pdo->prepare(
+                                "SELECT id FROM utilisateurs WHERE id = ? AND Emploi = 'Technicien' AND statut = 'actif' LIMIT 1"
+                            );
+                            $chkTech->execute([$parsed]);
+                            if (!$chkTech->fetch()) {
+                                $flash = ['type' => 'error', 'msg' => 'Technicien invalide ou inactif.'];
+                            } else {
+                                $newTechId = $parsed;
+                            }
+                        } else {
+                            $newTechId = 0;
+                        }
+                    }
+
+                    if ($flash['type']) {
+                        // Erreur validation technicien
+                    } else {
                     // Gestion automatique de la date_fermeture :
                     // - si on passe en "resolu" et qu'il n'y a pas encore de date_fermeture -> on met aujourd'hui
                     // - si on passe en autre statut (même depuis "resolu") et qu'il y a une date_fermeture -> on la met à NULL
@@ -119,6 +147,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                         require_once __DIR__ . '/../includes/api_helpers.php';
                         $hasNotesTechniques = columnExists($pdo, 'sav', 'notes_techniques');
                         
+                        $idTechnicienBind = $newTechId > 0 ? $newTechId : null;
+
                         if ($hasNotesTechniques) {
                             $upd = $pdo->prepare("
                                 UPDATE sav
@@ -126,6 +156,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                     priorite = :priorite,
                                     type_panne = :type_panne,
                                     date_fermeture = :date_fermeture,
+                                    id_technicien = :id_technicien,
                                     notes_techniques = :commentaire_technicien,
                                     updated_at = NOW()
                                 WHERE id = :id
@@ -135,6 +166,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 ':priorite'    => $newPriorite,
                                 ':type_panne'  => !empty($newTypePanne) ? $newTypePanne : null,
                                 ':date_fermeture' => $dateFermeture,
+                                ':id_technicien' => $idTechnicienBind,
                                 ':commentaire_technicien' => !empty($newCommentaireTechnicien) ? $newCommentaireTechnicien : null,
                                 ':id'          => $savId,
                             ]);
@@ -146,6 +178,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                     priorite = :priorite,
                                     type_panne = :type_panne,
                                     date_fermeture = :date_fermeture,
+                                    id_technicien = :id_technicien,
                                     updated_at = NOW()
                                 WHERE id = :id
                             ");
@@ -154,11 +187,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 ':priorite'    => $newPriorite,
                                 ':type_panne'  => !empty($newTypePanne) ? $newTypePanne : null,
                                 ':date_fermeture' => $dateFermeture,
+                                ':id_technicien' => $idTechnicienBind,
                                 ':id'          => $savId,
                             ]);
                         }
 
                         $pdo->commit();
+
+                        if ($newTechId > 0 && $newTechId !== $oldTechId) {
+                            NotificationService::create(
+                                $newTechId,
+                                'sav_assigne',
+                                'SAV assigné',
+                                sprintf(
+                                    'Le SAV n°%d (%s) vous a été assigné.',
+                                    $savId,
+                                    $sav['reference'] ?? 'N/A'
+                                ),
+                                $savId,
+                                'sav'
+                            );
+                        }
                         
                         // Enregistrer dans l'historique
                         try {
@@ -249,6 +298,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                         $pdo->rollBack();
                         error_log('sav.php UPDATE error: ' . $e->getMessage());
                         $flash = ['type'=>'error','msg'=>"Erreur SQL : impossible de mettre à jour le SAV."];
+                    }
                     }
                 }
             } catch (PDOException $e) {
@@ -358,6 +408,18 @@ $view = $_GET['view'] ?? 'toutes';
 $currentRole = currentUserRole();
 $isAdminOrDirigeant = in_array($currentRole, ['Admin', 'Dirigeant'], true);
 
+$savTechniciensOptions = [];
+if ($isAdminOrDirigeant) {
+    try {
+        $tq = $pdo->query(
+            "SELECT id, nom, prenom FROM utilisateurs WHERE Emploi = 'Technicien' AND statut = 'actif' ORDER BY nom, prenom"
+        );
+        $savTechniciensOptions = $tq->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        error_log('sav.php techniciens list: ' . $e->getMessage());
+    }
+}
+
 // Vérifier les permissions pour l'archive
 if ($view === 'archive' && !$isAdminOrDirigeant) {
     $flash = ['type' => 'error', 'msg' => "Vous n'êtes pas autorisé à accéder à l'archive."];
@@ -412,6 +474,8 @@ $filteredSav = array_values(array_filter($rows, function($s) use ($view, $today)
 
 $listedCount      = count($filteredSav);
 $lastRefreshLabel = date('d/m/Y à H:i');
+$pdfExportDateDebutDefault = date('Y-m-01');
+$pdfExportDateFinDefault = $today;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -508,6 +572,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       <a href="/public/sav.php?view=archive"
          class="btn <?= $view === 'archive' ? 'btn-primary' : 'btn-outline' ?>">📦 Archive</a>
       <?php endif; ?>
+      <button type="button" class="btn btn-outline" id="btnOpenPdfExportSav">Exporter PDF</button>
     </div>
   </div>
 
@@ -611,6 +676,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         ?>
         <tr
           data-id="<?= (int)$s['id'] ?>"
+          data-id-technicien="<?= (int)($s['id_technicien'] ?? 0) ?>"
           data-client-id="<?= (int)($s['id_client'] ?? 0) ?>"
           data-search="<?= h($searchText) ?>"
           data-client="<?= h($clientNom) ?>"
@@ -718,8 +784,22 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           </div>
         </div>
 
+        <?php if ($isAdminOrDirigeant): ?>
+        <label for="modal_id_technicien">Technicien assigné</label>
+        <select name="id_technicien" id="modal_id_technicien">
+          <option value="">— Non assigné —</option>
+          <?php foreach ($savTechniciensOptions as $tech): ?>
+            <?php
+              $tid = (int) ($tech['id'] ?? 0);
+              $tlabel = trim(($tech['prenom'] ?? '') . ' ' . ($tech['nom'] ?? ''));
+            ?>
+            <option value="<?= $tid ?>"><?= h($tlabel !== '' ? $tlabel : ('#' . $tid)) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <?php else: ?>
         <label>Technicien</label>
         <input type="text" id="modal_technicien" readonly>
+        <?php endif; ?>
 
         <label>Priorité</label>
         <select name="priorite" id="modal_priorite">
@@ -765,6 +845,23 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   </form>
 </div>
 
+<div id="pdfExportSavOverlay" class="popup-overlay" style="display:none;" aria-hidden="true"></div>
+<div id="pdfExportSavModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="pdfExportSavTitle" style="display:none;">
+  <div class="modal-header">
+    <h3 id="pdfExportSavTitle">Exporter le rapport SAV (PDF)</h3>
+    <button type="button" id="btnClosePdfExportSav" class="icon-btn icon-btn--close" aria-label="Fermer"><span aria-hidden="true">×</span></button>
+  </div>
+  <div class="standard-form modal-form" style="padding:1rem 1.25rem 1.25rem;">
+    <label for="pdfSavDateDebut">Date début</label>
+    <input type="date" id="pdfSavDateDebut" class="filter-input" value="<?= h($pdfExportDateDebutDefault) ?>" required>
+    <label for="pdfSavDateFin" style="margin-top:0.75rem;">Date fin</label>
+    <input type="date" id="pdfSavDateFin" class="filter-input" value="<?= h($pdfExportDateFinDefault) ?>" required>
+    <div class="modal-actions" style="margin-top:1rem;">
+      <button type="button" class="btn btn-primary" id="btnPdfSavGo">Télécharger le PDF</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // Gestion modale
 (function(){
@@ -779,6 +876,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   const inputOuverture    = document.getElementById('modal_ouverture');
   const inputFermeture    = document.getElementById('modal_fermeture');
   const inputTechnicien   = document.getElementById('modal_technicien');
+  const selectTechnicienId = document.getElementById('modal_id_technicien');
   const selectPriorite   = document.getElementById('modal_priorite');
   const selectStatut   = document.getElementById('modal_statut');
   const selectTypePanne = document.getElementById('modal_type_panne');
@@ -817,6 +915,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       const ouverture    = tr.getAttribute('data-ouverture') || '';
       const fermeture    = tr.getAttribute('data-fermeture') || '';
       const technicien   = tr.getAttribute('data-technicien') || '';
+      const idTechnicien = tr.getAttribute('data-id-technicien') || '';
       const priorite    = tr.getAttribute('data-priorite') || 'normale';
       const statut    = tr.getAttribute('data-statut') || 'ouvert';
       const typePanne = tr.getAttribute('data-type-panne') || '';
@@ -830,7 +929,12 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       if (inputDescription) inputDescription.value = description;
       if (inputOuverture)  inputOuverture.value = ouverture;
       if (inputFermeture)  inputFermeture.value = fermeture;
-      if (inputTechnicien) inputTechnicien.value = technicien;
+      if (selectTechnicienId) {
+        selectTechnicienId.value = idTechnicien && String(idTechnicien) !== '0' ? String(idTechnicien) : '';
+        selectTechnicienId.disabled = !canEdit;
+      } else if (inputTechnicien) {
+        inputTechnicien.value = technicien;
+      }
       if (textareaCom)  textareaCom.value = com;
       if (textareaComTech) {
         textareaComTech.value = comTech;
@@ -922,6 +1026,62 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       }
     }
   })();
+
+  (function() {
+    const savIdParam = urlParamsSav.get('sav_id');
+    if (!savIdParam || !/^\d+$/.test(savIdParam)) return;
+    const trOpen = document.querySelector('table#tbl tbody tr[data-id="' + savIdParam + '"]');
+    if (trOpen) {
+      setTimeout(() => {
+        trOpen.click();
+        trOpen.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        trOpen.style.backgroundColor = '#fef3c7';
+        setTimeout(() => { trOpen.style.backgroundColor = ''; }, 2000);
+      }, 120);
+    }
+  })();
+
+  const pdfOv = document.getElementById('pdfExportSavOverlay');
+  const pdfMd = document.getElementById('pdfExportSavModal');
+  const btnOpenPdf = document.getElementById('btnOpenPdfExportSav');
+  const btnClosePdf = document.getElementById('btnClosePdfExportSav');
+  const btnPdfGo = document.getElementById('btnPdfSavGo');
+  const pdfD1 = document.getElementById('pdfSavDateDebut');
+  const pdfD2 = document.getElementById('pdfSavDateFin');
+  function openPdfSavModal() {
+    if (!pdfOv || !pdfMd) return;
+    document.body.classList.add('modal-open');
+    pdfOv.style.display = 'block';
+    pdfOv.setAttribute('aria-hidden', 'false');
+    pdfMd.style.display = 'block';
+  }
+  function closePdfSavModal() {
+    if (!pdfOv || !pdfMd) return;
+    document.body.classList.remove('modal-open');
+    pdfOv.style.display = 'none';
+    pdfOv.setAttribute('aria-hidden', 'true');
+    pdfMd.style.display = 'none';
+  }
+  if (btnOpenPdf) btnOpenPdf.addEventListener('click', openPdfSavModal);
+  if (btnClosePdf) btnClosePdf.addEventListener('click', closePdfSavModal);
+  if (pdfOv) pdfOv.addEventListener('click', closePdfSavModal);
+  if (btnPdfGo && pdfD1 && pdfD2) {
+    btnPdfGo.addEventListener('click', function () {
+      const d1 = pdfD1.value;
+      const d2 = pdfD2.value;
+      if (!d1 || !d2) {
+        alert('Veuillez renseigner les deux dates.');
+        return;
+      }
+      if (d1 > d2) {
+        alert('La date de début doit être antérieure ou égale à la date de fin.');
+        return;
+      }
+      const url = '/API/export_pdf_sav.php?date_debut=' + encodeURIComponent(d1) + '&date_fin=' + encodeURIComponent(d2);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      closePdfSavModal();
+    });
+  }
 })();
 </script>
 </body>

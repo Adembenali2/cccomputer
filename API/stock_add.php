@@ -1,6 +1,7 @@
 <?php
 // /api/stock_add.php
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/Validator.php';
 
 initApi();
 requireApiAuth();
@@ -234,8 +235,27 @@ if (!is_array($data)) {
     jsonResponse(['ok' => false, 'error' => 'JSON invalide'], 400);
 }
 
-$type    = $data['type'] ?? '';
-$payload = $data['data'] ?? [];
+try {
+    $type = Validator::enum($data['type'] ?? '', ['papier', 'toner', 'lcd', 'pc']);
+    $payload = $data['data'] ?? [];
+    if (!is_array($payload)) {
+        jsonResponse(['ok' => false, 'error' => 'JSON invalide'], 400);
+    }
+    Validator::requireFields(['qty_delta'], $payload);
+    $qtyDeltaValidated = Validator::int($payload['qty_delta']);
+    if ($qtyDeltaValidated === 0) {
+        throw new InvalidArgumentException('qty_delta doit être différent de 0');
+    }
+    if (array_key_exists('reason', $payload)) {
+        $reasonRaw = trim((string) $payload['reason']);
+        if ($reasonRaw === '') {
+            apiFail('Champ requis manquant : reason', 400);
+        }
+        Validator::string($payload['reason'], 100);
+    }
+} catch (InvalidArgumentException $e) {
+    jsonResponse(['ok' => false, 'error' => $e->getMessage()], 400);
+}
 
 $apiResponse = ['ok' => true];
 
@@ -671,6 +691,11 @@ try {
     }
     error_log('stock_add.php PDO error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur de base de données'], 500);
+} catch (InvalidArgumentException $e) {
+    if (isset($pdo) && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    jsonResponse(['ok' => false, 'error' => $e->getMessage()], 400);
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();

@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../includes/session_config.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/historique.php';
+require_once __DIR__ . '/../../includes/rate_limiter.php';
 
 // Récupérer PDO via la fonction centralisée
 $pdo = getPdo();
@@ -20,6 +21,14 @@ $pass  = $_POST['password'] ?? '';
 
 if ($email === '' || $pass === '') {
     $_SESSION['login_error'] = "Veuillez remplir tous les champs.";
+    header('Location: /public/login.php');
+    exit;
+}
+
+// Protection brute-force : limite les tentatives par IP (checkRateLimit incrémente si la limite n’est pas encore atteinte)
+$loginRateKey = 'login_attempt_' . md5($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+if (!checkRateLimit($loginRateKey, 5, 600)) {
+    $_SESSION['login_error'] = 'Trop de tentatives. Réessayez dans 10 minutes.';
     header('Location: /public/login.php');
     exit;
 }
@@ -48,6 +57,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 // Vérifs
 if (!$user || !password_verify($pass, $user['password'])) {
+    // Protection brute-force : échec = cette requête a déjà été comptée par checkRateLimit ci-dessus
     enregistrerAction($pdo, null, 'connexion_echouee', 'Tentative échouée');
     $_SESSION['login_error'] = "Adresse e-mail ou mot de passe incorrect.";
     header('Location: /public/login.php');
@@ -89,6 +99,18 @@ try {
 }
 
 enregistrerAction($pdo, (int)$user['id'], 'connexion_reussie', 'Connexion réussie');
+
+// Protection brute-force : réinitialiser le compteur (même clé / stockage que rate_limiter.php)
+$rlKey = preg_replace('/[^a-zA-Z0-9_]/', '_', $loginRateKey);
+$rlCacheKey = 'ratelimit_' . $rlKey;
+if (function_exists('apcu_delete')) {
+    @apcu_delete($rlCacheKey);
+}
+$rlCacheDir = __DIR__ . '/../../cache/ratelimit';
+$rlCacheFile = $rlCacheDir . '/' . md5($rlKey) . '.json';
+if (is_file($rlCacheFile)) {
+    @unlink($rlCacheFile);
+}
 
 // Redirection directe vers le dashboard
 header('Location: /public/dashboard.php');
