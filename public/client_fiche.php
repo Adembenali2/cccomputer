@@ -170,7 +170,7 @@ try {
   error_log('client_fiche opportunites: ' . $e->getMessage());
 }
 
-$clientOverview = [
+$ccfOverviewDefault = [
   'printers' => [],
   'sav' => [],
   'livraisons' => [],
@@ -179,6 +179,7 @@ $clientOverview = [
   'alerts' => [],
   'counts' => ['sav_ouvert' => 0, 'livraisons_actives' => 0, 'impayees' => 0],
 ];
+$clientOverview = $ccfOverviewDefault;
 $clientTimeline = [];
 if (is_file(__DIR__ . '/../vendor/autoload.php')) {
   require_once __DIR__ . '/../vendor/autoload.php';
@@ -187,8 +188,27 @@ if (is_file(__DIR__ . '/../vendor/autoload.php')) {
     $clientTimeline = (new \App\Services\ClientTimelineService($pdo))->fetchEvents($id, 60);
   } catch (Throwable $e) {
     error_log('client_fiche overview: ' . $e->getMessage());
+    $clientOverview = $ccfOverviewDefault;
+    $clientTimeline = [];
   }
 }
+if (!is_array($clientTimeline)) {
+  $clientTimeline = [];
+}
+if (!is_array($clientOverview)) {
+  $clientOverview = $ccfOverviewDefault;
+}
+foreach (['printers', 'sav', 'livraisons', 'factures', 'paiements', 'alerts'] as $ccfKey) {
+  if (!isset($clientOverview[$ccfKey]) || !is_array($clientOverview[$ccfKey])) {
+    $clientOverview[$ccfKey] = [];
+  }
+}
+if (!isset($clientOverview['counts']) || !is_array($clientOverview['counts'])) {
+  $clientOverview['counts'] = $ccfOverviewDefault['counts'];
+} else {
+  $clientOverview['counts'] = array_merge($ccfOverviewDefault['counts'], $clientOverview['counts']);
+}
+unset($ccfOverviewDefault);
 
 // --------- Enregistrer ----------
 $flash = ['type'=>null,'msg'=>null];
@@ -388,17 +408,24 @@ if (($_GET['saved'] ?? '') === '1') {
       <div class="ccf-kpis" role="group" aria-label="Indicateurs">
         <div class="ccf-kpi"><span class="ccf-kpi-val"><?= (int)($clientOverview['counts']['sav_ouvert'] ?? 0) ?></span><span class="ccf-kpi-lbl">SAV ouverts / en cours</span></div>
         <div class="ccf-kpi"><span class="ccf-kpi-val"><?= (int)($clientOverview['counts']['livraisons_actives'] ?? 0) ?></span><span class="ccf-kpi-lbl">Livraisons actives</span></div>
-        <div class="ccf-kpi"><span class="ccf-kpi-val"><?= (int)($clientOverview['counts']['impayees'] ?? 0) ?></span><span class="ccf-kpi-lbl">Factures impayées (aperçu)</span></div>
+        <div class="ccf-kpi"><span class="ccf-kpi-val"><?= (int)($clientOverview['counts']['impayees'] ?? 0) ?></span><span class="ccf-kpi-lbl">Factures impayées</span><span class="ccf-kpi-hint">total en base (hors annulées)</span></div>
       </div>
 
       <?php if (!empty($clientOverview['alerts'])): ?>
-      <div class="ccf-alerts" role="alert">
+      <div class="ccf-alerts" role="region" aria-label="Points d'attention">
+        <div class="ccf-alerts-heading">Points d'attention</div>
+        <ul class="ccf-alert-list">
         <?php foreach ($clientOverview['alerts'] as $a):
           $lvl = $a['level'] ?? 'info';
           $cls = 'ccf-alert--' . ($lvl === 'danger' ? 'danger' : ($lvl === 'warn' ? 'warn' : 'info'));
+          $ttl = trim((string)($a['title'] ?? ''));
         ?>
-        <div class="ccf-alert <?= h($cls) ?>"><?= h($a['message'] ?? '') ?></div>
+          <li class="ccf-alert <?= h($cls) ?>">
+            <?php if ($ttl !== ''): ?><strong class="ccf-alert-kicker"><?= h($ttl) ?></strong><?php endif; ?>
+            <span class="ccf-alert-text"><?= h($a['message'] ?? '') ?></span>
+          </li>
         <?php endforeach; ?>
+        </ul>
       </div>
       <?php endif; ?>
 
@@ -406,7 +433,8 @@ if (($_GET['saved'] ?? '') === '1') {
         <div class="ccf-panel" id="ccf-parc">
           <div class="ccf-panel-title">Parc imprimantes / photocopieurs</div>
           <?php if (empty($clientOverview['printers'])): ?>
-            <p class="ccf-muted">Aucune machine rattachée. Attribution possible depuis le stock ou le détail machine.</p>
+            <p class="ccf-empty-title">Aucune machine sur ce client</p>
+            <p class="ccf-muted">Rattachez une photocopieuse depuis le <a class="ccf-link" href="/public/stock.php">stock</a> ou la fiche d’une machine.</p>
           <?php else: ?>
             <div class="ccf-table-wrap">
               <table class="ccf-table">
@@ -421,10 +449,11 @@ if (($_GET['saved'] ?? '') === '1') {
                 </thead>
                 <tbody>
                   <?php foreach ($clientOverview['printers'] as $p):
-                    $mac = (string)($p['mac_norm'] ?? '');
-                    $det = $mac !== '' ? '/public/photocopieurs_details.php?mac=' . rawurlencode($mac) : '#';
+                    $mac = trim((string)($p['mac_norm'] ?? ''));
+                    $det = $mac !== '' ? '/public/photocopieurs_details.php?mac=' . rawurlencode($mac) : '';
                     $last = $p['last_ts'] ?? null;
-                    $lastLabel = $last ? date('d/m/Y H:i', strtotime((string)$last)) : '—';
+                    $lastTs = $last !== null && $last !== '' ? strtotime((string)$last) : false;
+                    $lastLabel = $lastTs !== false ? date('d/m/Y H:i', $lastTs) : '—';
                     $stale = !empty($p['stale']);
                     $model = trim((string)($p['Model'] ?? $p['Nom'] ?? '')) ?: '—';
                     $bw = $p['TotalBW'] ?? '—';
@@ -435,7 +464,7 @@ if (($_GET['saved'] ?? '') === '1') {
                     <td><span class="ccf-mono"><?= h((string)($p['SerialNumber'] ?? '—')) ?></span><br><span class="ccf-mono ccf-small"><?= h($mac ?: '—') ?></span></td>
                     <td><?= h($lastLabel) ?></td>
                     <td class="ccf-small">NB <?= h((string)$bw) ?> / C <?= h((string)$co) ?></td>
-                    <td><a class="ccf-link" href="<?= h($det) ?>">Détail</a></td>
+                    <td><?php if ($det !== ''): ?><a class="ccf-link" href="<?= h($det) ?>">Détail machine</a><?php else: ?><span class="ccf-muted" title="MAC manquant en base">—</span><?php endif; ?></td>
                   </tr>
                   <?php endforeach; ?>
                 </tbody>
@@ -448,7 +477,8 @@ if (($_GET['saved'] ?? '') === '1') {
           <div class="ccf-panel-title">Timeline</div>
           <p class="ccf-muted ccf-small">Événements liés au client (relevés, SAV, livraisons, factures, paiements, audit « Client #<?= (int)$id ?> »).</p>
           <?php if (empty($clientTimeline)): ?>
-            <p class="ccf-muted">Aucun événement indexé pour le moment.</p>
+            <p class="ccf-empty-title">Aucun événement dans la timeline</p>
+            <p class="ccf-muted">Dès qu’il y a des relevés, SAV, livraisons, factures ou paiements, ils apparaîtront ici. L’audit n’affiche que les lignes contenant « Client #<?= (int)$id ?> ».</p>
           <?php else: ?>
             <ol class="ccf-timeline">
               <?php foreach ($clientTimeline as $ev):
@@ -463,13 +493,14 @@ if (($_GET['saved'] ?? '') === '1') {
                   'historique' => 'Audit',
                 ][$type] ?? $type;
                 $at = (string)($ev['at'] ?? '');
-                $atShow = $at !== '' ? date('d/m/Y H:i', strtotime($at)) : '—';
+                $atParsed = $at !== '' ? strtotime($at) : false;
+                $atShow = $atParsed !== false ? date('d/m/Y H:i', $atParsed) : '—';
                 $href = (string)($ev['href'] ?? '');
               ?>
               <li class="ccf-tl-item">
                 <div class="ccf-tl-meta">
                   <span class="ccf-tl-type"><?= h($typeLbl) ?></span>
-                  <time class="ccf-tl-time" datetime="<?= h($at) ?>"><?= h($atShow) ?></time>
+                  <time class="ccf-tl-time"<?= ($atParsed !== false) ? ' datetime="' . h($at) . '"' : '' ?>><?= h($atShow) ?></time>
                 </div>
                 <div class="ccf-tl-title"><?= h((string)($ev['title'] ?? '')) ?></div>
                 <div class="ccf-tl-sum"><?= h((string)($ev['summary'] ?? '')) ?></div>
@@ -485,7 +516,8 @@ if (($_GET['saved'] ?? '') === '1') {
         <div class="ccf-panel">
           <div class="ccf-panel-title">SAV récents</div>
           <?php if (empty($clientOverview['sav'])): ?>
-            <p class="ccf-muted">Aucun ticket.</p>
+            <p class="ccf-empty-title">Aucun SAV récent</p>
+            <p class="ccf-muted">Les 6 derniers tickets liés à ce client s’affichent ici.</p>
           <?php else: ?>
             <ul class="ccf-list">
               <?php foreach ($clientOverview['sav'] as $s):
@@ -503,7 +535,8 @@ if (($_GET['saved'] ?? '') === '1') {
         <div class="ccf-panel">
           <div class="ccf-panel-title">Livraisons récentes</div>
           <?php if (empty($clientOverview['livraisons'])): ?>
-            <p class="ccf-muted">Aucune livraison.</p>
+            <p class="ccf-empty-title">Aucune livraison pour ce client</p>
+            <p class="ccf-muted">Les livraisons sans client renseigné en base n’apparaissent pas sur cette fiche.</p>
           <?php else: ?>
             <ul class="ccf-list">
               <?php foreach ($clientOverview['livraisons'] as $l):
@@ -521,7 +554,8 @@ if (($_GET['saved'] ?? '') === '1') {
         <div class="ccf-panel">
           <div class="ccf-panel-title">Factures récentes</div>
           <?php if (empty($clientOverview['factures'])): ?>
-            <p class="ccf-muted">Aucune facture.</p>
+            <p class="ccf-empty-title">Aucune facture récente</p>
+            <p class="ccf-muted">Les 8 dernières factures (hors annulées) sont listées ici. Le compteur d’impayés ci-dessus couvre <em>toutes</em> les factures du client.</p>
           <?php else: ?>
             <ul class="ccf-list">
               <?php foreach ($clientOverview['factures'] as $f):
@@ -539,7 +573,8 @@ if (($_GET['saved'] ?? '') === '1') {
         <div class="ccf-panel">
           <div class="ccf-panel-title">Paiements récents</div>
           <?php if (empty($clientOverview['paiements'])): ?>
-            <p class="ccf-muted">Aucun paiement.</p>
+            <p class="ccf-empty-title">Aucun paiement enregistré</p>
+            <p class="ccf-muted">Les derniers paiements rattachés à ce client s’affichent ici.</p>
           <?php else: ?>
             <ul class="ccf-list">
               <?php foreach ($clientOverview['paiements'] as $py): ?>

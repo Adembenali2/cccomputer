@@ -21,7 +21,7 @@ final class ClientOverviewService
      *   livraisons: list<array>,
      *   factures: list<array>,
      *   paiements: list<array>,
-     *   alerts: list<array{level:string,message:string}>,
+     *   alerts: list<array{level:string,message:string,title?:string}>,
      *   counts: array{sav_ouvert:int,livraisons_actives:int,impayees:int}
      * }
      */
@@ -47,14 +47,9 @@ final class ClientOverviewService
 
         $savOuvert = $this->countSavOuverts($clientId);
         $livAct = $this->countLivraisonsActives($clientId);
-        $impayees = 0;
-        foreach ($factures as $f) {
-            if (!empty($f['impayee'])) {
-                $impayees++;
-            }
-        }
+        $impayees = $this->countFacturesImpayees($clientId);
 
-        $alerts = $this->buildAlerts($clientId, $printers, $factures, $savOuvert);
+        $alerts = $this->buildAlerts($clientId, $printers, $savOuvert);
 
         return [
             'printers' => $printers,
@@ -197,29 +192,107 @@ final class ClientOverviewService
     }
 
     /**
-     * @param list<array> $printers
-     * @param list<array> $factures
-     * @return list<array{level:string,message:string}>
+     * Nombre de factures non annulées avec solde dû (TTC − paiements « reçus »), toutes périodes confondues.
      */
-    private function buildAlerts(int $clientId, array $printers, array $factures, int $savOuvert): array
+    private function countFacturesImpayees(int $clientId): int
+    {
+        try {
+            $st = $this->pdo->prepare("
+                SELECT COUNT(*) FROM (
+                    SELECT f.id
+                    FROM factures f
+                    LEFT JOIN paiements p ON p.id_facture = f.id
+                    WHERE f.id_client = ?
+                      AND f.statut NOT IN ('annulee')
+                    GROUP BY f.id, f.montant_ttc
+                    HAVING f.montant_ttc > 0
+                       AND COALESCE(SUM(CASE WHEN p.statut = 'recu' THEN p.montant ELSE 0 END), 0) < f.montant_ttc
+                ) t
+            ");
+            $st->execute([$clientId]);
+            return (int)$st->fetchColumn();
+        } catch (\Throwable $e) {
+            error_log('[ClientOverviewService] countFacturesImpayees: ' . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /** @return list<array{numero:string,date_facture:string,montant_ttc:float,paye:float}> */
+    private function fetchFacturesOverdueUnpaidForClient(int $clientId): array
+    {
+        try {
+            $st = $this->pdo->prepare("
+                SELECT f.numero, f.date_facture, f.montant_ttc,
+                       COALESCE(SUM(CASE WHEN p.statut = 'recu' THEN p.montant ELSE 0 END), 0) AS paye
+                FROM factures f
+                LEFT JOIN paiements p ON p.id_facture = f.id
+                WHERE f.id_client = ?
+                  AND f.statut NOT IN ('annulee')
+                GROUP BY f.id, f.numero, f.date_facture, f.montant_ttc
+            ");
+            $st->execute([$clientId]);
+            $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $out = [];
+            foreach ($rows as $r) {
+                $ttc = (float)($r['montant_ttc'] ?? 0);
+                $paye = (float)($r['paye'] ?? 0);
+                if (OperationalStatusService::isFactureOverdueUnpaid($ttc, $paye, (string)($r['date_facture'] ?? ''))) {
+                    $out[] = [
+                        'numero' => (string)($r['numero'] ?? ''),
+                        'date_facture' => (string)($r['date_facture'] ?? ''),
+                        'montant_ttc' => $ttc,
+                        'paye' => $paye,
+                    ];
+                }
+            }
+            return $out;
+        } catch (\Throwable $e) {
+            error_log('[ClientOverviewService] fetchFacturesOverdueUnpaidForClient: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * @param list<array> $printers
+     * @return list<array{level:string,message:string,title?:string}>
+     */
+    private function buildAlerts(int $clientId, array $printers, int $savOuvert): array
     {
         $alerts = [];
 
         if ($savOuvert > 0) {
-            $alerts[] = ['level' => 'warn', 'message' => $savOuvert . ' ticket(s) SAV ouvert(s) ou en cours.'];
+            $alerts[] = [
+                'level' => 'warn',
+                'title' => 'SAV',
+                'message' => $savOuvert . ' ticket(s) ouvert(s) ou en cours pour ce client.',
+            ];
         }
 
-        foreach ($factures as $f) {
-            if (!empty($f['en_retard'])) {
-                $alerts[] = [
-                    'level' => 'danger',
-                    'message' => 'Facture ' . ($f['numero'] ?? '') . ' impayée après échéance (25 du mois).',
-                ];
-            }
+        $overdue = $this->fetchFacturesOverdueUnpaidForClient($clientId);
+        $maxLines = 5;
+        foreach (array_slice($overdue, 0, $maxLines) as $f) {
+            $alerts[] = [
+                'level' => 'danger',
+                'title' => 'Facturation',
+                'message' => 'Facture ' . ($f['numero'] !== '' ? $f['numero'] : '(sans numéro)')
+                    . ' : impayée après échéance (règle du 25 du mois suivant la date de facture).',
+            ];
+        }
+        $more = count($overdue) - $maxLines;
+        if ($more > 0) {
+            $alerts[] = [
+                'level' => 'danger',
+                'title' => 'Facturation',
+                'message' => '… et ' . $more . ' autre(s) facture(s) en retard (voir Paiements / factures).',
+            ];
         }
 
         if (count($printers) === 0) {
-            $alerts[] = ['level' => 'info', 'message' => 'Aucune imprimante rattachée à ce client.'];
+            $alerts[] = [
+                'level' => 'info',
+                'title' => 'Parc',
+                'message' => 'Aucune imprimante rattachée à ce client.',
+            ];
         }
 
         foreach ($printers as $p) {
@@ -228,7 +301,9 @@ final class ClientOverviewService
                 $label = trim((string)($p['Model'] ?? '')) ?: ($mac !== '' ? $mac : '—');
                 $alerts[] = [
                     'level' => 'warn',
-                    'message' => 'Relevé obsolète ou absent pour la machine ' . $label . ' (>' . OperationalStatusService::STALE_RELEVE_DAYS . ' j.).',
+                    'title' => 'Relevés',
+                    'message' => 'Relevé obsolète ou absent pour « ' . $label . ' » (seuil : '
+                        . OperationalStatusService::STALE_RELEVE_DAYS . ' jours sans relevé).',
                 ];
             }
         }
@@ -240,7 +315,11 @@ final class ClientOverviewService
             $st->execute([$clientId]);
             $dmax = $st->fetchColumn();
             if ($dmax && strtotime((string)$dmax) < strtotime('-365 days')) {
-                $alerts[] = ['level' => 'info', 'message' => 'Aucune facture depuis plus d’un an (vérifier l’activité).'];
+                $alerts[] = [
+                    'level' => 'info',
+                    'title' => 'Activité',
+                    'message' => 'Aucune facture enregistrée depuis plus d’un an — vérifier si le client est toujours actif.',
+                ];
             }
         } catch (\Throwable) {
         }

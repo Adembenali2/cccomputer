@@ -529,7 +529,7 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       </thead>
       <tbody>
       <?php if (!$filteredSav): ?>
-        <tr>
+        <tr data-empty-row="1">
           <td colspan="8" style="padding:1rem; color:var(--text-secondary);">
             Aucun SAV à afficher pour cette vue.
           </td>
@@ -881,6 +881,10 @@ $lastRefreshLabel = date('d/m/Y à H:i');
     function apply(){
       const v = (q.value || '').trim().toLowerCase();
       lines.forEach(tr => {
+        if (tr.getAttribute('data-empty-row') === '1') {
+          tr.style.display = '';
+          return;
+        }
         const t = (tr.getAttribute('data-search') || '').toLowerCase();
         const okSearch = !v || t.includes(v);
         const okClient = !initialClientIdSav || (tr.getAttribute('data-client-id') || '') === initialClientIdSav;
