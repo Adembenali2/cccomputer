@@ -436,6 +436,47 @@ if (($_GET['saved'] ?? '') === '1') {
           <?= $isArchivedClient ? 'Réactiver ce client' : 'Archiver ce client' ?>
         </button>
       </div>
+      <?php
+      // [Livraison Auto]
+      $autoConfig = null;
+      try {
+        $stmtAutoConf = $pdo->prepare("SELECT * FROM livraison_auto_config WHERE id_client=? LIMIT 1");
+        $stmtAutoConf->execute([(int)$id]);
+        $autoConfig = $stmtAutoConf->fetch(PDO::FETCH_ASSOC) ?: null;
+      } catch (Throwable $e) {
+        $autoConfig = null;
+      }
+      ?>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <strong style="color:#166534;">📦 Livraisons automatiques</strong>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="toggle-auto-livraison" <?= (($autoConfig['actif'] ?? 0) ? 'checked' : '') ?> data-client-id="<?= (int)$id ?>">
+            <span style="font-size:0.85rem;color:#374151;">
+              <?= (($autoConfig['actif'] ?? 0) ? 'Activé' : 'Désactivé') ?>
+            </span>
+          </label>
+        </div>
+        <?php if ($autoConfig): ?>
+          <div style="font-size:0.82rem;color:#374151;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>
+              Papier : <?= ((int)$autoConfig['papier_actif'] === 1) ? '✅ surveillé' : '⚪ désactivé' ?>
+              <?php if ((int)$autoConfig['papier_actif'] === 1): ?>
+                <br><span style="color:#6b7280;">Seuil : <?= (int)$autoConfig['papier_seuil'] ?> ramettes</span>
+              <?php endif; ?>
+            </div>
+            <div>
+              Toners : <?= ((int)$autoConfig['toner_actif'] === 1) ? '✅ surveillé' : '⚪ désactivé' ?>
+              <?php if ((int)$autoConfig['toner_actif'] === 1): ?>
+                <br><span style="color:#6b7280;">Seuil : <?= (int)$autoConfig['toner_seuil_pct'] ?>%</span>
+              <?php endif; ?>
+            </div>
+          </div>
+        <?php endif; ?>
+        <div style="margin-top:10px;">
+          <a href="/public/livraisons_auto.php?client_id=<?= (int)$id ?>" style="font-size:0.82rem;color:#2563eb;text-decoration:none;">⚙ Configurer les livraisons auto →</a>
+        </div>
+      </div>
 
       <div class="ccf-kpis" role="group" aria-label="Indicateurs">
         <div class="ccf-kpi"><span class="ccf-kpi-val"><?= (int)($clientOverview['counts']['sav_ouvert'] ?? 0) ?></span><span class="ccf-kpi-lbl">SAV ouverts / en cours</span></div>
@@ -1104,6 +1145,27 @@ if (($_GET['saved'] ?? '') === '1') {
       }
       loadContacts();
     })();
+  </script>
+  <script <?= csp_nonce() ?>>
+    // [Livraison Auto]
+    document.getElementById('toggle-auto-livraison')?.addEventListener('change', function() {
+      const actif = this.checked ? 1 : 0;
+      const clientId = this.dataset.clientId;
+      fetch('/API/livraisons/auto_toggle.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': '<?= h($csrfToken) ?>'},
+        body: JSON.stringify({id_client: clientId, actif: actif, csrf_token: '<?= h($csrfToken) ?>'})
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.success) {
+          if (this.nextElementSibling) {
+            this.nextElementSibling.textContent = actif ? 'Activé' : 'Désactivé';
+          }
+        }
+      });
+    });
   </script>
 </body>
 </html>

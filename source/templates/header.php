@@ -179,6 +179,20 @@ if (!function_exists('csp_nonce')) {
     </a>
     <?php endif; ?>
 
+    <!-- [Livraison Auto] -->
+    <a href="/public/livraison.php" aria-label="Livraisons">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="1" y="3" width="15" height="13"></rect><polygon points="16,8 20,8 23,11 23,16 16,16"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle>
+      </svg>
+      <span class="nav-label">Livraisons</span>
+    </a>
+    <a href="/public/livraisons_auto.php" aria-label="Livraisons auto">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 12a8 8 0 0 1 14-5"/><polyline points="18 3 18 7 14 7"/><path d="M20 12a8 8 0 0 1-14 5"/><polyline points="6 21 6 17 10 17"/>
+      </svg>
+      <span class="nav-label">Livraisons auto</span>
+    </a>
+
     <?php if ($modEnabled['commercial'] && $canCommercial): ?>
       <a href="/public/commercial.php" aria-label="Espace commercial">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
