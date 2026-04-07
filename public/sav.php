@@ -47,6 +47,88 @@ $flash = ['type' => null, 'msg' => null];
 $CSRF  = ensureCsrfToken();
 $today = date('Y-m-d');
 
+// [Fonctionnalité A]
+function generateUniqueSavReference(PDO $pdo): string {
+    do {
+        $reference = 'SAV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
+        $check = $pdo->prepare('SELECT id FROM sav WHERE reference = ? LIMIT 1');
+        $check->execute([$reference]);
+        $exists = (bool)$check->fetch(PDO::FETCH_ASSOC);
+    } while ($exists);
+    return $reference;
+}
+
+// [Fonctionnalité A]
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'create_sav') {
+    try {
+        assertValidCsrf($_POST['csrf_token'] ?? '');
+    } catch (RuntimeException $csrfEx) {
+        $flash = ['type' => 'error', 'msg' => $csrfEx->getMessage()];
+    }
+
+    if (!$flash['type']) {
+        $idClient = (int)($_POST['id_client'] ?? 0);
+        $description = trim((string)($_POST['description'] ?? ''));
+        $priorite = (string)($_POST['priorite'] ?? 'normale');
+        $typePanne = (string)($_POST['type_panne'] ?? '');
+        $datePrevue = trim((string)($_POST['date_intervention_prevue'] ?? ''));
+        $idTechnicien = (int)($_POST['id_technicien'] ?? 0);
+
+        $allowedPriorites = ['basse','normale','haute','urgente'];
+        $allowedTypePanne = ['logiciel','materiel','piece_rechangeable'];
+        if ($idClient <= 0 || $description === '') {
+            $flash = ['type' => 'error', 'msg' => 'Client et description requis.'];
+        } elseif (!in_array($priorite, $allowedPriorites, true)) {
+            $flash = ['type' => 'error', 'msg' => 'Priorité invalide.'];
+        } elseif ($typePanne !== '' && !in_array($typePanne, $allowedTypePanne, true)) {
+            $flash = ['type' => 'error', 'msg' => 'Type de panne invalide.'];
+        } else {
+            try {
+                $isAdminOrDirigeantPost = in_array(currentUserRole(), ['Admin', 'Dirigeant'], true);
+                $idTechnicienInsert = null;
+                if ($isAdminOrDirigeantPost && $idTechnicien > 0) {
+                    $techChk = $pdo->prepare("SELECT id FROM utilisateurs WHERE id = ? AND Emploi = 'Technicien' AND statut = 'actif' LIMIT 1");
+                    $techChk->execute([$idTechnicien]);
+                    if ($techChk->fetch(PDO::FETCH_ASSOC)) {
+                        $idTechnicienInsert = $idTechnicien;
+                    }
+                }
+                $reference = generateUniqueSavReference($pdo);
+                $stmt = $pdo->prepare("
+                    INSERT INTO sav (id_client, id_technicien, reference, description, priorite, type_panne, date_intervention_prevue, statut, date_ouverture)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'ouvert', CURDATE())
+                ");
+                $stmt->execute([
+                    $idClient,
+                    $idTechnicienInsert,
+                    $reference,
+                    $description,
+                    $priorite,
+                    $typePanne !== '' ? $typePanne : null,
+                    $datePrevue !== '' ? $datePrevue : null,
+                ]);
+                $newSavId = (int)$pdo->lastInsertId();
+                enregistrerAction($pdo, currentUserId(), 'sav_cree', "SAV #{$newSavId} ({$reference}) créé");
+                if ($idTechnicienInsert) {
+                    NotificationService::create(
+                        (int)$idTechnicienInsert,
+                        'sav_assigne',
+                        'SAV assigné',
+                        "Le SAV {$reference} vous a été assigné.",
+                        $newSavId,
+                        'sav'
+                    );
+                }
+                header('Location: /public/sav.php?created=1');
+                exit;
+            } catch (PDOException $e) {
+                error_log('sav.php create_sav error: ' . $e->getMessage());
+                $flash = ['type' => 'error', 'msg' => 'Erreur SQL : impossible de créer le SAV.'];
+            }
+        }
+    }
+}
+
 // ============================================================================
 // POST : mise à jour de SAV (statut, éventuellement date_fermeture)
 // ============================================================================
@@ -63,6 +145,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
         $newPriorite = $_POST['priorite'] ?? '';
         $newTypePanne = trim($_POST['type_panne'] ?? '');
         $newCommentaireTechnicien = trim($_POST['commentaire_technicien'] ?? '');
+        // [Fonctionnalité C/D/E]
+        $newTempsEstime = ($_POST['temps_estime'] ?? '') !== '' ? (float)$_POST['temps_estime'] : null;
+        $newTempsReel = ($_POST['temps_reel'] ?? '') !== '' ? (float)$_POST['temps_reel'] : null;
+        $newCout = ($_POST['cout_intervention'] ?? '') !== '' ? (float)$_POST['cout_intervention'] : null;
+        $newDatePrevue = trim((string)($_POST['date_intervention_prevue'] ?? ''));
+        $newSatisfaction = ($_POST['satisfaction_client'] ?? '') !== '' ? (int)$_POST['satisfaction_client'] : null;
+        $newCommentaireClient = trim((string)($_POST['commentaire_client'] ?? ''));
 
         $allowedStatuts = ['ouvert','en_cours','resolu','annule'];
         $allowedPriorites = ['basse','normale','haute','urgente'];
@@ -72,6 +161,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             $flash = ['type'=>'error','msg'=>"Données invalides pour la mise à jour du SAV."];
         } elseif (!empty($newTypePanne) && !in_array($newTypePanne, $allowedTypePanne, true)) {
             $flash = ['type'=>'error','msg'=>"Type de panne invalide."];
+        } elseif (($newTempsEstime !== null && $newTempsEstime < 0) || ($newTempsReel !== null && $newTempsReel < 0) || ($newCout !== null && $newCout < 0)) {
+            $flash = ['type'=>'error','msg'=>"Temps / coût invalides (>= 0)."];
+        } elseif ($newSatisfaction !== null && ($newSatisfaction < 1 || $newSatisfaction > 5)) {
+            $flash = ['type'=>'error','msg'=>"Satisfaction invalide (1 à 5)."];
         } else {
             try {
                 // Récupération du SAV pour vérifier permissions (avec infos client et technicien pour l'historique)
@@ -156,6 +249,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                     priorite = :priorite,
                                     type_panne = :type_panne,
                                     date_fermeture = :date_fermeture,
+                                    date_intervention_prevue = :date_prevue,
+                                    temps_intervention_estime = :temps_estime,
+                                    temps_intervention_reel = :temps_reel,
+                                    cout_intervention = :cout,
+                                    satisfaction_client = :satisfaction_client,
+                                    commentaire_client = :commentaire_client,
                                     id_technicien = :id_technicien,
                                     notes_techniques = :commentaire_technicien,
                                     updated_at = NOW()
@@ -166,6 +265,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 ':priorite'    => $newPriorite,
                                 ':type_panne'  => !empty($newTypePanne) ? $newTypePanne : null,
                                 ':date_fermeture' => $dateFermeture,
+                                ':date_prevue' => $newDatePrevue !== '' ? $newDatePrevue : null,
+                                ':temps_estime' => $newTempsEstime,
+                                ':temps_reel' => $newTempsReel,
+                                ':cout' => $newCout,
+                                ':satisfaction_client' => $newSatisfaction,
+                                ':commentaire_client' => $newCommentaireClient !== '' ? $newCommentaireClient : null,
                                 ':id_technicien' => $idTechnicienBind,
                                 ':commentaire_technicien' => !empty($newCommentaireTechnicien) ? $newCommentaireTechnicien : null,
                                 ':id'          => $savId,
@@ -178,6 +283,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                     priorite = :priorite,
                                     type_panne = :type_panne,
                                     date_fermeture = :date_fermeture,
+                                    date_intervention_prevue = :date_prevue,
+                                    temps_intervention_estime = :temps_estime,
+                                    temps_intervention_reel = :temps_reel,
+                                    cout_intervention = :cout,
+                                    satisfaction_client = :satisfaction_client,
+                                    commentaire_client = :commentaire_client,
                                     id_technicien = :id_technicien,
                                     updated_at = NOW()
                                 WHERE id = :id
@@ -187,6 +298,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 ':priorite'    => $newPriorite,
                                 ':type_panne'  => !empty($newTypePanne) ? $newTypePanne : null,
                                 ':date_fermeture' => $dateFermeture,
+                                ':date_prevue' => $newDatePrevue !== '' ? $newDatePrevue : null,
+                                ':temps_estime' => $newTempsEstime,
+                                ':temps_reel' => $newTempsReel,
+                                ':cout' => $newCout,
+                                ':satisfaction_client' => $newSatisfaction,
+                                ':commentaire_client' => $newCommentaireClient !== '' ? $newCommentaireClient : null,
                                 ':id_technicien' => $idTechnicienBind,
                                 ':id'          => $savId,
                             ]);
@@ -309,6 +426,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     }
 }
 
+if (($_GET['created'] ?? '') === '1') {
+    $flash = ['type' => 'success', 'msg' => 'SAV créé avec succès.'];
+}
+
 // ============================================================================
 // Récupération des SAV depuis la base (pour l'affichage)
 // ============================================================================
@@ -426,12 +547,17 @@ if ($view === 'archive' && !$isAdminOrDirigeant) {
     $view = 'toutes';
 }
 
-if (!in_array($view, ['toutes', 'urgent', 'aujourdhui', 'archive'], true)) {
+if (!in_array($view, ['toutes', 'urgent', 'aujourdhui', 'archive', 'mes_sav'], true)) {
     $view = 'toutes';
 }
 
 $filteredSav = array_values(array_filter($rows, function($s) use ($view, $today) {
     $statut = $s['statut'] ?? '';
+    // [Fonctionnalité F]
+    if ($view === 'mes_sav') {
+        return (int)($s['id_technicien'] ?? 0) === (int)currentUserId()
+               && $statut !== 'resolu';
+    }
     
     // Vue "archive" : afficher uniquement les SAV résolus
     if ($view === 'archive') {
@@ -499,6 +625,12 @@ $pdfExportDateFinDefault = $today;
       Vue des interventions SAV — dernière mise à jour <?= h($lastRefreshLabel) ?>.
     </p>
   </div>
+  <?php if ($currentRole === 'Technicien' && $view === 'toutes'): ?>
+    <!-- [Fonctionnalité F] -->
+    <div style="background:#dbeafe;border-left:4px solid #3b82f6;padding:10px 16px;margin-bottom:12px;border-radius:6px;font-size:0.88rem;">
+      💡 Utilisez "Mes SAV" pour voir uniquement vos interventions assignées.
+    </div>
+  <?php endif; ?>
 
   <!-- Flash -->
   <?php if ($flash['type']): ?>
@@ -562,12 +694,18 @@ $pdfExportDateFinDefault = $today;
       <button id="clearQ" class="btn btn-secondary" type="button">Effacer</button>
     </div>
     <div class="filters-actions">
+      <!-- [Fonctionnalité A] -->
+      <button type="button" class="btn btn-primary" id="btnOpenCreateSav">+ Créer un SAV</button>
       <a href="/public/sav.php?view=toutes"
          class="btn <?= $view === 'toutes' ? 'btn-primary' : 'btn-outline' ?>">Toutes</a>
       <a href="/public/sav.php?view=urgent"
          class="btn <?= $view === 'urgent' ? 'btn-primary' : 'btn-outline' ?>">Urgents</a>
       <a href="/public/sav.php?view=aujourdhui"
          class="btn <?= $view === 'aujourdhui' ? 'btn-primary' : 'btn-outline' ?>">Aujourd'hui</a>
+      <?php if ($currentRole === 'Technicien'): ?>
+      <a href="/public/sav.php?view=mes_sav"
+         class="btn <?= $view === 'mes_sav' ? 'btn-primary' : 'btn-outline' ?>">Mes SAV</a>
+      <?php endif; ?>
       <?php if ($isAdminOrDirigeant): ?>
       <a href="/public/sav.php?view=archive"
          class="btn <?= $view === 'archive' ? 'btn-primary' : 'btn-outline' ?>">📦 Archive</a>
@@ -589,13 +727,14 @@ $pdfExportDateFinDefault = $today;
           <th>Date fermeture</th>
           <th>Technicien</th>
           <th>Priorité</th>
+          <th>Durée / Coût</th>
           <th>Statut</th>
         </tr>
       </thead>
       <tbody>
       <?php if (!$filteredSav): ?>
         <tr data-empty-row="1">
-          <td colspan="8" style="padding:1rem; color:var(--text-secondary);">
+          <td colspan="10" style="padding:1rem; color:var(--text-secondary);">
             Aucun SAV à afficher pour cette vue.
           </td>
         </tr>
@@ -663,6 +802,13 @@ $pdfExportDateFinDefault = $today;
 
           $commentaire = $s['commentaire'] ?? '';
           $commentaireTechnicien = $s['commentaire_technicien'] ?? '';
+          // [Fonctionnalité C/D/E]
+          $tempsEstime = isset($s['temps_intervention_estime']) && $s['temps_intervention_estime'] !== null ? (float)$s['temps_intervention_estime'] : null;
+          $tempsReel = isset($s['temps_intervention_reel']) && $s['temps_intervention_reel'] !== null ? (float)$s['temps_intervention_reel'] : null;
+          $coutIntervention = isset($s['cout_intervention']) && $s['cout_intervention'] !== null ? (float)$s['cout_intervention'] : null;
+          $datePrevue = $s['date_intervention_prevue'] ?? '';
+          $satisfaction = isset($s['satisfaction_client']) ? (int)$s['satisfaction_client'] : 0;
+          $commentaireClient = $s['commentaire_client'] ?? '';
 
           $searchText = strtolower(
               $clientNom . ' ' . $ref . ' ' . $description . ' ' . $technicienNomComplet
@@ -690,6 +836,12 @@ $pdfExportDateFinDefault = $today;
           data-technicien="<?= h($technicienNomComplet) ?>"
           data-commentaire="<?= h($commentaire) ?>"
           data-commentaire-technicien="<?= h($commentaireTechnicien) ?>"
+          data-temps-estime="<?= h($tempsEstime !== null ? (string)$tempsEstime : '') ?>"
+          data-temps-reel="<?= h($tempsReel !== null ? (string)$tempsReel : '') ?>"
+          data-cout="<?= h($coutIntervention !== null ? (string)$coutIntervention : '') ?>"
+          data-date-prevue="<?= h($datePrevue) ?>"
+          data-satisfaction="<?= h((string)$satisfaction) ?>"
+          data-commentaire-client="<?= h($commentaireClient) ?>"
           data-can-edit="<?= $canEditThis ? '1' : '0' ?>"
           <?= $rowClassAttr ?>
         >
@@ -717,13 +869,44 @@ $pdfExportDateFinDefault = $today;
               <span style="color: #9ca3af;">—</span>
             <?php endif; ?>
           </td>
-          <td class="td-date" data-th="Date ouverture"><?= h($ouvertureLabel) ?></td>
+          <td class="td-date" data-th="Date ouverture">
+            <?= h($ouvertureLabel) ?>
+            <?php if (!empty($datePrevue)): ?>
+              <?php
+                $isFuturePrevue = ($datePrevue > $today);
+                $isLatePrevue = ($datePrevue < $today && $statut !== 'resolu');
+              ?>
+              <?php if ($isFuturePrevue): ?>
+                <div style="font-size:0.75rem;color:#2563eb;">📅 Prévue : <?= h(formatDate($datePrevue)) ?></div>
+              <?php elseif ($isLatePrevue): ?>
+                <div style="font-size:0.75rem;color:#ef4444;">⚠️ En retard : <?= h(formatDate($datePrevue)) ?></div>
+              <?php endif; ?>
+            <?php endif; ?>
+          </td>
           <td class="td-date" data-th="Date fermeture"><?= h($fermetureLabel) ?></td>
           <td data-th="Technicien"><?= h($technicienNomComplet) ?></td>
           <td data-th="Priorité">
             <span style="padding: 0.25rem 0.5rem; border-radius: 4px; background: <?= h($prioriteColor) ?>; color: white; font-size: 0.75rem;">
               <?= h($prioriteLabel) ?>
             </span>
+          </td>
+          <td data-th="Durée / Coût">
+            <?php
+              $dureeLabel = '—';
+              if ($tempsReel !== null) {
+                $hours = floor($tempsReel);
+                $mins = (int)round(($tempsReel - $hours) * 60);
+                $dureeLabel = sprintf('%dh%02d', $hours, $mins);
+              } elseif ($tempsEstime !== null) {
+                $hours = floor($tempsEstime);
+                $mins = (int)round(($tempsEstime - $hours) * 60);
+                $dureeLabel = sprintf('%dh%02d', $hours, $mins);
+              }
+            ?>
+            <span style="<?= $tempsReel === null && $tempsEstime !== null ? 'color:#9ca3af;' : '' ?>"><?= h($dureeLabel) ?></span>
+            <?php if ($coutIntervention !== null): ?>
+              <span> — <?= h(number_format($coutIntervention, 0, ',', ' ')) ?>€</span>
+            <?php endif; ?>
           </td>
           <td class="td-date has-pullout" data-th="Statut">
             <?= h($statutLabel) ?>
@@ -735,6 +918,9 @@ $pdfExportDateFinDefault = $today;
               <span class="badge-today" title="Ouvert ou fermé aujourd'hui">
                 📅 Aujourd'hui
               </span>
+            <?php endif; ?>
+            <?php if (($s['statut'] ?? '') === 'resolu' && !empty($s['satisfaction_client'])): ?>
+              <div style="color:#f59e0b;"><?= str_repeat('★', (int)$s['satisfaction_client']) ?><?= str_repeat('☆', 5 - (int)$s['satisfaction_client']) ?></div>
             <?php endif; ?>
           </td>
         </tr>
@@ -783,6 +969,9 @@ $pdfExportDateFinDefault = $today;
             <input type="text" id="modal_fermeture" readonly>
           </div>
         </div>
+        <!-- [Fonctionnalité D] -->
+        <label>Date intervention prévue</label>
+        <input type="date" name="date_intervention_prevue" id="modal_date_prevue">
 
         <?php if ($isAdminOrDirigeant): ?>
         <label for="modal_id_technicien">Technicien assigné</label>
@@ -831,8 +1020,50 @@ $pdfExportDateFinDefault = $today;
         <label>Commentaire technicien</label>
         <textarea name="commentaire_technicien" id="modal_commentaire_technicien" rows="4" placeholder="Ajoutez vos notes techniques ici..."></textarea>
         <small style="color: #6b7280; font-size: 0.85rem;">Ce commentaire est visible uniquement par les techniciens et administrateurs.</small>
+        <!-- [Fonctionnalité B] -->
+        <div class="subsection-title">Pièces utilisées</div>
+        <div id="pieces-list"><p style="color:#9ca3af;font-size:0.82rem;">Chargement...</p></div>
+        <button type="button" id="btn-add-piece">+ Ajouter une pièce</button>
+        <div id="piece-inline-form" style="display:none;margin-top:8px;">
+          <select id="piece_product_type">
+            <option value="papier">papier</option>
+            <option value="toner">toner</option>
+            <option value="lcd">lcd</option>
+            <option value="pc">pc</option>
+          </select>
+          <input type="number" id="piece_product_id" placeholder="product_id">
+          <input type="number" id="piece_quantite" value="1" min="1">
+          <button type="button" id="btn-piece-save">Ajouter</button>
+        </div>
+        <!-- [Fonctionnalité C] -->
+        <label>Temps estimé (heures)</label>
+        <input type="number" name="temps_estime" id="modal_temps_estime" min="0" max="99" step="0.25" placeholder="ex: 1.5">
+        <label>Temps réel (heures)</label>
+        <input type="number" name="temps_reel" id="modal_temps_reel" min="0" max="99" step="0.25" placeholder="ex: 2.0">
+        <label>Coût intervention (€ HT)</label>
+        <input type="number" name="cout_intervention" id="modal_cout" min="0" step="0.01" placeholder="ex: 150.00">
+        <!-- [Fonctionnalité E] -->
+        <div id="section-satisfaction" style="display:none;">
+          <div class="subsection-title">Retour client</div>
+          <label>Note de satisfaction (1 à 5 étoiles)</label>
+          <div id="star-rating" style="display:flex;gap:6px;cursor:pointer;">
+            <?php for($i=1;$i<=5;$i++): ?>
+            <span class="star" data-val="<?=$i?>" style="font-size:1.5rem;color:#d1d5db;">★</span>
+            <?php endfor; ?>
+          </div>
+          <input type="hidden" name="satisfaction_client" id="modal_satisfaction" value="">
+          <label style="margin-top:10px;">Commentaire client</label>
+          <textarea name="commentaire_client" id="modal_commentaire_client" rows="3" placeholder="Commentaire laissé par le client..."></textarea>
+        </div>
 
         <div id="modal_permission_msg" style="margin-top:0.5rem; font-size:0.85rem;"></div>
+      </div>
+    </div>
+    <!-- [Fonctionnalité G] -->
+    <div style="margin-top:16px;border-top:1px solid #e5e7eb;padding-top:12px;">
+      <div style="font-size:0.85rem;font-weight:600;color:#374151;margin-bottom:8px;">Historique des modifications</div>
+      <div id="sav-historique-list" style="max-height:180px;overflow-y:auto;">
+        <p style="color:#9ca3af;font-size:0.82rem;">Chargement...</p>
       </div>
     </div>
 
@@ -841,6 +1072,52 @@ $pdfExportDateFinDefault = $today;
         <strong>Permissions :</strong> Seul le technicien assigné à ce SAV peut modifier son statut. Les administrateurs et dirigeants peuvent modifier tous les SAV.
       </div>
       <button type="submit" id="modal_submit_btn" class="fiche-action-btn">Enregistrer</button>
+    </div>
+  </form>
+</div>
+
+<!-- [Fonctionnalité A] -->
+<div id="createSavOverlay" class="popup-overlay" aria-hidden="true"></div>
+<div id="createSavModal" class="support-popup" role="dialog" aria-modal="true" aria-labelledby="createSavModalTitle" style="display:none;">
+  <div class="modal-header">
+    <h3 id="createSavModalTitle">Nouveau SAV</h3>
+    <button type="button" id="btnCloseCreateSavModal" class="icon-btn icon-btn--close" aria-label="Fermer"><span aria-hidden="true">×</span></button>
+  </div>
+  <form method="post" action="<?= h($_SERVER['REQUEST_URI'] ?? '') ?>" class="standard-form modal-form" novalidate>
+    <input type="hidden" name="action" value="create_sav">
+    <input type="hidden" name="csrf_token" value="<?= h($CSRF) ?>">
+    <label>Client</label>
+    <input type="text" id="create_sav_client_search" placeholder="Rechercher client...">
+    <select name="id_client" id="create_sav_client_id" required></select>
+    <label>Description</label>
+    <textarea name="description" required rows="3"></textarea>
+    <label>Priorité</label>
+    <select name="priorite">
+      <option value="basse">basse</option>
+      <option value="normale" selected>normale</option>
+      <option value="haute">haute</option>
+      <option value="urgente">urgente</option>
+    </select>
+    <label>Type de panne</label>
+    <select name="type_panne">
+      <option value="">—</option>
+      <option value="logiciel">logiciel</option>
+      <option value="materiel">materiel</option>
+      <option value="piece_rechangeable">piece_rechangeable</option>
+    </select>
+    <?php if ($isAdminOrDirigeant): ?>
+      <label>Technicien assigné</label>
+      <select name="id_technicien">
+        <option value="">— Non assigné —</option>
+        <?php foreach ($savTechniciensOptions as $tech): ?>
+          <option value="<?= (int)$tech['id'] ?>"><?= h(trim(($tech['prenom'] ?? '') . ' ' . ($tech['nom'] ?? ''))) ?></option>
+        <?php endforeach; ?>
+      </select>
+    <?php endif; ?>
+    <label>Date intervention prévue</label>
+    <input type="date" name="date_intervention_prevue">
+    <div class="modal-actions">
+      <button type="submit" class="fiche-action-btn">Créer</button>
     </div>
   </form>
 </div>
@@ -865,6 +1142,8 @@ $pdfExportDateFinDefault = $today;
 <script <?= csp_nonce() ?>>
 // Gestion modale
 (function(){
+  // [Fonctionnalité A/B/G]
+  const csrfToken = <?= json_encode($CSRF) ?>;
   const overlay   = document.getElementById('savModalOverlay');
   const modal     = document.getElementById('editSavModal');
   const closeBtn  = document.getElementById('btnCloseSavModal');
@@ -882,8 +1161,91 @@ $pdfExportDateFinDefault = $today;
   const selectTypePanne = document.getElementById('modal_type_panne');
   const textareaCom    = document.getElementById('modal_commentaire');
   const textareaComTech = document.getElementById('modal_commentaire_technicien');
+  const inputDatePrevue = document.getElementById('modal_date_prevue');
+  const inputTempsEstime = document.getElementById('modal_temps_estime');
+  const inputTempsReel = document.getElementById('modal_temps_reel');
+  const inputCout = document.getElementById('modal_cout');
+  const inputSatisfaction = document.getElementById('modal_satisfaction');
+  const textareaCommentaireClient = document.getElementById('modal_commentaire_client');
+  const sectionSatisfaction = document.getElementById('section-satisfaction');
+  const stars = document.querySelectorAll('#star-rating .star');
+  const piecesList = document.getElementById('pieces-list');
+  const btnAddPiece = document.getElementById('btn-add-piece');
+  const pieceInlineForm = document.getElementById('piece-inline-form');
+  const btnPieceSave = document.getElementById('btn-piece-save');
+  const savHistoriqueList = document.getElementById('sav-historique-list');
   const permMsg        = document.getElementById('modal_permission_msg');
   const submitBtn      = document.getElementById('modal_submit_btn');
+
+  function updateSatisfactionVisibility() {
+    if (!sectionSatisfaction || !selectStatut) return;
+    sectionSatisfaction.style.display = selectStatut.value === 'resolu' ? 'block' : 'none';
+  }
+  if (selectStatut) {
+    selectStatut.addEventListener('change', updateSatisfactionVisibility);
+  }
+  stars.forEach(s => {
+    s.addEventListener('click', function() {
+      const val = parseInt(this.dataset.val || '0', 10);
+      if (inputSatisfaction) inputSatisfaction.value = String(val);
+      stars.forEach(st => {
+        st.style.color = parseInt(st.dataset.val || '0', 10) <= val ? '#f59e0b' : '#d1d5db';
+      });
+    });
+  });
+
+  function loadPieces(idSav) {
+    if (!piecesList) return;
+    piecesList.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Chargement...</p>';
+    fetch('/API/sav/pieces_get.php?id_sav=' + encodeURIComponent(String(idSav)), { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(d => {
+        if (!d || !d.success) throw new Error('load pieces failed');
+        const pieces = Array.isArray(d.pieces) ? d.pieces : [];
+        if (pieces.length === 0) {
+          piecesList.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Aucune pièce ajoutée.</p>';
+          return;
+        }
+        piecesList.innerHTML = '<table style="width:100%;font-size:0.82rem;"><thead><tr><th>Produit</th><th>Type</th><th>Quantité</th><th>Supprimer</th></tr></thead><tbody>' +
+          pieces.map(p => '<tr><td>' + ((p.marque || '') + ' ' + (p.modele || '')).trim() + ' (#' + p.product_id + ')</td><td>' + (p.product_type || '') + '</td><td>' + (p.quantite || '') + '</td><td><button type="button" class="btn-del-piece" data-piece="' + p.id + '" data-sav="' + idSav + '">Suppr.</button></td></tr>').join('') +
+          '</tbody></table>';
+        piecesList.querySelectorAll('.btn-del-piece').forEach(btn => {
+          btn.addEventListener('click', function() {
+            fetch('/API/sav/pieces_delete.php', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRF-Token': csrfToken },
+              body: new URLSearchParams({ id_piece: btn.dataset.piece || '', id_sav: btn.dataset.sav || '', csrf_token: csrfToken }).toString()
+            }).then(r => r.json()).then(resp => {
+              if (resp && resp.success) loadPieces(idSav);
+            });
+          });
+        });
+      })
+      .catch(() => { piecesList.innerHTML = '<p style="color:#ef4444;font-size:0.82rem;">Erreur de chargement des pièces.</p>'; });
+  }
+
+  function loadHistorique(idSav) {
+    if (!savHistoriqueList) return;
+    savHistoriqueList.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Chargement...</p>';
+    fetch('/API/sav/historique_get.php?id_sav=' + encodeURIComponent(String(idSav)), { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(d => {
+        if (!d || !d.success) throw new Error('load hist failed');
+        const list = Array.isArray(d.historique) ? d.historique : [];
+        if (!list.length) {
+          savHistoriqueList.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Aucun historique.</p>';
+          return;
+        }
+        savHistoriqueList.innerHTML = list.map(item => {
+          const who = ((item.prenom || '') + ' ' + (item.nom || '')).trim() || 'Système';
+          const date = item.date_action || '';
+          const txt = item.details || item.action || '';
+          return '<div style="padding:6px 0;border-bottom:1px solid #f1f5f9;"><span style="color:#9ca3af;font-size:0.78rem;">[' + date + ']</span> - <span style="color:#111827;">' + who + ' : ' + txt + '</span></div>';
+        }).join('');
+      })
+      .catch(() => { savHistoriqueList.innerHTML = '<p style="color:#ef4444;font-size:0.82rem;">Erreur de chargement.</p>'; });
+  }
 
   function openModal(){
     document.body.classList.add('modal-open');
@@ -921,6 +1283,12 @@ $pdfExportDateFinDefault = $today;
       const typePanne = tr.getAttribute('data-type-panne') || '';
       const com       = tr.getAttribute('data-commentaire') || '';
       const comTech   = tr.getAttribute('data-commentaire-technicien') || '';
+      const tempsEstime = tr.getAttribute('data-temps-estime') || '';
+      const tempsReel = tr.getAttribute('data-temps-reel') || '';
+      const cout = tr.getAttribute('data-cout') || '';
+      const datePrevue = tr.getAttribute('data-date-prevue') || '';
+      const satisfaction = tr.getAttribute('data-satisfaction') || '';
+      const commentaireClient = tr.getAttribute('data-commentaire-client') || '';
       const canEdit   = tr.getAttribute('data-can-edit') === '1';
 
       if (inputId)      inputId.value = id;
@@ -954,6 +1322,33 @@ $pdfExportDateFinDefault = $today;
         selectTypePanne.value = typePanne;
         selectTypePanne.disabled = !canEdit;
       }
+      if (inputDatePrevue) {
+        inputDatePrevue.value = datePrevue;
+        inputDatePrevue.disabled = !canEdit;
+      }
+      if (inputTempsEstime) {
+        inputTempsEstime.value = tempsEstime;
+        inputTempsEstime.disabled = !canEdit;
+      }
+      if (inputTempsReel) {
+        inputTempsReel.value = tempsReel;
+        inputTempsReel.disabled = !canEdit;
+      }
+      if (inputCout) {
+        inputCout.value = cout;
+        inputCout.disabled = !canEdit;
+      }
+      if (inputSatisfaction) {
+        inputSatisfaction.value = satisfaction;
+      }
+      if (textareaCommentaireClient) {
+        textareaCommentaireClient.value = commentaireClient;
+        textareaCommentaireClient.disabled = !canEdit;
+      }
+      stars.forEach(st => {
+        st.style.color = parseInt(st.dataset.val || '0', 10) <= parseInt(satisfaction || '0', 10) ? '#f59e0b' : '#d1d5db';
+      });
+      updateSatisfactionVisibility();
 
       if (submitBtn) {
         submitBtn.disabled = !canEdit;
@@ -970,9 +1365,43 @@ $pdfExportDateFinDefault = $today;
         }
       }
 
+      loadPieces(id);
+      loadHistorique(id);
       openModal();
     });
   });
+
+  if (btnAddPiece && pieceInlineForm) {
+    btnAddPiece.addEventListener('click', function() {
+      pieceInlineForm.style.display = pieceInlineForm.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+  if (btnPieceSave) {
+    btnPieceSave.addEventListener('click', function() {
+      const idSav = inputId ? inputId.value : '';
+      const productType = (document.getElementById('piece_product_type') || {}).value || '';
+      const productId = (document.getElementById('piece_product_id') || {}).value || '';
+      const quantite = (document.getElementById('piece_quantite') || {}).value || '1';
+      fetch('/API/sav/pieces_save.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRF-Token': csrfToken },
+        body: new URLSearchParams({
+          id_sav: String(idSav),
+          product_type: String(productType),
+          product_id: String(productId),
+          quantite: String(quantite),
+          csrf_token: csrfToken
+        }).toString()
+      }).then(r => r.json()).then(resp => {
+        if (resp && resp.success) {
+          loadPieces(idSav);
+        } else {
+          alert((resp && resp.error) ? resp.error : 'Erreur ajout pièce');
+        }
+      });
+    });
+  }
 
   const urlParamsSav = new URLSearchParams(window.location.search);
   const initialClientIdSav = urlParamsSav.get('client_id');
@@ -1080,6 +1509,46 @@ $pdfExportDateFinDefault = $today;
       const url = '/API/export_pdf_sav.php?date_debut=' + encodeURIComponent(d1) + '&date_fin=' + encodeURIComponent(d2);
       window.open(url, '_blank', 'noopener,noreferrer');
       closePdfSavModal();
+    });
+  }
+
+  // [Fonctionnalité A] create modal + clients autocomplete
+  const createOv = document.getElementById('createSavOverlay');
+  const createMd = document.getElementById('createSavModal');
+  const btnOpenCreate = document.getElementById('btnOpenCreateSav');
+  const btnCloseCreate = document.getElementById('btnCloseCreateSavModal');
+  const createSearch = document.getElementById('create_sav_client_search');
+  const createSelect = document.getElementById('create_sav_client_id');
+  function openCreateModal() {
+    if (!createOv || !createMd) return;
+    document.body.classList.add('modal-open');
+    createOv.style.display = 'block';
+    createOv.setAttribute('aria-hidden', 'false');
+    createMd.style.display = 'block';
+  }
+  function closeCreateModal() {
+    if (!createOv || !createMd) return;
+    document.body.classList.remove('modal-open');
+    createOv.style.display = 'none';
+    createOv.setAttribute('aria-hidden', 'true');
+    createMd.style.display = 'none';
+  }
+  if (btnOpenCreate) btnOpenCreate.addEventListener('click', openCreateModal);
+  if (btnCloseCreate) btnCloseCreate.addEventListener('click', closeCreateModal);
+  if (createOv) createOv.addEventListener('click', closeCreateModal);
+  if (createSearch && createSelect) {
+    createSearch.addEventListener('input', function() {
+      const qv = (createSearch.value || '').trim();
+      if (qv.length < 1) {
+        createSelect.innerHTML = '';
+        return;
+      }
+      fetch('/API/clients_search.php?q=' + encodeURIComponent(qv), { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(d => {
+          const results = (d && d.ok && Array.isArray(d.results)) ? d.results : [];
+          createSelect.innerHTML = results.map(item => '<option value="' + item.id + '">' + item.nom + '</option>').join('');
+        });
     });
   }
 })();
