@@ -265,6 +265,91 @@ try {
   $rows = [];
 }
 
+// [Fonctionnalité consommation]
+$premierReleve = null;
+$dernierReleve = null;
+$premierReleveMois = null;
+$historiqueReleves = [];
+$consoTotalBW = 0;
+$consoTotalColor = 0;
+$consoMoisBW = 0;
+$consoMoisColor = 0;
+if (!empty($macParam)) {
+  try {
+    $stmtFirst = $pdo->prepare("
+      SELECT TotalBW, TotalColor, Timestamp FROM (
+        SELECT TotalBW, TotalColor, Timestamp FROM compteur_relevee WHERE mac_norm = :mac1
+        UNION ALL
+        SELECT TotalBW, TotalColor, Timestamp FROM compteur_relevee_ancien WHERE mac_norm = :mac2
+      ) r WHERE TotalBW IS NOT NULL ORDER BY Timestamp ASC LIMIT 1
+    ");
+    $stmtFirst->execute([':mac1' => $macParam, ':mac2' => $macParam]);
+    $premierReleve = $stmtFirst->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    $stmtLast = $pdo->prepare("
+      SELECT TotalBW, TotalColor, TotalPages, Timestamp, TonerBlack, TonerCyan, TonerMagenta, TonerYellow
+      FROM (
+        SELECT TotalBW, TotalColor, TotalPages, Timestamp, TonerBlack, TonerCyan, TonerMagenta, TonerYellow
+        FROM compteur_relevee WHERE mac_norm = :mac1
+        UNION ALL
+        SELECT TotalBW, TotalColor, TotalPages, Timestamp, TonerBlack, TonerCyan, TonerMagenta, TonerYellow
+        FROM compteur_relevee_ancien WHERE mac_norm = :mac2
+      ) r WHERE TotalBW IS NOT NULL ORDER BY Timestamp DESC LIMIT 1
+    ");
+    $stmtLast->execute([':mac1' => $macParam, ':mac2' => $macParam]);
+    $dernierReleve = $stmtLast->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    $debutMois = date('Y-m-01 00:00:00');
+    $stmtMoisFirst = $pdo->prepare("
+      SELECT TotalBW, TotalColor, Timestamp FROM (
+        SELECT TotalBW, TotalColor, Timestamp FROM compteur_relevee WHERE mac_norm = :mac1 AND Timestamp >= :debut1
+        UNION ALL
+        SELECT TotalBW, TotalColor, Timestamp FROM compteur_relevee_ancien WHERE mac_norm = :mac2 AND Timestamp >= :debut2
+      ) r WHERE TotalBW IS NOT NULL ORDER BY Timestamp ASC LIMIT 1
+    ");
+    $stmtMoisFirst->execute([':mac1' => $macParam, ':debut1' => $debutMois, ':mac2' => $macParam, ':debut2' => $debutMois]);
+    $premierReleveMois = $stmtMoisFirst->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    if ($premierReleve && $dernierReleve) {
+      $consoTotalBW = max(0, (int)$dernierReleve['TotalBW'] - (int)$premierReleve['TotalBW']);
+      $consoTotalColor = max(0, (int)$dernierReleve['TotalColor'] - (int)$premierReleve['TotalColor']);
+    }
+    if ($premierReleveMois && $dernierReleve) {
+      $consoMoisBW = max(0, (int)$dernierReleve['TotalBW'] - (int)$premierReleveMois['TotalBW']);
+      $consoMoisColor = max(0, (int)$dernierReleve['TotalColor'] - (int)$premierReleveMois['TotalColor']);
+    }
+
+    $stmtHisto = $pdo->prepare("
+      SELECT Timestamp, TotalBW, TotalColor, TotalPages, TonerBlack, TonerCyan, TonerMagenta, TonerYellow
+      FROM (
+        SELECT Timestamp, TotalBW, TotalColor, TotalPages, TonerBlack, TonerCyan, TonerMagenta, TonerYellow
+        FROM compteur_relevee WHERE mac_norm = :mac1
+        UNION ALL
+        SELECT Timestamp, TotalBW, TotalColor, TotalPages, TonerBlack, TonerCyan, TonerMagenta, TonerYellow
+        FROM compteur_relevee_ancien WHERE mac_norm = :mac2
+      ) r WHERE TotalBW IS NOT NULL ORDER BY Timestamp DESC LIMIT 30
+    ");
+    $stmtHisto->execute([':mac1' => $macParam, ':mac2' => $macParam]);
+    $historiqueReleves = $stmtHisto->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    foreach ($historiqueReleves as $i => &$row) {
+      $next = $historiqueReleves[$i + 1] ?? null;
+      if ($next) {
+        $row['delta_bw'] = max(0, (int)$row['TotalBW'] - (int)$next['TotalBW']);
+        $row['delta_color'] = max(0, (int)$row['TotalColor'] - (int)$next['TotalColor']);
+      } else {
+        $row['delta_bw'] = max(0, (int)$row['TotalBW'] - (int)($premierReleve['TotalBW'] ?? 0));
+        $row['delta_color'] = max(0, (int)$row['TotalColor'] - (int)($premierReleve['TotalColor'] ?? 0));
+      }
+      $row['conso_depuis_debut_bw'] = max(0, (int)$row['TotalBW'] - (int)($premierReleve['TotalBW'] ?? 0));
+      $row['conso_depuis_debut_color'] = max(0, (int)$row['TotalColor'] - (int)($premierReleve['TotalColor'] ?? 0));
+    }
+    unset($row);
+  } catch (PDOException $e) {
+    error_log('[photocopieurs_details] Erreur consommation: ' . $e->getMessage());
+  }
+}
+
 /* ---------- En-tête (infos machine) ---------- */
 $latest     = !empty($rows) ? $rows[0] : null;
 $macPrettyFromParam = $useMac ? implode(':', str_split($macParam,2)) : null;
@@ -396,53 +481,90 @@ function pctOrIntOrNull($v): ?int {
     </div>
 
     <?php if ($rows): ?>
-      <div class="table-wrapper">
-        <table class="details">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Modèle</th>
-              <th>Statut</th>
-              <th class="th-toner">Toner K</th>
-              <th class="th-toner">Toner C</th>
-              <th class="th-toner">Toner M</th>
-              <th class="th-toner">Toner Y</th>
-              <th class="td-num">Total BW</th>
-              <th class="td-num">Total Color</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($rows as $r):
-              $ts = formatDateTime($r['Timestamp'] ?? null, 'Y-m-d H:i');
-              $mod  = $r['Model'] ?? '—';
-              $st   = $r['Status'] ?? '—';
+      <!-- [Fonctionnalité consommation] -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;text-align:center;">
+          <div style="font-size:0.8rem;color:#6b7280;margin-bottom:6px;">Consommation totale N&B</div>
+          <div style="font-size:2rem;font-weight:700;color:#111827;"><?= number_format($consoTotalBW, 0, ',', ' ') ?></div>
+          <div style="font-size:0.75rem;color:#9ca3af;">pages depuis le <?= $premierReleve ? date('d/m/Y', strtotime($premierReleve['Timestamp'])) : '—' ?></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;text-align:center;">
+          <div style="font-size:0.8rem;color:#6b7280;margin-bottom:6px;">Consommation totale Couleur</div>
+          <div style="font-size:2rem;font-weight:700;color:#2563eb;"><?= number_format($consoTotalColor, 0, ',', ' ') ?></div>
+          <div style="font-size:0.75rem;color:#9ca3af;">pages depuis le <?= $premierReleve ? date('d/m/Y', strtotime($premierReleve['Timestamp'])) : '—' ?></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;text-align:center;">
+          <div style="font-size:0.8rem;color:#6b7280;margin-bottom:6px;">Ce mois-ci N&B</div>
+          <div style="font-size:2rem;font-weight:700;color:#059669;"><?= number_format($consoMoisBW, 0, ',', ' ') ?></div>
+          <div style="font-size:0.75rem;color:#9ca3af;"><?= date('F Y') ?></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;text-align:center;">
+          <div style="font-size:0.8rem;color:#6b7280;margin-bottom:6px;">Ce mois-ci Couleur</div>
+          <div style="font-size:2rem;font-weight:700;color:#7c3aed;"><?= number_format($consoMoisColor, 0, ',', ' ') ?></div>
+          <div style="font-size:0.75rem;color:#9ca3af;"><?= date('F Y') ?></div>
+        </div>
+      </div>
 
-              $tk   = pctOrIntOrNull($r['TonerBlack']);
-              $tc   = pctOrIntOrNull($r['TonerCyan']);
-              $tm   = pctOrIntOrNull($r['TonerMagenta']);
-              $ty   = pctOrIntOrNull($r['TonerYellow']);
-
-              $totBW   = is_null($r['TotalBW'])    ? '—' : number_format((int)$r['TotalBW'], 0, ',', ' ');
-              $totCol  = is_null($r['TotalColor']) ? '—' : number_format((int)$r['TotalColor'], 0, ',', ' ');
-              
-              // Indicateur pour les relevés de l'ancien système
-              $dataSource = $r['source'] ?? null;
-              $isAncien = ($dataSource === 'ancien');
-            ?>
-              <tr>
-                <td><?= h($ts) ?><?php if ($isAncien): ?> <span class="ancien-badge" title="Données provenant de l'ancien système" aria-label="Ancien système">📜</span><?php endif; ?></td>
-                <td><?= h($mod) ?></td>
-                <td><?= h($st) ?></td>
-                <td class="td-toner"><div class="toner-bar k"><span style="width:<?= $tk!==null?$tk:0 ?>%"></span></div><em><?= $tk!==null ? $tk.'%' : '—' ?></em></td>
-                <td class="td-toner"><div class="toner-bar c"><span style="width:<?= $tc!==null?$tc:0 ?>%"></span></div><em><?= $tc!==null ? $tc.'%' : '—' ?></em></td>
-                <td class="td-toner"><div class="toner-bar m"><span style="width:<?= $tm!==null?$tm:0 ?>%"></span></div><em><?= $tm!==null ? $tm.'%' : '—' ?></em></td>
-                <td class="td-toner"><div class="toner-bar y"><span style="width:<?= $ty!==null?$ty:0 ?>%"></span></div><em><?= $ty!==null ? $ty.'%' : '—' ?></em></td>
-                <td class="td-num"><?= h($totBW) ?></td>
-                <td class="td-num"><?= h($totCol) ?></td>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin-bottom:24px;">
+        <h3 style="margin:0 0 16px;font-size:1rem;color:#111827;">Historique des relevés (30 derniers)</h3>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <button onclick="filtrerPeriode('7j')" class="btn-periode" data-periode="7j" style="padding:6px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:0.85rem;">7 jours</button>
+          <button onclick="filtrerPeriode('30j')" class="btn-periode" data-periode="30j" style="padding:6px 14px;border:1px solid #2563eb;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font-size:0.85rem;">30 jours</button>
+          <button onclick="filtrerPeriode('mois')" class="btn-periode" data-periode="mois" style="padding:6px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:0.85rem;">Ce mois</button>
+          <button onclick="filtrerPeriode('tout')" class="btn-periode" data-periode="tout" style="padding:6px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:0.85rem;">Tout</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table id="historique-table" style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead>
+              <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+                <th style="padding:10px 12px;text-align:left;color:#6b7280;font-weight:600;">Date / Heure</th>
+                <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Delta N&B</th>
+                <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Delta Couleur</th>
+                <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Conso totale N&B</th>
+                <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Conso totale Couleur</th>
+                <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Compteur brut N&B</th>
+                <th style="padding:10px 12px;text-align:center;color:#6b7280;font-weight:600;">Toners</th>
               </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              <?php if (empty($historiqueReleves)): ?>
+                <tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;">Aucun relevé disponible</td></tr>
+              <?php else: ?>
+                <?php foreach ($historiqueReleves as $i => $releve): ?>
+                  <tr style="border-bottom:1px solid #f3f4f6;<?= $i === 0 ? 'background:#f0fdf4;' : '' ?>">
+                    <td style="padding:10px 12px;color:#374151;font-weight:<?= $i===0?'600':'400' ?>;">
+                      <?= date('d/m/Y H:i', strtotime((string)$releve['Timestamp'])) ?>
+                      <?php if ($i === 0): ?>
+                        <span style="background:#059669;color:#fff;font-size:0.7rem;padding:2px 6px;border-radius:4px;margin-left:6px;">Dernier</span>
+                      <?php endif; ?>
+                    </td>
+                    <td style="padding:10px 12px;text-align:right;color:<?= ((int)$releve['delta_bw'] > 0) ? '#111827' : '#9ca3af' ?>;">
+                      <?= ((int)$releve['delta_bw'] > 0) ? '+' . number_format((int)$releve['delta_bw'], 0, ',', ' ') : '—' ?>
+                    </td>
+                    <td style="padding:10px 12px;text-align:right;color:<?= ((int)$releve['delta_color'] > 0) ? '#2563eb' : '#9ca3af' ?>;">
+                      <?= ((int)$releve['delta_color'] > 0) ? '+' . number_format((int)$releve['delta_color'], 0, ',', ' ') : '—' ?>
+                    </td>
+                    <td style="padding:10px 12px;text-align:right;color:#111827;"><?= number_format((int)$releve['conso_depuis_debut_bw'], 0, ',', ' ') ?></td>
+                    <td style="padding:10px 12px;text-align:right;color:#2563eb;"><?= number_format((int)$releve['conso_depuis_debut_color'], 0, ',', ' ') ?></td>
+                    <td style="padding:10px 12px;text-align:right;color:#9ca3af;font-size:0.78rem;"><?= number_format((int)($releve['TotalBW'] ?? 0), 0, ',', ' ') ?></td>
+                    <td style="padding:10px 12px;text-align:center;">
+                      <?php
+                        $tb = (int)($releve['TonerBlack'] ?? 0);
+                        $tc = (int)($releve['TonerCyan'] ?? 0);
+                      ?>
+                      <?php if ($tb > 0): ?>
+                        <span style="display:inline-block;background:<?= $tb <= 10 ? '#ef4444' : ($tb <= 25 ? '#f59e0b' : '#22c55e') ?>;color:#fff;font-size:0.7rem;padding:2px 5px;border-radius:3px;margin:1px;" title="Noir">N <?= $tb ?>%</span>
+                      <?php endif; ?>
+                      <?php if ($tc > 0): ?>
+                        <span style="display:inline-block;background:#0ea5e9;color:#fff;font-size:0.7rem;padding:2px 5px;border-radius:3px;margin:1px;" title="Cyan">C <?= $tc ?>%</span>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
       </div>
     <?php endif; ?>
   </div>
@@ -503,6 +625,31 @@ function pctOrIntOrNull($v): ?int {
   </div>
 
   <script <?= csp_nonce() ?>>
+    // [Fonctionnalité consommation]
+    function filtrerPeriode(periode) {
+      const maintenant = new Date();
+      let limiteDate = null;
+      if (periode === '7j') limiteDate = new Date(maintenant - 7 * 86400000);
+      else if (periode === '30j') limiteDate = new Date(maintenant - 30 * 86400000);
+      else if (periode === 'mois') limiteDate = new Date(maintenant.getFullYear(), maintenant.getMonth(), 1);
+
+      document.querySelectorAll('#historique-table tbody tr').forEach(tr => {
+        if (!limiteDate || periode === 'tout') { tr.style.display = ''; return; }
+        const dateCell = tr.querySelector('td:first-child');
+        if (!dateCell) { tr.style.display = ''; return; }
+        const parts = dateCell.textContent.trim().match(/(\d+)\/(\d+)\/(\d+)/);
+        if (!parts) { tr.style.display = ''; return; }
+        const dateReleve = new Date(parts[3], parts[2] - 1, parts[1]);
+        tr.style.display = dateReleve >= limiteDate ? '' : 'none';
+      });
+
+      document.querySelectorAll('.btn-periode').forEach(b => {
+        b.style.background = b.dataset.periode === periode ? '#2563eb' : '#fff';
+        b.style.color = b.dataset.periode === periode ? '#fff' : '';
+        b.style.borderColor = b.dataset.periode === periode ? '#2563eb' : '#d1d5db';
+      });
+    }
+
     (function(){
       const btn   = document.getElementById('btn-espace-client');
       const modal = document.getElementById('attachModal');
@@ -562,6 +709,7 @@ function pctOrIntOrNull($v): ?int {
 
         filter();
       }
+      filtrerPeriode('30j');
     })();
   </script>
 
