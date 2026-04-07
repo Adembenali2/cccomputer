@@ -523,12 +523,13 @@ function pctOrIntOrNull($v): ?int {
                 <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Conso totale N&B</th>
                 <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Conso totale Couleur</th>
                 <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Compteur brut N&B</th>
+                <th style="padding:10px 12px;text-align:right;color:#6b7280;font-weight:600;">Compteur brut Couleur</th>
                 <th style="padding:10px 12px;text-align:center;color:#6b7280;font-weight:600;">Toners</th>
               </tr>
             </thead>
             <tbody>
               <?php if (empty($historiqueReleves)): ?>
-                <tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;">Aucun relevé disponible</td></tr>
+                <tr><td colspan="8" style="padding:20px;text-align:center;color:#9ca3af;">Aucun relevé disponible</td></tr>
               <?php else: ?>
                 <?php foreach ($historiqueReleves as $i => $releve): ?>
                   <tr style="border-bottom:1px solid #f3f4f6;<?= $i === 0 ? 'background:#f0fdf4;' : '' ?>">
@@ -547,16 +548,37 @@ function pctOrIntOrNull($v): ?int {
                     <td style="padding:10px 12px;text-align:right;color:#111827;"><?= number_format((int)$releve['conso_depuis_debut_bw'], 0, ',', ' ') ?></td>
                     <td style="padding:10px 12px;text-align:right;color:#2563eb;"><?= number_format((int)$releve['conso_depuis_debut_color'], 0, ',', ' ') ?></td>
                     <td style="padding:10px 12px;text-align:right;color:#9ca3af;font-size:0.78rem;"><?= number_format((int)($releve['TotalBW'] ?? 0), 0, ',', ' ') ?></td>
+                    <td style="padding:10px 12px;text-align:right;color:#9ca3af;font-size:0.78rem;"><?= number_format((int)($releve['TotalColor'] ?? 0), 0, ',', ' ') ?></td>
                     <td style="padding:10px 12px;text-align:center;">
                       <?php
                         $tb = (int)($releve['TonerBlack'] ?? 0);
                         $tc = (int)($releve['TonerCyan'] ?? 0);
+                        $tm = (int)($releve['TonerMagenta'] ?? 0);
+                        $ty = (int)($releve['TonerYellow'] ?? 0);
+
+                        $tonerColor = function($v) {
+                            if ($v <= 10) return '#ef4444';
+                            if ($v <= 25) return '#f59e0b';
+                            return '#22c55e';
+                        };
+
+                        $toners = [
+                            ['label' => 'N', 'val' => $tb, 'bg' => $tonerColor($tb)],
+                            ['label' => 'C', 'val' => $tc, 'bg' => '#0ea5e9'],
+                            ['label' => 'M', 'val' => $tm, 'bg' => '#ec4899'],
+                            ['label' => 'J', 'val' => $ty, 'bg' => '#eab308'],
+                        ];
                       ?>
-                      <?php if ($tb > 0): ?>
-                        <span style="display:inline-block;background:<?= $tb <= 10 ? '#ef4444' : ($tb <= 25 ? '#f59e0b' : '#22c55e') ?>;color:#fff;font-size:0.7rem;padding:2px 5px;border-radius:3px;margin:1px;" title="Noir">N <?= $tb ?>%</span>
-                      <?php endif; ?>
-                      <?php if ($tc > 0): ?>
-                        <span style="display:inline-block;background:#0ea5e9;color:#fff;font-size:0.7rem;padding:2px 5px;border-radius:3px;margin:1px;" title="Cyan">C <?= $tc ?>%</span>
+                      <?php foreach ($toners as $t): ?>
+                        <?php if ($t['val'] <= 0) continue; ?>
+                        <?php $bg = ($t['label'] === 'N') ? $tonerColor($tb) : $t['bg']; ?>
+                        <?php $textColor = ($t['label'] === 'J') ? '#111827' : '#fff'; ?>
+                        <span style="display:inline-flex;align-items:center;gap:2px;background:<?= $bg ?>;color:<?= $textColor ?>;font-size:0.7rem;font-weight:600;padding:3px 6px;border-radius:4px;margin:1px;white-space:nowrap;" title="Toner <?= $t['label'] ?> : <?= $t['val'] ?>%">
+                          <?= $t['label'] ?> <?= $t['val'] ?>%
+                        </span>
+                      <?php endforeach; ?>
+                      <?php if ($tb <= 0 && $tc <= 0 && $tm <= 0 && $ty <= 0): ?>
+                        <span style="color:#9ca3af;font-size:0.78rem;">—</span>
                       <?php endif; ?>
                     </td>
                   </tr>
