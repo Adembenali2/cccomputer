@@ -565,7 +565,8 @@ if ($view === 'unassigned') {
     LEFT JOIN photocopieurs_clients pc ON pc.id_client = c.id
     LEFT JOIN v_last v ON v.mac_norm = pc.mac_norm
     -- [Fonctionnalité A]
-    WHERE (:statut = 'tous' OR COALESCE(c.statut, 'actif') = :statut)
+    WHERE 1=1
+      AND (c.statut IS NULL OR c.statut = :statut_filtre)
     ORDER BY
       COALESCE(c.raison_sociale, '—') ASC,
       COALESCE(pc.SerialNumber, pc.mac_norm) ASC
@@ -573,14 +574,32 @@ if ($view === 'unassigned') {
     ";
 }
 
+$showStatutMigrationWarning = false;
 try {
     $stmt = $pdo->prepare($sql);
-    // [Fonctionnalité A]
-    $stmt->execute($view === 'assigned' ? [':statut' => $statutFilter] : []);
+    $stmt->execute($view === 'assigned' ? [':statut_filtre' => 'actif'] : []);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    error_log('clients.php SQL error: ' . $e->getMessage());
-    $rows = [];
+    $errorMessage = $e->getMessage();
+    if ($view === 'assigned' && stripos($errorMessage, "Unknown column 'c.statut'") !== false) {
+        try {
+            $sqlFallback = str_replace(
+                "WHERE 1=1\n      AND (c.statut IS NULL OR c.statut = :statut_filtre)",
+                "WHERE 1=1",
+                $sql
+            );
+            $stmt = $pdo->prepare($sqlFallback);
+            $stmt->execute();
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $showStatutMigrationWarning = (($_SESSION['emploi'] ?? '') === 'Admin');
+        } catch (PDOException $e2) {
+            error_log('clients.php SQL fallback error: ' . $e2->getMessage());
+            $rows = [];
+        }
+    } else {
+        error_log('clients.php SQL error: ' . $errorMessage);
+        $rows = [];
+    }
 }
 
 // Calcul des statistiques
@@ -629,6 +648,11 @@ if (!empty($flash['type']) && ($flash['msg'] ?? '') !== '') {
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
 <div class="page-container">
+  <?php if ($showStatutMigrationWarning): ?>
+    <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin-bottom:16px;border-radius:6px;font-weight:600;">
+      ⚠️ Migration en attente : exécutez sql/migrations/add_client_statut.sql
+    </div>
+  <?php endif; ?>
   <div class="page-header">
     <h2 class="page-title">
       <?= $view==='unassigned' ? 'Photocopieurs non attribués' : 'Photocopieurs attribués par client' ?>
