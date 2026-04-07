@@ -134,7 +134,8 @@ try {
   $stmt = $pdo->prepare("SELECT id, numero_client, raison_sociale, adresse, code_postal, ville, 
                          nom_dirigeant, prenom_dirigeant, telephone1, telephone2, email, siret, 
                          numero_tva, depot_mode, parrain, offre, date_creation, date_dajout,
-                         adresse_livraison, livraison_identique, pdf1, pdf2, pdf3, pdf4, pdf5, pdfcontrat, iban
+                         adresse_livraison, livraison_identique, pdf1, pdf2, pdf3, pdf4, pdf5, pdfcontrat, iban,
+                         statut, notes_internes
                          FROM clients WHERE id = :id LIMIT 1");
   $stmt->execute([':id'=>$id]);
   $client = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -239,6 +240,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     'parrain'           => trim(v('parrain', $client['parrain'])),
     'offre'             => in_array(v('offre', $client['offre']), ['packbronze','packargent'], true) ? v('offre', $client['offre']) : $client['offre'],
     'iban'              => trim(v('iban', $client['iban'])),
+    // [Fonctionnalité E]
+    'notes_internes'    => mb_substr(trim(strip_tags((string)v('notes_internes', (string)($client['notes_internes'] ?? '')))), 0, 2000),
   ];
   if ($data['livraison_identique']) {
     $data['adresse_livraison'] = $data['adresse']; // synchro
@@ -290,7 +293,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
       'numero_client', 'raison_sociale', 'adresse', 'code_postal', 'ville',
       'adresse_livraison', 'livraison_identique', 'siret', 'numero_tva',
       'depot_mode', 'nom_dirigeant', 'prenom_dirigeant', 'telephone1',
-      'telephone2', 'email', 'parrain', 'offre', 'iban'
+      'telephone2', 'email', 'parrain', 'offre', 'iban',
+      // [Fonctionnalité E]
+      'notes_internes'
     ];
     $allowedFileColumns = ['pdf1', 'pdf2', 'pdf3', 'pdf4', 'pdf5', 'pdfcontrat'];
     
@@ -360,6 +365,12 @@ if (($_GET['saved'] ?? '') === '1') {
         <span class="badge">Créé le : <?= h(date('Y-m-d', strtotime($client['date_creation'] ?? $client['date_dajout'] ?? 'now'))) ?></span>
       </div>
     </div>
+    <?php if (($client['statut'] ?? 'actif') === 'archive'): ?>
+      <!-- [Fonctionnalité A] -->
+      <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin-bottom:16px;border-radius:6px;font-weight:bold;">
+        ⚠️ Ce client est archivé. Il n'apparaît plus dans les listes actives.
+      </div>
+    <?php endif; ?>
 
     <div class="details-header">
       <div>
@@ -389,6 +400,13 @@ if (($_GET['saved'] ?? '') === '1') {
         </div>
       </div>
     </div>
+    <?php if (!empty(trim((string)($client['notes_internes'] ?? '')))): ?>
+      <!-- [Fonctionnalité E] -->
+      <div style="background:#fefce8;border-left:4px solid #eab308;padding:12px 16px;border-radius:6px;margin-bottom:16px;white-space:pre-wrap;font-size:0.9rem;">
+        <strong>📝 Notes internes :</strong><br>
+        <?= nl2br(htmlspecialchars((string)$client['notes_internes'], ENT_QUOTES, 'UTF-8')) ?>
+      </div>
+    <?php endif; ?>
 
     <section class="ccf-hub" id="ccf-top" aria-label="Vue d'ensemble client">
       <div class="ccf-hub-head">
@@ -403,6 +421,18 @@ if (($_GET['saved'] ?? '') === '1') {
         <a class="ccf-btn" href="/public/paiements.php">Paiements / factures</a>
         <a class="ccf-btn" href="/public/historique.php?client_id=<?= (int)$id ?>">Historique (audit)</a>
         <a class="ccf-btn ccf-btn--secondary" href="#client-form-edit">Modifier la fiche</a>
+        <!-- [Fonctionnalité A] -->
+        <?php $isArchivedClient = (($client['statut'] ?? 'actif') === 'archive'); ?>
+        <button
+          type="button"
+          id="btnToggleClientStatut"
+          class="ccf-btn"
+          data-id-client="<?= (int)$id ?>"
+          data-action="<?= $isArchivedClient ? 'reactiver' : 'archiver' ?>"
+          style="border:none;cursor:pointer;background:<?= $isArchivedClient ? '#16a34a' : '#dc2626' ?>;color:#fff;"
+        >
+          <?= $isArchivedClient ? 'Réactiver ce client' : 'Archiver ce client' ?>
+        </button>
       </div>
 
       <div class="ccf-kpis" role="group" aria-label="Indicateurs">
@@ -678,13 +708,41 @@ if (($_GET['saved'] ?? '') === '1') {
         <input type="text" name="adresse_livraison" id="adresse_livraison" value="<?= h($client['adresse_livraison']) ?>" placeholder="Laisser vide si identique" />
       </div>
 
+      <!-- [Fonctionnalité F] -->
+      <div class="section-card">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Contacts de la société</span>
+          <button type="button" id="btnOpenContactModal" class="ccf-btn">Ajouter un contact</button>
+        </div>
+        <div style="overflow:auto;">
+          <table class="ccf-table" id="contactsTable">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Prénom</th>
+                <th>Poste</th>
+                <th>Téléphone</th>
+                <th>Email</th>
+                <th>Principal</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="contactsTableBody">
+              <tr><td colspan="7" class="ccf-muted">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Administration -->
       <div class="section-card">
         <div class="section-title">Administration</div>
         <div class="grid two">
           <div>
             <label>SIRET*</label>
-            <input type="text" name="siret" value="<?= h($client['siret']) ?>" required />
+            <input type="text" id="edit-client-siret" name="siret" value="<?= h($client['siret']) ?>" required />
+            <!-- [Fonctionnalité B] -->
+            <div id="edit-client-siret-feedback" style="font-size:0.83rem;margin-top:4px;"></div>
           </div>
           <div>
             <label>Numéro TVA</label>
@@ -757,6 +815,21 @@ if (($_GET['saved'] ?? '') === '1') {
         </div>
       </div>
 
+      <!-- [Fonctionnalité E] -->
+      <div class="form-section section-card">
+        <h3>Notes internes</h3>
+        <div class="form-group">
+          <label>Notes et commentaires (visibles uniquement en interne)</label>
+          <textarea name="notes_internes" rows="5" maxlength="2000"
+            placeholder="Informations importantes, historique commercial, points d'attention..."
+            style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9rem;resize:vertical;"
+          ><?= htmlspecialchars($client['notes_internes'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+          <span style="font-size:0.75rem;color:#9ca3af;" id="notes-counter">
+            0 / 2000 caractères
+          </span>
+        </div>
+      </div>
+
       <!-- Justificatifs -->
       <div class="section-card">
         <div class="section-title">Justificatifs (PDF/JPG/PNG)</div>
@@ -792,6 +865,44 @@ if (($_GET['saved'] ?? '') === '1') {
         <button type="submit" class="fiche-action-btn">Enregistrer</button>
       </div>
     </form>
+
+    <!-- [Fonctionnalité F] -->
+    <div id="contactModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:8px;padding:16px;max-width:520px;width:95%;">
+        <h3 style="margin-top:0;">Ajouter un contact</h3>
+        <div class="grid two">
+          <div>
+            <label>Nom*</label>
+            <input type="text" id="contactNom" />
+          </div>
+          <div>
+            <label>Prénom*</label>
+            <input type="text" id="contactPrenom" />
+          </div>
+        </div>
+        <div class="grid two">
+          <div>
+            <label>Poste</label>
+            <input type="text" id="contactPoste" />
+          </div>
+          <div>
+            <label>Téléphone</label>
+            <input type="text" id="contactTelephone" />
+          </div>
+        </div>
+        <div>
+          <label>Email</label>
+          <input type="email" id="contactEmail" />
+        </div>
+        <div style="margin-top:8px;">
+          <label><input type="checkbox" id="contactPrincipal" value="1"> Contact principal</label>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+          <button type="button" id="btnCloseContactModal" class="btn btn-secondary">Annuler</button>
+          <button type="button" id="btnSaveContact" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -814,6 +925,182 @@ if (($_GET['saved'] ?? '') === '1') {
       adr.addEventListener('input', ()=>{ if (cb.checked) adrLiv.value = adr.value; });
       cb.addEventListener('change', sync);
       sync();
+    })();
+    // [Fonctionnalité A]
+    (function(){
+      const btn = document.getElementById('btnToggleClientStatut');
+      if (!btn) return;
+      btn.addEventListener('click', function() {
+        const action = btn.getAttribute('data-action') || '';
+        const idClient = parseInt(btn.getAttribute('data-id-client') || '0', 10);
+        const csrf = document.body.getAttribute('data-csrf-token') || '';
+        if (!idClient || !action) return;
+        const confirmMsg = action === 'archiver'
+          ? 'Confirmer l\'archivage de ce client ?'
+          : 'Confirmer la réactivation de ce client ?';
+        if (!window.confirm(confirmMsg)) return;
+        fetch('/API/clients/toggle_statut.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+          body: new URLSearchParams({
+            id_client: String(idClient),
+            action: action,
+            csrf_token: csrf
+          }).toString()
+        })
+          .then(function(res){ return res.json(); })
+          .then(function(data){
+            if (data && data.success) {
+              window.location.reload();
+              return;
+            }
+            window.alert((data && data.error) ? data.error : 'Erreur lors de la mise à jour du statut.');
+          })
+          .catch(function(){
+            window.alert('Erreur réseau lors de la mise à jour du statut.');
+          });
+      });
+    })();
+    // [Fonctionnalité B]
+    (function(){
+      const siretInput = document.getElementById('edit-client-siret');
+      const siretFeedback = document.getElementById('edit-client-siret-feedback');
+      if (!siretInput || !siretFeedback) return;
+      siretInput.addEventListener('blur', function() {
+        const siret = (siretInput.value || '').trim();
+        siretFeedback.textContent = '';
+        if (siret.length !== 14) return;
+        fetch('/API/clients/check_siret.php?siret=' + encodeURIComponent(siret) + '&exclude_id=<?= (int)$id ?>', { credentials: 'same-origin' })
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if (data && data.exists && data.client) {
+              siretFeedback.style.color = '#dc2626';
+              siretFeedback.textContent = '⚠️ Ce SIRET existe déjà : ' + (data.client.raison_sociale || '') + ' (' + (data.client.numero_client || '') + ')';
+              return;
+            }
+            siretFeedback.style.color = '#16a34a';
+            siretFeedback.textContent = '✅ SIRET disponible';
+          })
+          .catch(function() {
+            siretFeedback.style.color = '#dc2626';
+            siretFeedback.textContent = '⚠️ Vérification du SIRET impossible';
+          });
+      });
+    })();
+    // [Fonctionnalité E]
+    (function(){
+      const ta = document.querySelector('textarea[name="notes_internes"]');
+      const counter = document.getElementById('notes-counter');
+      if (ta && counter) {
+        const update = () => counter.textContent = ta.value.length + ' / 2000 caractères';
+        ta.addEventListener('input', update);
+        update();
+      }
+    })();
+    // [Fonctionnalité F]
+    (function(){
+      const idClient = <?= (int)$id ?>;
+      const csrf = document.body.getAttribute('data-csrf-token') || '';
+      const tableBody = document.getElementById('contactsTableBody');
+      const modal = document.getElementById('contactModal');
+      const openBtn = document.getElementById('btnOpenContactModal');
+      const closeBtn = document.getElementById('btnCloseContactModal');
+      const saveBtn = document.getElementById('btnSaveContact');
+
+      function esc(v) {
+        return String(v || '').replace(/[&<>"']/g, function(ch){
+          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+        });
+      }
+      function openModal(){ if (modal) modal.style.display = 'flex'; }
+      function closeModal(){ if (modal) modal.style.display = 'none'; }
+      function resetForm() {
+        ['contactNom', 'contactPrenom', 'contactPoste', 'contactTelephone', 'contactEmail'].forEach(function(idEl){
+          const el = document.getElementById(idEl); if (el) el.value = '';
+        });
+        const principal = document.getElementById('contactPrincipal');
+        if (principal) principal.checked = false;
+      }
+      function renderContacts(contacts) {
+        if (!tableBody) return;
+        if (!Array.isArray(contacts) || contacts.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="7" class="ccf-muted">Aucun contact.</td></tr>';
+          return;
+        }
+        tableBody.innerHTML = contacts.map(function(c){
+          const star = Number(c.est_principal) === 1 ? '⭐' : '';
+          return '<tr>'
+            + '<td>' + esc(c.nom) + '</td>'
+            + '<td>' + esc(c.prenom) + '</td>'
+            + '<td>' + esc(c.poste || '—') + '</td>'
+            + '<td>' + esc(c.telephone || '—') + '</td>'
+            + '<td>' + esc(c.email || '—') + '</td>'
+            + '<td>' + star + '</td>'
+            + '<td><button type="button" class="btn btn-secondary btn-delete-contact" data-id="' + esc(c.id) + '">🗑 Supprimer</button></td>'
+            + '</tr>';
+        }).join('');
+        tableBody.querySelectorAll('.btn-delete-contact').forEach(function(btn){
+          btn.addEventListener('click', function() {
+            const contactId = parseInt(btn.getAttribute('data-id') || '0', 10);
+            if (!contactId) return;
+            if (!window.confirm('Supprimer ce contact ?')) return;
+            fetch('/API/clients/contacts_delete.php', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRF-Token': csrf },
+              body: new URLSearchParams({ id: String(contactId), id_client: String(idClient), csrf_token: csrf }).toString()
+            }).then(function(r){ return r.json(); }).then(function(d){
+              if (d && d.success) { loadContacts(); return; }
+              window.alert((d && d.error) ? d.error : 'Suppression impossible.');
+            }).catch(function(){ window.alert('Erreur réseau.'); });
+          });
+        });
+      }
+      function loadContacts() {
+        fetch('/API/clients/contacts_get.php?id_client=' + encodeURIComponent(String(idClient)), { credentials: 'same-origin' })
+          .then(function(r){ return r.json(); })
+          .then(function(d){ renderContacts(d && d.success ? d.contacts : []); })
+          .catch(function(){ if (tableBody) tableBody.innerHTML = '<tr><td colspan="7" class="ccf-muted">Erreur de chargement.</td></tr>'; });
+      }
+      if (openBtn) openBtn.addEventListener('click', function(){ resetForm(); openModal(); });
+      if (closeBtn) closeBtn.addEventListener('click', closeModal);
+      if (modal) {
+        modal.addEventListener('click', function(e){ if (e.target === modal) closeModal(); });
+      }
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+          const nom = (document.getElementById('contactNom') || {}).value || '';
+          const prenom = (document.getElementById('contactPrenom') || {}).value || '';
+          const poste = (document.getElementById('contactPoste') || {}).value || '';
+          const telephone = (document.getElementById('contactTelephone') || {}).value || '';
+          const email = (document.getElementById('contactEmail') || {}).value || '';
+          const estPrincipal = (document.getElementById('contactPrincipal') || {}).checked ? '1' : '0';
+          fetch('/API/clients/contacts_save.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRF-Token': csrf },
+            body: new URLSearchParams({
+              id_client: String(idClient),
+              nom: String(nom).trim(),
+              prenom: String(prenom).trim(),
+              poste: String(poste).trim(),
+              telephone: String(telephone).trim(),
+              email: String(email).trim(),
+              est_principal: estPrincipal,
+              csrf_token: csrf
+            }).toString()
+          }).then(function(r){ return r.json(); }).then(function(d){
+            if (d && d.success) {
+              closeModal();
+              loadContacts();
+              return;
+            }
+            window.alert((d && d.error) ? d.error : 'Enregistrement impossible.');
+          }).catch(function(){ window.alert('Erreur réseau.'); });
+        });
+      }
+      loadContacts();
     })();
   </script>
 </body>

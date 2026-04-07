@@ -1,0 +1,63 @@
+/* Alertes temps réel — dashboard */
+
+.alerts-section {
+    max-width: 1200px;
+    margin: 0 auto 1rem;
+    padding: 0 1rem;
+}
+
+.alerts-section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem;
+    color: var(--text-primary, #1e293b);
+}
+
+.dashboard-alert {
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.15s ease, filter 0.15s ease;
+}
+
+.dashboard-alert:hover {
+    filter: brightness(0.98);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-alert:focus {
+    outline: 2px solid var(--accent-primary, #3b82f6);
+    outline-offset: 2px;
+}
+
+.dashboard-alert-icon {
+    font-size: 1.25rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.dashboard-alert-message {
+    flex: 1;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-primary, #0f172a);
+}
+
+.alert-danger {
+    background: #fee2e2;
+    border-left: 4px solid #ef4444;
+}
+
+.alert-warning {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+}
+
+.alert-info {
+    background: #dbeafe;
+    border-left: 4px solid #3b82f6;
+}

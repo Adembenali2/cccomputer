@@ -426,16 +426,24 @@ if (($_GET['attached'] ?? '') === '1') {
     $flash = ['type' => 'success', 'msg' => "Photocopieur attribué avec succès."];
 }
 
+// [Fonctionnalité A]
+$statutFilter = (string)($_GET['statut'] ?? 'actif');
+if (!in_array($statutFilter, ['actif', 'archive', 'tous'], true)) {
+    $statutFilter = 'actif';
+}
+
 // Récupération de la liste des clients pour le select
 $clientsList = [];
 try {
+    // [Fonctionnalité A]
     $stmtClients = $pdo->prepare("
         SELECT id, numero_client, raison_sociale, nom_dirigeant, prenom_dirigeant
         FROM clients
+        WHERE (:statut = 'tous' OR COALESCE(statut, 'actif') = :statut)
         ORDER BY raison_sociale ASC
         LIMIT 500
     ");
-    $stmtClients->execute();
+    $stmtClients->execute([':statut' => $statutFilter]);
     $clientsList = $stmtClients->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('clients.php clients list error: ' . $e->getMessage());
@@ -444,7 +452,6 @@ try {
 // Détermination de la vue (assigned ou unassigned)
 $view = ($_GET['view'] ?? 'assigned');
 $view = ($view === 'unassigned') ? 'unassigned' : 'assigned';
-
 // Construction de la requête SQL selon la vue
 if ($view === 'unassigned') {
     // Non attribués = relevé sans client + entrée pc sans client et sans relevé
@@ -536,6 +543,7 @@ if ($view === 'unassigned') {
     SELECT
       c.id AS client_id, c.numero_client, c.raison_sociale,
       c.nom_dirigeant, c.prenom_dirigeant, c.telephone1,
+      c.ville, c.offre, c.depot_mode, COALESCE(c.statut, 'actif') AS statut_client,
       pc.mac_norm,
       COALESCE(pc.SerialNumber, v.SerialNumber) AS SerialNumber,
       COALESCE(pc.MacAddress, v.MacAddress) AS MacAddress,
@@ -547,6 +555,8 @@ if ($view === 'unassigned') {
     FROM clients c
     LEFT JOIN photocopieurs_clients pc ON pc.id_client = c.id
     LEFT JOIN v_last v ON v.mac_norm = pc.mac_norm
+    -- [Fonctionnalité A]
+    WHERE (:statut = 'tous' OR COALESCE(c.statut, 'actif') = :statut)
     ORDER BY
       COALESCE(c.raison_sociale, '—') ASC,
       COALESCE(pc.SerialNumber, pc.mac_norm) ASC
@@ -556,7 +566,8 @@ if ($view === 'unassigned') {
 
 try {
     $stmt = $pdo->prepare($sql);
-    $stmt->execute();
+    // [Fonctionnalité A]
+    $stmt->execute($view === 'assigned' ? [':statut' => $statutFilter] : []);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('clients.php SQL error: ' . $e->getMessage());
@@ -636,22 +647,71 @@ $lastRefreshLabel = date('d/m/Y à H:i');
   <!-- Barre de filtres + actions -->
   <div class="filters-row">
     <div class="filters-left">
+      <!-- [Fonctionnalité A] -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <a href="/public/clients.php?view=<?= h($view) ?>&statut=actif" class="btn <?= $statutFilter === 'actif' ? 'btn-primary' : 'btn-secondary' ?>" role="button">Clients actifs</a>
+        <a href="/public/clients.php?view=<?= h($view) ?>&statut=archive" class="btn <?= $statutFilter === 'archive' ? 'btn-primary' : 'btn-secondary' ?>" role="button">Clients archivés</a>
+        <a href="/public/clients.php?view=<?= h($view) ?>&statut=tous" class="btn <?= $statutFilter === 'tous' ? 'btn-primary' : 'btn-secondary' ?>" role="button">Tous les clients</a>
+      </div>
       <input type="text" id="q" class="filter-input" placeholder="Filtrer (client, modèle, SN, MAC)…">
       <button id="clearQ" class="btn btn-secondary" type="button">Effacer</button>
     </div>
     <div class="filters-actions">
+      <!-- [Fonctionnalité C] -->
+      <a id="btnExportCsv" href="/API/clients/export_csv.php?statut=<?= h($statutFilter) ?>" class="btn btn-outline" download>
+        📥 Exporter CSV
+      </a>
       <button id="btnAddClient" class="btn btn-primary" type="button">
         + Ajouter un client
       </button>
       <?php if ($view !== 'unassigned'): ?>
-        <a href="/public/clients.php?view=unassigned" class="btn btn-outline" role="button">
+        <a href="/public/clients.php?view=unassigned&statut=<?= h($statutFilter) ?>" class="btn btn-outline" role="button">
           Voir non attribués
         </a>
       <?php else: ?>
-        <a href="/public/clients.php" class="btn btn-outline" role="button">
+        <a href="/public/clients.php?statut=<?= h($statutFilter) ?>" class="btn btn-outline" role="button">
           ← Revenir aux attribués
         </a>
       <?php endif; ?>
+    </div>
+  </div>
+  <!-- [Fonctionnalité D] -->
+  <div style="margin-bottom:10px;">
+    <button id="btnAdvancedFilters" class="btn btn-secondary" type="button">Filtres avancés ▾</button>
+  </div>
+  <div id="advancedFiltersBar" style="display:none;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:12px;">
+    <div>
+      <label for="filterOffre">Offre</label>
+      <select id="filterOffre" class="filter-input">
+        <option value="">Toutes</option>
+        <option value="packbronze">Pack Bronze</option>
+        <option value="packargent">Pack Argent</option>
+      </select>
+    </div>
+    <div>
+      <label for="filterVille">Ville</label>
+      <input id="filterVille" class="filter-input" type="text" placeholder="Ville">
+    </div>
+    <div>
+      <label for="filterDepot">Mode paiement</label>
+      <select id="filterDepot" class="filter-input">
+        <option value="">Tous</option>
+        <option value="espece">Espèces</option>
+        <option value="cheque">Chèque</option>
+        <option value="virement">Virement</option>
+        <option value="paiement_carte">Carte</option>
+      </select>
+    </div>
+    <div>
+      <label for="filterMachines">Machines</label>
+      <select id="filterMachines" class="filter-input">
+        <option value="">Tous</option>
+        <option value="1">Avec machines</option>
+        <option value="0">Sans machines</option>
+      </select>
+    </div>
+    <div>
+      <button id="resetAdvancedFilters" class="btn btn-secondary" type="button">Réinitialiser les filtres</button>
     </div>
   </div>
 
@@ -708,7 +768,6 @@ $lastRefreshLabel = date('d/m/Y à H:i');
             $dirNom . ' ' . $tel . ' ' .
             $modele . ' ' . $sn . ' ' . $mac
         );
-
         // Construction de l'URL : utiliser mac_norm si disponible, sinon normaliser MacAddress, sinon utiliser SerialNumber
         $rowHref = '';
         
@@ -716,6 +775,11 @@ $lastRefreshLabel = date('d/m/Y à H:i');
         $macNormClean = trim((string)($macNorm ?? ''));
         $macClean = trim((string)($mac ?? ''));
         $snClean = trim((string)($sn ?? ''));
+        // [Fonctionnalité D]
+        $rowOffre = strtolower((string)($r['offre'] ?? ''));
+        $rowVille = (string)($r['ville'] ?? '');
+        $rowDepot = strtolower((string)($r['depot_mode'] ?? ''));
+        $rowHasMachine = ($macNormClean !== '' || $snClean !== '' || $modele !== '') ? '1' : '0';
         
         // Priorité 1 : Utiliser mac_norm si valide (12 hex sans séparateurs)
         if ($macNormClean !== '' && preg_match('/^[0-9A-F]{12}$/i', $macNormClean)) {
@@ -751,6 +815,10 @@ $lastRefreshLabel = date('d/m/Y à H:i');
             <?= $rowHrefAttr ?>
             <?= $rowClassAttr ?>
             <?= $isUnassigned ? ' data-unassigned="1"' : '' ?>
+            data-offre="<?= h($rowOffre) ?>"
+            data-ville="<?= h($rowVille) ?>"
+            data-depot="<?= h($rowDepot) ?>"
+            data-machines="<?= h($rowHasMachine) ?>"
             data-mac-norm="<?= h($macNormClean) ?>"
             data-mac-address="<?= h($macClean) ?>"
             data-serial-number="<?= h($snClean) ?>"
@@ -838,7 +906,12 @@ $lastRefreshLabel = date('d/m/Y à H:i');
           <div><label>Ville*</label><input type="text" name="ville" value="<?= old('ville') ?>" required></div>
         </div>
         <div class="grid-two">
-          <div><label>SIRET*</label><input type="text" name="siret" value="<?= old('siret') ?>" required></div>
+          <div>
+            <label>SIRET*</label>
+            <input type="text" id="add-client-siret" name="siret" value="<?= old('siret') ?>" required>
+            <!-- [Fonctionnalité B] -->
+            <div id="add-client-siret-feedback" style="font-size:0.83rem;margin-top:4px;"></div>
+          </div>
           <div><label>Numéro TVA</label><input type="text" name="numero_tva" value="<?= old('numero_tva') ?>"></div>
         </div>
 
@@ -1112,26 +1185,101 @@ $lastRefreshLabel = date('d/m/Y à H:i');
       });
     });
 
-    // Filtre rapide
+    // [Fonctionnalité B/C/D]
     const q = document.getElementById('q');
     const clear = document.getElementById('clearQ');
+    const lines = Array.from(document.querySelectorAll('table#tbl tbody tr'));
+    const filterOffre = document.getElementById('filterOffre');
+    const filterVille = document.getElementById('filterVille');
+    const filterDepot = document.getElementById('filterDepot');
+    const filterMachines = document.getElementById('filterMachines');
+    const btnAdvancedFilters = document.getElementById('btnAdvancedFilters');
+    const advancedFiltersBar = document.getElementById('advancedFiltersBar');
+    const resetAdvancedFilters = document.getElementById('resetAdvancedFilters');
+    const exportCsvBtn = document.getElementById('btnExportCsv');
+    const statutUrl = new URLSearchParams(window.location.search).get('statut') || 'actif';
+    if (exportCsvBtn) {
+      exportCsvBtn.href = '/API/clients/export_csv.php?statut=' + encodeURIComponent(statutUrl);
+    }
+    function applyCombinedFilters() {
+      const textVal = ((q && q.value) || '').trim().toLowerCase();
+      const offreVal = ((filterOffre && filterOffre.value) || '').toLowerCase();
+      const villeVal = ((filterVille && filterVille.value) || '').trim().toLowerCase();
+      const depotVal = ((filterDepot && filterDepot.value) || '').toLowerCase();
+      const machinesVal = ((filterMachines && filterMachines.value) || '');
+      lines.forEach(tr => {
+        const txt = (tr.getAttribute('data-search') || '').toLowerCase();
+        const dataOffre = (tr.getAttribute('data-offre') || '').toLowerCase();
+        const dataVille = (tr.getAttribute('data-ville') || '').toLowerCase();
+        const dataDepot = (tr.getAttribute('data-depot') || '').toLowerCase();
+        const dataMachines = (tr.getAttribute('data-machines') || '');
+        const textOk = !textVal || txt.includes(textVal);
+        const offreOk = !offreVal || dataOffre === offreVal;
+        const villeOk = !villeVal || dataVille.includes(villeVal);
+        const depotOk = !depotVal || dataDepot === depotVal;
+        const machinesOk = !machinesVal || dataMachines === machinesVal;
+        tr.style.display = (textOk && offreOk && villeOk && depotOk && machinesOk) ? '' : 'none';
+      });
+    }
     if (q) {
-      const lines = Array.from(document.querySelectorAll('table#tbl tbody tr'));
-      function apply() {
-        const v = (q.value || '').trim().toLowerCase();
-        lines.forEach(tr => {
-          const t = (tr.getAttribute('data-search') || '').toLowerCase();
-          tr.style.display = !v || t.includes(v) ? '' : 'none';
-        });
-      }
-      q.addEventListener('input', apply);
-      if (clear) {
-        clear.addEventListener('click', () => {
-          q.value = '';
-          apply();
-          q.focus();
-        });
-      }
+      q.addEventListener('input', applyCombinedFilters);
+    }
+    if (clear && q) {
+      clear.addEventListener('click', () => {
+        q.value = '';
+        applyCombinedFilters();
+        q.focus();
+      });
+    }
+    [filterOffre, filterVille, filterDepot, filterMachines].forEach(el => {
+      if (!el) return;
+      el.addEventListener('input', applyCombinedFilters);
+      el.addEventListener('change', applyCombinedFilters);
+    });
+    if (btnAdvancedFilters && advancedFiltersBar) {
+      btnAdvancedFilters.addEventListener('click', () => {
+        const isOpen = advancedFiltersBar.style.display !== 'none';
+        advancedFiltersBar.style.display = isOpen ? 'none' : 'flex';
+        btnAdvancedFilters.textContent = isOpen ? 'Filtres avancés ▾' : 'Filtres avancés ▴';
+      });
+    }
+    if (resetAdvancedFilters) {
+      resetAdvancedFilters.addEventListener('click', () => {
+        if (filterOffre) filterOffre.value = '';
+        if (filterVille) filterVille.value = '';
+        if (filterDepot) filterDepot.value = '';
+        if (filterMachines) filterMachines.value = '';
+        applyCombinedFilters();
+      });
+    }
+    applyCombinedFilters();
+
+    // [Fonctionnalité B]
+    const siretInput = document.getElementById('add-client-siret');
+    const siretFeedback = document.getElementById('add-client-siret-feedback');
+    if (siretInput && siretFeedback) {
+      siretInput.addEventListener('blur', function() {
+        const siret = (siretInput.value || '').trim();
+        siretFeedback.textContent = '';
+        if (siret.length !== 14) {
+          return;
+        }
+        fetch('/API/clients/check_siret.php?siret=' + encodeURIComponent(siret), { credentials: 'same-origin' })
+          .then(r => r.json())
+          .then(data => {
+            if (data && data.exists && data.client) {
+              siretFeedback.style.color = '#dc2626';
+              siretFeedback.textContent = '⚠️ Ce SIRET existe déjà : ' + (data.client.raison_sociale || '') + ' (' + (data.client.numero_client || '') + ')';
+              return;
+            }
+            siretFeedback.style.color = '#16a34a';
+            siretFeedback.textContent = '✅ SIRET disponible';
+          })
+          .catch(() => {
+            siretFeedback.style.color = '#dc2626';
+            siretFeedback.textContent = '⚠️ Vérification du SIRET impossible';
+          });
+      });
     }
 
     // ===== Recherche de client avec autocomplétion =====
