@@ -502,7 +502,7 @@ function pctOrIntOrNull($v): ?int {
     </form>
   </div>
 
-  <script>
+  <script <?= csp_nonce() ?>>
     (function(){
       const btn   = document.getElementById('btn-espace-client');
       const modal = document.getElementById('attachModal');

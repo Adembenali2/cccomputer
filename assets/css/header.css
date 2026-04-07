@@ -277,6 +277,13 @@ body {
 }
 
 .notif-wrap { position: relative; }
+.notif-wrap .notif-btn {
+    position: relative;
+}
+.notif-bell {
+    line-height: 1;
+    flex-shrink: 0;
+}
 .notif-badge {
     position:absolute; top: 4px; right: 4px;
     background:#ef4444; color:#fff; font-size:11px;
@@ -307,6 +314,16 @@ body {
 }
 .notif-markall:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 .notif-item { padding:10px 12px; border-bottom:1px solid var(--bg-tertiary); }
+button.notif-item {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    display: block;
+}
 .notif-item.unread { background: var(--bg-secondary); }
 .notif-item .title { font-weight:600; margin-bottom:4px; }
 .notif-item .body { font-size: 0.9rem; }

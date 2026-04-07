@@ -1,6 +1,8 @@
 <?php
 // /redirection/compte_desactiver.php
 // Statut 403 : accès refusé (compte inactif)
+require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/security_headers.php';
 http_response_code(403);
 ?>
 <!DOCTYPE html>
@@ -45,7 +47,7 @@ http_response_code(403);
         @keyframes fadeOut { to { opacity:0; } }
         @keyframes fadeIn { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
     </style>
-    <script>
+    <script <?= csp_nonce() ?>>
         // Redirection après 3 secondes
         setTimeout(function () {
             window.location.href = "/public/login.php";

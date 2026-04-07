@@ -47,6 +47,7 @@ try {
     try {
         foreach ($queries as $query) {
             echo 'Exécution: ' . substr($query, 0, 100) . "...\n";
+<<<<<<< HEAD
             try {
                 $pdo->exec($query);
             } catch (PDOException $e) {
@@ -62,6 +63,13 @@ try {
 
         $pdo->commit();
         echo "✅ Migration réussie : index créés ou déjà présents.\n";
+=======
+            $pdo->exec($query);
+        }
+
+        $pdo->commit();
+        echo "✅ Migration réussie : index créés ou déjà présents (IF NOT EXISTS).\n";
+>>>>>>> 3c27e996e742d3dba24b51560b6c4a4c568d4521
     } catch (PDOException $e) {
         $pdo->rollBack();
         throw $e;

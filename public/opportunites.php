@@ -50,7 +50,7 @@ ensureCsrfToken();
     </div>
     <div id="opp-root">Chargement…</div>
   </main>
-  <script>
+  <script <?= csp_nonce() ?>>
 (function(){
   const csrf = document.body.getAttribute('data-csrf-token') || '';
   const root = document.getElementById('opp-root');

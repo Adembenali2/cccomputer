@@ -96,19 +96,38 @@ class ClientRepository
      */
     public function findAll(int $limit = 500): array
     {
-        $stmt = $this->pdo->prepare("
+        require_once __DIR__ . '/../../includes/CacheHelper.php';
+
+        $params = ['limit' => $limit];
+        $key = 'clients:list:' . md5(serialize($params));
+
+        $rows = CacheHelper::remember(
+            $key,
+            function () use ($limit) {
+                $stmt = $this->pdo->prepare("
             SELECT * FROM clients
             ORDER BY raison_sociale ASC
             LIMIT :limit
         ");
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $out = [];
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $out[] = $row;
+                }
+
+                return $out;
+            },
+            300,
+            ['clients']
+        );
+
         $results = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        foreach ($rows as $row) {
             $results[] = Client::fromArray($row);
         }
-        
+
         return $results;
     }
     
@@ -119,7 +138,14 @@ class ClientRepository
      */
     public function findAllWithPhotocopieurs(): array
     {
-        $sql = "
+        require_once __DIR__ . '/../../includes/CacheHelper.php';
+
+        $key = 'clients:list:' . md5(serialize(['with_photocopieurs' => true]));
+
+        $packed = CacheHelper::remember(
+            $key,
+            function () {
+                $sql = "
             SELECT 
                 c.*,
                 pc.mac_norm,
@@ -147,30 +173,52 @@ class ClientRepository
             WHERE pc.mac_norm IS NOT NULL AND pc.mac_norm != ''
             ORDER BY c.raison_sociale, pc.mac_norm
         ";
-        
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute();
-        
-        $clientsData = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $clientId = (int)($row['id'] ?? 0);
-            
-            if (!isset($clientsData[$clientId])) {
-                $clientsData[$clientId] = [
-                    'client' => Client::fromArray($row),
-                    'photocopieurs' => []
-                ];
-            }
-            
-            $clientsData[$clientId]['photocopieurs'][] = [
-                'mac_norm' => trim($row['mac_norm'] ?? ''),
-                'mac_address' => $row['MacAddress'] ?? '',
-                'serial' => $row['SerialNumber'] ?? '',
-                'model' => $row['Model'] ?? 'Inconnu'
+
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute();
+
+                $clientsData = [];
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $clientId = (int) ($row['id'] ?? 0);
+
+                    if (!isset($clientsData[$clientId])) {
+                        $clientsData[$clientId] = [
+                            'client' => Client::fromArray($row),
+                            'photocopieurs' => [],
+                        ];
+                    }
+
+                    $clientsData[$clientId]['photocopieurs'][] = [
+                        'mac_norm' => trim($row['mac_norm'] ?? ''),
+                        'mac_address' => $row['MacAddress'] ?? '',
+                        'serial' => $row['SerialNumber'] ?? '',
+                        'model' => $row['Model'] ?? 'Inconnu',
+                    ];
+                }
+
+                $storable = [];
+                foreach (array_values($clientsData) as $item) {
+                    $storable[] = [
+                        'client' => $item['client']->toArray(),
+                        'photocopieurs' => $item['photocopieurs'],
+                    ];
+                }
+
+                return $storable;
+            },
+            300,
+            ['clients']
+        );
+
+        $out = [];
+        foreach ($packed as $item) {
+            $out[] = [
+                'client' => Client::fromArray($item['client']),
+                'photocopieurs' => $item['photocopieurs'],
             ];
         }
-        
-        return array_values($clientsData);
+
+        return $out;
     }
 }
 

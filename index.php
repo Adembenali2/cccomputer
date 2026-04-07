@@ -94,7 +94,10 @@ if ($requestUri !== '/') {
 // 1) Démarrer la session avec les bons paramètres (cookie path="/", secure, etc.)
 require_once __DIR__ . '/includes/session_config.php';
 
-// 2) Headers de sécurité
+// 2) Helpers (csp_nonce() pour les scripts inline sous CSP)
+require_once __DIR__ . '/includes/helpers.php';
+
+// 3) Headers de sécurité (CSP + nonce ; avant toute sortie HTML)
 require_once __DIR__ . '/includes/security_headers.php';
 
 // 2) Choisir la destination selon l'état de connexion
@@ -139,7 +142,7 @@ $redirectUrl = !empty($_SESSION['user_id'])
     @keyframes fadeOut { to { opacity: 0; } }
   </style>
 
-  <script>
+  <script <?= csp_nonce() ?>>
     // Redirection après 3 secondes vers la destination choisie côté PHP
     setTimeout(function () {
       window.location.href = "<?= htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') ?>";

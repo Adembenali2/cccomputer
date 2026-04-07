@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/auth_role.php';        // démarre la sessi
 authorize_page('client_fiche', ['Admin', 'Dirigeant']); // Utilise les valeurs exactes de la base de données (ENUM)   
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/historique.php';
+require_once __DIR__ . '/../includes/CacheHelper.php';
 
 // Récupérer PDO via la fonction centralisée
 $pdo = getPdo();
@@ -322,6 +323,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     try {
       $pdo->prepare($sql)->execute($params);
       logClientAction($pdo, $id, "Fiche mise à jour");
+      CacheHelper::invalidateTag('clients');
       // PRG
       header("Location: /public/client_fiche.php?id=".$id."&saved=1");
       exit;
@@ -637,7 +639,7 @@ if (($_GET['saved'] ?? '') === '1') {
         <?php endforeach; ?>
       </ul>
     </div>
-    <script>
+    <script <?= csp_nonce() ?>>
     (function(){
       var csrf = document.body.getAttribute('data-csrf-token') || '';
       document.querySelectorAll('.opp-fiche-btn').forEach(function(btn){
@@ -905,7 +907,7 @@ if (($_GET['saved'] ?? '') === '1') {
     </div>
   </div>
 
-  <script>
+  <script <?= csp_nonce() ?>>
     // Sync adresse livraison si "identique"
     (function(){
       const cb = document.getElementById('livraison_identique');

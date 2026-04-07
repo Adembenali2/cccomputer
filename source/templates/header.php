@@ -52,8 +52,18 @@ if (!function_exists('h')) {
         function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
     }
 }
+if (!function_exists('csp_nonce')) {
+    function csp_nonce(): string {
+        $nonce = $GLOBALS['csp_nonce'] ?? '';
+        if ($nonce === '') {
+            return '';
+        }
+        return 'nonce="' . htmlspecialchars($nonce, ENT_QUOTES, 'UTF-8') . '"';
+    }
+}
 ?>
 <link rel="stylesheet" href="/assets/css/header.css">
+<link rel="stylesheet" href="/assets/css/form-helpers.css">
 
 <a href="#main-content" class="skip-link">Aller au contenu</a>
 <header class="main-header" data-csrf-token="<?= h($csrf) ?>">
@@ -92,6 +102,22 @@ if (!function_exists('h')) {
       </svg>
       <span class="nav-label">Thème</span>
     </button>
+
+    <div class="notif-wrap nav-notif-wrap">
+      <button type="button" class="notif-btn" id="global-notif-btn" aria-label="Notifications" aria-expanded="false" aria-haspopup="true">
+        <span class="notif-bell" aria-hidden="true">🔔</span>
+        <span class="nav-label">Notifications</span>
+        <span class="notif-badge" id="global-notif-badge">0</span>
+      </button>
+      <div class="notif-dropdown" id="global-notif-dropdown" role="menu" aria-hidden="true">
+        <div class="notif-actions">
+          <span>Notifications</span>
+          <button type="button" class="notif-markall" id="global-notif-markall">Tout marquer lu</button>
+        </div>
+        <div id="global-notif-list"></div>
+        <div id="global-notif-empty" class="notif-item" style="display:none;">Aucune notification non lue.</div>
+      </div>
+    </div>
 
     <?php if ($modEnabled['dashboard']): ?>
     <a href="/public/dashboard.php" aria-label="Accueil">
@@ -185,6 +211,17 @@ if (!function_exists('h')) {
     </a>
     <?php endif; ?>
 
+    <?php
+    // [Fonctionnalité C] Dernière connexion (session précédente)
+    $lastLoginNav = $_SESSION['last_login_at'] ?? null;
+    if ($lastLoginNav !== null && $lastLoginNav !== '' && !empty($_SESSION['user_id'])):
+        $lastLoginTs = strtotime((string)$lastLoginNav);
+    ?>
+    <span class="nav-last-login" style="font-size:0.78rem;color:#9ca3af;line-height:1.2;text-align:right;max-width:160px;align-self:center;">
+      Dernière connexion : <?= $lastLoginTs ? h(date('d/m/Y à H:i', $lastLoginTs)) : '—' ?>
+    </span>
+    <?php endif; ?>
+
     <a href="/includes/logout.php" id="logout-link" aria-label="Déconnexion">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -196,7 +233,49 @@ if (!function_exists('h')) {
   </nav>
 </header>
 
-<script>
+<div id="alert-container" class="alert-container" role="region" aria-label="Notifications"></div>
+<?php if (!empty($_SESSION['user_id'])): ?>
+<div id="inactivity-warning" style="display:none;position:fixed;bottom:20px;right:20px;background:#f59e0b;color:#fff;padding:12px 18px;border-radius:8px;font-size:0.9rem;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.2);"></div>
+<script <?= csp_nonce() ?>>
+(function() {
+  // [Fonctionnalité B] Avertissement client avant déconnexion inactivité (aligné sur 30 min serveur)
+  const INACTIVITY_LIMIT = 1800;
+  const WARNING_BEFORE = 300;
+  let lastActivity = Date.now();
+  let warningShown = false;
+
+  function resetTimer() {
+    lastActivity = Date.now();
+    warningShown = false;
+    const banner = document.getElementById('inactivity-warning');
+    if (banner) banner.style.display = 'none';
+  }
+
+  ['mousemove','keydown','click','scroll','touchstart'].forEach(function(e) {
+    document.addEventListener(e, resetTimer, { passive: true });
+  });
+
+  setInterval(function() {
+    const elapsed = Math.floor((Date.now() - lastActivity) / 1000);
+    const remaining = INACTIVITY_LIMIT - elapsed;
+    if (remaining <= WARNING_BEFORE && !warningShown) {
+      warningShown = true;
+      const banner = document.getElementById('inactivity-warning');
+      if (banner) {
+        banner.textContent = 'Vous serez déconnecté dans ' + Math.ceil(remaining / 60) + ' minute(s) pour inactivité.';
+        banner.style.display = 'block';
+      }
+    }
+    if (remaining <= 0) {
+      window.location.href = '/includes/logout.php';
+    }
+  }, 10000);
+})();
+</script>
+<?php endif; ?>
+<script src="/assets/js/form-helpers.js"></script>
+
+<script <?= csp_nonce() ?>>
 document.addEventListener('DOMContentLoaded', () => {
   // --- INDICATEUR PAGE ACTIVE ---
   const path = window.location.pathname.replace(/\/$/, '');
@@ -420,6 +499,160 @@ document.addEventListener('DOMContentLoaded', () => {
     // Exposer la fonction globalement pour qu'elle puisse être appelée depuis d'autres pages
     window.updateMessagerieBadge = updateMessagerieBadge;
   }
+
+  // --- NOTIFICATIONS GLOBALES (hors chatroom) ---
+  (function initGlobalNotifications() {
+    const btn = document.getElementById('global-notif-btn');
+    const panel = document.getElementById('global-notif-dropdown');
+    const listEl = document.getElementById('global-notif-list');
+    const emptyEl = document.getElementById('global-notif-empty');
+    const badge = document.getElementById('global-notif-badge');
+    const markAllBtn = document.getElementById('global-notif-markall');
+    const headerEl = document.querySelector('.main-header');
+    if (!btn || !panel || !listEl || !badge || !headerEl) return;
+
+    const csrfToken = headerEl.dataset.csrfToken || '';
+    const POLL_MS = 30000;
+    let notifItems = [];
+
+    function notifHref(n) {
+      const id = n.id_lien;
+      const tl = n.type_lien;
+      if (id == null || id === '' || !tl) return null;
+      const sid = String(id);
+      if (tl === 'sav') return '/public/sav.php?sav_id=' + encodeURIComponent(sid);
+      if (tl === 'livraison') return '/public/livraison.php?livraison_id=' + encodeURIComponent(sid);
+      if (tl === 'facture') return '/public/view_facture.php?id=' + encodeURIComponent(sid);
+      if (tl === 'paiement') return '/public/paiements.php';
+      return null;
+    }
+
+    function formatNotifTime(isoOrSql) {
+      if (!isoOrSql) return '';
+      const s = String(isoOrSql).replace(' ', 'T');
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+    }
+
+    function setBadgeCount(n) {
+      if (n > 0) {
+        badge.textContent = n > 99 ? '99+' : String(n);
+        btn.classList.add('has-unread');
+      } else {
+        badge.textContent = '0';
+        btn.classList.remove('has-unread');
+      }
+    }
+
+    function renderList() {
+      listEl.innerHTML = '';
+      if (!notifItems.length) {
+        emptyEl.style.display = 'block';
+        return;
+      }
+      emptyEl.style.display = 'none';
+      notifItems.forEach((n) => {
+        const id = n.id;
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'notif-item unread';
+        row.setAttribute('role', 'menuitem');
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = n.titre || 'Notification';
+        const body = document.createElement('div');
+        body.className = 'body';
+        body.textContent = n.message || '';
+        const time = document.createElement('div');
+        time.className = 'time';
+        time.textContent = formatNotifTime(n.date_creation);
+        row.appendChild(title);
+        if (n.message) row.appendChild(body);
+        row.appendChild(time);
+        row.addEventListener('click', async () => {
+          const href = notifHref(n);
+          try {
+            await fetch('/API/notifications_mark_read.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+              },
+              body: JSON.stringify({ id_notification: id }),
+              credentials: 'include'
+            });
+          } catch (e) { /* ignore */ }
+          if (href) window.location.href = href;
+          else closePanel();
+        });
+        listEl.appendChild(row);
+      });
+    }
+
+    function closePanel() {
+      panel.classList.remove('open');
+      panel.setAttribute('aria-hidden', 'true');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function openPanel() {
+      panel.classList.add('open');
+      panel.setAttribute('aria-hidden', 'false');
+      btn.setAttribute('aria-expanded', 'true');
+      renderList();
+    }
+
+    async function loadNotifications() {
+      try {
+        const res = await fetch('/API/notifications_get.php', { cache: 'no-cache', credentials: 'include' });
+        if (res.status === 401) {
+          btn.closest('.notif-wrap').style.display = 'none';
+          return;
+        }
+        const data = await res.json();
+        if (!data.success) return;
+        notifItems = Array.isArray(data.notifications) ? data.notifications : [];
+        const c = typeof data.count === 'number' ? data.count : notifItems.length;
+        setBadgeCount(c);
+        if (panel.classList.contains('open')) renderList();
+      } catch (e) {
+        /* silencieux */
+      }
+    }
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (panel.classList.contains('open')) closePanel();
+      else openPanel();
+    });
+
+    document.addEventListener('click', () => closePanel());
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    if (markAllBtn) {
+      markAllBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await fetch('/API/notifications_mark_read.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({ all: true }),
+            credentials: 'include'
+          });
+        } catch (err) { /* ignore */ }
+        notifItems = [];
+        setBadgeCount(0);
+        renderList();
+      });
+    }
+
+    loadNotifications();
+    setInterval(loadNotifications, POLL_MS);
+  })();
 
   // --- EXÉCUTION AUTOMATIQUE DES ENVOIS PROGRAMMÉS (toutes les 1 min) ---
   (function initScheduledSendsPolling() {

@@ -8,6 +8,101 @@ declare(strict_types=1);
 class Validator
 {
     /**
+     * Vérifie que chaque clé existe dans $data et n'est pas vide (null, '', chaîne blanche).
+     */
+    public static function requireFields(array $fields, array $data): void
+    {
+        if (!function_exists('apiFail')) {
+            require_once __DIR__ . '/api_helpers.php';
+        }
+        foreach ($fields as $key) {
+            if (!array_key_exists($key, $data)) {
+                apiFail('Champ requis manquant : ' . $key, 400);
+            }
+            $v = $data[$key];
+            if ($v === null || $v === '' || (is_string($v) && trim($v) === '')) {
+                apiFail('Champ requis manquant : ' . $key, 400);
+            }
+        }
+    }
+
+    /**
+     * Valide et retourne un entier ; $min / $max inclus si fournis.
+     *
+     * @param mixed $value
+     */
+    public static function int($value, ?int $min = null, ?int $max = null): int
+    {
+        if (is_bool($value)) {
+            throw new InvalidArgumentException('Entier invalide');
+        }
+        if (is_int($value)) {
+            $int = $value;
+        } else {
+            $filtered = filter_var($value, FILTER_VALIDATE_INT);
+            if ($filtered === false) {
+                throw new InvalidArgumentException('Entier invalide');
+            }
+            $int = $filtered;
+        }
+        if ($min !== null && $int < $min) {
+            throw new InvalidArgumentException('Entier hors borne minimale');
+        }
+        if ($max !== null && $int > $max) {
+            throw new InvalidArgumentException('Entier hors borne maximale');
+        }
+        return $int;
+    }
+
+    /**
+     * Valide et retourne un flottant >= $min.
+     *
+     * @param mixed $value
+     */
+    public static function float($value, float $min = 0.0): float
+    {
+        if (is_bool($value)) {
+            throw new InvalidArgumentException('Nombre décimal invalide');
+        }
+        $f = filter_var($value, FILTER_VALIDATE_FLOAT);
+        if ($f === false) {
+            throw new InvalidArgumentException('Nombre décimal invalide');
+        }
+        if ($f < $min) {
+            throw new InvalidArgumentException('Nombre décimal hors borne minimale');
+        }
+        return (float) $f;
+    }
+
+    /**
+     * Trim, strip_tags, htmlspecialchars ; exception si trop long.
+     *
+     * @param mixed $value
+     */
+    public static function string($value, int $maxLen = 255): string
+    {
+        $raw = trim((string) $value);
+        $noTags = strip_tags($raw);
+        if (strlen($noTags) > $maxLen) {
+            throw new InvalidArgumentException('Chaîne trop longue');
+        }
+        return htmlspecialchars($noTags, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Vérifie que $value est l'une des valeurs autorisées (comparaison stricte).
+     *
+     * @param mixed $value
+     */
+    public static function enum($value, array $allowed): string
+    {
+        if (!in_array($value, $allowed, true)) {
+            throw new InvalidArgumentException('Valeur non autorisée');
+        }
+        return (string) $value;
+    }
+
+    /**
      * Valide et normalise un email
      * 
      * @param string $email Email à valider
@@ -116,39 +211,6 @@ class Validator
     {
         $postalCode = trim($postalCode);
         return preg_match('/^\d{5}$/', $postalCode) === 1;
-    }
-    
-    /**
-     * Valide une chaîne de caractères
-     * 
-     * @param string $value Valeur à valider
-     * @param string $name Nom du champ (pour les messages d'erreur)
-     * @param int $minLength Longueur minimale
-     * @param int $maxLength Longueur maximale
-     * @return string Valeur validée
-     * @throws InvalidArgumentException Si la validation échoue
-     */
-    public static function string(
-        string $value,
-        string $name,
-        int $minLength = 1,
-        int $maxLength = 1000
-    ): string {
-        $value = trim($value);
-        
-        if (strlen($value) < $minLength) {
-            throw new InvalidArgumentException(
-                "{$name} trop court (min {$minLength} caractères)"
-            );
-        }
-        
-        if (strlen($value) > $maxLength) {
-            throw new InvalidArgumentException(
-                "{$name} trop long (max {$maxLength} caractères)"
-            );
-        }
-        
-        return $value;
     }
     
     /**

@@ -712,7 +712,7 @@ $totalLivraisons = count($livraisons);
     </section>
 </main>
 
-<script>
+<script <?= csp_nonce() ?>>
 // Navigation de dates
 function navigateDate(days) {
     const currentDate = document.getElementById('datePicker').value;

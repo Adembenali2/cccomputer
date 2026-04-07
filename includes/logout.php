@@ -16,6 +16,15 @@ if ($userId > 0) {
     }
 }
 
+// [Fonctionnalité D] Supprimer l’entrée session côté serveur avant destruction
+try {
+    $pdoLogout = getPdo();
+    $stmtDel = $pdoLogout->prepare('DELETE FROM user_sessions WHERE session_token = ?');
+    $stmtDel->execute([session_id()]);
+} catch (Throwable $e) {
+    /* ignorer */
+}
+
 // Purge de la session
 $_SESSION = [];
 

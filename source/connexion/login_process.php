@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../includes/session_config.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/historique.php';
+require_once __DIR__ . '/../../includes/rate_limiter.php';
 
 // Récupérer PDO via la fonction centralisée
 $pdo = getPdo();
@@ -24,6 +25,14 @@ if ($email === '' || $pass === '') {
     exit;
 }
 
+// Protection brute-force : limite les tentatives par IP (checkRateLimit incrémente si la limite n’est pas encore atteinte)
+$loginRateKey = 'login_attempt_' . md5($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+if (!checkRateLimit($loginRateKey, 5, 600)) {
+    $_SESSION['login_error'] = 'Trop de tentatives. Réessayez dans 10 minutes.';
+    header('Location: /public/login.php');
+    exit;
+}
+
 // Récup utilisateur - sélection explicite selon le schéma railway.sql
 $stmt = $pdo->prepare("
     SELECT 
@@ -38,7 +47,8 @@ $stmt = $pdo->prepare("
         date_debut,
         date_creation,
         date_modification,
-        last_activity
+        last_activity,
+        last_login_at
     FROM utilisateurs 
     WHERE Email = :email 
     LIMIT 1
@@ -48,6 +58,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 // Vérifs
 if (!$user || !password_verify($pass, $user['password'])) {
+    // Protection brute-force : échec = cette requête a déjà été comptée par checkRateLimit ci-dessus
     enregistrerAction($pdo, null, 'connexion_echouee', 'Tentative échouée');
     $_SESSION['login_error'] = "Adresse e-mail ou mot de passe incorrect.";
     header('Location: /public/login.php');
@@ -70,6 +81,33 @@ if (password_needs_rehash($user['password'], PASSWORD_BCRYPT, ['cost' => 10])) {
 
 // Écritures session
 session_regenerate_id(true);
+
+// [Fonctionnalité C] Ancienne date de dernière connexion (affichage) puis mise à jour en base
+$_SESSION['last_login_at'] = $user['last_login_at'] ?? null;
+try {
+    $stmtLogin = $pdo->prepare('UPDATE utilisateurs SET last_login_at = NOW() WHERE id = ?');
+    $stmtLogin->execute([(int)$user['id']]);
+} catch (PDOException $e) {
+    error_log('[Fonctionnalité C] last_login_at update: ' . $e->getMessage());
+}
+
+// [Fonctionnalité D] Enregistrer la session active (table optionnelle jusqu’à migration)
+try {
+    $stmtSess = $pdo->prepare('
+        INSERT INTO user_sessions (user_id, session_token, ip_address, user_agent)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE last_activity = NOW()
+    ');
+    $stmtSess->execute([
+        (int)$user['id'],
+        session_id(),
+        $_SERVER['REMOTE_ADDR'] ?? '',
+        substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
+    ]);
+} catch (PDOException $e) {
+    /* table pas encore créée */
+}
+
 $_SESSION['user_id']     = (int)$user['id'];
 $_SESSION['user_email']  = $user['Email'];
 $_SESSION['user_nom']    = $user['nom'];
@@ -78,6 +116,7 @@ $_SESSION['emploi']      = $user['Emploi'];
 $_SESSION['csrf_token']  = bin2hex(random_bytes(32));
 $_SESSION['last_regenerate'] = time();
 $_SESSION['last_activity_update'] = time();
+$_SESSION['last_db_activity_sync'] = time();
 
 // Mise à jour de last_activity lors de la connexion
 try {
@@ -89,6 +128,18 @@ try {
 }
 
 enregistrerAction($pdo, (int)$user['id'], 'connexion_reussie', 'Connexion réussie');
+
+// Protection brute-force : réinitialiser le compteur (même clé / stockage que rate_limiter.php)
+$rlKey = preg_replace('/[^a-zA-Z0-9_]/', '_', $loginRateKey);
+$rlCacheKey = 'ratelimit_' . $rlKey;
+if (function_exists('apcu_delete')) {
+    @apcu_delete($rlCacheKey);
+}
+$rlCacheDir = __DIR__ . '/../../cache/ratelimit';
+$rlCacheFile = $rlCacheDir . '/' . md5($rlKey) . '.json';
+if (is_file($rlCacheFile)) {
+    @unlink($rlCacheFile);
+}
 
 // Redirection directe vers le dashboard
 header('Location: /public/dashboard.php');

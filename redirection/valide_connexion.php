@@ -2,6 +2,8 @@
 // /redirection/valide_connexion.php
 // Page d'attente après succès de connexion
 // 200 OK suffit (pas d'en-têtes supplémentaires)
+require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/security_headers.php';
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -50,7 +52,7 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(30px);} to { opacity: 1; transform: translateY(0);} }
   </style>
 
-  <script>
+  <script <?= csp_nonce() ?>>
     // Redirection après 2,7 secondes vers le tableau de bord
     setTimeout(function () {
       window.location.href = "/public/dashboard.php";

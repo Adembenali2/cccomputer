@@ -52,7 +52,7 @@ ensureCsrfToken();
     <div id="biz-error" class="biz-error" style="display:none;"></div>
     <div id="biz-root" class="biz-loading">Chargement des indicateurs…</div>
   </main>
-  <script>
+  <script <?= csp_nonce() ?>>
 (function(){
   const csrf = document.body.getAttribute('data-csrf-token') || '';
   const root = document.getElementById('biz-root');

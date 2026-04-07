@@ -21,7 +21,7 @@ const AUDIT_CATEGORY_PATTERNS = [
     'Factures' => ['facture%'],
     'Paiements' => ['paiement%'],
     'Profil' => ['profil%', 'statut_utilisateur%', 'mot_de_passe%'],
-    'Authentification' => ['connexion%', 'deconnexion%', 'login%'],
+    'Authentification' => ['connexion%', 'deconnexion%', 'login%', 'session%'],
     'Agenda' => ['rdv%'],
     'Système' => ['system%', 'import%'],
 ];
@@ -31,6 +31,7 @@ const AUDIT_ACTION_LABELS = [
     'connexion_reussie' => 'Connexion réussie',
     'connexion_echouee' => 'Connexion échouée',
     'deconnexion' => 'Déconnexion',
+    'session_revoquee' => 'Session fermée (autre appareil)',
     'client_ajoute' => 'Client ajouté',
     'client_modifie' => 'Client modifié',
     'client_mis_a_jour' => 'Client mis à jour',

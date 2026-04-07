@@ -655,7 +655,7 @@ $paginationBase = $queryString !== '' ? $baseUrl . $queryString . '&' : $baseUrl
     </div>
 </div>
 
-<script>
+<script <?= csp_nonce() ?>>
 (function() {
     'use strict';
     const form = document.getElementById('filterForm');

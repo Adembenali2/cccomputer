@@ -93,7 +93,7 @@ ensureCsrfToken();
     </div>
   </div>
 
-  <script>
+  <script <?= csp_nonce() ?>>
 (function(){
   const csrf = document.body.getAttribute('data-csrf-token') || '';
   const body = document.getElementById('rec-body');

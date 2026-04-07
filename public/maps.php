@@ -250,7 +250,7 @@ try {
     </section>
 </main>
 
-<script>
+<script <?= csp_nonce() ?>>
 // ==================
 // Configuration
 // ==================

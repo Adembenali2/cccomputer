@@ -459,3 +459,19 @@ if (!function_exists('getPdo')) {
     }
 }
 
+/**
+ * Attribut nonce CSP pour les balises script inline (après includes/security_headers.php).
+ * Exemple : ouverture de balise script + echo csp_nonce().
+ */
+if (!function_exists('csp_nonce')) {
+    function csp_nonce(): string
+    {
+        $nonce = $GLOBALS['csp_nonce'] ?? '';
+        if ($nonce === '') {
+            return '';
+        }
+
+        return 'nonce="' . htmlspecialchars($nonce, ENT_QUOTES, 'UTF-8') . '"';
+    }
+}
+
