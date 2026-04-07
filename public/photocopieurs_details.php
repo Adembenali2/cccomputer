@@ -551,34 +551,41 @@ function pctOrIntOrNull($v): ?int {
                     <td style="padding:10px 12px;text-align:right;color:#9ca3af;font-size:0.78rem;"><?= number_format((int)($releve['TotalColor'] ?? 0), 0, ',', ' ') ?></td>
                     <td style="padding:10px 12px;text-align:center;">
                       <?php
-                        $tb = (int)($releve['TonerBlack'] ?? 0);
-                        $tc = (int)($releve['TonerCyan'] ?? 0);
-                        $tm = (int)($releve['TonerMagenta'] ?? 0);
-                        $ty = (int)($releve['TonerYellow'] ?? 0);
-
-                        $tonerColor = function($v) {
-                            if ($v <= 10) return '#ef4444';
-                            if ($v <= 25) return '#f59e0b';
-                            return '#22c55e';
-                        };
+                        $tb = isset($releve['TonerBlack'])   ? (int)$releve['TonerBlack']   : null;
+                        $tc = isset($releve['TonerCyan'])    ? (int)$releve['TonerCyan']    : null;
+                        $tm = isset($releve['TonerMagenta']) ? (int)$releve['TonerMagenta'] : null;
+                        $ty = isset($releve['TonerYellow'])  ? (int)$releve['TonerYellow']  : null;
 
                         $toners = [
-                            ['label' => 'N', 'val' => $tb, 'bg' => $tonerColor($tb)],
-                            ['label' => 'C', 'val' => $tc, 'bg' => '#0ea5e9'],
-                            ['label' => 'M', 'val' => $tm, 'bg' => '#ec4899'],
-                            ['label' => 'J', 'val' => $ty, 'bg' => '#eab308'],
+                            ['label' => 'N', 'val' => $tb, 'bg_ok' => '#374151', 'bg_low' => '#ef4444', 'bg_warn' => '#f59e0b'],
+                            ['label' => 'C', 'val' => $tc, 'bg_ok' => '#0ea5e9', 'bg_low' => '#0ea5e9', 'bg_warn' => '#0ea5e9'],
+                            ['label' => 'M', 'val' => $tm, 'bg_ok' => '#ec4899', 'bg_low' => '#ec4899', 'bg_warn' => '#ec4899'],
+                            ['label' => 'J', 'val' => $ty, 'bg_ok' => '#ca8a04', 'bg_low' => '#ca8a04', 'bg_warn' => '#ca8a04'],
                         ];
+
+                        $hasAnyToner = ($tb !== null || $tc !== null || $tm !== null || $ty !== null);
                       ?>
-                      <?php foreach ($toners as $t): ?>
-                        <?php if ($t['val'] <= 0) continue; ?>
-                        <?php $bg = ($t['label'] === 'N') ? $tonerColor($tb) : $t['bg']; ?>
-                        <?php $textColor = ($t['label'] === 'J') ? '#111827' : '#fff'; ?>
-                        <span style="display:inline-flex;align-items:center;gap:2px;background:<?= $bg ?>;color:<?= $textColor ?>;font-size:0.7rem;font-weight:600;padding:3px 6px;border-radius:4px;margin:1px;white-space:nowrap;" title="Toner <?= $t['label'] ?> : <?= $t['val'] ?>%">
-                          <?= $t['label'] ?> <?= $t['val'] ?>%
-                        </span>
-                      <?php endforeach; ?>
-                      <?php if ($tb <= 0 && $tc <= 0 && $tm <= 0 && $ty <= 0): ?>
+                      <?php if (!$hasAnyToner): ?>
                         <span style="color:#9ca3af;font-size:0.78rem;">—</span>
+                      <?php else: ?>
+                        <?php foreach ($toners as $t): ?>
+                          <?php if ($t['val'] === null) continue; ?>
+                          <?php
+                            if ($t['label'] === 'N') {
+                              if ($t['val'] <= 10) $bg = '#ef4444';
+                              elseif ($t['val'] <= 25) $bg = '#f59e0b';
+                              else $bg = '#374151';
+                            } else {
+                              $bg = $t['bg_ok'];
+                            }
+                            $textColor = ($t['label'] === 'J') ? '#fff' : '#fff';
+                            $displayVal = $t['val'] === 0 ? '?' : $t['val'] . '%';
+                            $opacity = $t['val'] === 0 ? 'opacity:0.5;' : '';
+                          ?>
+                          <span style="display:inline-flex;align-items:center;gap:2px;background:<?= $bg ?>;color:<?= $textColor ?>;font-size:0.7rem;font-weight:600;padding:3px 6px;border-radius:4px;margin:1px;white-space:nowrap;<?= $opacity ?>" title="Toner <?= $t['label'] ?> : <?= $displayVal ?>">
+                            <?= $t['label'] ?> <?= $displayVal ?>
+                          </span>
+                        <?php endforeach; ?>
                       <?php endif; ?>
                     </td>
                   </tr>
