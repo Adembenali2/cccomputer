@@ -824,6 +824,76 @@
             }
         }
 
+        // [Fonctionnalité D]
+        async function loadFacturePreviewPanel() {
+            const panel = document.getElementById('facturePreviewPanel');
+            const content = document.getElementById('facturePreviewContent');
+            if (!panel || !content) return;
+
+            const idClient = document.getElementById('factureClient')?.value || '';
+            const type = document.getElementById('factureType')?.value || 'Consommation';
+            const dateDebut = document.getElementById('factureDateDebut')?.value || '';
+            const dateFin = document.getElementById('factureDateFin')?.value || '';
+
+            if (!idClient) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            try {
+                const res = await fetch('/API/factures_preview.php', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders(),
+                    },
+                    body: JSON.stringify({
+                        id_client: parseInt(idClient, 10),
+                        type,
+                        date_debut: dateDebut,
+                        date_fin: dateFin,
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    panel.style.display = 'block';
+                    content.innerHTML = `<p style="color:#b91c1c;">${escapeHtml(data.error || 'Erreur aperçu')}</p>`;
+                    return;
+                }
+
+                const lignes = Array.isArray(data.lignes) ? data.lignes : [];
+                const machines = Array.isArray(data.machines) ? data.machines : [];
+                const t = data.totaux || { montant_ht: 0, tva: 0, montant_ttc: 0 };
+
+                let html = '';
+                if (lignes.length === 0) {
+                    html += '<p>Aucune consommation détectée.</p>';
+                } else {
+                    html += '<table style="width:100%;border-collapse:collapse;margin-bottom:10px;"><tr><th style="text-align:left;border-bottom:1px solid #86efac;padding:6px;">Description</th><th>Type</th><th>Qté</th><th>PU HT</th><th>Total HT</th></tr>';
+                    lignes.forEach((l) => {
+                        html += `<tr><td style="padding:6px;border-bottom:1px solid #dcfce7;">${escapeHtml(String(l.description || ''))}</td><td style="text-align:center;">${escapeHtml(String(l.type || ''))}</td><td style="text-align:right;">${Number(l.quantite || 0).toLocaleString('fr-FR')}</td><td style="text-align:right;">${Number(l.pu_ht || 0).toFixed(2)} €</td><td style="text-align:right;">${Number(l.total_ht || 0).toFixed(2)} €</td></tr>`;
+                    });
+                    html += '</table>';
+                }
+
+                html += `<div style="display:flex;gap:16px;font-weight:700;margin:8px 0;"><span>HT: ${Number(t.montant_ht || 0).toFixed(2)} €</span><span>TVA: ${Number(t.tva || 0).toFixed(2)} €</span><span>TTC: ${Number(t.montant_ttc || 0).toFixed(2)} €</span></div>`;
+                if (machines.length > 0) {
+                    html += '<ul style="margin:8px 0 0 16px;">';
+                    machines.forEach((m) => {
+                        html += `<li>${escapeHtml(String(m.model || m.serial || 'Machine'))} - N&B: ${Number(m.bw || 0).toLocaleString('fr-FR')} / Couleur: ${Number(m.color || 0).toLocaleString('fr-FR')}</li>`;
+                    });
+                    html += '</ul>';
+                }
+
+                content.innerHTML = html;
+                panel.style.display = 'block';
+            } catch (e) {
+                panel.style.display = 'block';
+                content.innerHTML = '<p style="color:#b91c1c;">Erreur lors du chargement de l aperçu.</p>';
+            }
+        }
+
         /**
          * Génère les lignes de facture depuis les données de consommation
          */
@@ -4803,6 +4873,7 @@
         window.progFactureDeselectAll = progFactureDeselectAll;
         window.progFactureValidateSelection = progFactureValidateSelection;
         window.exportFacturesExcel = exportFacturesExcel;
+        window.loadFacturePreviewPanel = loadFacturePreviewPanel;
 
         document.addEventListener('DOMContentLoaded', function() {
             const messageContainer = document.getElementById('messageContainer');
@@ -4822,6 +4893,12 @@
 
             // Ne pas ajouter de ligne au chargement, seulement quand le modal s'ouvre
             // addFactureLigne() sera appelé dans openFactureModal()
+            const previewBtn = document.getElementById('btnPreviewFacture');
+            if (previewBtn) previewBtn.addEventListener('click', loadFacturePreviewPanel);
+            ['factureClient', 'factureType', 'factureDateDebut', 'factureDateFin'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', loadFacturePreviewPanel);
+            });
 
             // Fermer les modals avec Escape
             document.addEventListener('keydown', function(e) {

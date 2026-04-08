@@ -129,6 +129,14 @@ if (!function_exists('csp_nonce')) {
     </a>
     <?php endif; ?>
 
+    <a href="/public/factures.php" aria-label="Factures">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      <span class="nav-label">Factures</span>
+    </a>
+
     <?php if ($navBizDash): ?>
     <a href="/public/dashboard_business.php" aria-label="Pilotage">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

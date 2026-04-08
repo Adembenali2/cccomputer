@@ -636,10 +636,15 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         <span><input type="number" id="factureMontantTTC" name="montant_ttc" step="0.01" value="0.00" readonly style="border: none; background: transparent; text-align: right; font-weight: 700; width: 120px; font-size: 1.25rem;"> €</span>
                     </div>
                 </div>
+                <div id="facturePreviewPanel" style="display:none; margin-top:1rem; padding:1rem; background:#f0fdf4; border:1px solid #16a34a; border-radius:8px;">
+                    <h3 style="margin:0 0 .75rem 0; color:#166534;">Aperçu de la facture</h3>
+                    <div id="facturePreviewContent"></div>
+                </div>
             </form>
         </div>
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" onclick="closeFactureModal()">Annuler</button>
+            <button type="button" class="btn btn-secondary" id="btnPreviewFacture">👁 Aperçu</button>
             <button type="submit" form="factureForm" class="btn btn-primary" id="btnGenererFacture">Générer la facture</button>
         </div>
         </div>
