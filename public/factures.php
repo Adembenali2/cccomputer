@@ -77,8 +77,35 @@ ORDER BY jours_retard DESC
 LIMIT 10
 ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+// Compatibilité schéma ancien/nouveau pour factures_recurrentes
+$hasCol = static function (PDO $pdo, string $table, string $column): bool {
+    $st = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+    ");
+    $st->execute([$table, $column]);
+    return ((int)$st->fetchColumn()) > 0;
+};
+$hasType = $hasCol($pdo, 'factures_recurrentes', 'type');
+$hasTypeFacture = $hasCol($pdo, 'factures_recurrentes', 'type_facture');
+$hasJourGen = $hasCol($pdo, 'factures_recurrentes', 'jour_generation');
+$hasJourMois = $hasCol($pdo, 'factures_recurrentes', 'jour_mois');
+$hasMoisDernier = $hasCol($pdo, 'factures_recurrentes', 'mois_dernier_envoi');
+$hasProch = $hasCol($pdo, 'factures_recurrentes', 'prochaine_echeance');
+$hasActif = $hasCol($pdo, 'factures_recurrentes', 'actif');
+
+$recTypeExpr = $hasType ? "fr.type" : ($hasTypeFacture ? "fr.type_facture" : "'Consommation'");
+$recJourExpr = $hasJourGen ? "fr.jour_generation" : ($hasJourMois ? "fr.jour_mois" : "1");
+$recLastExpr = $hasMoisDernier ? "fr.mois_dernier_envoi" : ($hasProch ? "DATE_FORMAT(fr.prochaine_echeance, '%Y-%m')" : "NULL");
+$recActifExpr = $hasActif ? "fr.actif" : "0";
+
 $rec = $pdo->query("
-SELECT c.id id_client, c.raison_sociale, fr.type, fr.jour_generation, fr.mois_dernier_envoi, fr.actif
+SELECT c.id id_client, c.raison_sociale,
+       {$recTypeExpr} AS type_rec,
+       {$recJourExpr} AS jour_gen,
+       {$recLastExpr} AS dernier_envoi,
+       {$recActifExpr} AS actif_rec
 FROM clients c
 LEFT JOIN factures_recurrentes fr ON fr.id_client = c.id
 ORDER BY c.raison_sociale ASC
@@ -162,7 +189,7 @@ function eur($v): string { return number_format((float)$v, 2, ',', ' ') . ' €'
 
   <dialog id="dAnn"><form method="dialog"><h3>Annuler facture</h3><input type="hidden" id="annId"><textarea id="annMotif" required placeholder="Motif d'annulation"></textarea><button type="button" id="annOk">Confirmer</button><button>Fermer</button></form></dialog>
   <dialog id="dMod"><form method="dialog"><h3>Modifier facture</h3><input type="hidden" id="modId"><input type="date" id="modDate" required><button type="button" id="modOk">Enregistrer</button><button>Fermer</button></form></dialog>
-  <dialog id="dRec"><h3>Configurations récurrentes</h3><table class="tbl"><tr><th>Client</th><th>Type</th><th>Jour</th><th>Dernier envoi</th><th>Actif</th><th>Configurer</th></tr><?php foreach($rec as $rc): ?><tr><td><?= h($rc['raison_sociale']) ?></td><td><?= h((string)($rc['type'] ?? 'Consommation')) ?></td><td><?= (int)($rc['jour_generation'] ?? 1) ?></td><td><?= h((string)($rc['mois_dernier_envoi'] ?? '—')) ?></td><td><?= ((int)($rc['actif'] ?? 0)===1)?'Oui':'Non' ?></td><td><button class="cfgRec" data-client="<?= (int)$rc['id_client'] ?>">Configurer</button></td></tr><?php endforeach; ?></table><button onclick="document.getElementById('dRec').close()">Fermer</button></dialog>
+  <dialog id="dRec"><h3>Configurations récurrentes</h3><table class="tbl"><tr><th>Client</th><th>Type</th><th>Jour</th><th>Dernier envoi</th><th>Actif</th><th>Configurer</th></tr><?php foreach($rec as $rc): ?><tr><td><?= h($rc['raison_sociale']) ?></td><td><?= h((string)($rc['type_rec'] ?? 'Consommation')) ?></td><td><?= (int)($rc['jour_gen'] ?? 1) ?></td><td><?= h((string)($rc['dernier_envoi'] ?? '—')) ?></td><td><?= ((int)($rc['actif_rec'] ?? 0)===1)?'Oui':'Non' ?></td><td><button class="cfgRec" data-client="<?= (int)$rc['id_client'] ?>">Configurer</button></td></tr><?php endforeach; ?></table><button onclick="document.getElementById('dRec').close()">Fermer</button></dialog>
 </main>
 <script <?= csp_nonce() ?>>
 // [Fonctionnalité A]

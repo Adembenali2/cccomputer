@@ -11,8 +11,34 @@ CREATE TABLE IF NOT EXISTS facture_relances (
   INDEX idx_relance_date (date_relance)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-ALTER TABLE factures
-  ADD COLUMN IF NOT EXISTS nb_relances TINYINT DEFAULT 0 COMMENT 'Nombre de relances envoyees';
+SET @col_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'factures'
+    AND COLUMN_NAME = 'nb_relances'
+);
+SET @sql := IF(
+  @col_exists = 0,
+  "ALTER TABLE factures ADD COLUMN nb_relances TINYINT DEFAULT 0 COMMENT 'Nombre de relances envoyees'",
+  "SELECT 1"
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-ALTER TABLE factures
-  ADD COLUMN IF NOT EXISTS date_derniere_relance DATETIME DEFAULT NULL;
+SET @col_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'factures'
+    AND COLUMN_NAME = 'date_derniere_relance'
+);
+SET @sql := IF(
+  @col_exists = 0,
+  "ALTER TABLE factures ADD COLUMN date_derniere_relance DATETIME DEFAULT NULL",
+  "SELECT 1"
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
