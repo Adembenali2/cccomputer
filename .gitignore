@@ -1,0 +1,51 @@
+# Dependencies
+/vendor/
+composer.lock
+
+# Logs
+/logs/
+*.log
+
+# Temporary/Trash
+_trash/
+
+# Tests
+.phpunit.cache/
+coverage/
+/tests/
+
+# Debug/Diagnostic
+/debug/
+/monitoring/
+/audit/
+/reports/
+*debug*
+*diagnostic*
+*test_*.php
+*.dump
+*.trace
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Sentry
+config/sentry.local.php
+
+# Exceptions pour fichiers test SMTP et ping (nécessaires pour Railway)
+!public/test_smtp.php
+!public/API/
+!public/API/test_smtp.php
+!public/ping.txt
+

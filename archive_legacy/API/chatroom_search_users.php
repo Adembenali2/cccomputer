@@ -1,0 +1,108 @@
+<?php
+// API/chatroom_search_users.php
+// Endpoint pour rechercher des utilisateurs pour les mentions (@username)
+
+require_once __DIR__ . '/../includes/api_helpers.php';
+
+initApi();
+requireApiAuth();
+
+// Récupérer PDO via la fonction centralisée (apiFail en cas d'erreur)
+$pdo = getPdoOrFail();
+
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
+}
+
+$currentUserId = (int)$_SESSION['user_id'];
+
+try {
+
+    $query = trim($_GET['q'] ?? '');
+    // Limite : 500 max pour requête vide (liste complète pour mentions), 50 max pour recherche
+    $limitDefault = empty($query) ? 500 : 50;
+    $limit = max(1, min((int)($_GET['limit'] ?? 10), $limitDefault));
+
+    // Si la query est vide, retourner tous les utilisateurs actifs
+    if (empty($query) || strlen($query) < 1) {
+        $stmt = $pdo->prepare("
+            SELECT 
+                id,
+                nom,
+                prenom,
+                Email,
+                Emploi
+            FROM utilisateurs
+            WHERE statut = 'actif'
+              AND id != :current_user_id
+            ORDER BY nom ASC, prenom ASC
+            LIMIT :limit
+        ");
+        $stmt->bindValue(':current_user_id', $currentUserId, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    } else {
+        // Recherche avec filtrage par début de nom/prénom (plus performant et intuitif)
+        // Utiliser LIKE 'query%' pour rechercher les noms qui COMMENCENT par la query
+        $searchTerm = $query . '%';
+        $stmt = $pdo->prepare("
+            SELECT 
+                id,
+                nom,
+                prenom,
+                Email,
+                Emploi
+            FROM utilisateurs
+            WHERE statut = 'actif'
+              AND id != :current_user_id
+              AND (
+                nom LIKE :search
+                OR prenom LIKE :search
+                OR Email LIKE :search
+                OR CONCAT(prenom, ' ', nom) LIKE :search
+                OR CONCAT(nom, ' ', prenom) LIKE :search
+              )
+            ORDER BY 
+                CASE 
+                    WHEN prenom LIKE :search_exact THEN 1
+                    WHEN nom LIKE :search_exact THEN 2
+                    WHEN CONCAT(prenom, ' ', nom) LIKE :search_exact THEN 3
+                    ELSE 4
+                END,
+                nom ASC, 
+                prenom ASC
+            LIMIT :limit
+        ");
+        $stmt->bindValue(':current_user_id', $currentUserId, PDO::PARAM_INT);
+        $stmt->bindValue(':search', $searchTerm, PDO::PARAM_STR);
+        $stmt->bindValue(':search_exact', $searchTerm, PDO::PARAM_STR);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    }
+    
+    $stmt->execute();
+
+    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $formatted = array_map(function($user) {
+        return [
+            'id' => (int)$user['id'],
+            'nom' => $user['nom'],
+            'prenom' => $user['prenom'],
+            'email' => $user['Email'],
+            'emploi' => $user['Emploi'],
+            'display_name' => trim($user['prenom'] . ' ' . $user['nom'])
+        ];
+    }, $users);
+
+    jsonResponse([
+        'ok' => true,
+        'users' => $formatted
+    ]);
+
+} catch (PDOException $e) {
+    error_log('chatroom_search_users.php - Erreur PDO: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
+} catch (Exception $e) {
+    error_log('chatroom_search_users.php - Erreur: ' . $e->getMessage());
+    jsonResponse(['ok' => false, 'error' => 'Erreur serveur'], 500);
+}
+

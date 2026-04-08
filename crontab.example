@@ -1,0 +1,13 @@
+# Crontab pour CCComputer - Imports automatiques (10 fichiers SFTP + IONOS)
+#
+# OPTION A - Appel HTTP (recommandé si hébergement distant)
+# Définir CRON_SECRET_TOKEN dans config ou variables d'environnement
+# Puis utiliser cron-job.org ou :
+* * * * * curl -s "https://VOTRE-DOMAINE.com/API/import/cron_run.php?token=VOTRE_TOKEN" > /dev/null 2>&1
+
+# OPTION B - Exécution directe des scripts (serveur local)
+# * * * * * cd /var/www/html && SFTP_IMPORT_MAX_FILES=10 /usr/bin/php scripts/import_sftp_cron.php >> /var/www/html/logs/sftp_import.log 2>&1
+# * * * * * cd /var/www/html && /usr/bin/php scripts/import_ionos_cron.php >> /var/www/html/logs/ionos_import.log 2>&1
+
+# Note: mkdir -p /var/www/html/logs && chmod 755 /var/www/html/logs
+

@@ -1,0 +1,13 @@
+{
+  "name": "cccomputer-schema-validation",
+  "private": true,
+  "type": "module",
+  "description": "Import database/full_schema.sql into MySQL/MariaDB and cross-check with PHP",
+  "scripts": {
+    "validate": "node import_and_verify.mjs",
+    "validate:static": "node import_and_verify.mjs --static-only"
+  },
+  "dependencies": {
+    "mysql2": "^3.11.5"
+  }
+}
