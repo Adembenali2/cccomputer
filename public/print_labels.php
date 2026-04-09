@@ -25,46 +25,21 @@ if (empty($type) || $productId === 0) {
     die('Paramètres manquants');
 }
 
-// Récupérer les informations du produit et son QR Code
+// Récupérer les informations du produit et son QR Code depuis la table stock
 $barcode = '';
 $qrCodePath = '';
-
 try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    switch ($type) {
-        case 'papier':
-            $stmt = $pdo->prepare("SELECT barcode, qr_code_path FROM paper_catalog WHERE id = :id LIMIT 1");
-            break;
-        case 'toner':
-        case 'toners':
-            $stmt = $pdo->prepare("SELECT barcode, qr_code_path FROM toner_catalog WHERE id = :id LIMIT 1");
-            break;
-        case 'lcd':
-            $stmt = $pdo->prepare("SELECT barcode, qr_code_path FROM lcd_catalog WHERE id = :id LIMIT 1");
-            break;
-        case 'pc':
-            $stmt = $pdo->prepare("SELECT barcode, qr_code_path FROM pc_catalog WHERE id = :id LIMIT 1");
-            break;
-        default:
-            die('Type de produit invalide');
-    }
-    
+    $stmt = $pdo->prepare("SELECT reference, qr_code FROM stock WHERE id = :id AND actif = 1 LIMIT 1");
     $stmt->execute([':id' => $productId]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
-    
     if (!$product) {
         die('Produit non trouvé');
     }
-    
-    $barcode = $product['barcode'] ?? '';
-    $qrCodePath = $product['qr_code_path'] ?? '';
-    
-    // Si pas de QR Code, générer une URL pour l'API
-    if (empty($qrCodePath) && !empty($barcode)) {
+    $barcode = (string)($product['qr_code'] ?: $product['reference']);
+    if (!empty($barcode)) {
         $qrCodePath = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . urlencode($barcode);
     }
-    
 } catch (PDOException $e) {
     error_log('print_labels.php error: ' . $e->getMessage());
     die('Erreur de base de données');
@@ -77,14 +52,7 @@ if (empty($qrCodePath) && !empty($barcode)) {
     die('Code-barres ou QR Code non disponible');
 }
 
-// Chemins : /uploads/qrcodes/<type>/<id>.png (nouveau) ou /assets/qr_codes/ (legacy) ou URL http
-if (strpos($qrCodePath, 'http') === 0) {
-    // Déjà une URL complète
-} elseif (strpos($qrCodePath, '/') === 0) {
-    // Chemin absolu depuis la racine (uploads/qrcodes ou assets/qr_codes)
-} else {
-    $qrCodePath = '/uploads/qrcodes/' . ($type === 'toners' ? 'toner' : $type) . '/' . basename($qrCodePath);
-}
+// $qrCodePath est toujours une URL complète ici.
 ?>
 <!DOCTYPE html>
 <html lang="fr">

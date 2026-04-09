@@ -25,15 +25,13 @@ if ($idSav <= 0 || !in_array($productType, ['papier', 'toner', 'lcd', 'pc'], tru
 
 try {
     $pdo = getPdo();
-    $tableMap = [
-        'papier' => 'paper_catalog',
-        'toner' => 'toner_catalog',
-        'lcd' => 'lcd_catalog',
-        'pc' => 'pc_catalog',
-    ];
-    $table = $tableMap[$productType];
-    $checkSql = "SELECT id FROM {$table} WHERE id = ? LIMIT 1";
-    $check = $pdo->prepare($checkSql);
+    $catWhere = [
+        'papier' => "categorie='papier'",
+        'toner' => "categorie IN ('toner_noir','toner_cyan','toner_magenta','toner_jaune')",
+        'lcd' => "categorie='ecran_lcd'",
+        'pc' => "categorie='pc'",
+    ][$productType];
+    $check = $pdo->prepare("SELECT id FROM stock WHERE id = ? AND actif = 1 AND {$catWhere} LIMIT 1");
     $check->execute([$productId]);
     if (!$check->fetch(PDO::FETCH_ASSOC)) {
         jsonResponse(['success' => false, 'error' => 'Produit introuvable'], 404);

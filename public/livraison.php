@@ -46,6 +46,15 @@ $flash = ['type' => null, 'msg' => null];
 $CSRF  = ensureCsrfToken();
 $today = date('Y-m-d');
 
+$articlesStock = $pdo->query(
+  "SELECT id, reference, designation, categorie,
+          quantite, quantite_min, unite, contenance,
+          marque, modele, couleur_toner
+   FROM stock
+   WHERE actif = 1 AND quantite > 0
+   ORDER BY categorie, designation"
+)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
 // ============================================================================
 // POST : mise à jour de livraison (statut, éventuellement date_reelle)
 // ============================================================================
@@ -132,7 +141,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 ':id'          => $livraisonId,
                             ]);
 
-                            // Si la livraison vient d'être marquée comme "livrée", ajouter au stock client
+                            // Si la livraison vient d'être marquée comme "livrée", décrémenter le stock global
                             if ($isBecomingLivree) {
                             $productType = $liv['product_type'] ?? null;
                             $productId = isset($liv['product_id']) ? (int)$liv['product_id'] : 0;
@@ -143,57 +152,33 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                             error_log("Livraison #{$livraisonId} marquée livrée - Client: {$clientId}, Type: {$productType}, ID: {$productId}, Qty: {$productQty}");
 
                             if (!empty($productType) && $productId > 0 && $productQty > 0 && $clientId > 0) {
-                                if (in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) {
-                                    try {
-                                        // Vérifier si le stock client existe déjà pour ce produit
-                                        $checkStock = $pdo->prepare("
-                                            SELECT id, qty_stock 
-                                            FROM client_stock 
-                                            WHERE id_client = :client_id 
-                                              AND product_type = :product_type 
-                                              AND product_id = :product_id 
-                                            LIMIT 1
-                                        ");
-                                        $checkStock->execute([
-                                            ':client_id' => $clientId,
-                                            ':product_type' => $productType,
-                                            ':product_id' => $productId
-                                        ]);
-                                        $existingStock = $checkStock->fetch(PDO::FETCH_ASSOC);
+                                $stmtQte = $pdo->prepare("SELECT quantite FROM stock WHERE id = ? FOR UPDATE");
+                                $stmtQte->execute([$productId]);
+                                $qteAvant = (int)($stmtQte->fetchColumn() ?: 0);
+                                $qteApres = $qteAvant - $productQty;
+                                if ($qteApres < 0) {
+                                    throw new RuntimeException("Stock insuffisant pour valider la livraison.");
+                                }
 
-                                        if ($existingStock) {
-                                            // Mettre à jour le stock existant
-                                            $updateStock = $pdo->prepare("
-                                                UPDATE client_stock 
-                                                SET qty_stock = qty_stock + :qty,
-                                                    updated_at = NOW()
-                                                WHERE id = :id
-                                            ");
-                                            $updateStock->execute([
-                                                ':qty' => $productQty,
-                                                ':id' => $existingStock['id']
-                                            ]);
-                                            error_log("Stock client mis à jour - ID: {$existingStock['id']}, Nouvelle qty: " . ($existingStock['qty_stock'] + $productQty));
-                                        } else {
-                                            // Créer un nouveau stock client
-                                            $insertStock = $pdo->prepare("
-                                                INSERT INTO client_stock (id_client, product_type, product_id, qty_stock)
-                                                VALUES (:client_id, :product_type, :product_id, :qty)
-                                            ");
-                                            $insertStock->execute([
-                                                ':client_id' => $clientId,
-                                                ':product_type' => $productType,
-                                                ':product_id' => $productId,
-                                                ':qty' => $productQty
-                                            ]);
-                                            error_log("Nouveau stock client créé - Client: {$clientId}, Type: {$productType}, ID: {$productId}, Qty: {$productQty}");
-                                        }
-                                    } catch (PDOException $e) {
-                                        error_log("Erreur lors de l'ajout au stock client: " . $e->getMessage());
-                                        // Ne pas faire échouer la transaction pour cette erreur
-                                    }
-                                } else {
-                                    error_log("Type de produit invalide: {$productType}");
+                                $stmtMv = $pdo->prepare("
+                                  INSERT INTO stock_mouvements
+                                    (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by)
+                                  VALUES (?, 'livraison', ?, ?, ?, ?, ?, ?)
+                                ");
+                                $stmtMv->execute([
+                                  $productId,
+                                  $productQty,
+                                  $qteAvant,
+                                  $qteApres,
+                                  'Livraison client',
+                                  (string)($liv['reference'] ?? ''),
+                                  (int)($_SESSION['user_id'] ?? 0)
+                                ]);
+
+                                $stmtUpd = $pdo->prepare("UPDATE stock SET quantite = quantite - ? WHERE id = ? AND quantite >= ?");
+                                $stmtUpd->execute([$productQty, $productId, $productQty]);
+                                if ($stmtUpd->rowCount() === 0) {
+                                    throw new RuntimeException("Impossible de mettre à jour le stock (quantité insuffisante).");
                                 }
                             } else {
                                 error_log("Données produit manquantes ou invalides - Type: " . ($productType ?? 'null') . ", ID: {$productId}, Qty: {$productQty}, Client: {$clientId}");

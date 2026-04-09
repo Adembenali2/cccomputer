@@ -13,7 +13,7 @@ $today = date('Y-m-d');
 
 $paperProducts = [];
 try {
-    $stmtP = $pdo->query("SELECT id, marque, modele FROM paper_catalog ORDER BY marque, modele");
+    $stmtP = $pdo->query("SELECT id, marque, designation AS modele FROM stock WHERE actif = 1 AND categorie='papier' ORDER BY designation");
     $paperProducts = $stmtP->fetchAll(PDO::FETCH_ASSOC) ?: [];
 } catch (Throwable $e) {
     $paperProducts = [];
@@ -62,10 +62,27 @@ try {
 }
 
 $stats = ['auto_active' => 0, 'papier_alertes' => 0, 'toner_alertes' => 0, 'last_check' => '—'];
+$stmtTonerA = $pdo->prepare("
+  SELECT id, designation, quantite, quantite_min, couleur_toner
+  FROM stock
+  WHERE actif = 1
+    AND categorie IN ('toner_noir','toner_cyan','toner_magenta','toner_jaune')
+    AND quantite <= quantite_min
+");
+$stmtTonerA->execute();
+$tonersEnAlerteGlobal = $stmtTonerA->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$stmtPapierA = $pdo->prepare("
+  SELECT id, designation, quantite, quantite_min, unite, contenance
+  FROM stock
+  WHERE actif = 1 AND categorie = 'papier' AND quantite <= quantite_min
+");
+$stmtPapierA->execute();
+$papierEnAlerteGlobal = $stmtPapierA->fetchAll(PDO::FETCH_ASSOC) ?: [];
 foreach ($clients as $idx => $c) {
     $idClient = (int)$c['id'];
-    $stockStmt = $pdo->prepare("SELECT COALESCE(SUM(qty_stock),0) FROM client_stock WHERE id_client = ? AND product_type='papier'");
-    $stockStmt->execute([$idClient]);
+    $stockStmt = $pdo->prepare("SELECT COALESCE(SUM(quantite),0) FROM stock WHERE actif = 1 AND categorie='papier'");
+    $stockStmt->execute();
     $stockPapier = (int)$stockStmt->fetchColumn();
 
     $avgStmt = $pdo->prepare("
@@ -88,39 +105,23 @@ foreach ($clients as $idx => $c) {
     $joursRestants = $avgBw > 0 ? round(($stockPapier * 500) / $avgBw, 1) : null;
     $qteReco = $avgBw > 0 ? max(1, (int)ceil($avgBw * 7 / 500)) : null;
 
-    $tonerStmt = $pdo->prepare("
-      SELECT y.TonerBlack, y.TonerCyan, y.TonerMagenta, y.TonerYellow
-      FROM photocopieurs_clients pc
-      JOIN (
-        SELECT x.mac_norm, x.TonerBlack, x.TonerCyan, x.TonerMagenta, x.TonerYellow
-        FROM (
-          SELECT mac_norm, TonerBlack, TonerCyan, TonerMagenta, TonerYellow, Timestamp,
-                 ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) rn
-          FROM compteur_relevee
-          WHERE mac_norm IS NOT NULL
-        ) x WHERE x.rn = 1
-      ) y ON y.mac_norm = pc.mac_norm
-      WHERE pc.id_client = ?
-      LIMIT 1
-    ");
-    $tonerStmt->execute([$idClient]);
-    $toner = $tonerStmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $toners = [
-      'black' => isset($toner['TonerBlack']) ? (int)$toner['TonerBlack'] : null,
-      'cyan' => isset($toner['TonerCyan']) ? (int)$toner['TonerCyan'] : null,
-      'magenta' => isset($toner['TonerMagenta']) ? (int)$toner['TonerMagenta'] : null,
-      'yellow' => isset($toner['TonerYellow']) ? (int)$toner['TonerYellow'] : null,
+      'black' => null,
+      'cyan' => null,
+      'magenta' => null,
+      'yellow' => null,
     ];
+    foreach ($tonersEnAlerteGlobal as $ta) {
+      if (($ta['categorie'] ?? '') === 'toner_noir') $toners['black'] = (int)$ta['quantite'];
+      if (($ta['categorie'] ?? '') === 'toner_cyan') $toners['cyan'] = (int)$ta['quantite'];
+      if (($ta['categorie'] ?? '') === 'toner_magenta') $toners['magenta'] = (int)$ta['quantite'];
+      if (($ta['categorie'] ?? '') === 'toner_jaune') $toners['yellow'] = (int)$ta['quantite'];
+    }
 
     $papierSeuil = (int)$c['papier_seuil'];
     $tonerSeuil = (int)$c['toner_seuil_pct'];
     $papierAlerte = ((int)$c['papier_actif'] === 1) && ($stockPapier <= $papierSeuil);
-    $tonerAlerte = ((int)$c['toner_actif'] === 1) && (
-      (($toners['black'] ?? 999) > 0 && ($toners['black'] ?? 999) <= $tonerSeuil) ||
-      (($toners['cyan'] ?? 999) > 0 && ($toners['cyan'] ?? 999) <= $tonerSeuil) ||
-      (($toners['magenta'] ?? 999) > 0 && ($toners['magenta'] ?? 999) <= $tonerSeuil) ||
-      (($toners['yellow'] ?? 999) > 0 && ($toners['yellow'] ?? 999) <= $tonerSeuil)
-    );
+    $tonerAlerte = ((int)$c['toner_actif'] === 1) && !empty($tonersEnAlerteGlobal);
 
     if ((int)$c['actif'] === 1) $stats['auto_active']++;
     if ($papierAlerte) $stats['papier_alertes']++;

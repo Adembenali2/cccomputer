@@ -40,140 +40,16 @@ try {
         jsonResponse(['ok' => false, 'error' => 'Code-barres manquant'], 400);
     }
     
-    $product = null;
-    $productType = null;
-    
-    // Rechercher dans paper_catalog
     $stmt = $pdo->prepare("
-        SELECT 
-            id,
-            'papier' as type,
-            marque,
-            modele,
-            poids,
-            CONCAT(marque, ' ', modele) as nom,
-            CONCAT('Papier ', marque, ' ', modele, ' - Poids: ', poids) as description,
-            barcode
-        FROM paper_catalog
-        WHERE barcode = :barcode
+        SELECT id, categorie AS type, marque, modele, reference, cpu, ram, couleur_toner,
+               designation AS nom, quantite AS qty_stock, qr_code
+        FROM stock
+        WHERE actif = 1 AND (qr_code = :barcode OR reference = :barcode)
         LIMIT 1
     ");
     $stmt->execute([':barcode' => $barcode]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($product) {
-        // Récupérer la quantité en stock depuis la vue
-        $stmt = $pdo->prepare("
-            SELECT qty_stock 
-            FROM v_paper_stock 
-            WHERE paper_id = :id
-            LIMIT 1
-        ");
-        $stmt->execute([':id' => $product['id']]);
-        $qty = (int)($stmt->fetchColumn() ?? 0);
-        $product['qty_stock'] = $qty;
-        $productType = 'papier';
-    } else {
-        // Rechercher dans toner_catalog
-        $stmt = $pdo->prepare("
-            SELECT 
-                id,
-                'toner' as type,
-                marque,
-                modele,
-                couleur,
-                CONCAT(marque, ' ', modele) as nom,
-                CONCAT('Toner ', marque, ' ', modele, ' - Couleur: ', couleur) as description,
-                barcode
-            FROM toner_catalog
-            WHERE barcode = :barcode
-            LIMIT 1
-        ");
-        $stmt->execute([':barcode' => $barcode]);
-        $product = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($product) {
-            // Récupérer la quantité en stock depuis la vue
-            $stmt = $pdo->prepare("
-                SELECT qty_stock 
-                FROM v_toner_stock 
-                WHERE toner_id = :id
-                LIMIT 1
-            ");
-            $stmt->execute([':id' => $product['id']]);
-            $qty = (int)($stmt->fetchColumn() ?? 0);
-            $product['qty_stock'] = $qty;
-            $productType = 'toner';
-        } else {
-            // Rechercher dans lcd_catalog
-            $stmt = $pdo->prepare("
-                SELECT 
-                    id,
-                    'lcd' as type,
-                    marque,
-                    modele,
-                    reference,
-                    taille,
-                    resolution,
-                    CONCAT(marque, ' ', modele) as nom,
-                    CONCAT('LCD ', marque, ' ', modele, ' - ', taille, '\" - ', resolution) as description,
-                    barcode
-                FROM lcd_catalog
-                WHERE barcode = :barcode
-                LIMIT 1
-            ");
-            $stmt->execute([':barcode' => $barcode]);
-            $product = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($product) {
-                // Récupérer la quantité en stock depuis la vue
-                $stmt = $pdo->prepare("
-                    SELECT qty_stock 
-                    FROM v_lcd_stock 
-                    WHERE lcd_id = :id
-                    LIMIT 1
-                ");
-                $stmt->execute([':id' => $product['id']]);
-                $qty = (int)($stmt->fetchColumn() ?? 0);
-                $product['qty_stock'] = $qty;
-                $productType = 'lcd';
-            } else {
-                // Rechercher dans pc_catalog
-                $stmt = $pdo->prepare("
-                    SELECT 
-                        id,
-                        'pc' as type,
-                        marque,
-                        modele,
-                        reference,
-                        cpu,
-                        ram,
-                        CONCAT(marque, ' ', modele) as nom,
-                        CONCAT('PC ', marque, ' ', modele, ' - CPU: ', cpu, ' - RAM: ', ram) as description,
-                        barcode
-                    FROM pc_catalog
-                    WHERE barcode = :barcode
-                    LIMIT 1
-                ");
-                $stmt->execute([':barcode' => $barcode]);
-                $product = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($product) {
-                    // Récupérer la quantité en stock depuis la vue
-                    $stmt = $pdo->prepare("
-                        SELECT qty_stock 
-                        FROM v_pc_stock 
-                        WHERE pc_id = :id
-                        LIMIT 1
-                    ");
-                    $stmt->execute([':id' => $product['id']]);
-                    $qty = (int)($stmt->fetchColumn() ?? 0);
-                    $product['qty_stock'] = $qty;
-                    $productType = 'pc';
-                }
-            }
-        }
-    }
+    $productType = $product['type'] ?? null;
     
     if (!$product) {
         jsonResponse([

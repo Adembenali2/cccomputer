@@ -55,15 +55,25 @@ if ($stockId > 0) {
     </div>
     <?php endforeach; ?>
   </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script>
-  document.querySelectorAll('.qr-box').forEach(function(el) {
-    new QRCode(el, {
-      text: el.dataset.code,
-      width: 70, height: 70,
-      colorDark: "#000000",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.M
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script <?= csp_nonce() ?>>
+  window.addEventListener('load', function() {
+    document.querySelectorAll('.qr-box').forEach(function(el) {
+      const code = el.dataset.code;
+      if (!code) return;
+      QRCode.toCanvas(document.createElement('canvas'), code, {
+        width: 70,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' }
+      }, function(err, canvas) {
+        if (err) {
+          el.innerHTML = '<div style="font-size:9px;color:#ef4444;text-align:center;">Erreur QR</div>';
+          return;
+        }
+        canvas.style.width = '70px';
+        canvas.style.height = '70px';
+        el.appendChild(canvas);
+      });
     });
   });
   </script>

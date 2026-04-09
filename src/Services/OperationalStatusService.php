@@ -113,9 +113,9 @@ final class OperationalStatusService
         try {
             return (int)$pdo->query("
                 SELECT COUNT(*) FROM (
-                    SELECT paper_id FROM v_paper_stock WHERE qty_stock <= 5
+                    SELECT id FROM stock WHERE actif = 1 AND categorie='papier' AND quantite <= quantite_min
                     UNION ALL
-                    SELECT toner_id FROM v_toner_stock WHERE qty_stock <= 3
+                    SELECT id FROM stock WHERE actif = 1 AND categorie IN ('toner_noir','toner_cyan','toner_magenta','toner_jaune') AND quantite <= quantite_min
                 ) x
             ")->fetchColumn();
         } catch (\Throwable) {

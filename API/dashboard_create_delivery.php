@@ -144,94 +144,35 @@ try {
         // Vérifier le stock disponible
         $stockCheck = null;
         
-        switch ($productType) {
-            case 'papier':
-                $stockCheck = $pdo->prepare("SELECT paper_id AS id, marque, modele, poids, qty_stock FROM v_paper_stock WHERE paper_id = :id LIMIT 1");
-                $stockCheck->execute([':id' => $productId]);
-                $stock = $stockCheck->fetch(PDO::FETCH_ASSOC);
-                if ($stock) {
-                    $stockLabel = trim($stock['marque'] . ' ' . $stock['modele'] . ' ' . $stock['poids']);
-                    if ((int)$stock['qty_stock'] < $productQty) {
-                        $pdo->rollBack();
-                        jsonResponse(['ok' => false, 'error' => 'Stock insuffisant. Disponible: ' . $stock['qty_stock']], 400);
-                    }
-                    // Déduire le stock (ajouter un mouvement négatif avec reason='retour' pour sortie de stock)
-                    $moveSql = "INSERT INTO paper_moves (paper_id, qty_delta, reason, reference, user_id) VALUES (:paper_id, :qty_delta, 'retour', :ref, :user_id)";
-                    $moveStmt = $pdo->prepare($moveSql);
-                    $moveStmt->execute([
-                        ':paper_id' => $productId,
-                        ':qty_delta' => -abs($productQty), // Toujours négatif pour déduire
-                        ':ref' => $reference . ' (livraison)',
-                        ':user_id' => $_SESSION['user_id']
-                    ]);
-                }
-                break;
-                
-            case 'toner':
-                $stockCheck = $pdo->prepare("SELECT toner_id AS id, marque, modele, couleur, qty_stock FROM v_toner_stock WHERE toner_id = :id LIMIT 1");
-                $stockCheck->execute([':id' => $productId]);
-                $stock = $stockCheck->fetch(PDO::FETCH_ASSOC);
-                if ($stock) {
-                    $stockLabel = trim($stock['marque'] . ' ' . $stock['modele'] . ' ' . $stock['couleur']);
-                    if ((int)$stock['qty_stock'] < $productQty) {
-                        $pdo->rollBack();
-                        jsonResponse(['ok' => false, 'error' => 'Stock insuffisant. Disponible: ' . $stock['qty_stock']], 400);
-                    }
-                    // Déduire le stock
-                    $moveSql = "INSERT INTO toner_moves (toner_id, qty_delta, reason, reference, user_id) VALUES (:toner_id, :qty_delta, 'retour', :ref, :user_id)";
-                    $moveStmt = $pdo->prepare($moveSql);
-                    $moveStmt->execute([
-                        ':toner_id' => $productId,
-                        ':qty_delta' => -abs($productQty), // Toujours négatif pour déduire
-                        ':ref' => $reference . ' (livraison)',
-                        ':user_id' => $_SESSION['user_id']
-                    ]);
-                }
-                break;
-                
-            case 'lcd':
-                $stockCheck = $pdo->prepare("SELECT lcd_id AS id, marque, modele, reference, qty_stock FROM v_lcd_stock WHERE lcd_id = :id LIMIT 1");
-                $stockCheck->execute([':id' => $productId]);
-                $stock = $stockCheck->fetch(PDO::FETCH_ASSOC);
-                if ($stock) {
-                    $stockLabel = trim($stock['marque'] . ' ' . $stock['modele'] . ' (' . $stock['reference'] . ')');
-                    if ((int)$stock['qty_stock'] < $productQty) {
-                        $pdo->rollBack();
-                        jsonResponse(['ok' => false, 'error' => 'Stock insuffisant. Disponible: ' . $stock['qty_stock']], 400);
-                    }
-                    // Déduire le stock
-                    $moveSql = "INSERT INTO lcd_moves (lcd_id, qty_delta, reason, reference, user_id) VALUES (:lcd_id, :qty_delta, 'retour', :ref, :user_id)";
-                    $moveStmt = $pdo->prepare($moveSql);
-                    $moveStmt->execute([
-                        ':lcd_id' => $productId,
-                        ':qty_delta' => -abs($productQty), // Toujours négatif pour déduire
-                        ':ref' => $reference . ' (livraison)',
-                        ':user_id' => $_SESSION['user_id']
-                    ]);
-                }
-                break;
-                
-            case 'pc':
-                $stockCheck = $pdo->prepare("SELECT pc_id AS id, marque, modele, reference, qty_stock FROM v_pc_stock WHERE pc_id = :id LIMIT 1");
-                $stockCheck->execute([':id' => $productId]);
-                $stock = $stockCheck->fetch(PDO::FETCH_ASSOC);
-                if ($stock) {
-                    $stockLabel = trim($stock['marque'] . ' ' . $stock['modele'] . ' (' . $stock['reference'] . ')');
-                    if ((int)$stock['qty_stock'] < $productQty) {
-                        $pdo->rollBack();
-                        jsonResponse(['ok' => false, 'error' => 'Stock insuffisant. Disponible: ' . $stock['qty_stock']], 400);
-                    }
-                    // Déduire le stock
-                    $moveSql = "INSERT INTO pc_moves (pc_id, qty_delta, reason, reference, user_id) VALUES (:pc_id, :qty_delta, 'retour', :ref, :user_id)";
-                    $moveStmt = $pdo->prepare($moveSql);
-                    $moveStmt->execute([
-                        ':pc_id' => $productId,
-                        ':qty_delta' => -abs($productQty), // Toujours négatif pour déduire
-                        ':ref' => $reference . ' (livraison)',
-                        ':user_id' => $_SESSION['user_id']
-                    ]);
-                }
-                break;
+        $catWhere = [
+            'papier' => "categorie='papier'",
+            'toner' => "categorie IN ('toner_noir','toner_cyan','toner_magenta','toner_jaune')",
+            'lcd' => "categorie='ecran_lcd'",
+            'pc' => "categorie='pc'",
+        ][$productType] ?? '';
+        $stockCheck = $pdo->prepare("SELECT id, marque, COALESCE(modele, designation) AS modele, reference, quantite FROM stock WHERE id = :id AND actif = 1 AND {$catWhere} LIMIT 1");
+        $stockCheck->execute([':id' => $productId]);
+        $stock = $stockCheck->fetch(PDO::FETCH_ASSOC);
+        if ($stock) {
+            $stockLabel = trim(($stock['marque'] ?? '') . ' ' . ($stock['modele'] ?? '') . ' (' . ($stock['reference'] ?? '') . ')');
+            if ((int)$stock['quantite'] < $productQty) {
+                $pdo->rollBack();
+                jsonResponse(['ok' => false, 'error' => 'Stock insuffisant. Disponible: ' . $stock['quantite']], 400);
+            }
+            $qteAvant = (int)$stock['quantite'];
+            $qteApres = $qteAvant - abs($productQty);
+            $moveStmt = $pdo->prepare("INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by) VALUES (:stock_id, 'livraison', :quantite, :qa, :qn, :motif, :ref, :user_id)");
+            $moveStmt->execute([
+                ':stock_id' => $productId,
+                ':quantite' => abs($productQty),
+                ':qa' => $qteAvant,
+                ':qn' => $qteApres,
+                ':motif' => 'Livraison client',
+                ':ref' => $reference . ' (livraison)',
+                ':user_id' => $_SESSION['user_id']
+            ]);
+            $upd = $pdo->prepare("UPDATE stock SET quantite = quantite - :qte WHERE id = :id AND quantite >= :qte");
+            $upd->execute([':qte' => abs($productQty), ':id' => $productId]);
         }
         
         if (!$stock) {

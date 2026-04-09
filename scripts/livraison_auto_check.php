@@ -23,44 +23,28 @@ try {
 foreach ($configs as $config) {
     $clientId = (int)$config['client_id'];
     try {
-        // [Livraison Auto] Verification papier
-        if ((int)$config['papier_actif'] === 1 && !empty($config['papier_product_id'])) {
+        // [Livraison Auto] Verification papier (nouveau stock)
+        if ((int)$config['papier_actif'] === 1) {
             $stmtStock = $pdo->prepare("
-                SELECT qty_stock FROM client_stock
-                WHERE id_client=? AND product_type='papier' AND product_id=?
+                SELECT COALESCE(SUM(quantite),0) FROM stock
+                WHERE actif = 1 AND categorie='papier'
             ");
-            $stmtStock->execute([$clientId, (int)$config['papier_product_id']]);
+            $stmtStock->execute();
             $stock = (int)($stmtStock->fetchColumn() ?: 0);
             $seuil = (int)$config['papier_seuil'];
 
             if ($stock <= $seuil) {
                 $stmtCheck = $pdo->prepare("
                     SELECT COUNT(*) FROM livraisons
-                    WHERE id_client=? AND product_type='papier' AND product_id=?
+                            WHERE id_client=? AND product_type='papier'
                     AND statut IN ('planifiee','en_cours')
                     AND commentaire LIKE '%[AUTO]%'
                 ");
-                $stmtCheck->execute([$clientId, (int)$config['papier_product_id']]);
+                $stmtCheck->execute([$clientId]);
                 $existante = (int)$stmtCheck->fetchColumn();
                 if ($existante === 0) {
                     if ((int)$config['papier_qte_auto'] === 1) {
-                        $stmtConso = $pdo->prepare("
-                            SELECT ROUND(
-                              COALESCE((MAX(cr.TotalBW) - MIN(cr.TotalBW)) / NULLIF(DATEDIFF(MAX(cr.Timestamp), MIN(cr.Timestamp)), 0), 0), 1
-                            ) AS avg_bw
-                            FROM photocopieurs_clients pc
-                            JOIN (
-                              SELECT mac_norm, TotalBW, Timestamp FROM compteur_relevee
-                              WHERE Timestamp >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-                              UNION ALL
-                              SELECT mac_norm, TotalBW, Timestamp FROM compteur_relevee_ancien
-                              WHERE Timestamp >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-                            ) cr ON cr.mac_norm = pc.mac_norm
-                            WHERE pc.id_client = ?
-                        ");
-                        $stmtConso->execute([$clientId]);
-                        $avgBw = (float)($stmtConso->fetchColumn() ?: 0);
-                        $qte = $avgBw > 0 ? max(1, (int)ceil($avgBw * 7 / 500)) : (int)$config['papier_qte_livraison'];
+                        $qte = max(1, (int)$config['papier_qte_livraison']);
                     } else {
                         $qte = max(1, (int)$config['papier_qte_livraison']);
                     }
@@ -71,7 +55,7 @@ foreach ($configs as $config) {
                     $stmtInsert = $pdo->prepare("
                         INSERT INTO livraisons
                         (id_client, reference, adresse_livraison, objet, date_prevue, statut, product_type, product_id, product_qty, commentaire)
-                        VALUES (?, ?, ?, ?, ?, 'planifiee', 'papier', ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, 'planifiee', 'papier', NULL, ?, ?)
                     ");
                     $stmtInsert->execute([
                         $clientId,
@@ -79,7 +63,6 @@ foreach ($configs as $config) {
                         $adresse,
                         "Reapprovisionnement papier automatique ({$qte} ramettes)",
                         $datePrevue,
-                        (int)$config['papier_product_id'],
                         $qte,
                         "[AUTO] Stock={$stock} ramettes <= seuil={$seuil}",
                     ]);
@@ -101,41 +84,26 @@ foreach ($configs as $config) {
             }
         }
 
-        // [Livraison Auto] Verification toners
+        // [Livraison Auto] Verification toners (nouveau stock)
         if ((int)$config['toner_actif'] === 1) {
-            $seuilToner = (int)$config['toner_seuil_pct'];
             $stmtToners = $pdo->prepare("
-                SELECT last_rel.mac_norm, last_rel.TonerBlack, last_rel.TonerCyan, last_rel.TonerMagenta, last_rel.TonerYellow
-                FROM photocopieurs_clients pc
-                JOIN (
-                  SELECT x.mac_norm, x.TonerBlack, x.TonerCyan, x.TonerMagenta, x.TonerYellow
-                  FROM (
-                    SELECT mac_norm, TonerBlack, TonerCyan, TonerMagenta, TonerYellow, Timestamp,
-                           ROW_NUMBER() OVER (PARTITION BY mac_norm ORDER BY Timestamp DESC) rn
-                    FROM compteur_relevee
-                    WHERE mac_norm IS NOT NULL
-                  ) x WHERE x.rn = 1
-                ) last_rel ON last_rel.mac_norm = pc.mac_norm
-                WHERE pc.id_client = ?
+                SELECT id, categorie, designation, quantite, quantite_min
+                FROM stock
+                WHERE actif = 1
+                  AND categorie IN ('toner_noir','toner_cyan','toner_magenta','toner_jaune')
+                  AND quantite <= quantite_min
             ");
-            $stmtToners->execute([$clientId]);
-            $machinesReleves = $stmtToners->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            $tonerTypes = [
-                ['col' => 'TonerBlack', 'label' => 'Noir', 'type_log' => 'toner_black'],
-                ['col' => 'TonerCyan', 'label' => 'Cyan', 'type_log' => 'toner_cyan'],
-                ['col' => 'TonerMagenta', 'label' => 'Magenta', 'type_log' => 'toner_magenta'],
-                ['col' => 'TonerYellow', 'label' => 'Jaune', 'type_log' => 'toner_yellow'],
-            ];
-            foreach ($machinesReleves as $releve) {
-                foreach ($tonerTypes as $info) {
-                    $pct = (int)($releve[$info['col']] ?? 0);
-                    if ($pct > 0 && $pct <= $seuilToner) {
+            $stmtToners->execute();
+            $tonersEnAlerte = $stmtToners->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($tonersEnAlerte as $toner) {
+                    $label = str_replace('toner_', '', (string)$toner['categorie']);
+                    $label = ucfirst($label);
                         $stmtCheckT = $pdo->prepare("
                             SELECT COUNT(*) FROM livraisons
                             WHERE id_client=? AND statut IN ('planifiee','en_cours')
                             AND commentaire LIKE ?
                         ");
-                        $likeSearch = '%[AUTO] toner ' . $info['label'] . '%';
+                        $likeSearch = '%[AUTO] toner ' . $label . '%';
                         $stmtCheckT->execute([$clientId, $likeSearch]);
                         if ((int)$stmtCheckT->fetchColumn() === 0) {
                             $ref = 'LIV-AUTO-' . date('Ymd') . '-' . strtoupper(substr(uniqid('', true), -4));
@@ -149,19 +117,17 @@ foreach ($configs as $config) {
                                 $clientId,
                                 $ref,
                                 $adresse,
-                                "Remplacement toner {$info['label']} automatique",
+                                "Remplacement toner {$label} automatique",
                                 date('Y-m-d', strtotime('+1 day')),
-                                "[AUTO] toner {$info['label']} = {$pct}% <= seuil={$seuilToner}%",
+                                "[AUTO] toner {$label} en alerte stock",
                             ]);
                             $livIdT = (int)$pdo->lastInsertId();
                             $pdo->prepare("
                                 INSERT INTO livraison_auto_log (id_client, type, declencheur, id_livraison_creee)
                                 VALUES (?, ?, ?, ?)
-                            ")->execute([$clientId, $info['type_log'], "{$pct}% <= {$seuilToner}%", $livIdT]);
-                            $results['created'][] = ['client_id' => $clientId, 'type' => $info['type_log'], 'livraison_id' => $livIdT, 'ref' => $ref];
+                            ")->execute([$clientId, 'toner_' . strtolower($label), "stock toner en alerte", $livIdT]);
+                            $results['created'][] = ['client_id' => $clientId, 'type' => 'toner_' . strtolower($label), 'livraison_id' => $livIdT, 'ref' => $ref];
                         }
-                    }
-                }
             }
             $pdo->prepare("UPDATE livraison_auto_config SET derniere_verification=NOW() WHERE id_client=?")->execute([$clientId]);
         }
