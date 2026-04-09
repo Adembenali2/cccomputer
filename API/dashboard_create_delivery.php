@@ -70,6 +70,10 @@ try {
     $hasLivProductId = columnExists($pdo, 'livraisons', 'product_id');
     $hasLivProductQty = columnExists($pdo, 'livraisons', 'product_qty');
     $useLivProductCols = $hasLivProductType && $hasLivProductId && $hasLivProductQty;
+    $userRoleCol = columnExists($pdo, 'utilisateurs', 'Emploi') ? 'Emploi' : (columnExists($pdo, 'utilisateurs', 'emploi') ? 'emploi' : '');
+    $userStatusCol = columnExists($pdo, 'utilisateurs', 'statut') ? 'statut' : (columnExists($pdo, 'utilisateurs', 'status') ? 'status' : '');
+    $hasMoveCreatedBy = columnExists($pdo, 'stock_mouvements', 'created_by');
+    $hasMoveUserId = columnExists($pdo, 'stock_mouvements', 'user_id');
     
     // Vérifier que la référence n'existe pas déjà
     $checkRef = $pdo->prepare("SELECT id FROM livraisons WHERE reference = :ref LIMIT 1");
@@ -95,15 +99,32 @@ try {
     // Optimisation: au lieu de RAND() (lent), on prend le premier disponible ou celui avec le moins de livraisons
     if ($idLivreur <= 0) {
         // Sélection optimisée: prendre le livreur avec le moins de livraisons planifiées/en cours
+        $whereParts = [];
+        if ($userRoleCol !== '') {
+            $whereParts[] = "u.`{$userRoleCol}` = 'Livreur'";
+        }
+        if ($userStatusCol !== '') {
+            $whereParts[] = "u.`{$userStatusCol}` = 'actif'";
+        }
+        $whereSql = $whereParts ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
+        $roleSelect = $userRoleCol !== '' ? "u.`{$userRoleCol}` AS Emploi" : "NULL AS Emploi";
+        $statusSelect = $userStatusCol !== '' ? "u.`{$userStatusCol}` AS statut" : "NULL AS statut";
+        $groupByParts = ['u.id', 'u.nom', 'u.prenom'];
+        if ($userRoleCol !== '') {
+            $groupByParts[] = "u.`{$userRoleCol}`";
+        }
+        if ($userStatusCol !== '') {
+            $groupByParts[] = "u.`{$userStatusCol}`";
+        }
+        $groupBySql = implode(', ', $groupByParts);
         $autoLiv = $pdo->prepare("
-            SELECT u.id, u.nom, u.prenom, u.Emploi, u.statut,
+            SELECT u.id, u.nom, u.prenom, {$roleSelect}, {$statusSelect},
                    COUNT(l.id) AS livraisons_count
             FROM utilisateurs u
             LEFT JOIN livraisons l ON l.id_livreur = u.id 
                 AND l.statut IN ('planifiee', 'en_cours')
-            WHERE u.Emploi = 'Livreur'
-              AND u.statut = 'actif'
-            GROUP BY u.id, u.nom, u.prenom, u.Emploi, u.statut
+            {$whereSql}
+            GROUP BY {$groupBySql}
             ORDER BY livraisons_count ASC, u.id ASC
             LIMIT 1
         ");
@@ -121,12 +142,17 @@ try {
         $idLivreur = (int)$livreur['id']; // on force l’ID trouvé
     } else {
         // Si un livreur est fourni, on vérifie qu'il est bien livreur actif
+        $whereParts = ["id = :id"];
+        if ($userRoleCol !== '') {
+            $whereParts[] = "`{$userRoleCol}` = 'Livreur'";
+        }
+        if ($userStatusCol !== '') {
+            $whereParts[] = "`{$userStatusCol}` = 'actif'";
+        }
         $checkLivreur = $pdo->prepare("
-            SELECT id, nom, prenom, Emploi, statut 
+            SELECT * 
             FROM utilisateurs 
-            WHERE id = :id 
-              AND Emploi = 'Livreur' 
-              AND statut = 'actif' 
+            WHERE " . implode(' AND ', $whereParts) . "
             LIMIT 1
         ");
         $checkLivreur->execute([':id' => $idLivreur]);
@@ -138,9 +164,13 @@ try {
     }
     
     // Double vérification (sécurité supplémentaire)
-    if (($livreur['Emploi'] ?? '') !== 'Livreur' || ($livreur['statut'] ?? '') !== 'actif') {
+    if ($userRoleCol !== '' && ($livreur[$userRoleCol] ?? '') !== 'Livreur') {
         $pdo->rollBack();
-        jsonResponse(['ok' => false, 'error' => 'L\'utilisateur sélectionné n\'est pas un livreur actif.'], 400);
+        jsonResponse(['ok' => false, 'error' => 'L\'utilisateur sélectionné n\'est pas un livreur.'], 400);
+    }
+    if ($userStatusCol !== '' && ($livreur[$userStatusCol] ?? '') !== 'actif') {
+        $pdo->rollBack();
+        jsonResponse(['ok' => false, 'error' => 'Le livreur sélectionné est inactif.'], 400);
     }
     
     // Si un produit est sélectionné, vérifier le stock et déduire
@@ -168,16 +198,29 @@ try {
             }
             $qteAvant = (int)$stock['quantite'];
             $qteApres = $qteAvant - abs($productQty);
-            $moveStmt = $pdo->prepare("INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by) VALUES (:stock_id, 'livraison', :quantite, :qa, :qn, :motif, :ref, :user_id)");
-            $moveStmt->execute([
-                ':stock_id' => $productId,
-                ':quantite' => abs($productQty),
-                ':qa' => $qteAvant,
-                ':qn' => $qteApres,
-                ':motif' => 'Livraison client',
-                ':ref' => $reference . ' (livraison)',
-                ':user_id' => $_SESSION['user_id']
-            ]);
+            if ($hasMoveCreatedBy || $hasMoveUserId) {
+                $userCol = $hasMoveCreatedBy ? 'created_by' : 'user_id';
+                $moveStmt = $pdo->prepare("INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, {$userCol}) VALUES (:stock_id, 'livraison', :quantite, :qa, :qn, :motif, :ref, :user_id)");
+                $moveStmt->execute([
+                    ':stock_id' => $productId,
+                    ':quantite' => abs($productQty),
+                    ':qa' => $qteAvant,
+                    ':qn' => $qteApres,
+                    ':motif' => 'Livraison client',
+                    ':ref' => $reference . ' (livraison)',
+                    ':user_id' => $_SESSION['user_id']
+                ]);
+            } else {
+                $moveStmt = $pdo->prepare("INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc) VALUES (:stock_id, 'livraison', :quantite, :qa, :qn, :motif, :ref)");
+                $moveStmt->execute([
+                    ':stock_id' => $productId,
+                    ':quantite' => abs($productQty),
+                    ':qa' => $qteAvant,
+                    ':qn' => $qteApres,
+                    ':motif' => 'Livraison client',
+                    ':ref' => $reference . ' (livraison)'
+                ]);
+            }
             $upd = $pdo->prepare("UPDATE stock SET quantite = quantite - :qte WHERE id = :id AND quantite >= :qte");
             $upd->execute([':qte' => abs($productQty), ':id' => $productId]);
         }
