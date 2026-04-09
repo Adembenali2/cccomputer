@@ -1,4 +1,172 @@
 <?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../includes/security_headers.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/auth_role.php';
+require_once __DIR__ . '/../includes/helpers.php';
+
+authorize_page('stock', []);
+ensureCsrfToken();
+
+$emploi = (string)($_SESSION['emploi'] ?? '');
+$allowedRead = ['Admin', 'Dirigeant', 'Secrétaire', 'Livreur', 'Technicien'];
+if (!in_array($emploi, $allowedRead, true)) {
+    http_response_code(403);
+    exit('Accès refusé');
+}
+$canWrite = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
+
+$pdo = getPdo();
+$stmt = $pdo->prepare("SELECT * FROM stock WHERE actif = 1 ORDER BY categorie, designation");
+$stmt->execute();
+$articles = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$kpiTotal = 0;
+$kpiValue = 0.0;
+$kpiAlert = 0;
+$kpiRupture = 0;
+foreach ($articles as $a) {
+    $kpiTotal++;
+    $q = (int)($a['quantite'] ?? 0);
+    $min = (int)($a['quantite_min'] ?? 0);
+    $kpiValue += $q * (float)($a['prix_unitaire_ht'] ?? 0);
+    if ($q <= 0) {
+        $kpiRupture++;
+    } elseif ($q < $min) {
+        $kpiAlert++;
+    }
+}
+?>
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="<?= h($_SESSION['csrf_token'] ?? '') ?>">
+  <title>Stock - CCComputer</title>
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <style>
+    body { background:#f8fafc; }
+    .wrap { padding:14px; }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .kpis { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:10px; }
+    .kpis b { margin-left:4px; }
+    .input, .select, .btn { height:34px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; padding:0 10px; }
+    .btn { cursor:pointer; }
+    .table-wrap { background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:8px; border-bottom:1px solid #e2e8f0; text-align:left; font-size:13px; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2ff; font-size:11px; }
+    .muted { color:#64748b; }
+  </style>
+</head>
+<body>
+<?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+<main class="wrap" data-can-write="<?= $canWrite ? '1' : '0' ?>">
+  <h1>Stock</h1>
+
+  <div class="kpis">
+    <div>Total articles <b><?= (int)$kpiTotal ?></b></div>
+    <div>Valeur stock HT <b><?= number_format($kpiValue, 2, ',', ' ') ?> €</b></div>
+    <div>En alerte <b><?= (int)$kpiAlert ?></b></div>
+    <div>En rupture <b><?= (int)$kpiRupture ?></b></div>
+  </div>
+
+  <div class="toolbar">
+    <input id="q" class="input" placeholder="Recherche (réf, désignation, CPU...)">
+    <select id="fCategorie" class="select"><option value="">Toutes catégories</option></select>
+    <select id="fEtat" class="select">
+      <option value="">Tous états</option>
+      <option value="neuf">Neuf</option>
+      <option value="bon">Bon</option>
+      <option value="use">Usé</option>
+      <option value="hs">HS</option>
+    </select>
+    <button id="btnPrint" class="btn" type="button">Imprimer étiquettes</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+      <tr>
+        <th>Référence</th>
+        <th>Désignation</th>
+        <th>Catégorie</th>
+        <th>Détails</th>
+        <th>Quantité</th>
+        <th>État</th>
+      </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</main>
+
+<script nonce="<?= csp_nonce() ?>">
+(() => {
+  const items = <?= json_encode($articles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || [];
+  const tb = document.getElementById('tb');
+  const q = document.getElementById('q');
+  const fCategorie = document.getElementById('fCategorie');
+  const fEtat = document.getElementById('fEtat');
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  const cats = [...new Set(items.map(i => i.categorie).filter(Boolean))];
+  fCategorie.innerHTML = '<option value="">Toutes catégories</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+  const details = (i) => {
+    if (i.categorie === 'pc') return [i.cpu, i.ram, i.stockage].filter(Boolean).join(' | ');
+    if (i.categorie === 'imprimante') return [i.modele_compatible, i.numero_serie].filter(Boolean).join(' | ');
+    if ((i.categorie || '').startsWith('toner_')) return [i.couleur_toner, i.modele_compatible, i.rendement_pages ? `${i.rendement_pages} pages` : ''].filter(Boolean).join(' | ');
+    if (i.categorie === 'ecran_lcd') return [i.taille_ecran, i.resolution].filter(Boolean).join(' | ');
+    if (i.categorie === 'papier') {
+      const qte = Number(i.quantite || 0);
+      const cont = Number(i.contenance || 0);
+      return cont > 0 ? `${qte} cartons (${qte * cont} feuilles)` : `${qte} unités`;
+    }
+    return i.modele_compatible || '';
+  };
+
+  const render = () => {
+    const term = q.value.trim().toLowerCase();
+    const cat = fCategorie.value;
+    const etat = fEtat.value;
+    const rows = items.filter((i) => {
+      if (cat && i.categorie !== cat) return false;
+      if (etat && i.etat !== etat) return false;
+      if (!term) return true;
+      const hay = `${i.reference || ''} ${i.designation || ''} ${i.numero_serie || ''} ${i.adresse_mac || ''} ${i.cpu || ''}`.toLowerCase();
+      return hay.includes(term);
+    });
+
+    tb.innerHTML = rows.map((i) => `
+      <tr>
+        <td>${esc(i.reference || '')}</td>
+        <td>${esc(i.designation || '')}</td>
+        <td><span class="pill">${esc(i.categorie || '')}</span></td>
+        <td>${esc(details(i))}</td>
+        <td>${esc(i.quantite ?? 0)}</td>
+        <td>${esc((i.etat || 'neuf').toUpperCase())}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" class="muted">Aucun article</td></tr>';
+  };
+
+  q.addEventListener('input', render);
+  fCategorie.addEventListener('change', render);
+  fEtat.addEventListener('change', render);
+  document.getElementById('btnPrint').addEventListener('click', () => {
+    window.open('/public/stock_etiquettes.php?all=1', '_blank');
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
+<?php __halt_compiler(); ?>
+
+<?php
 /* duplicate block starts - strict_types removed */
 require_once __DIR__ . '/../includes/security_headers.php';
 require_once __DIR__ . '/../includes/auth.php';
