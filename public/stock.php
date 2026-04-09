@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+/* duplicate block starts - strict_types removed */
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -25,6 +25,7 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 $flashWarning = $_SESSION['flash_warning'] ?? null;
 unset($_SESSION['flash_warning']);
+
 $totalPapier = 0;
 $totalToners = 0;
 $totalLCD = 0;
@@ -59,89 +60,72 @@ foreach ($articles as $a) {
   <meta name="csrf-token" content="<?= h($_SESSION['csrf_token'] ?? '') ?>">
   <title>Stock - CCComputer</title>
   <link rel="stylesheet" href="/assets/css/dashboard.css">
-  <style>
-    body{background:#f8fafc}.wrap{padding:14px}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
-    .btn,.in,.sel{height:36px;border:1px solid #d1d5db;border-radius:8px;background:#fff;padding:0 10px}.btn{cursor:pointer}.btnP{background:#2563eb;color:#fff;border-color:#2563eb}
-    .kpi{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin-bottom:10px}.k{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px}
-    .k b{display:block;font-size:20px}.layout{display:grid;grid-template-columns:220px 1fr;gap:10px}.side,.main{background:#fff;border:1px solid #e5e7eb;border-radius:8px}
-    .side{padding:10px}.main{padding:10px;overflow:auto}.tbl{width:100%;border-collapse:collapse}.tbl th,.tbl td{padding:8px;border-bottom:1px solid #e5e7eb;font-size:13px}
-    .tbl th{cursor:pointer;user-select:none}.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
-    .qprog{width:120px;height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden}.qbar{height:100%}
-    .menuWrap{position:relative}.menuBtn{border:none;background:transparent;cursor:pointer;font-size:18px}.menu{display:none;position:absolute;right:0;top:22px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-width:140px;z-index:10}
-    .menu button{display:block;width:100%;text-align:left;border:none;background:transparent;padding:6px 8px;cursor:pointer}.menu button:hover{background:#f1f5f9}
-    .menuWrap:hover .menu{display:block}.paging{display:flex;justify-content:flex-end;gap:8px;align-items:center;margin-top:8px}
-    .modalBg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:50}.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(880px,95vw);max-height:90vh;overflow:auto;background:#fff;border-radius:10px;border:1px solid #e5e7eb;display:none;z-index:51}
-    .mHead,.mFoot{padding:10px;border-bottom:1px solid #e5e7eb}.mFoot{border-top:1px solid #e5e7eb;border-bottom:none;display:flex;justify-content:space-between}.mBody{padding:10px}.grid{display:grid;grid-template-columns:repeat(3,minmax(140px,1fr));gap:8px}
-    .field{display:flex;flex-direction:column;gap:4px}.field label{font-size:12px;color:#64748b}.toastWrap{position:fixed;right:12px;bottom:12px;display:flex;flex-direction:column;gap:8px;z-index:60}
-    .toast{color:#fff;padding:10px;border-radius:8px;min-width:220px}.ok{background:#16a34a}.bad{background:#dc2626}.warn{background:#f59e0b}
-    .scanBox{position:relative;width:400px;height:300px;background:#000;margin:auto;border-radius:8px;overflow:hidden}.scanLine{position:absolute;left:0;right:0;height:2px;background:#22c55e;animation:scan 2s linear infinite}
-    @keyframes scan{0%{top:0}100%{top:298px}} .hi{animation:hi 2s}@keyframes hi{0%{background:#bbf7d0}100%{background:transparent}}
-  </style>
 </head>
 <body>
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
-<main class="wrap" data-can-write="<?= $canWrite ? '1' : '0' ?>">
-  <h1 style="margin:0 0 8px 0">Stock</h1>
-  <div class="bar">
-    <button id="btnAdd" class="btn btnP">+ Ajouter article</button>
-    <input id="q" class="in" style="min-width:240px" placeholder="Recherche">
-    <select id="fCategorie" class="sel"><option value="">Filtre catégorie</option></select>
-    <select id="fEtat" class="sel"><option value="">Filtre état</option><option value="neuf">Neuf</option><option value="bon">Bon</option><option value="use">Usé</option><option value="hs">HS</option></select>
-    <button id="btnPrint" class="btn">Imprimer étiquettes</button>
-    <button id="btnScan" class="btn">Scanner QR</button>
+
+<main data-can-write="<?= $canWrite ? '1' : '0' ?>" style="padding:14px">
+  <h1>Stock</h1>
+
+  <?php if ($flash): ?><div><?= h((string)$flash) ?></div><?php endif; ?>
+  <?php if ($flashWarning): ?><div><?= h((string)$flashWarning) ?></div><?php endif; ?>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0">
+    <div>Total articles: <strong><?= (int)$kpiTotal ?></strong></div>
+    <div>Valeur stock HT: <strong><?= number_format($kpiValue, 2, ',', ' ') ?> €</strong></div>
+    <div>En alerte: <strong><?= (int)$kpiAlert ?></strong></div>
+    <div>En rupture: <strong><?= (int)$kpiRupture ?></strong></div>
   </div>
 
-  <?php if ($flash): ?><div style="margin-bottom:8px;color:#065f46"><?= h((string)$flash) ?></div><?php endif; ?>
-  <?php if ($flashWarning): ?><div style="margin-bottom:8px;color:#92400e"><?= h((string)$flashWarning) ?></div><?php endif; ?>
-
-  <div class="kpi">
-    <div class="k"><span>Total articles</span><b><?= (int)$kpiTotal ?></b></div>
-    <div class="k"><span>Valeur stock HT</span><b><?= number_format($kpiValue,2,',',' ') ?> €</b></div>
-    <div class="k"><span>En alerte</span><b><?= (int)$kpiAlert ?></b></div>
-    <div class="k"><span>En rupture</span><b><?= (int)$kpiRupture ?></b></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <button id="btnAdd" type="button">+ Ajouter article</button>
+    <input id="q" placeholder="Recherche">
+    <select id="fCategorie"><option value="">Filtre catégorie</option></select>
+    <select id="fEtat">
+      <option value="">Filtre état</option>
+      <option value="neuf">Neuf</option>
+      <option value="bon">Bon</option>
+      <option value="use">Usé</option>
+      <option value="hs">HS</option>
+    </select>
+    <button id="btnPrint" type="button">Imprimer étiquettes</button>
+    <button id="btnScan" type="button">Scanner QR</button>
   </div>
 
-  <div class="layout">
-    <aside class="side">
-      <label><input type="radio" name="stockState" value="all" checked> Tout</label><br>
-      <label><input type="radio" name="stockState" value="alert"> Alerte</label><br>
-      <label><input type="radio" name="stockState" value="out"> Rupture</label><br>
-      <label><input type="radio" name="stockState" value="normal"> Normal</label><hr>
-      <label>Quantité max affichée</label>
-      <input id="qRange" type="range" min="0" max="1000" value="1000" style="width:100%">
-      <div><small id="qRangeVal">1000</small></div>
-    </aside>
-    <section class="main">
-      <table class="tbl">
-        <thead><tr><th data-sort="reference">Référence</th><th data-sort="designation">Désignation</th><th data-sort="categorie">Catégorie</th><th>Détails</th><th data-sort="quantite">Quantité</th><th data-sort="etat">État</th><th>Actions</th></tr></thead>
-        <tbody id="tb"></tbody>
-      </table>
-      <div class="paging"><button id="prev" class="btn">Préc.</button><span id="pg"></span><button id="next" class="btn">Suiv.</button></div>
-    </section>
-  </div>
+  <table border="1" cellpadding="6" cellspacing="0" width="100%">
+    <thead>
+      <tr>
+        <th>Référence</th>
+        <th>Désignation</th>
+        <th>Catégorie</th>
+        <th>Détails</th>
+        <th>Quantité</th>
+        <th>État</th>
+      </tr>
+    </thead>
+    <tbody id="tb"></tbody>
+  </table>
 </main>
 
-<div id="modalBg" class="modalBg"></div>
-<div id="editModal" class="modal"><div class="mHead"><strong>Ajouter / Modifier</strong></div><div class="mBody"><div class="grid">
-  <div class="field"><label>Référence</label><input id="f_reference" class="in" placeholder="Auto si vide"></div>
-  <div class="field"><label>Désignation</label><input id="f_designation" class="in"></div>
-  <div class="field"><label>Catégorie</label><select id="f_categorie" class="sel"></select></div>
-  <div class="field"><label>Marque</label><input id="f_marque" class="in"></div>
-  <div class="field"><label>Quantité</label><input id="f_quantite" type="number" min="0" class="in" value="0"></div>
-  <div class="field"><label>Seuil min</label><input id="f_quantite_min" type="number" min="0" class="in" value="5"></div>
-  <div class="field"><label>Prix HT</label><input id="f_prix_unitaire_ht" type="number" step="0.01" min="0" class="in" value="0"></div>
-  <div class="field"><label>État</label><select id="f_etat" class="sel"><option value="neuf">Neuf</option><option value="bon">Bon</option><option value="use">Usé</option><option value="hs">HS</option></select></div>
-  <div class="field"><label>Emplacement</label><input id="f_emplacement" class="in"></div>
-  <div class="field" style="grid-column:span 3"><label>Notes</label><textarea id="f_notes" class="in" style="height:72px;padding:8px"></textarea></div>
-</div></div><div class="mFoot"><button id="mClose" class="btn">Fermer</button><button id="mSave" class="btn btnP">Enregistrer</button></div></div>
-
-<div id="scanModal" class="modal"><div class="mHead"><strong>Scanner un article</strong></div><div class="mBody"><div class="scanBox"><video id="qrVideo" width="400" height="300" style="width:100%;height:100%;object-fit:cover"></video><canvas id="qrCanvas" style="display:none"></canvas><div class="scanLine"></div></div></div><div class="mFoot"><span></span><button id="scanClose" class="btn">Fermer</button></div></div>
-<div id="histModal" class="modal"><div class="mHead"><strong>Historique des mouvements</strong></div><div class="mBody"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Avant</th><th>Après</th><th>Motif</th></tr></thead><tbody id="histBody"></tbody></table></div><div class="mFoot"><span></span><button id="histClose" class="btn">Fermer</button></div></div>
-<div id="toasts" class="toastWrap"></div>
-
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script nonce="<?= csp_nonce() ?>">
-(()=>{const csrf=document.querySelector('meta[name="csrf-token"]').content||'';const canWrite=document.querySelector('main').dataset.canWrite==='1';let items=<?= json_encode($articles, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>||[],filtered=[...items],page=1,size=25,sortKey='designation',sortDir='asc',editId=0;const CATS=['papier','toner_noir','toner_cyan','toner_magenta','toner_jaune','pc','ecran_lcd','imprimante','piece_detachee','consommable','autre'];const catMap={'papier':'Papier','toner_noir':'Toner Noir','toner_cyan':'Toner Cyan','toner_magenta':'Toner Magenta','toner_jaune':'Toner Jaune','pc':'PC','ecran_lcd':'LCD','imprimante':'Imprimante','piece_detachee':'Pièce détachée','consommable':'Consommable','autre':'Autre'};const badge={'papier':'background:#dbeafe;color:#1e3a8a','toner_noir':'background:#111827;color:#fff','toner_cyan':'background:#0891b2;color:#fff','toner_magenta':'background:#db2777;color:#fff','toner_jaune':'background:#fde047;color:#111827','pc':'background:#4f46e5;color:#fff','ecran_lcd':'background:#7c3aed;color:#fff','imprimante':'background:#166534;color:#fff','piece_detachee':'background:#ea580c;color:#fff','consommable':'background:#0f766e;color:#fff','autre':'background:#6b7280;color:#fff'};const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));const toast=(m,t='ok')=>{const d=document.createElement('div');d.className='toast '+t;d.textContent=m;document.getElementById('toasts').appendChild(d);setTimeout(()=>d.remove(),3000)};document.getElementById('fCategorie').innerHTML='<option value="">Filtre catégorie</option>'+CATS.map(c=>`<option value="${c}">${catMap[c]}</option>`).join('');document.getElementById('f_categorie').innerHTML=CATS.map(c=>`<option value="${c}">${catMap[c]}</option>`).join('');
+(() => {
+  const items = <?= json_encode($articles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || [];
+  const tb = document.getElementById('tb');
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  tb.innerHTML = items.map((i) => `
+    <tr>
+      <td>${esc(i.reference || '')}</td>
+      <td>${esc(i.designation || '')}</td>
+      <td>${esc(i.categorie || '')}</td>
+      <td>${esc(i.modele_compatible || '')}</td>
+      <td>${esc(i.quantite || 0)}</td>
+      <td>${esc(i.etat || 'neuf')}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="6"><em>Aucun article</em></td></tr>';
+})();
+</script>
+</body>
+</html>
 function details(i){if(i.categorie==='pc')return [i.cpu,i.ram,i.stockage].filter(Boolean).join(' | ');if(i.categorie==='imprimante')return [i.modele_compatible,i.numero_serie].filter(Boolean).join(' | ');if((i.categorie||'').startsWith('toner_'))return `${i.couleur_toner||i.categorie.replace('toner_','')} | ${i.modele_compatible||''}`;if(i.categorie==='papier'){const q=Number(i.quantite||0),c=Number(i.contenance||0);return c>0?`${q} cartons (${q*c} feuilles)`:`${q} unités`;}if(i.categorie==='ecran_lcd')return [i.taille_ecran,i.resolution].filter(Boolean).join(' | ');return i.modele_compatible||'';}
 function state(i){const q=Number(i.quantite||0),m=Number(i.quantite_min||0);return q<=0?'out':(q<m?'alert':'normal');}
 function apply(){const q=document.getElementById('q').value.trim().toLowerCase(),c=document.getElementById('fCategorie').value,e=document.getElementById('fEtat').value,maxQ=Number(document.getElementById('qRange').value||1000),s=(document.querySelector('input[name="stockState"]:checked')||{}).value||'all';filtered=items.filter(i=>{if(c&&i.categorie!==c)return false;if(e&&i.etat!==e)return false;if(Number(i.quantite||0)>maxQ)return false;if(s!=='all'&&state(i)!==s)return false;if(q){const h=`${i.reference||''} ${i.designation||''} ${i.numero_serie||''} ${i.adresse_mac||''} ${i.cpu||''}`.toLowerCase();if(!h.includes(q))return false;}return true;});filtered.sort((a,b)=>{const va=a[sortKey]??'',vb=b[sortKey]??'';const na=Number(va),nb=Number(vb);if(!Number.isNaN(na)&&!Number.isNaN(nb))return sortDir==='asc'?na-nb:nb-na;return sortDir==='asc'?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));});page=1;render();}
@@ -164,7 +148,7 @@ if(!canWrite)document.getElementById('btnAdd').disabled=true;apply();
 </html>
 
 <?php
-declare(strict_types=1);
+/* duplicate block starts - strict_types removed */
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
