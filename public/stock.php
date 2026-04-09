@@ -17,17 +17,30 @@ $enRupture = count(array_filter($articles, static fn($a) => (int)$a['quantite'] 
 
 function badgeCategorie(string $cat): string {
   $cfg = [
-    'papier' => ['Papier', '#dbeafe', '#1d4ed8'],
-    'toner_noir' => ['Toner Noir', '#1f2937', '#fff'],
-    'toner_cyan' => ['Toner Cyan', '#cffafe', '#0e7490'],
-    'toner_magenta' => ['Toner Magenta', '#fce7f3', '#9d174d'],
-    'toner_jaune' => ['Toner Jaune', '#fef9c3', '#854d0e'],
-    'pc' => ['PC', '#ede9fe', '#5b21b6'],
-    'ecran_lcd' => ['Écran LCD', '#f3e8ff', '#7e22ce'],
-    'imprimante' => ['Imprimante', '#dcfce7', '#166534'],
+    'papier' => ['📄 Papier', '#dbeafe', '#1d4ed8'],
+    'toner_noir' => ['⬛ Toner Noir', '#1f2937', '#fff'],
+    'toner_cyan' => ['🔵 Toner Cyan', '#cffafe', '#0e7490'],
+    'toner_magenta' => ['🟣 Toner Magenta', '#fce7f3', '#9d174d'],
+    'toner_jaune' => ['🟡 Toner Jaune', '#fef9c3', '#854d0e'],
+    'pc' => ['💻 PC', '#ede9fe', '#5b21b6'],
+    'ecran_lcd' => ['🖥️ Écran LCD', '#f3e8ff', '#7e22ce'],
+    'imprimante' => ['🖨️ Imprimante', '#dcfce7', '#166534'],
   ];
   [$label,$bg,$color] = $cfg[$cat] ?? [ucfirst($cat), '#f3f4f6', '#374151'];
   return "<span style=\"background:{$bg};color:{$color};padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;\">{$label}</span>";
+}
+function labelCategorieAvecIcone(string $cat): string {
+  $labels = [
+    'papier' => '📄 Papiers',
+    'toner_noir' => '⬛ Toners Noir',
+    'toner_cyan' => '🔵 Toners Cyan',
+    'toner_magenta' => '🟣 Toners Magenta',
+    'toner_jaune' => '🟡 Toners Jaune',
+    'pc' => '💻 PC',
+    'ecran_lcd' => '🖥️ Écrans LCD',
+    'imprimante' => '🖨️ Imprimantes',
+  ];
+  return $labels[$cat] ?? ('📦 ' . ucfirst(str_replace('_', ' ', $cat)));
 }
 function badgeEtat(string $etat): string {
   $cfg = ['neuf'=>['Neuf','#dcfce7','#166534'],'bon'=>['Bon','#dbeafe','#1d4ed8'],'use'=>['Usé','#ffedd5','#9a3412'],'hs'=>['HS','#fee2e2','#991b1b']];
@@ -122,7 +135,14 @@ function detailsTechniques(array $a): string {
     <table id="tableauStock" style="width:100%;border-collapse:collapse">
       <thead><tr style="background:#f9fafb"><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Référence</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Désignation</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Catégorie</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Détails</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Quantité</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">État</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Actions</th></tr></thead>
       <tbody>
-      <?php foreach ($articles as $a): ?>
+      <?php $currentGroup = null; foreach ($articles as $a): ?>
+        <?php if ($currentGroup !== (string)$a['categorie']): $currentGroup = (string)$a['categorie']; ?>
+          <tr>
+            <td colspan="7" style="padding:10px 16px;background:#f8fafc;color:#334155;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;">
+              <?= htmlspecialchars(labelCategorieAvecIcone($currentGroup), ENT_QUOTES, 'UTF-8') ?>
+            </td>
+          </tr>
+        <?php endif; ?>
         <?php $q=(int)$a['quantite']; $m=(int)$a['quantite_min']; $pct=$m>0?min(100,round(($q/max($m,1))*50)):100; $cq=$q==0?'#ef4444':($q<=$m?'#f59e0b':'#10b981'); $aff=($a['unite']==='carton' && (int)($a['contenance']??0)>0)?($q.' carton'.($q>1?'s':'').' ('.($q*(int)$a['contenance']).' f.)'):($q.' unité'.($q>1?'s':'')); ?>
         <tr data-id="<?= (int)$a['id'] ?>" data-ref="<?= htmlspecialchars((string)$a['reference'], ENT_QUOTES, 'UTF-8') ?>" data-designation="<?= htmlspecialchars((string)$a['designation'], ENT_QUOTES, 'UTF-8') ?>" data-categorie="<?= htmlspecialchars((string)$a['categorie'], ENT_QUOTES, 'UTF-8') ?>" data-etat="<?= htmlspecialchars((string)$a['etat'], ENT_QUOTES, 'UTF-8') ?>" data-qte="<?= $q ?>" data-qte-min="<?= $m ?>" data-marque="<?= htmlspecialchars((string)($a['marque'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-modele="<?= htmlspecialchars((string)($a['modele'] ?? $a['modele_compatible'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-emplacement="<?= htmlspecialchars((string)($a['emplacement'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-unite="<?= htmlspecialchars((string)($a['unite'] ?? 'unite'), ENT_QUOTES, 'UTF-8') ?>" data-contenance="<?= (int)($a['contenance'] ?? 0) ?>" data-details="<?= htmlspecialchars(strip_tags(detailsTechniques($a)), ENT_QUOTES, 'UTF-8') ?>" style="border-bottom:1px solid #f3f4f6;transition:background .15s">
           <td style="padding:12px 16px;font-size:13px;font-family:monospace;color:#374151"><?= htmlspecialchars((string)$a['reference'], ENT_QUOTES, 'UTF-8') ?></td>
