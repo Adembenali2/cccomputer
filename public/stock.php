@@ -103,7 +103,7 @@ foreach ($articles as $a) {
   </div>
 </main>
 
-<script nonce="<?= csp_nonce() ?>">
+<script <?= csp_nonce() ?>>
 (() => {
   const items = <?= json_encode($articles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || [];
   const tb = document.getElementById('tb');
@@ -270,7 +270,7 @@ foreach ($articles as $a) {
   </table>
 </main>
 
-<script nonce="<?= csp_nonce() ?>">
+<script <?= csp_nonce() ?>>
 (() => {
   const items = <?= json_encode($articles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || [];
   const tb = document.getElementById('tb');
@@ -519,7 +519,7 @@ foreach ($articles as $a) {
 <div id="toasts" class="toastWrap"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script nonce="<?= csp_nonce() ?>">
+<script <?= csp_nonce() ?>>
 (() => {
   const csrf = document.querySelector('meta[name="csrf-token"]').content || '';
   const canWrite = document.querySelector('main').dataset.canWrite === '1';
