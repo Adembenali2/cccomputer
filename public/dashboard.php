@@ -36,6 +36,7 @@ $savCreatedCol = colExists($pdo, 'sav', 'created_at') ? 'created_at' : (colExist
 $livCreatedCol = colExists($pdo, 'livraisons', 'created_at') ? 'created_at' : (colExists($pdo, 'livraisons', 'date_creation') ? 'date_creation' : 'NOW()');
 $factNumberCol = colExists($pdo, 'factures', 'numero_facture') ? 'numero_facture' : (colExists($pdo, 'factures', 'reference') ? 'reference' : 'id');
 $dateEcheanceCol = colExists($pdo, 'factures', 'date_echeance') ? 'date_echeance' : 'date_facture';
+$clientNameCol = colExists($pdo, 'clients', 'nom') ? 'nom' : (colExists($pdo, 'clients', 'raison_sociale') ? 'raison_sociale' : 'id');
 
 // Factures
 $caMonthRow = $pdo->prepare("
@@ -85,10 +86,10 @@ $statutsFactures = $pdo->query("
 ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 $top5Clients = $pdo->query("
-  SELECT c.nom, COALESCE(SUM(f.montant_ttc),0) as ca
+  SELECT c.{$clientNameCol} AS client_nom, COALESCE(SUM(f.montant_ttc),0) as ca
   FROM clients c
   LEFT JOIN factures f ON f.{$factClientCol} = c.id AND f.statut NOT IN ('annulee','brouillon')
-  GROUP BY c.id, c.nom
+  GROUP BY c.id, c.{$clientNameCol}
   ORDER BY ca DESC
   LIMIT 5
 ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -129,7 +130,7 @@ $articlesAlerte = $pdo->query("
 
 // Activités
 $dernieresLivraisons = $pdo->query("
-  SELECT l.*, c.nom as client_nom
+  SELECT l.*, c.{$clientNameCol} as client_nom
   FROM livraisons l
   LEFT JOIN clients c ON l.{$livClientCol} = c.id
   ORDER BY l.{$livCreatedCol} DESC
@@ -137,7 +138,7 @@ $dernieresLivraisons = $pdo->query("
 ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 $derniersSAV = $pdo->query("
-  SELECT s.*, c.nom as client_nom
+  SELECT s.*, c.{$clientNameCol} as client_nom
   FROM sav s
   LEFT JOIN clients c ON s.{$savClientCol} = c.id
   ORDER BY s.{$savCreatedCol} DESC
@@ -145,7 +146,7 @@ $derniersSAV = $pdo->query("
 ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 $prochainesRelances = $pdo->query("
-  SELECT f.{$factNumberCol} AS numero_facture, c.nom as client_nom,
+  SELECT f.{$factNumberCol} AS numero_facture, c.{$clientNameCol} as client_nom,
          f.montant_ttc, COALESCE(f.montant_paye,0) as montant_paye, f.{$dateEcheanceCol} as date_echeance
   FROM factures f
   LEFT JOIN clients c ON f.{$factClientCol} = c.id
@@ -225,7 +226,7 @@ $isTechnicien = $userRole === 'technicien';
       <?php foreach ($top5Clients as $i => $client): $pct = (int)round(((float)$client['ca'] / $maxCA) * 100); ?>
         <div style="margin-bottom:14px;">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <span style="font-size:13px;font-weight:500;color:#374151;"><?= ($i+1) ?>. <?= h((string)$client['nom']) ?></span>
+            <span style="font-size:13px;font-weight:500;color:#374151;"><?= ($i+1) ?>. <?= h((string)($client['client_nom'] ?? '—')) ?></span>
             <span style="font-size:13px;font-weight:600;color:#6366f1;"><?= number_format((float)$client['ca'],0,',',' ') ?> €</span>
           </div>
           <div style="height:6px;background:#f3f4f6;border-radius:3px;"><div style="width:<?= $pct ?>%;height:100%;background:#6366f1;border-radius:3px;"></div></div>
