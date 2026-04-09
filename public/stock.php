@@ -93,6 +93,9 @@ function detailsTechniques(array $a): string {
     .toolbar-stock{background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
     .table-wrap{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:visible}
     .scanner-box{position:relative;width:400px;height:300px;margin:auto;background:#000;border-radius:8px;overflow:hidden}
+    /* Vue stock simplifiee: masquer outils QR/etiquettes/historique */
+    #btnScanner,#btnEtiquettes,.act-historique,
+    #modalScanner,#modalEtiquettes,#modalHistorique{display:none !important}
     @media (max-width: 980px){
       .kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
