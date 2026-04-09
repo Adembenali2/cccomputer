@@ -27,8 +27,8 @@ if ($id <= 0) {
 }
 
 $pdo = getPdoOrFail();
-$stmt = $pdo->prepare("DELETE FROM stock WHERE id = :id");
+$stmt = $pdo->prepare("UPDATE stock SET actif = 0, updated_at = CURRENT_TIMESTAMP WHERE id = :id");
 $stmt->execute([':id' => $id]);
-enregistrerAction($pdo, currentUserId(), 'stock_supprime', "Stock #{$id} supprimé");
-jsonResponse(['ok' => true]);
+enregistrerAction($pdo, currentUserId(), 'stock_desactive', "Stock #{$id} désactivé (soft delete)");
+jsonResponse(['ok' => true, 'soft_deleted' => true]);
 

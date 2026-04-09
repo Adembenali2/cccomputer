@@ -14,6 +14,22 @@ if (empty($_SESSION['user_id'])) {
 
 $pdo = getPdoOrFail();
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    $stockId = (int)($_GET['stock_id'] ?? 0);
+    if ($stockId <= 0) {
+        jsonResponse(['ok' => false, 'error' => 'stock_id invalide'], 400);
+    }
+    $stmt = $pdo->prepare("
+        SELECT id, stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by, created_at
+        FROM stock_mouvements
+        WHERE stock_id = :stock_id
+        ORDER BY id DESC
+        LIMIT 100
+    ");
+    $stmt->execute([':stock_id' => $stockId]);
+    jsonResponse(['ok' => true, 'items' => $stmt->fetchAll(PDO::FETCH_ASSOC) ?: []]);
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }

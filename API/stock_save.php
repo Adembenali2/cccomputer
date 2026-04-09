@@ -14,7 +14,15 @@ if (!in_array((string)($_SESSION['emploi'] ?? ''), ['Admin', 'Dirigeant', 'Secr�
     jsonResponse(['ok' => false, 'error' => 'Accès refusé'], 403);
 }
 
-$csrf = (string)($_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+$isJson = str_contains((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json');
+$jsonPayload = [];
+if ($isJson) {
+    $raw = file_get_contents('php://input') ?: '{}';
+    $decoded = json_decode($raw, true);
+    $jsonPayload = is_array($decoded) ? $decoded : [];
+}
+
+$csrf = (string)($jsonPayload['csrf_token'] ?? $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
 requireCsrfForApi($csrf);
 
 $pdo = getPdoOrFail();
@@ -27,7 +35,7 @@ $fields = [
 ];
 $data = [];
 foreach ($fields as $f) {
-    $data[$f] = $_POST[$f] ?? null;
+    $data[$f] = $jsonPayload[$f] ?? $_POST[$f] ?? null;
 }
 
 $id = (int)($data['id'] ?? 0);
@@ -43,30 +51,7 @@ if ($reference === '') {
     $reference = strtoupper(substr($categorie, 0, 3)) . '-' . date('Ymd-His');
 }
 
-$photoPath = trim((string)($_POST['photo_existing'] ?? ''));
-if (!empty($_FILES['photo']) && (int)$_FILES['photo']['error'] === UPLOAD_ERR_OK) {
-    $tmp = (string)$_FILES['photo']['tmp_name'];
-    $size = (int)($_FILES['photo']['size'] ?? 0);
-    if ($size > 2 * 1024 * 1024) {
-        jsonResponse(['ok' => false, 'error' => 'Photo trop volumineuse (max 2MB)'], 400);
-    }
-    $mime = (string)(mime_content_type($tmp) ?: '');
-    if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
-        jsonResponse(['ok' => false, 'error' => 'Type image non autorisé (jpeg/png)'], 400);
-    }
-    $ext = $mime === 'image/png' ? 'png' : 'jpg';
-    $hash = md5_file($tmp . microtime(true));
-    $dir = __DIR__ . '/../uploads/stock';
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
-    }
-    $filename = $hash . '.' . $ext;
-    $target = $dir . '/' . $filename;
-    if (!move_uploaded_file($tmp, $target)) {
-        jsonResponse(['ok' => false, 'error' => 'Échec upload photo'], 500);
-    }
-    $photoPath = '/uploads/stock/' . $filename;
-}
+$photoPath = trim((string)($jsonPayload['photo_existing'] ?? $_POST['photo_existing'] ?? ''));
 
 $payload = [
     ':reference' => $reference,

@@ -1,6 +1,351 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../includes/security_headers.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/auth_role.php';
+require_once __DIR__ . '/../includes/helpers.php';
+
+authorize_page('stock', []);
+ensureCsrfToken();
+
+$emploi = (string)($_SESSION['emploi'] ?? '');
+$allowedRead = ['Admin', 'Dirigeant', 'Secrétaire', 'Livreur', 'Technicien'];
+if (!in_array($emploi, $allowedRead, true)) {
+    http_response_code(403);
+    exit('Accès refusé');
+}
+$canWrite = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
+
+$flash = $_SESSION['flash'] ?? null;
+unset($_SESSION['flash']);
+$flashWarning = $_SESSION['flash_warning'] ?? null;
+unset($_SESSION['flash_warning']);
+$totalPapier = 0;
+$totalToners = 0;
+$totalLCD = 0;
+$totalPC = 0;
+
+$pdo = getPdo();
+$stmt = $pdo->prepare("SELECT * FROM stock WHERE actif = 1 ORDER BY categorie, designation");
+$stmt->execute();
+$articles = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$kpiTotal = 0;
+$kpiValue = 0.0;
+$kpiAlert = 0;
+$kpiRupture = 0;
+
+foreach ($articles as $a) {
+    $kpiTotal++;
+    $q = (int)($a['quantite'] ?? 0);
+    $min = (int)($a['quantite_min'] ?? 0);
+    $price = (float)($a['prix_unitaire_ht'] ?? 0);
+    $kpiValue += $q * $price;
+    if ($q <= 0) {
+        $kpiRupture++;
+    } elseif ($q < $min) {
+        $kpiAlert++;
+    }
+
+    $cat = (string)($a['categorie'] ?? '');
+    if ($cat === 'papier') $totalPapier += $q;
+    if (str_starts_with($cat, 'toner_')) $totalToners += $q;
+    if ($cat === 'ecran_lcd') $totalLCD += $q;
+    if ($cat === 'pc') $totalPC += $q;
+}
+?>
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="<?= h($_SESSION['csrf_token'] ?? '') ?>">
+  <title>Stock - CCComputer</title>
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <style>
+    body{background:#f8fafc}.wrap{padding:14px}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+    .btn,.in,.sel{height:36px;border:1px solid #d1d5db;border-radius:8px;background:#fff;padding:0 10px}.btn{cursor:pointer}.btnP{background:#2563eb;color:#fff;border-color:#2563eb}
+    .kpi{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin-bottom:10px}.k{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px}
+    .k b{display:block;font-size:20px}.layout{display:grid;grid-template-columns:240px 1fr;gap:10px}.side,.main{background:#fff;border:1px solid #e5e7eb;border-radius:8px}
+    .side{padding:10px}.main{padding:10px;overflow:auto}.tbl{width:100%;border-collapse:collapse}.tbl th,.tbl td{padding:8px;border-bottom:1px solid #e5e7eb;font-size:13px}
+    .tbl th{cursor:pointer;user-select:none}.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+    .qprog{width:120px;height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden}.qbar{height:100%}
+    .menuWrap{position:relative}.menuBtn{border:none;background:transparent;cursor:pointer;font-size:18px}.menu{display:none;position:absolute;right:0;top:22px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-width:140px;z-index:10}
+    .menu button{display:block;width:100%;text-align:left;border:none;background:transparent;padding:6px 8px;cursor:pointer}.menu button:hover{background:#f1f5f9}
+    .menuWrap:hover .menu{display:block}.paging{display:flex;justify-content:flex-end;gap:8px;align-items:center;margin-top:8px}
+    .modalBg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:50}.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(880px,95vw);max-height:90vh;overflow:auto;background:#fff;border-radius:10px;border:1px solid #e5e7eb;display:none;z-index:51}
+    .mHead,.mFoot{padding:10px;border-bottom:1px solid #e5e7eb}.mFoot{border-top:1px solid #e5e7eb;border-bottom:none;display:flex;justify-content:space-between}.mBody{padding:10px}.grid{display:grid;grid-template-columns:repeat(3,minmax(140px,1fr));gap:8px}
+    .field{display:flex;flex-direction:column;gap:4px}.field label{font-size:12px;color:#64748b}.toastWrap{position:fixed;right:12px;bottom:12px;display:flex;flex-direction:column;gap:8px;z-index:60}
+    .toast{color:#fff;padding:10px;border-radius:8px;min-width:220px}.ok{background:#16a34a}.bad{background:#dc2626}.warn{background:#f59e0b}
+    .scanBox{position:relative;width:400px;height:300px;background:#000;margin:auto;border-radius:8px;overflow:hidden}.scanLine{position:absolute;left:0;right:0;height:2px;background:#22c55e;animation:scan 2s linear infinite}
+    @keyframes scan{0%{top:0}100%{top:298px}} .hi{animation:hi 2s}@keyframes hi{0%{background:#bbf7d0}100%{background:transparent}}
+    @media(max-width:980px){.layout{grid-template-columns:1fr}.kpi{grid-template-columns:repeat(2,minmax(120px,1fr))}}
+  </style>
+</head>
+<body>
+<?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+<main class="wrap" data-can-write="<?= $canWrite ? '1' : '0' ?>">
+  <h1 style="margin:0 0 8px 0">Stock</h1>
+
+  <div class="bar">
+    <button id="btnAdd" class="btn btnP">+ Ajouter article</button>
+    <input id="q" class="in" style="min-width:240px" placeholder="Recherche">
+    <select id="fCategorie" class="sel"><option value="">Filtre catégorie</option></select>
+    <select id="fEtat" class="sel"><option value="">Filtre état</option><option value="neuf">Neuf</option><option value="bon">Bon</option><option value="use">Usé</option><option value="hs">HS</option></select>
+    <button id="btnPrint" class="btn">Imprimer étiquettes</button>
+    <button id="btnScan" class="btn">Scanner QR</button>
+  </div>
+
+  <?php if ($flash): ?><div style="margin-bottom:8px;color:#065f46"><?= h((string)$flash) ?></div><?php endif; ?>
+  <?php if ($flashWarning): ?><div style="margin-bottom:8px;color:#92400e"><?= h((string)$flashWarning) ?></div><?php endif; ?>
+
+  <div class="kpi">
+    <div class="k"><span>Total articles</span><b id="kTot"><?= (int)$kpiTotal ?></b></div>
+    <div class="k"><span>Valeur stock HT</span><b id="kVal"><?= number_format($kpiValue,2,',',' ') ?> €</b></div>
+    <div class="k"><span>En alerte</span><b id="kAlert"><?= (int)$kpiAlert ?></b></div>
+    <div class="k"><span>En rupture</span><b id="kOut"><?= (int)$kpiRupture ?></b></div>
+  </div>
+
+  <div class="layout">
+    <aside class="side">
+      <h3 style="margin:4px 0">Filtres</h3>
+      <div id="etatChecks">
+        <label><input type="checkbox" value="neuf" checked> Neuf</label><br>
+        <label><input type="checkbox" value="bon" checked> Bon</label><br>
+        <label><input type="checkbox" value="use" checked> Usé</label><br>
+        <label><input type="checkbox" value="hs" checked> HS</label>
+      </div><hr>
+      <div>
+        <label><input type="radio" name="stockState" value="all" checked> Tout</label><br>
+        <label><input type="radio" name="stockState" value="alert"> Alerte</label><br>
+        <label><input type="radio" name="stockState" value="out"> Rupture</label><br>
+        <label><input type="radio" name="stockState" value="normal"> Normal</label>
+      </div><hr>
+      <label>Quantité max affichée</label>
+      <input id="qRange" type="range" min="0" max="1000" value="1000" style="width:100%">
+      <div><small id="qRangeVal">1000</small></div>
+    </aside>
+
+    <section class="main">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th data-sort="reference">Référence</th>
+            <th data-sort="designation">Désignation</th>
+            <th data-sort="categorie">Catégorie</th>
+            <th>Détails</th>
+            <th data-sort="quantite">Quantité</th>
+            <th data-sort="etat">État</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
+      <div class="paging"><button id="prev" class="btn">Préc.</button><span id="pg"></span><button id="next" class="btn">Suiv.</button></div>
+    </section>
+  </div>
+</main>
+
+<div id="modalBg" class="modalBg"></div>
+<div id="editModal" class="modal">
+  <div class="mHead"><strong id="mTitle">Ajouter / Modifier article</strong></div>
+  <div class="mBody">
+    <div class="grid">
+      <div class="field"><label>Référence</label><input id="f_reference" class="in" placeholder="Auto si vide"></div>
+      <div class="field"><label>Désignation</label><input id="f_designation" class="in"></div>
+      <div class="field"><label>Catégorie</label><select id="f_categorie" class="sel"></select></div>
+      <div class="field"><label>Marque</label><input id="f_marque" class="in"></div>
+      <div class="field"><label>Quantité</label><input id="f_quantite" type="number" min="0" class="in" value="0"></div>
+      <div class="field"><label>Seuil min</label><input id="f_quantite_min" type="number" min="0" class="in" value="5"></div>
+      <div class="field"><label>Prix HT</label><input id="f_prix_unitaire_ht" type="number" step="0.01" min="0" class="in" value="0"></div>
+      <div class="field"><label>État</label><select id="f_etat" class="sel"><option value="neuf">Neuf</option><option value="bon">Bon</option><option value="use">Usé</option><option value="hs">HS</option></select></div>
+      <div class="field"><label>Emplacement</label><input id="f_emplacement" class="in"></div>
+      <div class="field" style="grid-column:span 3"><label>Notes</label><textarea id="f_notes" class="in" style="height:72px;padding:8px"></textarea></div>
+
+      <div class="field tech" data-k="numero_serie"><label>N° série</label><input id="f_numero_serie" class="in"></div>
+      <div class="field tech" data-k="adresse_mac"><label>Adresse MAC</label><input id="f_adresse_mac" class="in"></div>
+      <div class="field tech" data-k="cpu"><label>CPU</label><input id="f_cpu" class="in"></div>
+      <div class="field tech" data-k="ram"><label>RAM</label><input id="f_ram" class="in"></div>
+      <div class="field tech" data-k="stockage"><label>Stockage</label><input id="f_stockage" class="in"></div>
+      <div class="field tech" data-k="modele_compatible"><label>Modèle compatible</label><input id="f_modele_compatible" class="in"></div>
+      <div class="field tech" data-k="couleur_toner"><label>Couleur toner</label><input id="f_couleur_toner" class="in" readonly></div>
+      <div class="field tech" data-k="rendement_pages"><label>Rendement pages</label><input id="f_rendement_pages" type="number" min="0" class="in"></div>
+      <div class="field tech" data-k="grammage"><label>Grammage</label><input id="f_grammage" class="in"></div>
+      <div class="field tech" data-k="taille_ecran"><label>Taille écran</label><input id="f_taille_ecran" class="in"></div>
+      <div class="field tech" data-k="resolution"><label>Résolution</label><input id="f_resolution" class="in"></div>
+
+      <div class="field"><label>Unité</label><select id="f_unite" class="sel"><option value="unite">unité</option><option value="carton">carton</option><option value="rame">rame</option></select></div>
+      <div class="field"><label>Contenance</label><input id="f_contenance" type="number" min="0" class="in"></div>
+    </div>
+  </div>
+  <div class="mFoot"><button id="mClose" class="btn">Fermer</button><button id="mSave" class="btn btnP">Enregistrer</button></div>
+</div>
+
+<div id="scanModal" class="modal">
+  <div class="mHead"><strong>Scanner un article</strong></div>
+  <div class="mBody">
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">
+      <select id="camSel" class="sel"></select>
+      <button id="manualSearch" class="btn">Saisir manuellement</button>
+    </div>
+    <div class="scanBox"><video id="qrVideo" width="400" height="300" style="width:100%;height:100%;object-fit:cover"></video><canvas id="qrCanvas" style="display:none"></canvas><div class="scanLine"></div></div>
+  </div>
+  <div class="mFoot"><span></span><button id="scanClose" class="btn">Fermer</button></div>
+</div>
+
+<div id="histModal" class="modal">
+  <div class="mHead"><strong>Historique des mouvements</strong></div>
+  <div class="mBody"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Avant</th><th>Après</th><th>Motif</th></tr></thead><tbody id="histBody"></tbody></table></div>
+  <div class="mFoot"><span></span><button id="histClose" class="btn">Fermer</button></div>
+</div>
+
+<div id="toasts" class="toastWrap"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script nonce="<?= csp_nonce() ?>">
+(() => {
+  const csrf = document.querySelector('meta[name="csrf-token"]').content || '';
+  const canWrite = document.querySelector('main').dataset.canWrite === '1';
+  const raw = <?= json_encode($articles, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?> || [];
+  const CATS = ['papier','toner_noir','toner_cyan','toner_magenta','toner_jaune','pc','ecran_lcd','imprimante','piece_detachee','consommable','autre'];
+  const catMap = {'papier':'Papier','toner_noir':'Toner Noir','toner_cyan':'Toner Cyan','toner_magenta':'Toner Magenta','toner_jaune':'Toner Jaune','pc':'PC','ecran_lcd':'LCD','imprimante':'Imprimante','piece_detachee':'Pièce détachée','consommable':'Consommable','autre':'Autre'};
+  const catBadge = {'papier':'background:#dbeafe;color:#1e3a8a','toner_noir':'background:#111827;color:#fff','toner_cyan':'background:#0891b2;color:#fff','toner_magenta':'background:#db2777;color:#fff','toner_jaune':'background:#fde047;color:#111827','pc':'background:#4f46e5;color:#fff','ecran_lcd':'background:#7c3aed;color:#fff','imprimante':'background:#166534;color:#fff','piece_detachee':'background:#ea580c;color:#fff','consommable':'background:#0f766e;color:#fff','autre':'background:#6b7280;color:#fff'};
+  const esc = s => String(s??'').replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const eur = n => Number(n||0).toFixed(2)+' €';
+  const toast=(m,t='ok')=>{const d=document.createElement('div');d.className='toast '+t;d.textContent=m;document.getElementById('toasts').appendChild(d);setTimeout(()=>d.remove(),3000);};
+  let items=[...raw], filtered=[...raw], page=1, size=25, sortKey='designation', sortDir='asc', editId=0;
+
+  document.getElementById('fCategorie').innerHTML = '<option value="">Filtre catégorie</option>'+CATS.map(c=>`<option value="${c}">${catMap[c]}</option>`).join('');
+  document.getElementById('f_categorie').innerHTML = CATS.map(c=>`<option value="${c}">${catMap[c]}</option>`).join('');
+
+  function details(i){
+    if(i.categorie==='pc') return [i.cpu,i.ram,i.stockage].filter(Boolean).join(' | ');
+    if(i.categorie==='imprimante'){const sn=String(i.numero_serie||''); return [i.modele_compatible, sn?('SN '+sn.slice(0,10)+(sn.length>10?'...':'')):'' ].filter(Boolean).join(' | ');}
+    if((i.categorie||'').startsWith('toner_')){const c=(i.couleur_toner||i.categorie.replace('toner_','')).toLowerCase();const dot=`<span style="display:inline-block;width:10px;height:10px;border-radius:99px;background:${c==='noir'?'#111827':c==='cyan'?'#0891b2':c==='magenta'?'#db2777':'#fde047'};vertical-align:middle;margin-right:6px"></span>`;return `${dot}${esc(i.modele_compatible||'')} ${i.rendement_pages?('('+i.rendement_pages+' p.)'):''}`;}
+    if(i.categorie==='papier'){const q=Number(i.quantite||0),c=Number(i.contenance||0);return `${i.format_papier||''} ${i.grammage||''} ${c>0?`${q} cartons (${q*c} feuilles)`:`${q} unités`}`;}
+    if(i.categorie==='ecran_lcd') return [i.taille_ecran,i.resolution].filter(Boolean).join(' | ');
+    return esc(i.modele_compatible||'');
+  }
+  function state(i){const q=Number(i.quantite||0),m=Number(i.quantite_min||0);return q<=0?'out':(q<m?'alert':'normal');}
+
+  function applyFilters(){
+    const q=document.getElementById('q').value.trim().toLowerCase();
+    const c=document.getElementById('fCategorie').value;
+    const e=document.getElementById('fEtat').value;
+    const maxQ=Number(document.getElementById('qRange').value||1000);
+    const etats=[...document.querySelectorAll('#etatChecks input:checked')].map(x=>x.value);
+    const s=(document.querySelector('input[name="stockState"]:checked')||{}).value||'all';
+    filtered = items.filter(i=>{
+      if(c && i.categorie!==c) return false;
+      if(e && i.etat!==e) return false;
+      if(etats.length && !etats.includes(i.etat||'neuf')) return false;
+      if(Number(i.quantite||0)>maxQ) return false;
+      if(s!=='all' && state(i)!==s) return false;
+      if(q){
+        const hay=`${i.reference||''} ${i.designation||''} ${i.numero_serie||''} ${i.adresse_mac||''} ${i.cpu||''}`.toLowerCase();
+        if(!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    filtered.sort((a,b)=>{const va=a[sortKey]??'',vb=b[sortKey]??'';const na=Number(va),nb=Number(vb);if(!Number.isNaN(na)&&!Number.isNaN(nb)) return sortDir==='asc'?na-nb:nb-na;return sortDir==='asc'?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));});
+    page=1; render();
+  }
+
+  function render(){
+    const tb=document.getElementById('tb');
+    const rows=filtered.slice((page-1)*size,page*size);
+    tb.innerHTML = rows.map(i=>{
+      const q=Number(i.quantite||0),m=Number(i.quantite_min||0),pct=m>0?Math.min(100,Math.round((q/m)*100)):100,color=q<=0?'#dc2626':(q<m?'#f59e0b':'#16a34a');
+      const et=i.etat||'neuf';
+      return `<tr data-id="${i.id}">
+        <td>${esc(i.reference||'')}</td>
+        <td>${esc(i.designation||'')}</td>
+        <td><span class="badge" style="${catBadge[i.categorie]||catBadge.autre}">${esc(catMap[i.categorie]||i.categorie||'')}</span></td>
+        <td>${details(i)}</td>
+        <td>${q}<div class="qprog"><div class="qbar" style="width:${pct}%;background:${color}"></div></div></td>
+        <td><span class="badge" style="${et==='neuf'?'background:#dcfce7;color:#166534':et==='bon'?'background:#dbeafe;color:#1e3a8a':et==='use'?'background:#fef3c7;color:#854d0e':'background:#fee2e2;color:#991b1b'}">${esc(et.toUpperCase())}</span></td>
+        <td><div class="menuWrap"><button class="menuBtn">⋮</button><div class="menu">
+          <button onclick="openEdit(${i.id})" ${canWrite?'':'disabled'}>✏️ Modifier</button>
+          <button onclick="moveItem(${i.id},'entree')" ${canWrite?'':'disabled'}>➕ Entrée</button>
+          <button onclick="moveItem(${i.id},'sortie')" ${canWrite?'':'disabled'}>➖ Sortie</button>
+          <button onclick="window.open('/public/stock_etiquettes.php?stock_id=${i.id}','_blank')">🏷️ Étiquette</button>
+          <button onclick="showHist(${i.id})">📋 Historique</button>
+          <button onclick="delItem(${i.id})" ${canWrite?'':'disabled'}>🗑️ Supprimer</button>
+        </div></div></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7"><em>Aucun article</em></td></tr>';
+    const pages=Math.max(1,Math.ceil(filtered.length/size)); document.getElementById('pg').textContent=`${page}/${pages}`;
+    document.getElementById('prev').disabled=page<=1; document.getElementById('next').disabled=page>=pages;
+  }
+
+  function openModal(id){editId=id||0;document.getElementById('modalBg').style.display='block';document.getElementById('editModal').style.display='block';if(!id){document.querySelectorAll('#editModal input,#editModal textarea').forEach(el=>{if(el.id!=='f_quantite'&&el.id!=='f_quantite_min'&&el.id!=='f_prix_unitaire_ht')el.value='';});document.getElementById('f_quantite').value='0';document.getElementById('f_quantite_min').value='5';document.getElementById('f_prix_unitaire_ht').value='0';}else{const it=items.find(x=>Number(x.id)===Number(id));if(it){Object.keys(it).forEach(k=>{const el=document.getElementById('f_'+k);if(el)el.value=it[k]??'';});}}applyTech();}
+  function closeAll(){document.getElementById('modalBg').style.display='none';document.querySelectorAll('.modal').forEach(m=>m.style.display='none');stopScan();}
+  function applyTech(){
+    const map={'pc':['numero_serie','adresse_mac','cpu','ram','stockage'],'ecran_lcd':['numero_serie','taille_ecran','resolution'],'imprimante':['numero_serie','modele_compatible'],'toner_noir':['couleur_toner','modele_compatible','rendement_pages'],'toner_cyan':['couleur_toner','modele_compatible','rendement_pages'],'toner_magenta':['couleur_toner','modele_compatible','rendement_pages'],'toner_jaune':['couleur_toner','modele_compatible','rendement_pages'],'papier':['grammage'],'piece_detachee':['numero_serie','modele_compatible'],'consommable':['modele_compatible'],'autre':[]};
+    const cat=document.getElementById('f_categorie').value||'autre'; const allow=map[cat]||[];
+    document.querySelectorAll('.tech').forEach(r=>{const k=r.dataset.k,inp=document.getElementById('f_'+k),show=allow.includes(k);r.style.display=show?'':'none';if(!show&&inp)inp.value='';});
+    if(cat==='papier'){document.getElementById('f_unite').value='carton';document.getElementById('f_contenance').value='2500';}
+    const t={'toner_noir':'Noir','toner_cyan':'Cyan','toner_magenta':'Magenta','toner_jaune':'Jaune'}; if(t[cat]) document.getElementById('f_couleur_toner').value=t[cat];
+  }
+
+  async function save(){
+    if(!canWrite){toast('Lecture seule','warn');return;}
+    const payload={csrf_token:csrf}; if(editId) payload.id=editId;
+    ['reference','designation','categorie','marque','quantite','quantite_min','prix_unitaire_ht','etat','emplacement','notes','numero_serie','adresse_mac','cpu','ram','stockage','modele_compatible','couleur_toner','rendement_pages','grammage','taille_ecran','resolution','unite','contenance'].forEach(k=>{const el=document.getElementById('f_'+k); payload[k]=el?el.value:'';});
+    const res=await fetch('/API/stock_save.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(payload)}); const d=await res.json();
+    if(!d.ok){toast(d.error||'Erreur','bad');return;}
+    await reloadItems(); closeAll(); toast(editId?'Article modifié':'Article ajouté','ok');
+  }
+  async function reloadItems(){const r=await fetch('/API/stock_items.php?actif=1',{credentials:'include'});const d=await r.json();items=(d&&d.ok&&Array.isArray(d.items))?d.items:[];applyFilters();}
+
+  window.openEdit = (id)=>openModal(id);
+  window.moveItem = async (id,type)=>{if(!canWrite){toast('Lecture seule','warn');return;} const q=parseInt(prompt('Quantité','1')||'0',10);if(!q||q<=0)return; const motif=prompt('Motif','')||''; const ref=prompt('Réf doc','')||''; const r=await fetch('/API/stock_mouvement.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({stock_id:id,type_mouvement:type,quantite:q,motif:motif,reference_doc:ref})}); const d=await r.json(); if(!d.ok){toast(d.error||'Erreur','bad');return;} toast('Mouvement enregistré','ok'); await reloadItems();};
+  window.showHist = async (id)=>{const r=await fetch('/API/stock_mouvement.php?stock_id='+encodeURIComponent(id),{credentials:'include'}); const d=await r.json(); if(!d.ok){toast(d.error||'Erreur','bad');return;} document.getElementById('histBody').innerHTML=(d.items||[]).map(m=>`<tr><td>${esc(m.created_at||'')}</td><td>${esc(m.type_mouvement||'')}</td><td>${esc(m.quantite_avant||'')}</td><td>${esc(m.quantite_apres||'')}</td><td>${esc(m.motif||'')}</td></tr>`).join('')||'<tr><td colspan="5"><em>Aucun mouvement</em></td></tr>'; document.getElementById('modalBg').style.display='block'; document.getElementById('histModal').style.display='block';};
+  window.delItem = async (id)=>{if(!canWrite){toast('Lecture seule','warn');return;} if(!confirm('Désactiver cet article ?'))return; const r=await fetch('/API/stock_delete.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({id})}); const d=await r.json(); if(!d.ok){toast(d.error||'Erreur','bad');return;} toast('Article désactivé','ok'); await reloadItems();};
+
+  // Scanner QR
+  let stream=null,scanning=false; const video=document.getElementById('qrVideo'),canvas=document.getElementById('qrCanvas'),ctx=canvas.getContext('2d');
+  async function listCams(){const dev=await navigator.mediaDevices.enumerateDevices(); const cams=dev.filter(x=>x.kind==='videoinput'); const sel=document.getElementById('camSel'); sel.innerHTML=cams.map((c,i)=>`<option value="${esc(c.deviceId)}">${esc(c.label||('Caméra '+(i+1)))}</option>`).join('');}
+  async function startScan(deviceId=''){await listCams(); stream=await navigator.mediaDevices.getUserMedia({video:deviceId?{deviceId:{exact:deviceId},width:400,height:300}:{facingMode:'environment',width:400,height:300}}); video.srcObject=stream; await video.play(); scanning=true; requestAnimationFrame(scanFrame);}
+  function stopScan(){scanning=false; if(stream){stream.getTracks().forEach(t=>t.stop()); stream=null;} video.srcObject=null;}
+  function beep(){const ac=new (window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(); const g=ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.value=880; o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.1); o.stop(ac.currentTime+0.1);}
+  function rechercherArticle(ref){document.getElementById('q').value=ref; applyFilters(); const tr=[...document.querySelectorAll('#tb tr')].find(r=>(r.children[0]?.textContent||'').trim()===ref); if(tr){tr.classList.add('hi');setTimeout(()=>tr.classList.remove('hi'),2000);toast('Article trouvé','ok');}else{toast('Article non trouvé — référence: '+ref,'warn');}}
+  function scanFrame(){if(!scanning) return; if(video.readyState===video.HAVE_ENOUGH_DATA){canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.drawImage(video,0,0,canvas.width,canvas.height);const img=ctx.getImageData(0,0,canvas.width,canvas.height);const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});if(code){beep();stopScan();closeAll();rechercherArticle(code.data);return;}} requestAnimationFrame(scanFrame);}
+
+  // events
+  document.getElementById('btnAdd').addEventListener('click',()=>openModal(0));
+  document.getElementById('mClose').addEventListener('click',closeAll);
+  document.getElementById('mSave').addEventListener('click',save);
+  document.getElementById('modalBg').addEventListener('click',closeAll);
+  document.getElementById('histClose').addEventListener('click',closeAll);
+  document.getElementById('scanClose').addEventListener('click',closeAll);
+  document.getElementById('f_categorie').addEventListener('change',applyTech);
+  document.getElementById('btnPrint').addEventListener('click',()=>window.open('/public/stock_etiquettes.php?all=1','_blank'));
+  document.getElementById('btnScan').addEventListener('click',async()=>{document.getElementById('modalBg').style.display='block';document.getElementById('scanModal').style.display='block';await startScan();});
+  document.getElementById('camSel').addEventListener('change',async e=>{stopScan();await startScan(e.target.value);});
+  document.getElementById('manualSearch').addEventListener('click',()=>{closeAll();document.getElementById('q').focus();});
+  document.querySelectorAll('.tbl th[data-sort]').forEach(th=>th.addEventListener('click',()=>{const k=th.dataset.sort;sortDir=(sortKey===k&&sortDir==='asc')?'desc':'asc';sortKey=k;applyFilters();}));
+  document.getElementById('q').addEventListener('input',applyFilters); document.getElementById('fCategorie').addEventListener('change',applyFilters); document.getElementById('fEtat').addEventListener('change',applyFilters);
+  document.querySelectorAll('#etatChecks input,input[name="stockState"]').forEach(el=>el.addEventListener('change',applyFilters));
+  document.getElementById('qRange').addEventListener('input',()=>{document.getElementById('qRangeVal').textContent=document.getElementById('qRange').value; applyFilters();});
+  document.getElementById('prev').addEventListener('click',()=>{if(page>1){page--;render();}});
+  document.getElementById('next').addEventListener('click',()=>{const p=Math.max(1,Math.ceil(filtered.length/size)); if(page<p){page++;render();}});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAll(); if(e.key.toLowerCase()==='n'){e.preventDefault();openModal(0);} if(e.key.toLowerCase()==='f'){e.preventDefault();document.getElementById('q').focus();} if(e.key.toLowerCase()==='s'){e.preventDefault();document.getElementById('btnScan').click();}});
+  if(!canWrite){document.getElementById('btnAdd').disabled=true;}
+  applyFilters();
+})();
+</script>
+</body>
+</html>
+
+<?php
+declare(strict_types=1);
+
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
 require_once __DIR__ . '/../includes/helpers.php';
