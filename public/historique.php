@@ -14,6 +14,17 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 
+function colExistsHist(PDO $pdo, string $table, string $column): bool {
+    $stmt = $pdo->prepare("
+      SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+    ");
+    $stmt->execute([$table, $column]);
+    return ((int)$stmt->fetchColumn()) > 0;
+}
+
+$histDateCol = colExistsHist($pdo, 'historique', 'created_at') ? 'created_at' : 'date_action';
+
 $filtreType = (string)($_GET['type'] ?? 'tout');
 $filtreDate = (string)($_GET['date'] ?? '');
 $filtreSearch = trim((string)($_GET['search'] ?? ''));
@@ -30,7 +41,7 @@ if ($filtreType !== 'tout' && $filtreType !== '') {
 }
 
 if ($filtreDate !== '') {
-    $where[] = 'DATE(h.created_at) = ?';
+    $where[] = "DATE(h.{$histDateCol}) = ?";
     $params[] = $filtreDate;
 }
 
@@ -53,7 +64,7 @@ $dataStmt = $pdo->prepare("
   SELECT h.*
   FROM historique h
   WHERE $whereSQL
-  ORDER BY h.created_at DESC
+  ORDER BY h.{$histDateCol} DESC
   LIMIT $parPage OFFSET $offset
 ");
 $dataStmt->execute($params);
@@ -166,8 +177,9 @@ $actionsLabels = [
     </div>
     <?php else: ?>
       <?php $datePrecedente = ''; foreach ($events as $e):
-        $dateEvent = date('d/m/Y', strtotime((string)$e['created_at']));
-        $heureEvent = date('H:i', strtotime((string)$e['created_at']));
+        $eventDateRaw = (string)($e[$histDateCol] ?? '');
+        $dateEvent = date('d/m/Y', strtotime($eventDateRaw));
+        $heureEvent = date('H:i', strtotime($eventDateRaw));
         $cfg = $typesConfig[$e['type']] ?? ['icone' => '📌', 'bg' => '#f3f4f6', 'color' => '#374151', 'label' => ucfirst((string)$e['type'])];
         $actionLabel = $actionsLabels[$e['action']] ?? ucfirst((string)$e['action']);
       ?>
@@ -177,7 +189,7 @@ $actionsLabels = [
                   letter-spacing:.8px;color:var(--text-muted);
                   border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
         <?php
-          $ts = strtotime((string)$e['created_at']);
+          $ts = strtotime($eventDateRaw);
           if (date('Y-m-d', $ts) === date('Y-m-d')) {
               echo "Aujourd'hui — $dateEvent";
           } elseif (date('Y-m-d', $ts) === date('Y-m-d', strtotime('-1 day'))) {
