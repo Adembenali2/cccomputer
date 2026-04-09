@@ -24,6 +24,28 @@ function colExistsHist(PDO $pdo, string $table, string $column): bool {
 }
 
 $histDateCol = colExistsHist($pdo, 'historique', 'created_at') ? 'created_at' : 'date_action';
+$hasTypeCol = colExistsHist($pdo, 'historique', 'type');
+$hasLabelCol = colExistsHist($pdo, 'historique', 'label');
+$hasDetailCol = colExistsHist($pdo, 'historique', 'detail');
+$hasUserNomCol = colExistsHist($pdo, 'historique', 'user_nom');
+$hasRefUrlCol = colExistsHist($pdo, 'historique', 'ref_url');
+
+$typeExpr = $hasTypeCol
+    ? "h.type"
+    : "CASE
+        WHEN h.action LIKE 'client%' OR h.action LIKE 'photocopieur%' THEN 'client'
+        WHEN h.action LIKE 'facture%' THEN 'facture'
+        WHEN h.action LIKE 'paiement%' THEN 'paiement'
+        WHEN h.action LIKE 'sav%' THEN 'sav'
+        WHEN h.action LIKE 'livraison%' THEN 'livraison'
+        WHEN h.action LIKE 'stock%' OR h.action LIKE 'mouvement_stock%' THEN 'stock'
+        WHEN h.action LIKE 'connexion%' OR h.action LIKE 'login%' OR h.action LIKE 'deconnexion%' THEN 'connexion'
+        ELSE 'utilisateur'
+      END";
+$labelExpr = $hasLabelCol ? "h.label" : "COALESCE(NULLIF(h.details,''), h.action)";
+$detailExpr = $hasDetailCol ? "h.detail" : "COALESCE(h.details,'')";
+$userNomExpr = $hasUserNomCol ? "h.user_nom" : "CONCAT('Utilisateur #', COALESCE(CAST(h.user_id AS CHAR), '0'))";
+$refUrlExpr = $hasRefUrlCol ? "h.ref_url" : "NULL";
 
 $filtreType = (string)($_GET['type'] ?? 'tout');
 $filtreDate = (string)($_GET['date'] ?? '');
@@ -36,7 +58,7 @@ $where = ['1=1'];
 $params = [];
 
 if ($filtreType !== 'tout' && $filtreType !== '') {
-    $where[] = 'h.type = ?';
+    $where[] = "{$typeExpr} = ?";
     $params[] = $filtreType;
 }
 
@@ -46,7 +68,7 @@ if ($filtreDate !== '') {
 }
 
 if ($filtreSearch !== '') {
-    $where[] = '(h.label LIKE ? OR h.detail LIKE ? OR h.user_nom LIKE ?)';
+    $where[] = "({$labelExpr} LIKE ? OR {$detailExpr} LIKE ? OR {$userNomExpr} LIKE ?)";
     $like = '%' . $filtreSearch . '%';
     $params[] = $like;
     $params[] = $like;
@@ -61,7 +83,14 @@ $totalEvents = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalEvents / $parPage));
 
 $dataStmt = $pdo->prepare("
-  SELECT h.*
+  SELECT
+    h.*,
+    {$typeExpr} AS event_type,
+    {$labelExpr} AS event_label,
+    {$detailExpr} AS event_detail,
+    {$userNomExpr} AS event_user_nom,
+    {$refUrlExpr} AS event_ref_url,
+    h.{$histDateCol} AS event_created_at
   FROM historique h
   WHERE $whereSQL
   ORDER BY h.{$histDateCol} DESC
@@ -70,7 +99,7 @@ $dataStmt = $pdo->prepare("
 $dataStmt->execute($params);
 $events = $dataStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-$countsStmt = $pdo->query("SELECT type, COUNT(*) as nb FROM historique GROUP BY type");
+$countsStmt = $pdo->query("SELECT {$typeExpr} AS type, COUNT(*) as nb FROM historique h GROUP BY {$typeExpr}");
 $counts = [];
 foreach (($countsStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
     $counts[(string)$row['type']] = (int)$row['nb'];
@@ -177,11 +206,16 @@ $actionsLabels = [
     </div>
     <?php else: ?>
       <?php $datePrecedente = ''; foreach ($events as $e):
-        $eventDateRaw = (string)($e[$histDateCol] ?? '');
+        $eventDateRaw = (string)($e['event_created_at'] ?? ($e[$histDateCol] ?? ''));
         $dateEvent = date('d/m/Y', strtotime($eventDateRaw));
         $heureEvent = date('H:i', strtotime($eventDateRaw));
-        $cfg = $typesConfig[$e['type']] ?? ['icone' => '📌', 'bg' => '#f3f4f6', 'color' => '#374151', 'label' => ucfirst((string)$e['type'])];
-        $actionLabel = $actionsLabels[$e['action']] ?? ucfirst((string)$e['action']);
+        $eventType = (string)($e['event_type'] ?? 'utilisateur');
+        $eventLabel = (string)($e['event_label'] ?? '');
+        $eventDetail = (string)($e['event_detail'] ?? '');
+        $eventUserNom = (string)($e['event_user_nom'] ?? 'Systeme');
+        $eventRefUrl = (string)($e['event_ref_url'] ?? '');
+        $cfg = $typesConfig[$eventType] ?? ['icone' => '📌', 'bg' => '#f3f4f6', 'color' => '#374151', 'label' => ucfirst($eventType)];
+        $actionLabel = $actionsLabels[(string)($e['action'] ?? '')] ?? ucfirst((string)($e['action'] ?? 'action'));
       ?>
       <?php if ($dateEvent !== $datePrecedente): $datePrecedente = $dateEvent; ?>
       <div style="padding:8px 24px;background:var(--bg-page);
@@ -216,31 +250,31 @@ $actionsLabels = [
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <span style="font-size:14px;font-weight:600;color:var(--text-primary);">
-              <?= htmlspecialchars((string)$e['label'], ENT_QUOTES, 'UTF-8') ?>
+              <?= htmlspecialchars($eventLabel, ENT_QUOTES, 'UTF-8') ?>
             </span>
             <span style="background:<?= $cfg['bg'] ?>;color:<?= $cfg['color'] ?>;
                          padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;">
-              <?= $cfg['icone'] ?> <?= htmlspecialchars(ucfirst((string)$e['type']), ENT_QUOTES, 'UTF-8') ?>
+              <?= $cfg['icone'] ?> <?= htmlspecialchars(ucfirst($eventType), ENT_QUOTES, 'UTF-8') ?>
             </span>
             <span style="background:var(--bg-page);color:var(--text-muted);
                          padding:2px 8px;border-radius:999px;font-size:10px;border:1px solid var(--border);">
               <?= htmlspecialchars($actionLabel, ENT_QUOTES, 'UTF-8') ?>
             </span>
           </div>
-          <?php if (!empty($e['detail'])): ?>
+          <?php if ($eventDetail !== ''): ?>
           <div style="font-size:12px;color:var(--text-second);margin-top:3px;">
-            <?= htmlspecialchars((string)$e['detail'], ENT_QUOTES, 'UTF-8') ?>
+            <?= htmlspecialchars($eventDetail, ENT_QUOTES, 'UTF-8') ?>
           </div>
           <?php endif; ?>
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
-            Par <?= htmlspecialchars((string)($e['user_nom'] ?? 'Systeme'), ENT_QUOTES, 'UTF-8') ?>
+            Par <?= htmlspecialchars($eventUserNom !== '' ? $eventUserNom : 'Systeme', ENT_QUOTES, 'UTF-8') ?>
           </div>
         </div>
 
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <span style="font-size:12px;color:var(--text-muted);"><?= htmlspecialchars($heureEvent, ENT_QUOTES, 'UTF-8') ?></span>
-          <?php if (!empty($e['ref_url'])): ?>
-          <a href="<?= htmlspecialchars((string)$e['ref_url'], ENT_QUOTES, 'UTF-8') ?>"
+          <?php if ($eventRefUrl !== ''): ?>
+          <a href="<?= htmlspecialchars($eventRefUrl, ENT_QUOTES, 'UTF-8') ?>"
              style="font-size:11px;color:#6366f1;text-decoration:none;font-weight:500;">
             Voir →
           </a>
