@@ -242,8 +242,16 @@ if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
                 );
             }
 
-            $details = sprintf('Facture #%s - Client %s - %.2f € TTC', $numeroFacture, $client['raison_sociale'] ?? $clientId, $montantTTC);
-            enregistrerAction($pdo, currentUserId(), 'facture_generee', $details);
+            $clientNom = (string)($client['raison_sociale'] ?? ('Client #' . $clientId));
+            logAction(
+                $pdo,
+                'facture',
+                'creation',
+                'Facture creee — ' . $numeroFacture . ' · ' . $clientNom,
+                'Montant TTC: ' . number_format((float)$montantTTC, 2, '.', '') . ' EUR',
+                (int)$factureId,
+                'factures.php?id=' . (int)$factureId
+            );
 
             jsonResponse([
                 'ok' => true,

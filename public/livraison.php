@@ -251,7 +251,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 $details .= ' - Livraison replanifiée';
                             }
                             
-                            enregistrerAction($pdo, currentUserId(), 'livraison_modifiee', $details);
+                            $actionType = $isBecomingLivree ? 'livraison_effectuee' : 'modification';
+                            $actionLabel = $isBecomingLivree
+                                ? 'Livraison effectuee — ' . (string)($liv['reference'] ?? ('#' . $livraisonId))
+                                : 'Livraison mise a jour — ' . (string)($liv['reference'] ?? ('#' . $livraisonId));
+                            logAction(
+                                $pdo,
+                                'livraison',
+                                $actionType,
+                                $actionLabel,
+                                'Nouveau statut: ' . $newStatutLabel,
+                                $livraisonId,
+                                'livraison.php'
+                            );
                         } catch (Throwable $e) {
                             error_log('livraison.php historique error: ' . $e->getMessage());
                             // Ne pas faire échouer la transaction pour une erreur d'historique

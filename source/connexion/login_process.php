@@ -127,7 +127,15 @@ try {
     error_log('Warning: last_activity update on login failed (field may not exist): ' . $e->getMessage());
 }
 
-enregistrerAction($pdo, (int)$user['id'], 'connexion_reussie', 'Connexion réussie');
+logAction(
+    $pdo,
+    'connexion',
+    'login',
+    'Connexion — ' . (string)($user['nom'] ?? 'Utilisateur'),
+    'Role: ' . (string)($user['Emploi'] ?? ''),
+    (int)$user['id'],
+    'dashboard.php'
+);
 
 // Protection brute-force : réinitialiser le compteur (même clé / stockage que rate_limiter.php)
 $rlKey = preg_replace('/[^a-zA-Z0-9_]/', '_', $loginRateKey);

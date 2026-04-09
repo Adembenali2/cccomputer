@@ -35,7 +35,7 @@ function requireAdmin() {
  * Note: 'Chargé relation clients' est la valeur exacte dans la base, pas 'Commercial'
  */
 function requireCommercial() {
-    return authorize_roles(['Chargé relation clients', 'Admin']);
+    return authorize_roles(['Chargé relation clients', 'commercial', 'Admin']);
 }
 
 /**
@@ -61,6 +61,20 @@ function checkPagePermission(string $page, array $allowed_roles = []): bool {
 
     $user_id = (int)($_SESSION['user_id'] ?? 0);
     $emploi = $_SESSION['emploi'] ?? '';
+    $roleSession = $_SESSION['role'] ?? '';
+    $roleNormalized = function (string $v): string {
+        $v = strtolower(trim($v));
+        $replace = [
+            'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+            'à' => 'a', 'â' => 'a', 'ä' => 'a',
+            'î' => 'i', 'ï' => 'i',
+            'ô' => 'o', 'ö' => 'o',
+            'ù' => 'u', 'û' => 'u', 'ü' => 'u',
+            'ç' => 'c', ' ' => '_', '-' => '_',
+        ];
+        return strtr($v, $replace);
+    };
+    $currentRole = $roleNormalized((string)($roleSession !== '' ? $roleSession : $emploi));
 
     if (empty($user_id)) {
         return false;
@@ -100,14 +114,35 @@ function checkPagePermission(string $page, array $allowed_roles = []): bool {
         }
 
         if (!empty($allowed_roles)) {
-            return in_array($emploi, $allowed_roles, true);
+            $allowedNorm = array_map(static fn(string $r): string => $roleNormalized($r), $allowed_roles);
+            return in_array($currentRole, $allowedNorm, true);
         }
-
+        // Règles métier globales pour rôle commercial
+        if (in_array($currentRole, ['commercial', 'charge_relation_clients'], true)) {
+            if (in_array($page, ['utilisateurs', 'parametres'], true)) {
+                return false;
+            }
+            if (in_array($page, ['clients', 'factures', 'paiements', 'sav', 'livraison', 'espace_commercial', 'historique'], true)) {
+                return true;
+            }
+            if ($page === 'stock') {
+                return true; // lecture seule à gérer côté page/API
+            }
+        }
         return true;
     } catch (PDOException $e) {
         error_log('Warning: user_permissions table may not exist: ' . $e->getMessage());
         if (!empty($allowed_roles)) {
-            return in_array($emploi, $allowed_roles, true);
+            $allowedNorm = array_map(static fn(string $r): string => $roleNormalized($r), $allowed_roles);
+            return in_array($currentRole, $allowedNorm, true);
+        }
+        if (in_array($currentRole, ['commercial', 'charge_relation_clients'], true)) {
+            if (in_array($page, ['utilisateurs', 'parametres'], true)) {
+                return false;
+            }
+            if (in_array($page, ['clients', 'factures', 'paiements', 'sav', 'livraison', 'espace_commercial', 'historique', 'stock'], true)) {
+                return true;
+            }
         }
         return true;
     }

@@ -84,6 +84,16 @@ try {
         LIMIT 1
     ");
     $stmt->execute([':id' => $factureId]);
+
+    logAction(
+        $pdo,
+        'facture',
+        'envoi',
+        'Facture envoyee — ' . (string)$facture['numero'] . ' · ' . (string)($facture['client_nom'] ?: 'Client'),
+        'Envoyee par email',
+        $factureId,
+        'factures.php?id=' . $factureId
+    );
     $facture = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$facture) {

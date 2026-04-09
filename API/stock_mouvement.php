@@ -54,6 +54,18 @@ try {
     $stmt->execute([$stockId, $type, $quantite, $avant, $apres, $motif, $referenceDoc, (int)($_SESSION['user_id'] ?? 0) ?: null]);
 
     $pdo->commit();
+    $designationStmt = $pdo->prepare("SELECT designation FROM stock WHERE id = ? LIMIT 1");
+    $designationStmt->execute([$stockId]);
+    $designation = (string)($designationStmt->fetchColumn() ?: ('Article #' . $stockId));
+    logAction(
+        $pdo,
+        'stock',
+        $type,
+        ucfirst($type) . ' stock — ' . $designation,
+        'Quantite: ' . $avant . ' -> ' . $apres . ($motif ? ' | ' . $motif : ''),
+        $stockId,
+        'stock.php'
+    );
     jsonResponse(['success' => true, 'quantite_nouvelle' => $apres, 'message' => 'Mouvement enregistré']);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {

@@ -41,5 +41,13 @@ if (($f['statut'] ?? '') === 'payee') {
 $stmt = $pdo->prepare("UPDATE factures SET statut = 'annulee', updated_at = NOW() WHERE id = ?");
 $stmt->execute([$id]);
 
-enregistrerAction($pdo, currentUserId(), 'facture_annulee', "Facture #{$id} annulee. Motif: {$motif}");
+logAction(
+    $pdo,
+    'facture',
+    'annulation',
+    'Facture annulee — #' . $id,
+    $motif,
+    $id,
+    'factures.php'
+);
 jsonResponse(['success' => true]);

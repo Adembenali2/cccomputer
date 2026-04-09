@@ -202,9 +202,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
             $insertedId = $pdo->lastInsertId();
             $insertedId = $insertedId ? (int)$insertedId : null;
 
-            $userId = currentUserId();
-            $details = "Client créé: ID=" . ($insertedId ?? 'NULL') . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
-            enregistrerAction($pdo, $userId, 'client_ajoute', $details);
+            $createdId = (int)($insertedId ?? 0);
+            logAction(
+                $pdo,
+                'client',
+                'creation',
+                'Nouveau client — ' . $raison_sociale,
+                'Ville: ' . $ville . ' | Tel: ' . $telephone1,
+                $createdId,
+                'clients.php?id=' . $createdId
+            );
             $pdo->commit();
 
             CacheHelper::invalidateTag('clients');
@@ -244,9 +251,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     ");
                     $stmt->execute($params + [':id' => $id]);
                     
-                    // Enregistrer l'action dans l'historique
-                    $details = "Client créé: ID=" . $id . ", numero=" . $numero . ", raison_sociale=" . $raison_sociale;
-                    enregistrerAction($pdo, currentUserId(), 'client_ajoute', $details);
+                    logAction(
+                        $pdo,
+                        'client',
+                        'creation',
+                        'Nouveau client — ' . $raison_sociale,
+                        'Ville: ' . $ville . ' | Tel: ' . $telephone1,
+                        $id,
+                        'clients.php?id=' . $id
+                    );
                     
                     $pdo->commit();
 
@@ -291,8 +304,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $numero = generateClientNumber($pdo);
                     $params[':numero_client'] = $numero;
                     $pdo->prepare($sqlInsert)->execute($params);
-                    $details = "Client créé (retry): numero=" . $numero . ", raison_sociale=" . $raison_sociale;
-                    enregistrerAction($pdo, currentUserId(), 'client_ajoute', $details);
+                    $createdRetryId = (int)$pdo->lastInsertId();
+                    logAction(
+                        $pdo,
+                        'client',
+                        'creation',
+                        'Nouveau client — ' . $raison_sociale,
+                        'Ville: ' . $ville . ' | Tel: ' . $telephone1,
+                        $createdRetryId,
+                        'clients.php?id=' . $createdRetryId
+                    );
                     $pdo->commit();
                     header('Location: /public/clients.php?added=1');
                     exit;
@@ -400,9 +421,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                         ]);
                     }
                     
-                    $userId = currentUserId();
-                    $details = "Photocopieur attribué: MAC=" . ($macNorm ?? 'N/A') . ", SN=" . ($snInput ?: 'N/A') . " → Client #" . $idClient;
-                    enregistrerAction($pdo, $userId, 'photocopieur_attribue', $details);
+                    logAction(
+                        $pdo,
+                        'photocopieur',
+                        'modification',
+                        'Photocopieur attribue — Client #' . $idClient,
+                        'MAC: ' . ($macNorm ?? 'N/A') . ' | SN: ' . ($snInput ?: 'N/A'),
+                        $idClient,
+                        'clients.php?id=' . $idClient
+                    );
                     $pdo->commit();
                     
                     header('Location: /public/clients.php?attached=1');

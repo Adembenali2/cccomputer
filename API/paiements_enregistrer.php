@@ -299,8 +299,24 @@ try {
         
         $pdo->commit();
 
-        $details = sprintf('Facture #%s - Ref: %s - %.2f € - %s', $facture['numero'] ?? $factureId, $reference, $montant, $modePaiement);
-        enregistrerAction($pdo, $userId, 'paiement_enregistre', $details);
+        $numeroFacture = (string)($facture['numero'] ?? $factureId);
+        $clientNom = 'Client #' . $clientId;
+        try {
+            $clientStmt = $pdo->prepare("SELECT raison_sociale FROM clients WHERE id = ? LIMIT 1");
+            $clientStmt->execute([$clientId]);
+            $clientNom = (string)($clientStmt->fetchColumn() ?: $clientNom);
+        } catch (Throwable $e) {
+            // ignore
+        }
+        logAction(
+            $pdo,
+            'paiement',
+            'paiement_recu',
+            'Paiement recu — ' . $clientNom,
+            'Montant: ' . number_format($montant, 2, '.', '') . ' EUR | Mode: ' . $modePaiement . ' | Facture: ' . $numeroFacture,
+            (int)$paiementId,
+            'paiements.php'
+        );
 
         // Envoi email "reçu, en attente de validation" pour tous les modes de paiement
         require_once __DIR__ . '/../includes/parametres.php';

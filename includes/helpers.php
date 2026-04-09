@@ -475,3 +475,47 @@ if (!function_exists('csp_nonce')) {
     }
 }
 
+/**
+ * Enregistre une action dans l'historique global.
+ */
+if (!function_exists('logAction')) {
+    function logAction(
+        PDO $pdo,
+        string $type,
+        string $action,
+        string $label,
+        string $detail = '',
+        int $refId = 0,
+        string $refUrl = ''
+    ): void {
+        try {
+            $userId = $_SESSION['user_id'] ?? ($_SESSION['user']['id'] ?? null);
+            $userNom = $_SESSION['nom']
+                ?? $_SESSION['user_nom']
+                ?? trim((string)(($_SESSION['user_prenom'] ?? '') . ' ' . ($_SESSION['user_nom'] ?? '')))
+                ?? 'Systeme';
+            $userNom = trim((string)$userNom) !== '' ? trim((string)$userNom) : 'Systeme';
+            $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+
+            $stmt = $pdo->prepare("
+                INSERT INTO historique
+                    (type, action, label, detail, ref_id, ref_url, user_id, user_nom, ip_address)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $type,
+                $action,
+                $label,
+                $detail !== '' ? $detail : null,
+                $refId > 0 ? $refId : null,
+                $refUrl !== '' ? $refUrl : null,
+                $userId ? (int)$userId : null,
+                $userNom,
+                $ip,
+            ]);
+        } catch (Throwable $e) {
+            error_log('logAction error: ' . $e->getMessage());
+        }
+    }
+}
+

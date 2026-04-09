@@ -108,7 +108,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                     $datePrevue !== '' ? $datePrevue : null,
                 ]);
                 $newSavId = (int)$pdo->lastInsertId();
-                enregistrerAction($pdo, currentUserId(), 'sav_cree', "SAV #{$newSavId} ({$reference}) créé");
+                $clientNomLog = 'Client #' . $idClient;
+                try {
+                    $clientStmt = $pdo->prepare("SELECT raison_sociale FROM clients WHERE id = ? LIMIT 1");
+                    $clientStmt->execute([$idClient]);
+                    $clientNomLog = (string)($clientStmt->fetchColumn() ?: $clientNomLog);
+                } catch (Throwable $e) {
+                    // ignore
+                }
+                logAction(
+                    $pdo,
+                    'sav',
+                    'creation',
+                    'SAV ouvert — ' . $clientNomLog,
+                    'Ref: ' . $reference . ' | ' . mb_substr($description, 0, 80),
+                    $newSavId,
+                    'sav.php?id=' . $newSavId
+                );
                 if ($idTechnicienInsert) {
                     NotificationService::create(
                         (int)$idTechnicienInsert,
@@ -402,9 +418,25 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
                                 $details .= sprintf(' - Technicien: %s', $technicienNom);
                             }
                             
-                            enregistrerAction($pdo, currentUserId(), 'sav_modifie', $details);
+                            logAction(
+                                $pdo,
+                                'sav',
+                                'modification',
+                                'SAV mis a jour — ' . (string)($sav['reference'] ?? ('#' . $savId)),
+                                'Nouveau statut: ' . $newStatutLabel,
+                                $savId,
+                                'sav.php?id=' . $savId
+                            );
                             if ($isBecomingResolu) {
-                                enregistrerAction($pdo, currentUserId(), 'sav_cloture', sprintf('SAV #%d (%s) clôturé', $savId, $sav['reference'] ?? 'N/A'));
+                                logAction(
+                                    $pdo,
+                                    'sav',
+                                    'resolution',
+                                    'SAV resolu — ' . (string)($sav['reference'] ?? ('#' . $savId)) . ' · ' . (string)($sav['client_nom'] ?? 'Client'),
+                                    '',
+                                    $savId,
+                                    'sav.php'
+                                );
                             }
                         } catch (Throwable $e) {
                             error_log('sav.php historique error: ' . $e->getMessage());

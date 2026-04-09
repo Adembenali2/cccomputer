@@ -86,6 +86,15 @@ if ($id > 0) {
             WHERE id=:id";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params + [':id' => $id]);
+    logAction(
+        $pdo,
+        'stock',
+        'modification',
+        'Article modifie — ' . $designation,
+        'Ref: ' . $reference . ' | Qte: ' . (int)$params[':quantite'],
+        $id,
+        'stock.php'
+    );
     jsonResponse(['success' => true, 'id' => $id, 'reference' => $reference, 'message' => 'Article mis à jour']);
 }
 
@@ -103,5 +112,14 @@ $sql = "INSERT INTO stock (
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params + [':created_by' => (int)($_SESSION['user_id'] ?? 0) ?: null]);
 $newId = (int)$pdo->lastInsertId();
+logAction(
+    $pdo,
+    'stock',
+    'creation',
+    'Article ajoute — ' . $designation,
+    'Ref: ' . $reference . ' | Qte: ' . (int)$params[':quantite'],
+    $newId,
+    'stock.php'
+);
 
 jsonResponse(['success' => true, 'id' => $newId, 'reference' => $reference, 'message' => 'Article créé']);

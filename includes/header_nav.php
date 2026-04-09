@@ -68,6 +68,16 @@ if (!function_exists('getNavIcon')) {
   </nav>
   <div class="header-right">
     <button type="button" class="header-icon-btn" id="btnDarkMode" title="Mode nuit"><span id="iconDarkMode">🌙</span></button>
+    <a href="/public/espace_commercial.php"
+       class="header-icon-btn"
+       title="Espace Commercial"
+       style="<?= $pageActuelle === 'espace_commercial.php' ? 'background:rgba(255,255,255,.15);color:#fff;' : '' ?>">
+      <svg width="18" height="18" fill="none" stroke="currentColor"
+           stroke-width="2" viewBox="0 0 24 24">
+        <path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+        <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
+      </svg>
+    </a>
     <button type="button" class="header-icon-btn js-cal" title="Calendrier"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button>
     <button type="button" class="header-icon-btn notif-btn js-notif" title="Notifications"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg><?php if ($nbNotifTotal > 0): ?><span class="notif-badge"><?= (int)$nbNotifTotal ?></span><?php endif; ?></button>
     <button type="button" class="header-icon-btn js-msg" title="Messagerie"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></button>

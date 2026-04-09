@@ -173,7 +173,15 @@ try {
             $details .= ' - Description: ' . $descShort;
         }
         
-        enregistrerAction($pdo, $_SESSION['user_id'], 'sav_cree', $details);
+        logAction(
+            $pdo,
+            'sav',
+            'creation',
+            'SAV ouvert — ' . (string)$client['raison_sociale'],
+            'Ref: ' . $reference . ' | ' . mb_substr($description, 0, 80),
+            $savId,
+            'sav.php?id=' . $savId
+        );
     } catch (Throwable $e) {
         error_log('dashboard_create_sav.php log error: ' . $e->getMessage());
     }

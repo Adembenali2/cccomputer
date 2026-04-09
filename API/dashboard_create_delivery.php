@@ -339,7 +339,15 @@ try {
         if ($productType && $productId > 0) {
             $details .= ', produit: ' . $stockLabel . ' (quantité: ' . $productQty . ')';
         }
-        enregistrerAction($pdo, $_SESSION['user_id'], 'livraison_creee', $details);
+        logAction(
+            $pdo,
+            'livraison',
+            'creation',
+            'Livraison planifiee — ' . (string)$client['raison_sociale'],
+            'Statut: planifiee',
+            $livraisonId,
+            'livraison.php'
+        );
     } catch (Throwable $e) {
         error_log('dashboard_create_delivery.php log error: ' . $e->getMessage());
     }

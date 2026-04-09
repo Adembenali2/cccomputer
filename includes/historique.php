@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/helpers.php';
 
 /**
  * includes/historique.php
@@ -195,25 +196,45 @@ function sanitizeAuditDetails(string $details): string
  */
 function enregistrerAction(PDO $pdo, ?int $userId, string $action, string $details = '', ?string $ipOverride = null): bool
 {
-    $action = mb_substr($action, 0, AUDIT_ACTION_MAX_LENGTH);
-    $details = sanitizeAuditDetails($details);
-    $ipAddress = $ipOverride ?? getClientIp();
-
-    $sql = "INSERT INTO historique (user_id, action, details, ip_address, date_action)
-            VALUES (:user_id, :action, :details, :ip_address, NOW())";
-
     try {
-        $stmt = $pdo->prepare($sql);
-        if ($userId === null) {
-            $stmt->bindValue(':user_id', null, PDO::PARAM_NULL);
-        } else {
-            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        $action = mb_substr($action, 0, AUDIT_ACTION_MAX_LENGTH);
+        $details = sanitizeAuditDetails($details);
+        $category = getActionCategory($action);
+        $typeMap = [
+            'Clients' => 'client',
+            'SAV' => 'sav',
+            'Livraisons' => 'livraison',
+            'Stock' => 'stock',
+            'Factures' => 'facture',
+            'Paiements' => 'paiement',
+            'Profil' => 'utilisateur',
+            'Authentification' => 'connexion',
+        ];
+        $type = $typeMap[$category] ?? 'utilisateur';
+        $label = formatActionLabel($action);
+        if ($details !== '') {
+            $label .= ' — ' . mb_substr($details, 0, 180);
         }
-        $stmt->bindValue(':action', $action, PDO::PARAM_STR);
-        $stmt->bindValue(':details', $details, PDO::PARAM_STR);
-        $stmt->bindValue(':ip_address', $ipAddress, PDO::PARAM_STR);
-        return $stmt->execute();
-    } catch (PDOException $e) {
+        $label = mb_substr($label, 0, 255);
+
+        $legacySessionUser = $_SESSION['user_id'] ?? ($_SESSION['user']['id'] ?? null);
+        if ($userId !== null) {
+            $_SESSION['user_id'] = $userId;
+        } elseif ($legacySessionUser === null) {
+            $_SESSION['user_id'] = null;
+        }
+
+        if ($ipOverride !== null && $ipOverride !== '') {
+            $_SERVER['REMOTE_ADDR'] = $ipOverride;
+        }
+
+        logAction($pdo, $type, $action, $label, $details);
+
+        if ($legacySessionUser !== null) {
+            $_SESSION['user_id'] = $legacySessionUser;
+        }
+        return true;
+    } catch (Throwable $e) {
         error_log("Erreur d'historique: " . $e->getMessage());
         return false;
     }
