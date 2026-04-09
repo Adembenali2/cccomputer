@@ -22,7 +22,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Cross-Origin-Opener-Policy: same-origin');
 header('Cross-Origin-Resource-Policy: same-origin');
 
-header('Permissions-Policy: camera=(), microphone=(), geolocation=(self), payment=()');
+header('Permissions-Policy: camera=(self), microphone=(), geolocation=(self), payment=()');
 
 // Détecter si on est en HTTPS (dont proxy Railway / X-Forwarded-Proto)
 $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -37,7 +37,7 @@ if ($isSecure) {
 // Content Security Policy stricte (nonce pour scripts inline)
 $csp = implode('; ', [
     "default-src 'self'",
-    "script-src 'self' 'nonce-" . $GLOBALS['csp_nonce'] . "'",
+    "script-src 'self' https://cdn.jsdelivr.net 'nonce-" . $GLOBALS['csp_nonce'] . "'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",

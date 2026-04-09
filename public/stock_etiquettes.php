@@ -100,6 +100,14 @@ foreach ($articles as &$article) {
   $article['qr_data_uri'] = buildQrDataUri($qrText);
 }
 unset($article);
+
+$etiquettes = [];
+foreach ($articles as $article) {
+  $copies = max(0, (int)($article['quantite'] ?? 0));
+  for ($i = 0; $i < $copies; $i++) {
+    $etiquettes[] = $article;
+  }
+}
 ?>
 <!doctype html>
 <html lang="fr">
@@ -123,10 +131,10 @@ unset($article);
   <div class="no-print" style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;">
     <button type="button" id="btnPrint">Imprimer</button>
     <button type="button" id="btnClose">Fermer</button>
-    <div style="line-height:30px;"><?= count($articles) ?> étiquettes — Format A4 (3×8)</div>
+    <div style="line-height:30px;"><?= count($etiquettes) ?> étiquettes — Format A4 (3×8)</div>
   </div>
   <div class="planche">
-    <?php foreach ($articles as $a): ?>
+    <?php foreach ($etiquettes as $a): ?>
     <div class="etiquette">
       <div class="qr-box" id="qr-<?= (int)$a['id'] ?>">
         <?php if (!empty($a['qr_data_uri'])): ?>

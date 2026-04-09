@@ -286,7 +286,25 @@ async function ouvrirHistorique(id){ const res = await fetch('../API/stock_histo
 async function supprimerArticle(id){ if(!confirm('Supprimer cet article ?')) return; const fd = new FormData(); fd.append('stock_id', id); fd.append('csrf_token', document.body.dataset.csrfToken || ''); try{ const res = await fetch('../API/stock_delete.php', { method:'POST', body:fd, credentials:'include' }); const json = await res.json(); if(json.success){ afficherToast('Article supprimé','success'); setTimeout(()=>location.reload(),700);} else { afficherToast(json.message || 'Erreur', 'error'); }}catch(_){ afficherToast('Erreur réseau','error'); }}
 
 let scanStream = null, scanning = false;
-async function ouvrirScanner(){ document.getElementById('modalScanner').style.display='flex'; const cams = await navigator.mediaDevices.enumerateDevices(); const sel=document.getElementById('cameraSelect'); sel.innerHTML = cams.filter(d=>d.kind==='videoinput').map((c,i)=>`<option value="${c.deviceId}">${c.label||('Caméra '+(i+1))}</option>`).join(''); await demarrerScan(sel.value||undefined); sel.onchange = async()=>{ await demarrerScan(sel.value||undefined); }; }
+async function ouvrirScanner(){
+  document.getElementById('modalScanner').style.display='flex';
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      afficherToast('Camera non supportee sur ce navigateur', 'warning');
+      return;
+    }
+    if (typeof jsQR === 'undefined') {
+      afficherToast('Le module QR est bloque ou non charge', 'warning');
+    }
+    const cams = await navigator.mediaDevices.enumerateDevices();
+    const sel = document.getElementById('cameraSelect');
+    sel.innerHTML = cams.filter(d=>d.kind==='videoinput').map((c,i)=>`<option value="${c.deviceId}">${c.label||('Caméra '+(i+1))}</option>`).join('');
+    await demarrerScan(sel.value||undefined);
+    sel.onchange = async()=>{ await demarrerScan(sel.value||undefined); };
+  } catch (e) {
+    afficherToast('Acces camera refuse. Autorise la camera puis reessaie.', 'error');
+  }
+}
 async function demarrerScan(deviceId){ stopScan(); const constraints = deviceId ? { video:{ deviceId:{ exact:deviceId } } } : { video:{ facingMode:'environment', width:400, height:300 } }; scanStream = await navigator.mediaDevices.getUserMedia(constraints); const video=document.getElementById('qrVideo'); video.srcObject=scanStream; await video.play(); scanning=true; requestAnimationFrame(scanFrame); }
 function stopScan(){ scanning=false; if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; } }
 function scanFrame(){ if(!scanning || typeof jsQR==='undefined') return; const video=document.getElementById('qrVideo'); const canvas=document.getElementById('qrCanvas'); const ctx=canvas.getContext('2d'); if(video.readyState===video.HAVE_ENOUGH_DATA){ canvas.width=video.videoWidth; canvas.height=video.videoHeight; ctx.drawImage(video,0,0,canvas.width,canvas.height); const imageData=ctx.getImageData(0,0,canvas.width,canvas.height); const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'dontInvert'}); if(code){ const ref=code.data; document.getElementById('recherche').value=ref; filtrerTableau(); const row=[...document.querySelectorAll('#tableauStock tbody tr[data-ref]')].find(tr=>tr.dataset.ref===ref); if(row){ row.style.background='#dcfce7'; setTimeout(()=>{row.style.background='';},2000);} stopScan(); fermerModal('modalScanner'); return; } } requestAnimationFrame(scanFrame); }
