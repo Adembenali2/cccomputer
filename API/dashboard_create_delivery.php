@@ -247,8 +247,12 @@ try {
                     ':ref' => $reference . ' (livraison)'
                 ]);
             }
-            $upd = $pdo->prepare("UPDATE stock SET quantite = quantite - :qte WHERE id = :id AND quantite >= :qte");
-            $upd->execute([':qte' => abs($productQty), ':id' => $productId]);
+            $upd = $pdo->prepare("UPDATE stock SET quantite = quantite - :qte_sub WHERE id = :id AND quantite >= :qte_check");
+            $upd->execute([
+                ':qte_sub' => abs($productQty),
+                ':id' => $productId,
+                ':qte_check' => abs($productQty)
+            ]);
         }
         
         if (!$stock) {
