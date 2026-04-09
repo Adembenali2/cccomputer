@@ -37,6 +37,9 @@ $livCreatedCol = colExists($pdo, 'livraisons', 'created_at') ? 'created_at' : (c
 $factNumberCol = colExists($pdo, 'factures', 'numero_facture') ? 'numero_facture' : (colExists($pdo, 'factures', 'reference') ? 'reference' : 'id');
 $dateEcheanceCol = colExists($pdo, 'factures', 'date_echeance') ? 'date_echeance' : 'date_facture';
 $clientNameCol = colExists($pdo, 'clients', 'nom') ? 'nom' : (colExists($pdo, 'clients', 'raison_sociale') ? 'raison_sociale' : 'id');
+$savDateInterventionCol = colExists($pdo, 'sav', 'date_intervention')
+    ? 'date_intervention'
+    : (colExists($pdo, 'sav', 'date_prevue') ? 'date_prevue' : null);
 
 // Factures
 $caMonthRow = $pdo->prepare("
@@ -106,7 +109,11 @@ if ($clientsCreatedCol !== null) {
 
 // SAV
 $savEnCours = (int)$pdo->query("SELECT COUNT(*) FROM sav WHERE statut IN ('ouvert','en_cours')")->fetchColumn();
-$savEnRetard = (int)$pdo->query("SELECT COUNT(*) FROM sav WHERE statut IN ('ouvert','en_cours') AND date_intervention < CURDATE()")->fetchColumn();
+if ($savDateInterventionCol !== null) {
+    $savEnRetard = (int)$pdo->query("SELECT COUNT(*) FROM sav WHERE statut IN ('ouvert','en_cours') AND {$savDateInterventionCol} < CURDATE()")->fetchColumn();
+} else {
+    $savEnRetard = 0;
+}
 $savParTech = $pdo->query("
   SELECT COALESCE(u.nom,'Non assigné') as technicien, COUNT(s.id) as nb
   FROM sav s
