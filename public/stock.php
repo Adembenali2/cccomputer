@@ -255,6 +255,9 @@ function detailsTechniques(array $a): string {
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" <?= csp_nonce() ?>></script>
 <script <?= csp_nonce() ?>>
+// Mode strict: la page Stock ne doit pas ouvrir d'onglets externes.
+window.open = function() { return null; };
+
 function afficherToast(message, type = 'success') {
   const colors = {success:{bg:'#10b981',icon:'✅'},error:{bg:'#ef4444',icon:'❌'},warning:{bg:'#f59e0b',icon:'⚠️'}};
   const c = colors[type] || colors.success;
@@ -330,7 +333,7 @@ document.getElementById('formArticle').addEventListener('submit', soumettreFormu
 function ouvrirModalEntree(id, designation){ document.getElementById('mv_stock_id').value=id; document.getElementById('mv_type').value='entree'; document.getElementById('mv_article').value=designation; document.getElementById('mv_quantite').value=''; document.getElementById('mv_motif').value=''; document.getElementById('mv_reference_doc').value=''; document.getElementById('modalMouvement').style.display='flex';}
 function ouvrirModalSortie(id, designation, qte){ document.getElementById('mv_stock_id').value=id; document.getElementById('mv_type').value='sortie'; document.getElementById('mv_article').value=designation + ' (Stock: ' + qte + ')'; document.getElementById('mv_quantite').value=''; document.getElementById('mv_motif').value=''; document.getElementById('mv_reference_doc').value=''; document.getElementById('modalMouvement').style.display='flex';}
 document.getElementById('formMouvement').addEventListener('submit', async (e)=>{ e.preventDefault(); const fd = new FormData(e.target); try{ const res = await fetch('../API/stock_mouvement.php', { method:'POST', body:fd, credentials:'include' }); const json = await res.json(); if(json.success){ afficherToast(json.message || 'Mouvement enregistré','success'); setTimeout(()=>location.reload(), 900);} else { afficherToast(json.message || 'Erreur','error'); }}catch(_){ afficherToast('Erreur réseau', 'error'); }});
-async function ouvrirHistorique(id){ const res = await fetch('../API/stock_historique.php?stock_id=' + encodeURIComponent(id), { credentials:'include' }); const rows = await res.json(); const body=document.getElementById('historiqueBody'); body.innerHTML = Array.isArray(rows)&&rows.length ? rows.map(r=>`<tr><td>${r.created_at||''}</td><td>${r.type_mouvement||''}</td><td>${r.quantite||''}</td><td>${r.quantite_avant||''}</td><td>${r.quantite_apres||''}</td><td>${r.motif||''}</td></tr>`).join('') : '<tr><td colspan="6">Aucun mouvement</td></tr>'; document.getElementById('modalHistorique').style.display='flex'; }
+async function ouvrirHistorique(id){ return; }
 async function supprimerArticle(id){
   if(!confirm('Supprimer cet article ?')) return;
   const fd = new FormData();
@@ -383,35 +386,11 @@ function afficherPopupDetailsProduit(row){
   document.getElementById('scanDetailsContent').innerHTML = html;
   document.getElementById('modalScanDetails').style.display = 'flex';
 }
-async function ouvrirScanner(){
-  document.getElementById('modalScanner').style.display='flex';
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      afficherToast('Camera non supportee sur ce navigateur', 'warning');
-      return;
-    }
-    if (typeof jsQR === 'undefined') {
-      afficherToast('Le module QR est bloque ou non charge', 'warning');
-    }
-    await demarrerScan(undefined);
-    const cams = await navigator.mediaDevices.enumerateDevices();
-    const sel = document.getElementById('cameraSelect');
-    const videoInputs = cams.filter(d=>d.kind==='videoinput');
-    sel.innerHTML = videoInputs.map((c,i)=>`<option value="${c.deviceId}">${c.label||('Caméra '+(i+1))}</option>`).join('');
-    const backCam = videoInputs.find(c => /back|rear|environment|arriere|derriere/i.test(c.label || ''));
-    if (backCam && backCam.deviceId) {
-      sel.value = backCam.deviceId;
-      await demarrerScan(backCam.deviceId);
-    }
-    sel.onchange = async()=>{ await demarrerScan(sel.value||undefined); };
-  } catch (e) {
-    afficherToast('Acces camera refuse. Autorise la camera puis reessaie.', 'error');
-  }
-}
-async function demarrerScan(deviceId){ stopScan(); const constraints = deviceId ? { video:{ deviceId:{ exact:deviceId } } } : { video:{ facingMode:'environment', width:400, height:300 } }; scanStream = await navigator.mediaDevices.getUserMedia(constraints); const video=document.getElementById('qrVideo'); video.srcObject=scanStream; await video.play(); scanning=true; requestAnimationFrame(scanFrame); }
+async function ouvrirScanner(){ return; }
+async function demarrerScan(deviceId){ return; }
 function stopScan(){ scanning=false; if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; } }
-function scanFrame(){ if(!scanning || typeof jsQR==='undefined') return; const video=document.getElementById('qrVideo'); const canvas=document.getElementById('qrCanvas'); const ctx=canvas.getContext('2d'); if(video.readyState===video.HAVE_ENOUGH_DATA){ canvas.width=video.videoWidth; canvas.height=video.videoHeight; ctx.drawImage(video,0,0,canvas.width,canvas.height); const imageData=ctx.getImageData(0,0,canvas.width,canvas.height); const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'dontInvert'}); if(code){ const ref=(code.data||'').trim(); if(ref && ref !== lastDetectedRef){ lastDetectedRef = ref; document.getElementById('recherche').value=ref; filtrerTableau(); const row=[...document.querySelectorAll('#tableauStock tbody tr[data-ref]')].find(tr=>tr.dataset.ref===ref); if(row){ row.style.background='#dcfce7'; setTimeout(()=>{row.style.background='';},2000); } stopScan(); fermerModal('modalScanner'); if(row){ afficherPopupDetailsProduit(row); } else { afficherToast('Article non trouve: '+ref, 'warning'); } return; } } } requestAnimationFrame(scanFrame); }
-document.getElementById('manualSearch').addEventListener('click', ()=>{ stopScan(); fermerModal('modalScanner'); document.getElementById('recherche').focus(); });
+function scanFrame(){ return; }
+document.getElementById('manualSearch')?.addEventListener('click', ()=>{});
 document.getElementById('btnAddArticle')?.addEventListener('click', ouvrirModalAjout);
 document.getElementById('btnFirstAdd')?.addEventListener('click', ouvrirModalAjout);
 document.getElementById('btnEtiquettes')?.addEventListener('click', ()=>document.getElementById('modalEtiquettes').style.display='flex');
@@ -444,7 +423,7 @@ document.querySelectorAll('.act-edit-btn').forEach(a => a.addEventListener('clic
 document.querySelectorAll('.act-delete-btn').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); supprimerArticle(parseInt(a.dataset.id||'0',10)); }));
 document.querySelectorAll('.act-entree').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalEntree(parseInt(a.dataset.id||'0',10), a.dataset.designation || ''); }));
 document.querySelectorAll('.act-sortie').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalSortie(parseInt(a.dataset.id||'0',10), a.dataset.designation || '', parseInt(a.dataset.qte||'0',10)); }));
-document.querySelectorAll('.act-historique').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirHistorique(parseInt(a.dataset.id||'0',10)); }));
+document.querySelectorAll('.act-historique').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); }));
 document.querySelectorAll('.act-delete').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); supprimerArticle(parseInt(a.dataset.id||'0',10)); }));
 </script>
 </body>
