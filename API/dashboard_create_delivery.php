@@ -63,6 +63,13 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $datePrevue)) {
 
 try {
     $pdo->beginTransaction();
+    $hasStockModele = columnExists($pdo, 'stock', 'modele');
+    $hasStockModeleCompatible = columnExists($pdo, 'stock', 'modele_compatible');
+    $stockModeleExpr = $hasStockModele ? 'modele' : ($hasStockModeleCompatible ? 'modele_compatible' : 'NULL');
+    $hasLivProductType = columnExists($pdo, 'livraisons', 'product_type');
+    $hasLivProductId = columnExists($pdo, 'livraisons', 'product_id');
+    $hasLivProductQty = columnExists($pdo, 'livraisons', 'product_qty');
+    $useLivProductCols = $hasLivProductType && $hasLivProductId && $hasLivProductQty;
     
     // Vérifier que la référence n'existe pas déjà
     $checkRef = $pdo->prepare("SELECT id FROM livraisons WHERE reference = :ref LIMIT 1");
@@ -150,7 +157,7 @@ try {
             'lcd' => "categorie='ecran_lcd'",
             'pc' => "categorie='pc'",
         ][$productType] ?? '';
-        $stockCheck = $pdo->prepare("SELECT id, marque, COALESCE(modele, designation) AS modele, reference, quantite FROM stock WHERE id = :id AND actif = 1 AND {$catWhere} LIMIT 1");
+        $stockCheck = $pdo->prepare("SELECT id, marque, COALESCE({$stockModeleExpr}, designation) AS modele, reference, quantite FROM stock WHERE id = :id AND actif = 1 AND {$catWhere} LIMIT 1");
         $stockCheck->execute([':id' => $productId]);
         $stock = $stockCheck->fetch(PDO::FETCH_ASSOC);
         if ($stock) {
@@ -195,6 +202,12 @@ try {
     }
     
     // Insérer la livraison
+    $productColumnsSql = '';
+    $productValuesSql = '';
+    if ($useLivProductCols) {
+        $productColumnsSql = ",\n            product_type,\n            product_id,\n            product_qty";
+        $productValuesSql = ",\n            :product_type,\n            :product_id,\n            :product_qty";
+    }
     $sql = "
         INSERT INTO livraisons (
             id_client,
@@ -204,10 +217,7 @@ try {
             objet,
             date_prevue,
             commentaire,
-            statut,
-            product_type,
-            product_id,
-            product_qty
+            statut{$productColumnsSql}
         ) VALUES (
             :id_client,
             :id_livreur,
@@ -216,15 +226,12 @@ try {
             :objet,
             :date_prevue,
             :commentaire,
-            'planifiee',
-            :product_type,
-            :product_id,
-            :product_qty
+            'planifiee'{$productValuesSql}
         )
     ";
     
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([
+    $params = [
         ':id_client' => $idClient,
         ':id_livreur' => $idLivreur,
         ':reference' => $reference,
@@ -232,10 +239,13 @@ try {
         ':objet' => $objetFinal,
         ':date_prevue' => $datePrevue,
         ':commentaire' => empty($commentaire) ? null : $commentaire,
-        ':product_type' => ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productType : null,
-        ':product_id' => ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productId : null,
-        ':product_qty' => ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productQty : null
-    ]);
+    ];
+    if ($useLivProductCols) {
+        $params[':product_type'] = ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productType : null;
+        $params[':product_id'] = ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productId : null;
+        $params[':product_qty'] = ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) ? $productQty : null;
+    }
+    $stmt->execute($params);
     
     $livraisonId = (int)$pdo->lastInsertId();
     

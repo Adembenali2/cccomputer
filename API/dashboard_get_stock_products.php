@@ -16,6 +16,9 @@ $pdo = getPdoOrFail();
 
 try {
     $products = [];
+    $hasModele = columnExists($pdo, 'stock', 'modele');
+    $hasModeleCompatible = columnExists($pdo, 'stock', 'modele_compatible');
+    $modeleExpr = $hasModele ? 's.modele' : ($hasModeleCompatible ? 's.modele_compatible' : 'NULL');
     
     $catWhere = [
         'papier' => "s.categorie = 'papier'",
@@ -23,7 +26,7 @@ try {
         'lcd' => "s.categorie = 'ecran_lcd'",
         'pc' => "s.categorie = 'pc'",
     ][$type];
-    $sql = "SELECT s.id, s.marque, COALESCE(s.modele, s.designation) AS modele, s.reference, s.quantite, s.categorie, s.couleur_toner
+    $sql = "SELECT s.id, s.marque, COALESCE({$modeleExpr}, s.designation) AS modele, s.reference, s.quantite, s.categorie, s.couleur_toner
             FROM stock s
             WHERE s.actif = 1 AND s.quantite > 0 AND {$catWhere}
             ORDER BY s.categorie, s.designation";
