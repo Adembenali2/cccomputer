@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "PHP Dev Server",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "localhost:8080", "-t", "public"],
+      "port": 8080
+    },
+    {
+      "name": "Docker Apache (Project)",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["run", "--rm", "-p", "8080:80", "cccomputer-1"],
+      "port": 8080
+    },
+    {
+      "name": "Schema Validation (Node)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/schema-validation/import_and_verify.mjs"],
+      "port": 3000
+    },
+    {
+      "name": "Schema Validation MySQL (Docker Compose)",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "-f", "tools/schema-validation/docker-compose.yml", "up", "-d"],
+      "port": 13307
+    }
+  ]
+}
