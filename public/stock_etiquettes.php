@@ -4,12 +4,27 @@ declare(strict_types=1);
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\PngWriter;
 
 $pdo = getPdo();
 $stockId = (int)($_GET['stock_id'] ?? 0);
 $all = isset($_GET['all']);
+$idsCsv = trim((string)($_GET['ids'] ?? ''));
 
-if ($stockId > 0) {
+if ($idsCsv !== '') {
+  $idList = array_values(array_unique(array_filter(array_map('intval', explode(',', $idsCsv)), static fn(int $v): bool => $v > 0)));
+  if ($idList) {
+    $placeholders = implode(',', array_fill(0, count($idList), '?'));
+    $stmt = $pdo->prepare("SELECT * FROM stock WHERE actif = 1 AND id IN ({$placeholders}) ORDER BY categorie, designation");
+    $stmt->execute($idList);
+    $articles = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  } else {
+    $articles = [];
+  }
+} elseif ($stockId > 0) {
   $stmt = $pdo->prepare("SELECT * FROM stock WHERE id = ? AND actif = 1");
   $stmt->execute([$stockId]);
   $articles = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -18,6 +33,25 @@ if ($stockId > 0) {
 } else {
   $articles = [];
 }
+
+$writer = new PngWriter();
+foreach ($articles as &$article) {
+  $qrText = (string)($article['qr_code'] ?? '');
+  if ($qrText === '') {
+    $qrText = (string)($article['reference'] ?? '');
+  }
+  $article['qr_data_uri'] = '';
+  if ($qrText !== '') {
+    try {
+      $qrCode = new QrCode(data: $qrText, size: 120, margin: 2);
+      $result = $writer->write($qrCode);
+      $article['qr_data_uri'] = $result->getDataUri();
+    } catch (Throwable $e) {
+      $article['qr_data_uri'] = '';
+    }
+  }
+}
+unset($article);
 ?>
 <!doctype html>
 <html lang="fr">
@@ -39,14 +73,20 @@ if ($stockId > 0) {
 </head>
 <body>
   <div class="no-print" style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;">
-    <button type="button" onclick="window.print()">Imprimer</button>
-    <button type="button" onclick="window.close()">Fermer</button>
+    <button type="button" id="btnPrint">Imprimer</button>
+    <button type="button" id="btnClose">Fermer</button>
     <div style="line-height:30px;"><?= count($articles) ?> étiquettes — Format A4 (3×8)</div>
   </div>
   <div class="planche">
     <?php foreach ($articles as $a): ?>
     <div class="etiquette">
-      <div class="qr-box" id="qr-<?= (int)$a['id'] ?>" data-code="<?= htmlspecialchars((string)$a['reference'], ENT_QUOTES, 'UTF-8') ?>"></div>
+      <div class="qr-box" id="qr-<?= (int)$a['id'] ?>">
+        <?php if (!empty($a['qr_data_uri'])): ?>
+          <img src="<?= htmlspecialchars((string)$a['qr_data_uri'], ENT_QUOTES, 'UTF-8') ?>" alt="QR">
+        <?php else: ?>
+          <div style="font-size:9px;color:#ef4444;text-align:center;">QR indisponible</div>
+        <?php endif; ?>
+      </div>
       <div class="etiquette-info">
         <div class="etiquette-ref"><?= htmlspecialchars((string)$a['reference'], ENT_QUOTES, 'UTF-8') ?></div>
         <div class="etiquette-nom"><?= htmlspecialchars((string)mb_substr((string)$a['designation'], 0, 28), ENT_QUOTES, 'UTF-8') ?></div>
@@ -55,27 +95,9 @@ if ($stockId > 0) {
     </div>
     <?php endforeach; ?>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script <?= csp_nonce() ?>>
-  window.addEventListener('load', function() {
-    document.querySelectorAll('.qr-box').forEach(function(el) {
-      const code = el.dataset.code;
-      if (!code) return;
-      QRCode.toCanvas(document.createElement('canvas'), code, {
-        width: 70,
-        margin: 1,
-        color: { dark: '#000000', light: '#ffffff' }
-      }, function(err, canvas) {
-        if (err) {
-          el.innerHTML = '<div style="font-size:9px;color:#ef4444;text-align:center;">Erreur QR</div>';
-          return;
-        }
-        canvas.style.width = '70px';
-        canvas.style.height = '70px';
-        el.appendChild(canvas);
-      });
-    });
-  });
+  document.getElementById('btnPrint')?.addEventListener('click', function(){ window.print(); });
+  document.getElementById('btnClose')?.addEventListener('click', function(){ window.close(); });
   </script>
 </body>
 </html>
