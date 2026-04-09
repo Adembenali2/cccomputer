@@ -126,6 +126,28 @@ foreach ($recQueries as $sqlRec) {
 }
 
 function eur($v): string { return number_format((float)$v, 2, ',', ' ') . ' €'; }
+function badgeStatut(string $statut): string {
+    $styles = [
+        'envoyee'   => 'background:#ede9fe; color:#6d28d9;',
+        'payee'     => 'background:#d1fae5; color:#065f46;',
+        'partielle' => 'background:#fef3c7; color:#92400e;',
+        'en_retard' => 'background:#fee2e2; color:#991b1b;',
+        'annulee'   => 'background:#f3f4f6; color:#6b7280;',
+        'brouillon' => 'background:#e0f2fe; color:#0369a1;',
+    ];
+    $labels = [
+        'envoyee'   => 'Envoyée',
+        'payee'     => 'Payée',
+        'partielle' => 'Partielle',
+        'en_retard' => 'En retard',
+        'annulee'   => 'Annulée',
+        'brouillon' => 'Brouillon',
+    ];
+    $s = $styles[$statut] ?? 'background:#f3f4f6; color:#374151;';
+    $l = $labels[$statut] ?? ucfirst($statut);
+    return "<span style=\"{$s} padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600;\">{$l}</span>";
+}
+$totalFactures = (int)($stats['total_factures'] ?? 0);
 ?>
 <!doctype html>
 <html lang="fr">
@@ -135,34 +157,78 @@ function eur($v): string { return number_format((float)$v, 2, ',', ' ') . ' €'
   <title>Factures - CCComputer</title>
   <link rel="stylesheet" href="/assets/css/dashboard.css">
   <style>
-    .wrap{padding:16px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{background:#fff;padding:12px;border-radius:8px}
-    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.tbl{width:100%;border-collapse:collapse}.tbl th,.tbl td{padding:8px;border-bottom:1px solid #e5e7eb}
-    .badge{padding:2px 8px;border-radius:12px;font-size:12px}.b-brouillon{background:#e5e7eb}.b-envoyee{background:#dbeafe}.b-payee{background:#dcfce7}.b-retard{background:#fee2e2}.b-annulee{text-decoration:line-through}
-    .kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}.panel{background:#fff;border-radius:8px;padding:12px;margin-top:10px}
-    .hidden{display:none}.actions button,.actions a{margin-right:4px}
+    body{background:#f8f9fb}
+    .wrap{padding:20px}
+    .title{margin-bottom:24px}
+    .title h1{font-size:24px;font-weight:700;color:#111827;margin:0 0 4px}
+    .title p{color:#6b7280;font-size:14px;margin:0}
+
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+    .card{background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+    .card .k{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    .card .v{font-size:28px;font-weight:700;color:#111827}
+    .k1{border-left:4px solid #6366f1}.k2{border-left:4px solid #10b981}.k3{border-left:4px solid #f59e0b}.k4{border-left:4px solid #ef4444}
+
+    .toolbar{background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .searchWrap{position:relative;min-width:260px}
+    .searchWrap .ico{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:14px}
+    .f-input,.f-select{border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:14px;color:#374151;background:#fff}
+    .f-input{padding-left:34px;min-width:260px}
+    .f-select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#9ca3af 50%),linear-gradient(135deg,#9ca3af 50%,transparent 50%);background-position:calc(100% - 14px) calc(50% - 2px),calc(100% - 9px) calc(50% - 2px);background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:28px}
+    .btn{border:none;border-radius:8px;padding:8px 16px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+    .btn-primary{background:#6366f1;color:#fff}
+    .btn-soft{background:#f3f4f6;color:#374151}
+
+    .tableWrap{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+    .tbl{width:100%;border-collapse:collapse}
+    .tbl thead th{background:#f9fafb;padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;border-bottom:1px solid #e5e7eb;text-align:left}
+    .tbl tbody tr{border-bottom:1px solid #f3f4f6}
+    .tbl tbody tr:hover{background:#fafafa}
+    .tbl tbody td{padding:12px 16px;font-size:14px;color:#374151;vertical-align:middle}
+    .tbl tbody tr:last-child{border-bottom:none}
+    .badge{padding:2px 8px;border-radius:12px;font-size:12px}
+    .hidden{display:none}
+
+    .actions{position:relative;display:inline-block}
+    .menuBtn{background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;cursor:pointer;color:#6b7280}
+    .action-menu{display:none;position:absolute;right:0;top:100%;background:#fff;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.1);min-width:170px;z-index:100}
+    .action-menu a,.action-menu button{display:block;width:100%;text-align:left;padding:8px 16px;font-size:13px;color:#374151;text-decoration:none;background:none;border:none;cursor:pointer}
+    .action-menu a:hover,.action-menu button:hover{background:#f9fafb}
+    .action-menu .danger{color:#ef4444}
+
+    .kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+    .panel{background:#fff;border-radius:12px;padding:12px;margin-top:10px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+    @media (max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:700px){.cards{grid-template-columns:1fr}}
   </style>
 </head>
 <body data-csrf-token="<?= h($_SESSION['csrf_token'] ?? '') ?>">
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 <main class="wrap">
-  <h1>Factures</h1>
+  <div class="title">
+    <h1>Factures</h1>
+    <p>Gestion complète de la facturation — <?= $totalFactures ?> factures</p>
+  </div>
 
   <div class="cards">
-    <div class="card"><strong>Total factures</strong><div><?= (int)$stats['total_factures'] ?></div></div>
-    <div class="card"><strong>Montant total TTC</strong><div><?= eur($stats['total_ttc'] ?? 0) ?></div></div>
-    <div class="card"><strong>Impayées</strong><div><?= (int)$stats['impayees'] ?></div></div>
-    <div class="card"><strong>Montant impayé</strong><div><?= eur($stats['montant_impaye'] ?? 0) ?></div></div>
+    <div class="card k1"><div class="k">Total factures</div><div class="v"><?= (int)$stats['total_factures'] ?></div></div>
+    <div class="card k2"><div class="k">Montant total TTC</div><div class="v"><?= eur($stats['total_ttc'] ?? 0) ?></div></div>
+    <div class="card k3"><div class="k">Impayées</div><div class="v"><?= (int)$stats['impayees'] ?></div></div>
+    <div class="card k4"><div class="k">Montant impayé</div><div class="v"><?= eur($stats['montant_impaye'] ?? 0) ?></div></div>
   </div>
 
   <div class="toolbar">
-    <input id="fSearch" placeholder="Client ou numéro facture">
-    <select id="fStatut"><option value="">Tous statuts</option><option>brouillon</option><option>envoyee</option><option>payee</option><option>en_retard</option><option>annulee</option></select>
-    <select id="fType"><option value="">Tous types</option><option>Consommation</option><option>Achat</option><option>Service</option></select>
-    <select id="fPeriod"><option value="all">Tout</option><option value="month">Ce mois</option><option value="3m">3 mois</option><option value="6m">6 mois</option><option value="year">Cette année</option></select>
-    <a href="/API/factures_export_csv.php">Exporter CSV</a>
-    <a href="/public/factures_generer.php">+ Nouvelle facture</a>
-    <button id="btnRec">🔄 Récurrence</button>
-    <button id="btnDash">📊 Tableau de bord ▾</button>
+    <div class="searchWrap">
+      <span class="ico">🔍</span>
+      <input id="fSearch" class="f-input" placeholder="Client ou numéro facture">
+    </div>
+    <select id="fStatut" class="f-select"><option value="">Tous statuts</option><option>brouillon</option><option>envoyee</option><option>payee</option><option>en_retard</option><option>annulee</option></select>
+    <select id="fType" class="f-select"><option value="">Tous types</option><option>Consommation</option><option>Achat</option><option>Service</option></select>
+    <select id="fPeriod" class="f-select"><option value="all">Tout</option><option value="month">Ce mois</option><option value="3m">3 mois</option><option value="6m">6 mois</option><option value="year">Cette année</option></select>
+    <a class="btn btn-soft" href="/API/factures_export_csv.php">Exporter CSV</a>
+    <a class="btn btn-primary" href="/public/factures_generer.php">+ Nouvelle facture</a>
+    <button id="btnRec" class="btn btn-soft">🔄 Récurrence</button>
+    <button id="btnDash" class="btn btn-soft">📊 Tableau de bord ▾</button>
   </div>
 
   <section id="dash" class="panel hidden">
@@ -178,27 +244,35 @@ function eur($v): string { return number_format((float)$v, 2, ',', ' ') . ' €'
     <div class="panel"><strong>Factures en retard</strong><table class="tbl"><tr><th>N°</th><th>Client</th><th>Date</th><th>TTC</th><th>Relances</th><th>Jours retard</th></tr><?php foreach($retards as $r): ?><tr><td><?= h($r['numero']) ?></td><td><?= h($r['raison_sociale']) ?></td><td><?= h($r['date_facture']) ?></td><td><?= eur($r['montant_ttc']) ?></td><td>R<?= (int)$r['nb_relances'] ?></td><td style="color:<?= ((int)$r['jours_retard']>=30)?'#7f1d1d':'#c2410c' ?>"><?= (int)$r['jours_retard'] ?> j</td></tr><?php endforeach; ?></table></div>
   </section>
 
+  <div class="tableWrap">
   <table class="tbl" id="factTbl">
     <thead><tr><th>N° Facture</th><th>Client</th><th>Date</th><th>Type</th><th>Montant HT</th><th>TVA</th><th>Montant TTC</th><th>Statut</th><th>Email</th><th>Actions</th></tr></thead>
     <tbody>
-    <?php foreach ($rows as $r): $st=(string)$r['statut']; $badge='b-'.$st; ?>
+    <?php foreach ($rows as $r): $st=(string)$r['statut']; ?>
       <tr data-statut="<?= h($st) ?>" data-type="<?= h((string)$r['type']) ?>" data-date="<?= h((string)$r['date_facture']) ?>" data-search="<?= h(strtolower(($r['numero'] ?? '').' '.($r['raison_sociale'] ?? ''))) ?>">
         <td><?= h((string)$r['numero']) ?> <?php if((int)$r['nb_relances']>0): ?><span class="badge" style="background:<?= ((int)$r['nb_relances']>=3)?'#fee2e2':'#fef3c7' ?>">R<?= (int)$r['nb_relances'] ?></span><?php endif; ?></td>
         <td><?= h((string)$r['raison_sociale']) ?></td><td><?= h((string)$r['date_facture']) ?></td><td><?= h((string)$r['type']) ?></td>
         <td><?= eur($r['montant_ht']) ?></td><td><?= eur($r['tva']) ?></td><td><?= eur($r['montant_ttc']) ?></td>
-        <td><span class="badge <?= h($badge) ?>"><?= h($st) ?></span></td>
+        <td><?= badgeStatut($st) ?></td>
         <td><?= ((int)$r['email_envoye'] === 1) ? '✅' : '—' ?></td>
-        <td class="actions">
-          <a href="/public/view_facture.php?id=<?= (int)$r['id'] ?>">👁</a>
-          <?php if(!in_array($st,['payee','annulee'],true)): ?><button data-relance="<?= (int)$r['id'] ?>">📨</button><button data-mail="<?= (int)$r['id'] ?>">✉</button><?php endif; ?>
-          <a href="/public/paiements.php?facture_id=<?= (int)$r['id'] ?>">💰</a>
-          <?php if($st==='brouillon'): ?><button data-mod="<?= (int)$r['id'] ?>" data-date="<?= h((string)$r['date_facture']) ?>">✏</button><?php endif; ?>
-          <?php if(!in_array($st,['payee','annulee'],true)): ?><button data-ann="<?= (int)$r['id'] ?>">❌</button><?php endif; ?>
+        <td>
+          <div class="actions">
+            <button class="menuBtn" data-menu-btn>⋮</button>
+            <div class="action-menu">
+              <a href="/public/view_facture.php?id=<?= (int)$r['id'] ?>">👁 Voir</a>
+              <?php if($st==='brouillon'): ?><button data-mod="<?= (int)$r['id'] ?>" data-date="<?= h((string)$r['date_facture']) ?>">✏️ Modifier</button><?php endif; ?>
+              <?php if(!in_array($st,['payee','annulee'],true)): ?><button data-mail="<?= (int)$r['id'] ?>">✉️ Envoyer</button><?php endif; ?>
+              <?php if(!in_array($st,['payee','annulee'],true)): ?><button data-relance="<?= (int)$r['id'] ?>">🔔 Relancer</button><?php endif; ?>
+              <a href="/public/paiements.php?facture_id=<?= (int)$r['id'] ?>">💰 Paiement</a>
+              <?php if(!in_array($st,['payee','annulee'],true)): ?><hr style="margin:4px 0;border-color:#f3f4f6"><button class="danger" data-ann="<?= (int)$r['id'] ?>">✕ Annuler</button><?php endif; ?>
+            </div>
+          </div>
         </td>
       </tr>
     <?php endforeach; ?>
     </tbody>
   </table>
+  </div>
 
   <dialog id="dAnn"><form method="dialog"><h3>Annuler facture</h3><input type="hidden" id="annId"><textarea id="annMotif" required placeholder="Motif d'annulation"></textarea><button type="button" id="annOk">Confirmer</button><button>Fermer</button></form></dialog>
   <dialog id="dMod"><form method="dialog"><h3>Modifier facture</h3><input type="hidden" id="modId"><input type="date" id="modDate" required><button type="button" id="modOk">Enregistrer</button><button>Fermer</button></form></dialog>
@@ -220,5 +294,24 @@ document.getElementById('modOk').onclick=async()=>{const id=document.getElementB
 document.querySelectorAll('[data-relance]').forEach(b=>b.onclick=async()=>{await fetch('/API/factures_relance_manuelle.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({id_facture:parseInt(b.dataset.relance,10),numero_relance:1})});location.reload();});
 document.querySelectorAll('[data-mail]').forEach(b=>b.onclick=async()=>{await fetch('/API/factures_envoyer_email.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({facture_id:parseInt(b.dataset.mail,10)})});location.reload();});
 document.querySelectorAll('.cfgRec').forEach(btn=>btn.onclick=async()=>{const type=prompt('Type (Consommation/Achat/Service)','Consommation')||'Consommation';const jour=parseInt(prompt('Jour (1-28)','1')||'1',10);const montant=prompt('Montant fixe HT (Achat/Service)','');await fetch('/API/factures_recurrente_config.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({id_client:parseInt(btn.dataset.client,10),actif:1,type,jour_generation:jour,montant_fixe:montant})});location.reload();});
+
+function toggleMenu(btn) {
+  document.querySelectorAll('.action-menu').forEach(m => {
+    if (m !== btn.nextElementSibling) m.style.display = 'none';
+  });
+  const menu = btn.nextElementSibling;
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+}
+document.querySelectorAll('[data-menu-btn]').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleMenu(btn);
+  });
+});
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.action-menu') && !e.target.closest('[data-menu-btn]')) {
+    document.querySelectorAll('.action-menu').forEach(m => m.style.display = 'none');
+  }
+});
 </script>
 </body></html>
