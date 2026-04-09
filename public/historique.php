@@ -51,6 +51,8 @@ $cliCreatedCol = colExists($pdo, 'clients', 'created_at') ? 'created_at' : (colE
 $savReferenceCol = colExists($pdo, 'sav', 'reference_sav') ? 'reference_sav' : (colExists($pdo, 'sav', 'reference') ? 'reference' : 'id');
 $savDescCol = colExists($pdo, 'sav', 'description_panne') ? 'description_panne' : (colExists($pdo, 'sav', 'description') ? 'description' : 'statut');
 $payFactureCol = colExists($pdo, 'paiements', 'facture_id') ? 'facture_id' : (colExists($pdo, 'paiements', 'id_facture') ? 'id_facture' : 'facture_id');
+$clientVilleExpr = colExists($pdo, 'clients', 'ville') ? "COALESCE(c.ville,'')" : "''";
+$clientPhoneExpr = colExists($pdo, 'clients', 'telephone') ? "COALESCE(c.telephone,'')" : "''";
 
 $events = [];
 
@@ -135,8 +137,10 @@ $clientRows = $pdo->query("
   SELECT
     'Client' as type,
     CONCAT('Nouveau client — ', COALESCE(c.{$clientNameCol},'Client')) as label,
-    CONCAT(IF(c.ville IS NOT NULL, c.ville, ''),
-           IF(c.telephone IS NOT NULL, CONCAT(' | ', c.telephone), '')) as detail,
+    CONCAT(
+      {$clientVilleExpr},
+      IF({$clientPhoneExpr} <> '', CONCAT(' | ', {$clientPhoneExpr}), '')
+    ) as detail,
     'actif' as statut,
     c.{$cliCreatedCol} as created_at,
     c.id as ref_id,
