@@ -1,10 +1,5 @@
 <?php
 /* duplicate block starts - strict_types removed */
-
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
-
 require_once __DIR__ . '/../includes/security_headers.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
