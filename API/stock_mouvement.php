@@ -1,116 +1,68 @@
 <?php
 declare(strict_types=1);
 
-// [Fonctionnalité Stock] API mouvements sur table `stock`
 require_once __DIR__ . '/../includes/api_helpers.php';
-require_once __DIR__ . '/../includes/historique.php';
 
 initApi();
 requireApiAuth();
-
-if (empty($_SESSION['user_id'])) {
-    jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
-}
-
-$pdo = getPdoOrFail();
-
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $stockId = (int)($_GET['stock_id'] ?? 0);
-    if ($stockId <= 0) {
-        jsonResponse(['ok' => false, 'error' => 'stock_id invalide'], 400);
-    }
-    $stmt = $pdo->prepare("
-        SELECT id, stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by, created_at
-        FROM stock_mouvements
-        WHERE stock_id = :stock_id
-        ORDER BY id DESC
-        LIMIT 100
-    ");
-    $stmt->execute([':stock_id' => $stockId]);
-    jsonResponse(['ok' => true, 'items' => $stmt->fetchAll(PDO::FETCH_ASSOC) ?: []]);
-}
+apiRequireEmploi(['Admin', 'Dirigeant', 'Secrétaire']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
-}
-if (!in_array((string)($_SESSION['emploi'] ?? ''), ['Admin', 'Dirigeant', 'Secrétaire'], true)) {
-    jsonResponse(['ok' => false, 'error' => 'Accès refusé'], 403);
+    jsonResponse(['success' => false, 'message' => 'Méthode non autorisée'], 405);
 }
 
-requireCsrfForApi();
-
-$raw = file_get_contents('php://input');
-$data = json_decode($raw ?: '[]', true);
+$raw = file_get_contents('php://input') ?: '{}';
+$data = json_decode($raw, true);
 if (!is_array($data)) {
     $data = $_POST;
 }
 
-$stockId = (int)($data['stock_id'] ?? 0);
-$type = trim((string)($data['type_mouvement'] ?? ''));
-$quantite = (int)($data['quantite'] ?? 0);
-$motif = trim((string)($data['motif'] ?? ''));
-$referenceDoc = trim((string)($data['reference_doc'] ?? ''));
-$allowed = ['entree', 'sortie', 'ajustement', 'livraison'];
+requireCsrfForApi((string)($data['csrf_token'] ?? ''));
 
-if ($stockId <= 0 || $quantite <= 0 || !in_array($type, $allowed, true)) {
-    jsonResponse(['ok' => false, 'error' => 'Paramètres invalides'], 400);
+$stockId = (int)($data['stock_id'] ?? 0);
+$type = trim((string)($data['type'] ?? ''));
+$quantite = (int)($data['quantite'] ?? 0);
+$motif = trim((string)($data['motif'] ?? '')) ?: null;
+$referenceDoc = trim((string)($data['reference_doc'] ?? '')) ?: null;
+
+if ($stockId <= 0 || $quantite <= 0 || !in_array($type, ['entree', 'sortie', 'ajustement', 'livraison'], true)) {
+    jsonResponse(['success' => false, 'message' => 'Paramètres invalides'], 400);
 }
 
+$pdo = getPdoOrFail();
 $pdo->beginTransaction();
 try {
-    $stmt = $pdo->prepare("SELECT id, reference, categorie, unite, contenance, quantite FROM stock WHERE id = :id FOR UPDATE");
-    $stmt->execute([':id' => $stockId]);
-    $item = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$item) {
-        $pdo->rollBack();
-        jsonResponse(['ok' => false, 'error' => 'Article introuvable'], 404);
+    $stmt = $pdo->prepare("SELECT id, quantite FROM stock WHERE id = ? FOR UPDATE");
+    $stmt->execute([$stockId]);
+    $article = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$article) {
+        throw new RuntimeException('Article introuvable');
     }
 
-    $avant = (int)$item['quantite'];
+    $avant = (int)$article['quantite'];
     $apres = $avant;
-    if ($type === 'entree') {
+    if ($type === 'entree' || $type === 'livraison') {
         $apres = $avant + $quantite;
-    } elseif ($type === 'sortie' || $type === 'livraison') {
-        if (($item['unite'] ?? '') === 'carton' && $quantite > $avant) {
-            $pdo->rollBack();
-            jsonResponse(['ok' => false, 'error' => 'Stock insuffisant en cartons'], 409);
+    } elseif ($type === 'sortie') {
+        if ($quantite > $avant) {
+            throw new RuntimeException('Stock insuffisant');
         }
         $apres = $avant - $quantite;
     } elseif ($type === 'ajustement') {
         $apres = $quantite;
     }
 
-    if ($apres < 0) {
-        $pdo->rollBack();
-        jsonResponse(['ok' => false, 'error' => 'Stock insuffisant'], 409);
-    }
+    $stmt = $pdo->prepare("UPDATE stock SET quantite = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+    $stmt->execute([$apres, $stockId]);
 
-    $stmt = $pdo->prepare("
-        INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by)
-        VALUES (:stock_id, :type_mouvement, :quantite, :quantite_avant, :quantite_apres, :motif, :reference_doc, :created_by)
-    ");
-    $stmt->execute([
-        ':stock_id' => $stockId,
-        ':type_mouvement' => $type,
-        ':quantite' => $quantite,
-        ':quantite_avant' => $avant,
-        ':quantite_apres' => $apres,
-        ':motif' => $motif !== '' ? $motif : null,
-        ':reference_doc' => $referenceDoc !== '' ? $referenceDoc : null,
-        ':created_by' => (int)$_SESSION['user_id'],
-    ]);
-
-    $pdo->prepare("UPDATE stock SET quantite = :q, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
-        ->execute([':q' => $apres, ':id' => $stockId]);
+    $stmt = $pdo->prepare("INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by) VALUES (?,?,?,?,?,?,?,?)");
+    $stmt->execute([$stockId, $type, $quantite, $avant, $apres, $motif, $referenceDoc, (int)($_SESSION['user_id'] ?? 0) ?: null]);
 
     $pdo->commit();
-    enregistrerAction($pdo, (int)$_SESSION['user_id'], 'stock_mouvement', "Article #{$stockId} ({$item['reference']}) {$type}: {$avant} -> {$apres}");
-
-    jsonResponse(['ok' => true, 'quantite_avant' => $avant, 'quantite_apres' => $apres], 200);
+    jsonResponse(['success' => true, 'quantite_nouvelle' => $apres, 'message' => 'Mouvement enregistré']);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    throw $e;
+    jsonResponse(['success' => false, 'message' => $e->getMessage()], 400);
 }
-

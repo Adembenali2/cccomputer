@@ -2,123 +2,96 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/api_helpers.php';
-require_once __DIR__ . '/../includes/historique.php';
 
 initApi();
 requireApiAuth();
+apiRequireEmploi(['Admin', 'Dirigeant', 'Secrétaire']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
-}
-if (!in_array((string)($_SESSION['emploi'] ?? ''), ['Admin', 'Dirigeant', 'Secrétaire'], true)) {
-    jsonResponse(['ok' => false, 'error' => 'Accès refusé'], 403);
+    jsonResponse(['success' => false, 'message' => 'Méthode non autorisée'], 405);
 }
 
-$isJson = str_contains((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json');
-$jsonPayload = [];
-if ($isJson) {
-    $raw = file_get_contents('php://input') ?: '{}';
-    $decoded = json_decode($raw, true);
-    $jsonPayload = is_array($decoded) ? $decoded : [];
+$raw = file_get_contents('php://input') ?: '{}';
+$data = json_decode($raw, true);
+if (!is_array($data)) {
+    $data = $_POST;
 }
 
-$csrf = (string)($jsonPayload['csrf_token'] ?? $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
-requireCsrfForApi($csrf);
+requireCsrfForApi((string)($data['csrf_token'] ?? ''));
 
 $pdo = getPdoOrFail();
 
-$fields = [
-    'id','reference','designation','categorie','marque','modele_compatible','quantite','quantite_min','prix_unitaire_ht',
-    'emplacement','actif','unite','contenance','numero_serie','adresse_mac','cpu','ram','stockage',
-    'etat','date_achat','fournisseur','notes','taille_ecran','resolution','couleur_toner','rendement_pages',
-    'grammage','format_papier','compteur_initial'
-];
-$data = [];
-foreach ($fields as $f) {
-    $data[$f] = $jsonPayload[$f] ?? $_POST[$f] ?? null;
-}
-
 $id = (int)($data['id'] ?? 0);
-$reference = trim((string)($data['reference'] ?? ''));
 $designation = trim((string)($data['designation'] ?? ''));
 $categorie = trim((string)($data['categorie'] ?? 'autre'));
+$reference = trim((string)($data['reference'] ?? ''));
 
-$allowedCategories = ['papier','toner_noir','toner_cyan','toner_magenta','toner_jaune','pc','ecran_lcd','imprimante','piece_detachee','consommable','autre'];
-if ($designation === '' || !in_array($categorie, $allowedCategories, true)) {
-    jsonResponse(['ok' => false, 'error' => 'Paramètres invalides'], 400);
+if ($designation === '') {
+    jsonResponse(['success' => false, 'message' => 'Désignation requise'], 400);
 }
+
 if ($reference === '') {
-    $reference = strtoupper(substr($categorie, 0, 3)) . '-' . date('Ymd-His');
+    $prefixes = [
+      'papier'=>'PAP','toner_noir'=>'TON-N','toner_cyan'=>'TON-C',
+      'toner_magenta'=>'TON-M','toner_jaune'=>'TON-J',
+      'pc'=>'PC','ecran_lcd'=>'LCD','imprimante'=>'IMP',
+      'piece_detachee'=>'PDR','consommable'=>'CSO','autre'=>'ART'
+    ];
+    $prefix = $prefixes[$categorie] ?? 'ART';
+    $date = date('Ymd');
+    $stmt = $pdo->prepare("SELECT reference FROM stock WHERE reference LIKE ? ORDER BY reference DESC LIMIT 1");
+    $stmt->execute([$prefix . '-' . $date . '-%']);
+    $last = $stmt->fetchColumn();
+    $num = $last ? (intval(substr((string)$last, -4)) + 1) : 1;
+    $reference = $prefix . '-' . $date . '-' . str_pad((string)$num, 4, '0', STR_PAD_LEFT);
 }
-
-$photoPath = trim((string)($jsonPayload['photo_existing'] ?? $_POST['photo_existing'] ?? ''));
 
 $payload = [
     ':reference' => $reference,
     ':designation' => $designation,
     ':categorie' => $categorie,
-    ':marque' => (($v = trim((string)$data['marque'])) !== '' ? $v : null),
-    ':modele_compatible' => (($v = trim((string)$data['modele_compatible'])) !== '' ? $v : null),
-    ':quantite' => max(0, (int)($data['quantite'] ?? 0)),
-    ':quantite_min' => max(0, (int)($data['quantite_min'] ?? 5)),
-    ':prix_unitaire_ht' => max(0.0, (float)($data['prix_unitaire_ht'] ?? 0)),
-    ':emplacement' => (($v = trim((string)$data['emplacement'])) !== '' ? $v : null),
-    ':actif' => ((int)($data['actif'] ?? 1) === 1 ? 1 : 0),
-    ':unite' => in_array((string)$data['unite'], ['unite','carton','rame'], true) ? (string)$data['unite'] : 'unite',
-    ':contenance' => ($data['contenance'] !== null && $data['contenance'] !== '' ? (int)$data['contenance'] : null),
-    ':numero_serie' => (($v = trim((string)$data['numero_serie'])) !== '' ? $v : null),
-    ':adresse_mac' => (($v = trim((string)$data['adresse_mac'])) !== '' ? $v : null),
-    ':cpu' => (($v = trim((string)$data['cpu'])) !== '' ? $v : null),
-    ':ram' => (($v = trim((string)$data['ram'])) !== '' ? $v : null),
-    ':stockage' => (($v = trim((string)$data['stockage'])) !== '' ? $v : null),
-    ':etat' => in_array((string)$data['etat'], ['neuf','bon','use','hs'], true) ? (string)$data['etat'] : 'neuf',
-    ':date_achat' => (($v = trim((string)$data['date_achat'])) !== '' ? $v : null),
-    ':fournisseur' => (($v = trim((string)$data['fournisseur'])) !== '' ? $v : null),
-    ':notes' => (($v = trim((string)$data['notes'])) !== '' ? $v : null),
-    ':taille_ecran' => (($v = trim((string)$data['taille_ecran'])) !== '' ? $v : null),
-    ':resolution' => (($v = trim((string)$data['resolution'])) !== '' ? $v : null),
-    ':couleur_toner' => (($v = trim((string)$data['couleur_toner'])) !== '' ? $v : null),
-    ':rendement_pages' => ($data['rendement_pages'] !== null && $data['rendement_pages'] !== '' ? (int)$data['rendement_pages'] : null),
-    ':grammage' => (($v = trim((string)$data['grammage'])) !== '' ? $v : null),
-    ':format_papier' => (($v = trim((string)$data['format_papier'])) !== '' ? $v : null),
-    ':compteur_initial' => ($data['compteur_initial'] !== null && $data['compteur_initial'] !== '' ? (int)$data['compteur_initial'] : 0),
-    ':photo' => ($photoPath !== '' ? $photoPath : null),
+    ':marque' => trim((string)($data['marque'] ?? '')) ?: null,
+    ':quantite' => (int)($data['quantite'] ?? 0),
+    ':quantite_min' => (int)($data['quantite_min'] ?? 5),
+    ':prix_unitaire_ht' => (float)($data['prix_unitaire_ht'] ?? 0),
+    ':unite' => trim((string)($data['unite'] ?? 'unite')) ?: 'unite',
+    ':contenance' => ($data['contenance'] ?? '') !== '' ? (int)$data['contenance'] : null,
+    ':etat' => trim((string)($data['etat'] ?? 'neuf')) ?: 'neuf',
+    ':emplacement' => trim((string)($data['emplacement'] ?? '')) ?: null,
+    ':notes' => trim((string)($data['notes'] ?? '')) ?: null,
+    ':numero_serie' => trim((string)($data['numero_serie'] ?? '')) ?: null,
+    ':adresse_mac' => trim((string)($data['adresse_mac'] ?? '')) ?: null,
+    ':cpu' => trim((string)($data['cpu'] ?? '')) ?: null,
+    ':ram' => trim((string)($data['ram'] ?? '')) ?: null,
+    ':stockage' => trim((string)($data['stockage'] ?? '')) ?: null,
+    ':modele_compatible' => trim((string)($data['modele_compatible'] ?? '')) ?: null,
+    ':couleur_toner' => trim((string)($data['couleur_toner'] ?? '')) ?: null,
+    ':rendement_pages' => ($data['rendement_pages'] ?? '') !== '' ? (int)$data['rendement_pages'] : null,
+    ':taille_ecran' => trim((string)($data['taille_ecran'] ?? '')) ?: null,
+    ':resolution' => trim((string)($data['resolution'] ?? '')) ?: null,
+    ':grammage' => trim((string)($data['grammage'] ?? '')) ?: null,
 ];
 
-try {
-    if ($id > 0) {
-        $payload[':id'] = $id;
-        $sql = "UPDATE stock SET
-            reference=:reference, designation=:designation, categorie=:categorie, marque=:marque, modele_compatible=:modele_compatible,
-            quantite=:quantite, quantite_min=:quantite_min, prix_unitaire_ht=:prix_unitaire_ht, emplacement=:emplacement, actif=:actif,
-            unite=:unite, contenance=:contenance, numero_serie=:numero_serie, adresse_mac=:adresse_mac, cpu=:cpu, ram=:ram, stockage=:stockage,
-            etat=:etat, date_achat=:date_achat, fournisseur=:fournisseur, notes=:notes,
-            taille_ecran=:taille_ecran, resolution=:resolution, couleur_toner=:couleur_toner, rendement_pages=:rendement_pages,
-            grammage=:grammage, format_papier=:format_papier, compteur_initial=:compteur_initial,
-            photo=:photo, updated_at=CURRENT_TIMESTAMP
-            WHERE id=:id";
-        $pdo->prepare($sql)->execute($payload);
-        enregistrerAction($pdo, currentUserId(), 'stock_modifie', "Stock #{$id} modifié");
-        jsonResponse(['ok' => true, 'id' => $id, 'updated' => true]);
-    }
-
-    $sql = "INSERT INTO stock (
-        reference,designation,categorie,marque,modele_compatible,quantite,quantite_min,prix_unitaire_ht,emplacement,actif,
-        unite,contenance,numero_serie,adresse_mac,cpu,ram,stockage,etat,date_achat,fournisseur,notes,
-        taille_ecran,resolution,couleur_toner,rendement_pages,grammage,format_papier,compteur_initial,photo
-    ) VALUES (
-        :reference,:designation,:categorie,:marque,:modele_compatible,:quantite,:quantite_min,:prix_unitaire_ht,:emplacement,:actif,
-        :unite,:contenance,:numero_serie,:adresse_mac,:cpu,:ram,:stockage,:etat,:date_achat,:fournisseur,:notes,
-        :taille_ecran,:resolution,:couleur_toner,:rendement_pages,:grammage,:format_papier,:compteur_initial,:photo
-    )";
-    $pdo->prepare($sql)->execute($payload);
-    $newId = (int)$pdo->lastInsertId();
-    enregistrerAction($pdo, currentUserId(), 'stock_cree', "Stock #{$newId} créé");
-    jsonResponse(['ok' => true, 'id' => $newId, 'created' => true]);
-} catch (PDOException $e) {
-    if ($e->getCode() === '23000') {
-        jsonResponse(['ok' => false, 'error' => 'Référence déjà existante'], 409);
-    }
-    throw $e;
+if ($id > 0) {
+    $sql = "UPDATE stock SET
+        reference=:reference, designation=:designation, categorie=:categorie, marque=:marque,
+        quantite=:quantite, quantite_min=:quantite_min, prix_unitaire_ht=:prix_unitaire_ht,
+        unite=:unite, contenance=:contenance, etat=:etat, emplacement=:emplacement, notes=:notes,
+        numero_serie=:numero_serie, adresse_mac=:adresse_mac, cpu=:cpu, ram=:ram, stockage=:stockage,
+        modele_compatible=:modele_compatible, couleur_toner=:couleur_toner, rendement_pages=:rendement_pages,
+        taille_ecran=:taille_ecran, resolution=:resolution, grammage=:grammage,
+        updated_at=CURRENT_TIMESTAMP
+        WHERE id=:id";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($payload + [':id' => $id]);
+    jsonResponse(['success' => true, 'message' => 'Article modifié', 'id' => $id]);
 }
 
+$sql = "INSERT INTO stock
+    (reference,designation,categorie,marque,quantite,quantite_min,prix_unitaire_ht,unite,contenance,etat,emplacement,notes,numero_serie,adresse_mac,cpu,ram,stockage,modele_compatible,couleur_toner,rendement_pages,taille_ecran,resolution,grammage)
+    VALUES
+    (:reference,:designation,:categorie,:marque,:quantite,:quantite_min,:prix_unitaire_ht,:unite,:contenance,:etat,:emplacement,:notes,:numero_serie,:adresse_mac,:cpu,:ram,:stockage,:modele_compatible,:couleur_toner,:rendement_pages,:taille_ecran,:resolution,:grammage)";
+$stmt = $pdo->prepare($sql);
+$stmt->execute($payload);
+$newId = (int)$pdo->lastInsertId();
+jsonResponse(['success' => true, 'message' => 'Article créé', 'id' => $newId]);

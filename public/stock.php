@@ -1,6 +1,221 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/security_headers.php';
+require_once __DIR__ . '/../includes/helpers.php';
+
+$pdo = getPdo();
+$articles = $pdo->query("SELECT * FROM stock WHERE actif = 1 ORDER BY categorie, designation")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$totalArticles = count($articles);
+$valeurStock = array_sum(array_map(static fn($a) => ((float)$a['quantite'] * (float)$a['prix_unitaire_ht']), $articles));
+$enAlerte = count(array_filter($articles, static fn($a) => ((int)$a['quantite'] > 0 && (int)$a['quantite'] <= (int)$a['quantite_min'])));
+$enRupture = count(array_filter($articles, static fn($a) => (int)$a['quantite'] === 0));
+$csrfToken = $_SESSION['csrf_token'] ?? '';
+$canWrite = in_array((string)($_SESSION['emploi'] ?? ''), ['Admin', 'Dirigeant', 'Secrétaire'], true);
+
+function h2(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
+?>
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestion du Stock</title>
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <style>
+    body{background:#f8f9fb}
+    .wrap{padding:20px}
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+    .card{background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+    .toolbar{background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+    .btn{border:none;border-radius:8px;padding:8px 16px;font-weight:600;cursor:pointer}
+    .btn-primary{background:#6366f1;color:#fff}
+    .btn-soft{background:#f3f4f6;color:#374151}
+    .input,.select{border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px}
+    .tableWrap{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+    table{width:100%;border-collapse:collapse}
+    thead th{background:#f9fafb;font-size:11px;font-weight:600;text-transform:uppercase;color:#6b7280;padding:12px 16px;text-align:left}
+    tbody td{padding:12px 16px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+    tbody tr:hover{background:#fafafa}
+    .badge{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;display:inline-block}
+    .menu{position:relative;display:inline-block}
+    .menu-items{display:none;position:absolute;right:0;top:100%;background:#fff;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.1);min-width:170px;z-index:20}
+    .menu-items a,.menu-items button{display:block;width:100%;padding:8px 16px;border:none;background:none;text-align:left;color:#374151;cursor:pointer}
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:90}
+    .modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;width:min(900px,95vw);max-height:90vh;overflow:auto;display:none;z-index:91;padding:16px}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(140px,1fr));gap:10px}
+    .field{display:flex;flex-direction:column;gap:4px}
+    .scan-box{position:relative;width:400px;height:300px;background:#000;margin:auto;overflow:hidden;border-radius:8px}
+    .scan-line{position:absolute;left:0;right:0;height:2px;background:#22c55e;animation:scan 2s linear infinite}
+    .corners:before,.corners:after{content:"";position:absolute;width:60px;height:60px;border:3px solid #22c55e}
+    .corners:before{top:10px;left:10px;border-right:none;border-bottom:none}
+    .corners:after{right:10px;bottom:10px;border-left:none;border-top:none}
+    @keyframes scan{0%{top:0}100%{top:298px}}
+    @media(max-width:1000px){.cards{grid-template-columns:repeat(2,1fr)} .grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body data-csrf-token="<?= h2((string)$csrfToken) ?>" data-can-write="<?= $canWrite ? '1' : '0' ?>">
+<?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+<main class="wrap">
+  <div style="margin-bottom:24px;">
+    <h1 style="font-size:24px;font-weight:700;color:#111827;margin:0 0 4px;">Gestion du Stock</h1>
+    <p style="color:#6b7280;font-size:14px;margin:0;">Inventaire complet — <?= $totalArticles ?> articles</p>
+  </div>
+
+  <div class="cards">
+    <div class="card" style="border-left:4px solid #6366f1;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Total articles</div><div style="font-size:28px;font-weight:700;color:#111827"><?= $totalArticles ?></div></div>
+    <div class="card" style="border-left:4px solid #10b981;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Valeur stock HT</div><div style="font-size:28px;font-weight:700;color:#111827"><?= number_format($valeurStock, 2, ',', ' ') ?> €</div></div>
+    <div class="card" style="border-left:4px solid #f59e0b;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">En alerte</div><div style="font-size:28px;font-weight:700;color:#111827"><?= $enAlerte ?></div></div>
+    <div class="card" style="border-left:4px solid #ef4444;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">En rupture</div><div style="font-size:28px;font-weight:700;color:#111827"><?= $enRupture ?></div></div>
+  </div>
+
+  <div class="toolbar">
+    <button id="btnAdd" class="btn btn-primary" type="button">+ Ajouter article</button>
+    <input id="search" class="input" placeholder="Recherche (réf, désignation)">
+    <select id="filtreCategorie" class="select"><option value="">Toutes catégories</option></select>
+    <select id="filtreEtat" class="select"><option value="">Tous états</option><option value="neuf">Neuf</option><option value="bon">Bon</option><option value="use">Usé</option><option value="hs">HS</option></select>
+    <button id="btnEtiquettes" class="btn btn-soft" type="button">Imprimer étiquettes</button>
+    <button id="btnScan" class="btn btn-soft" type="button">Scanner QR</button>
+  </div>
+
+  <div class="tableWrap">
+    <table id="stockTable">
+      <thead><tr><th>Référence</th><th>Désignation</th><th>Catégorie</th><th>Détails</th><th>Quantité</th><th>État</th><th>Actions</th></tr></thead>
+      <tbody id="tbody">
+      <?php if ($totalArticles === 0): ?>
+        <tr><td colspan="7" style="text-align:center;padding:40px;color:#9ca3af;">Aucun article en stock — <button type="button" onclick="ouvrirModal()">Ajouter le premier article</button></td></tr>
+      <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<div id="modalBg" class="modal-bg"></div>
+
+<div id="modalForm" class="modal">
+  <h3>Ajouter / Modifier article</h3>
+  <input type="hidden" id="id">
+  <div class="grid">
+    <div class="field"><label>Désignation*</label><input id="designation" class="input"></div>
+    <div class="field"><label>Référence</label><input id="reference" class="input" placeholder="Auto-générée si vide"></div>
+    <div class="field"><label>Catégorie</label><select id="categorie" class="select"><option value="papier">papier</option><option value="toner_noir">toner_noir</option><option value="toner_cyan">toner_cyan</option><option value="toner_magenta">toner_magenta</option><option value="toner_jaune">toner_jaune</option><option value="pc">pc</option><option value="ecran_lcd">ecran_lcd</option><option value="imprimante">imprimante</option><option value="piece_detachee">piece_detachee</option><option value="consommable">consommable</option><option value="autre">autre</option></select></div>
+    <div class="field"><label>Marque</label><input id="marque" class="input"></div>
+    <div class="field"><label>Quantité initiale</label><input id="quantite" type="number" min="0" class="input" value="0"></div>
+    <div class="field"><label>Seuil minimum</label><input id="quantite_min" type="number" min="0" class="input" value="5"></div>
+    <div class="field"><label>Prix unitaire HT</label><input id="prix_unitaire_ht" type="number" step="0.01" min="0" class="input" value="0"></div>
+    <div class="field"><label>État</label><select id="etat" class="select"><option value="neuf">Neuf</option><option value="bon">Bon</option><option value="use">Usé</option><option value="hs">HS</option></select></div>
+    <div class="field"><label>Emplacement</label><input id="emplacement" class="input"></div>
+    <div class="field" style="grid-column:span 3"><label>Notes</label><textarea id="notes" class="input"></textarea></div>
+
+    <div id="row_numero_serie" class="field champ-conditionnel" style="display:none"><label>Numéro de série</label><input id="numero_serie" class="input"></div>
+    <div id="row_adresse_mac" class="field champ-conditionnel" style="display:none"><label>MAC</label><input id="adresse_mac" class="input"></div>
+    <div id="row_cpu" class="field champ-conditionnel" style="display:none"><label>CPU</label><input id="cpu" class="input"></div>
+    <div id="row_ram" class="field champ-conditionnel" style="display:none"><label>RAM</label><input id="ram" class="input"></div>
+    <div id="row_stockage" class="field champ-conditionnel" style="display:none"><label>Stockage</label><input id="stockage" class="input"></div>
+    <div id="row_modele_compatible" class="field champ-conditionnel" style="display:none"><label>Modèle compatible</label><input id="modele_compatible" class="input"></div>
+    <div id="row_couleur_toner" class="field champ-conditionnel" style="display:none"><label>Couleur</label><input id="couleur_toner" readonly class="input"></div>
+    <div id="row_rendement_pages" class="field champ-conditionnel" style="display:none"><label>Rendement pages</label><input id="rendement_pages" type="number" min="0" class="input"></div>
+    <div id="row_taille_ecran" class="field champ-conditionnel" style="display:none"><label>Taille écran</label><input id="taille_ecran" class="input"></div>
+    <div id="row_resolution" class="field champ-conditionnel" style="display:none"><label>Résolution</label><input id="resolution" class="input"></div>
+    <div id="row_unite" class="field champ-conditionnel" style="display:none"><label>Unité</label><select id="unite" class="select"><option value="unite">unite</option><option value="carton">carton</option><option value="rame">rame</option></select></div>
+    <div id="row_contenance" class="field champ-conditionnel" style="display:none"><label>Contenance</label><input id="contenance" type="number" min="0" class="input"></div>
+    <div id="row_grammage" class="field champ-conditionnel" style="display:none"><label>Grammage</label><input id="grammage" class="input"></div>
+  </div>
+  <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+    <button type="button" class="btn btn-soft" onclick="fermerModal()">Fermer</button>
+    <button type="button" id="saveBtn" class="btn btn-primary">Enregistrer</button>
+  </div>
+</div>
+
+<div id="modalScan" class="modal">
+  <h3>Scanner QR</h3>
+  <div class="scan-box">
+    <video id="qrVideo" width="400" height="300" style="width:100%;height:100%;object-fit:cover"></video>
+    <canvas id="qrCanvas" style="display:none"></canvas>
+    <div class="corners"></div>
+    <div class="scan-line"></div>
+  </div>
+  <div style="margin-top:10px;display:flex;justify-content:flex-end;gap:8px">
+    <button type="button" class="btn btn-soft" id="manualSearch">Saisir manuellement</button>
+    <button type="button" class="btn btn-soft" onclick="fermerModal()">Fermer</button>
+  </div>
+</div>
+
+<div id="modalHist" class="modal">
+  <h3>Historique mouvements</h3>
+  <table><thead><tr><th>Date</th><th>Type</th><th>Quantité</th><th>Avant</th><th>Après</th><th>Motif</th></tr></thead><tbody id="histBody"></tbody></table>
+  <div style="margin-top:10px;text-align:right"><button type="button" class="btn btn-soft" onclick="fermerModal()">Fermer</button></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script <?= csp_nonce() ?>>
+const csrfToken = document.body.dataset.csrfToken || '';
+const canWrite = document.body.dataset.canWrite === '1';
+let items = <?= json_encode($articles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || [];
+const catColor = {'papier':'background:#dbeafe;color:#1d4ed8','toner_noir':'background:#1f2937;color:#fff','toner_cyan':'background:#cffafe;color:#0e7490','toner_magenta':'background:#fce7f3;color:#9d174d','toner_jaune':'background:#fef9c3;color:#854d0e','pc':'background:#ede9fe;color:#5b21b6','ecran_lcd':'background:#f3e8ff;color:#7e22ce','imprimante':'background:#dcfce7;color:#166534','piece_detachee':'background:#ffedd5;color:#9a3412','consommable':'background:#e0f2fe;color:#0369a1','autre':'background:#f3f4f6;color:#374151'};
+const stateColor = {'neuf':'background:#d1fae5;color:#065f46','bon':'background:#dbeafe;color:#1e40af','use':'background:#fef3c7;color:#92400e','hs':'background:#fee2e2;color:#991b1b'};
+
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function qtyCell(a){const q=Number(a.quantite||0),m=Math.max(1,Number(a.quantite_min||1));const pct=Math.min(100,Math.round((q/m)*100));const c=q===0?'#ef4444':(q<=m?'#f59e0b':'#10b981');return `<div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:600;color:${c}">${q}</span><div style="width:60px;height:6px;background:#e5e7eb;border-radius:3px;"><div style="width:${pct}%;height:100%;background:${c};border-radius:3px;"></div></div></div>`;}
+function details(a){if(a.categorie==='papier'){const q=Number(a.quantite||0),c=Number(a.contenance||0);return (a.unite==='carton'&&c>0)?`${q} cartons (${q*c} feuilles)`:(a.emplacement||'—');}if((a.categorie||'').startsWith('toner_')){const dot={'toner_noir':'#111827','toner_cyan':'#06b6d4','toner_magenta':'#db2777','toner_jaune':'#eab308'}[a.categorie]||'#6b7280';return `<span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:${dot};margin-right:6px"></span>${esc(a.modele_compatible||'—')}`;}if(a.categorie==='pc')return esc([a.cpu,a.ram].filter(Boolean).join(' | ')||'—');if(a.categorie==='imprimante'||a.categorie==='ecran_lcd'){const sn=String(a.numero_serie||'');return esc(sn?sn.slice(0,12)+(sn.length>12?'...':''):'—');}return esc(a.emplacement||'—');}
+function render(){const s=document.getElementById('search').value.toLowerCase().trim();const c=document.getElementById('filtreCategorie').value;const e=document.getElementById('filtreEtat').value;const rows=items.filter(a=>{if(c&&a.categorie!==c)return false;if(e&&a.etat!==e)return false;if(s){const hay=`${a.reference||''} ${a.designation||''}`.toLowerCase();if(!hay.includes(s))return false;}return true;});const tbody=document.getElementById('tbody');tbody.innerHTML=rows.map(a=>`<tr id="row-${a.id}"><td>${esc(a.reference||'')}</td><td>${esc(a.designation||'')}</td><td><span class="badge" style="${catColor[a.categorie]||catColor.autre}">${esc(a.categorie||'')}</span></td><td>${details(a)}</td><td>${qtyCell(a)}</td><td><span class="badge" style="${stateColor[a.etat]||stateColor.neuf}">${esc((a.etat||'neuf').toUpperCase())}</span></td><td><div class="menu"><button type="button" class="btn btn-soft" data-menu>⋮</button><div class="menu-items"><button data-edit="${a.id}">Modifier</button><button data-in="${a.id}">Entrée stock</button><button data-out="${a.id}">Sortie stock</button><button data-label="${a.id}">Étiquette</button><button data-hist="${a.id}">Historique</button><button data-del="${a.id}" style="color:#ef4444">Supprimer</button></div></div></td></tr>`).join('') || `<tr><td colspan="7" style="text-align:center;padding:40px;color:#9ca3af;">Aucun article en stock — <button type="button" onclick="ouvrirModal()">Ajouter le premier article</button></td></tr>`;
+  document.querySelectorAll('[data-menu]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();document.querySelectorAll('.menu-items').forEach(m=>m.style.display='none');b.nextElementSibling.style.display='block';});
+  bindActions();
+}
+function bindActions(){
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEdit(Number(b.dataset.edit)));
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>removeItem(Number(b.dataset.del)));
+  document.querySelectorAll('[data-in]').forEach(b=>b.onclick=()=>moveStock(Number(b.dataset.in),'entree'));
+  document.querySelectorAll('[data-out]').forEach(b=>b.onclick=()=>moveStock(Number(b.dataset.out),'sortie'));
+  document.querySelectorAll('[data-hist]').forEach(b=>b.onclick=()=>showHistorique(Number(b.dataset.hist)));
+  document.querySelectorAll('[data-label]').forEach(b=>b.onclick=()=>window.open('/public/stock_etiquettes.php?stock_id='+Number(b.dataset.label),'_blank'));
+}
+document.addEventListener('click',()=>document.querySelectorAll('.menu-items').forEach(m=>m.style.display='none'));
+
+function ouvrirModal(){if(!canWrite)return;document.getElementById('modalBg').style.display='block';document.getElementById('modalForm').style.display='block';}
+function fermerModal(){document.getElementById('modalBg').style.display='none';document.querySelectorAll('.modal').forEach(m=>m.style.display='none');stopScan();}
+window.ouvrirModal = ouvrirModal; window.fermerModal = fermerModal;
+
+function openEdit(id){if(!canWrite)return;const a=items.find(x=>Number(x.id)===id);if(!a)return;ouvrirModal();['id','designation','reference','categorie','marque','quantite','quantite_min','prix_unitaire_ht','etat','emplacement','notes','numero_serie','adresse_mac','cpu','ram','stockage','modele_compatible','couleur_toner','rendement_pages','taille_ecran','resolution','unite','contenance','grammage'].forEach(k=>{const el=document.getElementById(k);if(el)el.value=a[k]??'';});onCategorieChange();}
+
+const champsCat = {'pc':['numero_serie','adresse_mac','cpu','ram','stockage'],'imprimante':['numero_serie','modele_compatible'],'ecran_lcd':['numero_serie','taille_ecran','resolution'],'toner_noir':['couleur_toner','modele_compatible','rendement_pages'],'toner_cyan':['couleur_toner','modele_compatible','rendement_pages'],'toner_magenta':['couleur_toner','modele_compatible','rendement_pages'],'toner_jaune':['couleur_toner','modele_compatible','rendement_pages'],'papier':['unite','contenance','grammage']};
+const couleursAuto = {'toner_noir':'Noir','toner_cyan':'Cyan','toner_magenta':'Magenta','toner_jaune':'Jaune'};
+function onCategorieChange(){const c=document.getElementById('categorie').value;document.querySelectorAll('.champ-conditionnel').forEach(el=>{el.style.display='none';const inp=el.querySelector('input,select,textarea');if(inp)inp.value='';});(champsCat[c]||[]).forEach(k=>{const row=document.getElementById('row_'+k);if(row)row.style.display='block';});if(couleursAuto[c])document.getElementById('couleur_toner').value=couleursAuto[c];if(c==='papier'){document.getElementById('unite').value='carton';document.getElementById('contenance').value=2500;}}
+document.getElementById('categorie').addEventListener('change', onCategorieChange);
+
+async function saveItem(){if(!canWrite)return;const payload={};['id','designation','reference','categorie','marque','quantite','quantite_min','prix_unitaire_ht','unite','contenance','etat','emplacement','notes','numero_serie','adresse_mac','cpu','ram','stockage','modele_compatible','couleur_toner','rendement_pages','taille_ecran','resolution','grammage'].forEach(k=>payload[k]=document.getElementById(k)?.value??'');payload.csrf_token=csrfToken;const r=await fetch('/API/stock_save.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!d.success){alert(d.message||'Erreur');return;}location.reload();}
+document.getElementById('saveBtn').addEventListener('click', saveItem);
+
+async function removeItem(stock_id){if(!canWrite||!confirm('Supprimer cet article ?'))return;const r=await fetch('/API/stock_delete.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({stock_id,csrf_token:csrfToken})});const d=await r.json();if(!d.success){alert(d.message||'Erreur');return;}location.reload();}
+async function moveStock(stock_id,type){if(!canWrite)return;const quantite=parseInt(prompt('Quantité', '1')||'0',10);if(!quantite||quantite<=0)return;const motif=prompt('Motif','')||'';const reference_doc=prompt('Référence document','')||'';const r=await fetch('/API/stock_mouvement.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({stock_id,type,quantite,motif,reference_doc,csrf_token:csrfToken})});const d=await r.json();if(!d.success){alert(d.message||'Erreur');return;}location.reload();}
+async function showHistorique(stock_id){const r=await fetch('/API/stock_historique.php?stock_id='+stock_id,{credentials:'include'});const d=await r.json();const rows=Array.isArray(d)?d:(d.items||[]);document.getElementById('histBody').innerHTML=rows.map(x=>`<tr><td>${esc(x.created_at||'')}</td><td>${esc(x.type_mouvement||'')}</td><td>${esc(x.quantite||'')}</td><td>${esc(x.quantite_avant||'')}</td><td>${esc(x.quantite_apres||'')}</td><td>${esc(x.motif||'')}</td></tr>`).join('')||'<tr><td colspan="6">Aucun mouvement</td></tr>';document.getElementById('modalBg').style.display='block';document.getElementById('modalHist').style.display='block';}
+
+let stream=null,scanning=false;
+async function startScan(){document.getElementById('modalBg').style.display='block';document.getElementById('modalScan').style.display='block';stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:400,height:300}});const video=document.getElementById('qrVideo');video.srcObject=stream;await video.play();scanning=true;requestAnimationFrame(scanFrame);}
+function stopScan(){scanning=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}const v=document.getElementById('qrVideo');if(v)v.srcObject=null;}
+function scanFrame(){if(!scanning||typeof jsQR==='undefined')return;const video=document.getElementById('qrVideo'),canvas=document.getElementById('qrCanvas'),ctx=canvas.getContext('2d');if(video.readyState===video.HAVE_ENOUGH_DATA){canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.drawImage(video,0,0,canvas.width,canvas.height);const img=ctx.getImageData(0,0,canvas.width,canvas.height);const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});if(code){document.getElementById('search').value=code.data;render();const tr=[...document.querySelectorAll('#tbody tr')].find(t=>(t.children[0]?.textContent||'').trim()===code.data);if(tr){tr.style.background='#dcfce7';setTimeout(()=>tr.style.background='',2000);}fermerModal();return;}}requestAnimationFrame(scanFrame);}
+
+document.getElementById('btnAdd').addEventListener('click', ()=>ouvrirModal());
+document.getElementById('btnScan').addEventListener('click', ()=>startScan());
+document.getElementById('manualSearch').addEventListener('click', ()=>{fermerModal();document.getElementById('search').focus();});
+document.getElementById('btnEtiquettes').addEventListener('click', ()=>window.open('/public/stock_etiquettes.php?all=1','_blank'));
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('filtreCategorie').addEventListener('change', render);
+document.getElementById('filtreEtat').addEventListener('change', render);
+document.getElementById('modalBg').addEventListener('click', fermerModal);
+
+const cats = [...new Set(items.map(x=>x.categorie).filter(Boolean))];
+document.getElementById('filtreCategorie').innerHTML += cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+render();
+</script>
+</body>
+</html>
+<?php
+declare(strict_types=1);
+
 require_once __DIR__ . '/../includes/security_headers.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/auth_role.php';
