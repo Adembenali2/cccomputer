@@ -32,6 +32,9 @@ $factClientCol = colExistsEC($pdo, 'factures', 'client_id') ? 'client_id' : 'id_
 $factDateCol = colExistsEC($pdo, 'factures', 'date_facture') ? 'date_facture' : (colExistsEC($pdo, 'factures', 'created_at') ? 'created_at' : 'NOW()');
 $factNumCol = colExistsEC($pdo, 'factures', 'numero_facture') ? 'numero_facture' : (colExistsEC($pdo, 'factures', 'reference') ? 'reference' : 'id');
 $paiFactureCol = colExistsEC($pdo, 'paiements', 'facture_id') ? 'facture_id' : 'id_facture';
+$factDueExpr = colExistsEC($pdo, 'factures', 'date_echeance')
+    ? 'date_echeance'
+    : "DATE_ADD({$factDateCol}, INTERVAL 30 DAY)";
 
 $caMoisStmt = $pdo->prepare("
   SELECT COALESCE(SUM(montant_ttc),0) FROM factures
@@ -56,7 +59,7 @@ $facturesImpayees = $pdo->query("
 $facturesEnRetard = (int)$pdo->query("
   SELECT COUNT(*) FROM factures
   WHERE statut IN ('envoyee','partielle','en_retard')
-    AND date_echeance < CURDATE()
+    AND {$factDueExpr} < CURDATE()
 ")->fetchColumn();
 
 $clientsWhere = $clientStatutCol ? "WHERE {$clientStatutCol}='actif'" : '';
@@ -78,11 +81,11 @@ $pctCA = $objectifCA > 0 ? min(100, (int)round(($caMois / $objectifCA) * 100)) :
 $aRelancer = $pdo->query("
   SELECT f.*, c.{$clientNameCol} as client_nom, c.email as client_email,
          (f.montant_ttc - f.montant_paye) as solde,
-         DATEDIFF(CURDATE(), f.date_echeance) as jours_retard
+         DATEDIFF(CURDATE(), {$factDueExpr}) as jours_retard
   FROM factures f
   LEFT JOIN clients c ON f.{$factClientCol} = c.id
   WHERE f.statut IN ('envoyee','partielle','en_retard')
-    AND f.date_echeance < CURDATE()
+    AND {$factDueExpr} < CURDATE()
   ORDER BY jours_retard DESC
   LIMIT 10
 ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
