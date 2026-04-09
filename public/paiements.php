@@ -39,6 +39,38 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         <!-- Message Container -->
         <div id="messageContainer" class="message-container"></div>
 
+        <!-- [Fonctionnalité A] Liste paiements avec filtres -->
+        <div style="margin:1rem 0;padding:1rem;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:var(--radius-md);">
+            <h2 style="margin:0 0 .75rem 0;font-size:1.05rem;">Paiements enregistrés</h2>
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:.5rem;margin-bottom:.75rem;">
+                <input type="date" id="plDate" />
+                <select id="plClient"><option value="">Tous les clients</option></select>
+                <select id="plMode">
+                    <option value="">Tous modes</option>
+                    <option value="virement">Virement</option>
+                    <option value="cheque">Chèque</option>
+                    <option value="especes">Espèces</option>
+                    <option value="prelevement">Prélèvement</option>
+                    <option value="carte">Carte</option>
+                </select>
+                <select id="plStatutFacture">
+                    <option value="">Tous statuts facture</option>
+                    <option value="brouillon">Brouillon</option>
+                    <option value="envoyee">Envoyée</option>
+                    <option value="en_retard">En retard</option>
+                    <option value="partielle">Partielle</option>
+                    <option value="payee">Payée</option>
+                    <option value="annulee">Annulée</option>
+                </select>
+            </div>
+            <div style="overflow:auto;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead><tr style="border-bottom:1px solid var(--border-color);"><th style="text-align:left;padding:.5rem;">Date</th><th style="text-align:left;padding:.5rem;">Client</th><th style="text-align:left;padding:.5rem;">Facture</th><th style="text-align:right;padding:.5rem;">Montant</th><th style="text-align:left;padding:.5rem;">Mode</th><th style="text-align:left;padding:.5rem;">Statut facture</th></tr></thead>
+                    <tbody id="plBody"><tr><td colspan="6" style="padding:.75rem;">Chargement...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Tableau de bord financier -->
         <div class="finance-dashboard" id="financeDashboard">
             <div class="finance-dashboard-row finance-row-ca">
@@ -1260,13 +1292,13 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
                         <label for="payerMode">Mode de paiement <span style="color: #ef4444;">*</span></label>
                         <select id="payerMode" name="mode_paiement" required>
                             <option value="">Sélectionner un mode de paiement</option>
-                            <option value="cb">Carte bancaire</option>
+                            <option value="carte">Carte</option>
                             <option value="cheque">Chèque</option>
                             <option value="virement">Virement</option>
-                            <option value="especes">Espèce</option>
-                            <option value="autre">Autre paiement</option>
+                            <option value="especes">Espèces</option>
+                            <option value="prelevement">Prélèvement</option>
                         </select>
-                        <div class="input-hint">Espèce et Carte bancaire : statut "Payé" automatique. Autres modes : statut "En cours"</div>
+                        <div class="input-hint">Le paiement met à jour automatiquement le montant payé et le statut de la facture.</div>
                     </div>
 
                     <div class="modal-form-group">
@@ -1294,6 +1326,40 @@ ensureCsrfToken(); // Génère le token CSRF si manquant (pour le formulaire pai
         </div>
     </div>
 
+    <script <?= csp_nonce() ?>>
+      (function(){
+        const plDate=document.getElementById('plDate');
+        const plClient=document.getElementById('plClient');
+        const plMode=document.getElementById('plMode');
+        const plStatut=document.getElementById('plStatutFacture');
+        const plBody=document.getElementById('plBody');
+        if(!plBody) return;
+        async function loadClients(){
+          try{
+            const r=await fetch('/API/clients_search.php?q=',{credentials:'include'});
+            const d=await r.json();
+            if(d && (d.ok||d.success) && Array.isArray(d.clients||d.items||d.results)){
+              const arr=d.clients||d.items||d.results;
+              arr.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.raison_sociale||c.nom||('Client #'+c.id);plClient.appendChild(o);});
+            }
+          }catch(e){}
+        }
+        async function loadPaiements(){
+          const q=new URLSearchParams();
+          if(plDate?.value) q.set('date',plDate.value);
+          if(plClient?.value) q.set('client_id',plClient.value);
+          if(plMode?.value) q.set('mode_paiement',plMode.value);
+          if(plStatut?.value) q.set('statut_facture',plStatut.value);
+          const res=await fetch('/API/paiements_liste.php?'+q.toString(),{credentials:'include'});
+          const data=await res.json();
+          const items=(data&&data.ok&&Array.isArray(data.items))?data.items:[];
+          if(items.length===0){plBody.innerHTML='<tr><td colspan="6" style="padding:.75rem;">Aucun paiement</td></tr>';return;}
+          plBody.innerHTML=items.map(p=>`<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:.5rem;">${(p.date_paiement||'')}</td><td style="padding:.5rem;">${(p.client_nom||'')}</td><td style="padding:.5rem;">${(p.facture_numero||'')}</td><td style="padding:.5rem;text-align:right;">${Number(p.montant||0).toFixed(2)} €</td><td style="padding:.5rem;">${(p.mode_paiement||'')}</td><td style="padding:.5rem;">${(p.facture_statut||'')}</td></tr>`).join('');
+        }
+        [plDate,plClient,plMode,plStatut].forEach(el=>el&&el.addEventListener('change',loadPaiements));
+        loadClients();loadPaiements();
+      })();
+    </script>
     <script src="/assets/js/paiements.js" charset="UTF-8"></script>
 </body>
 </html>

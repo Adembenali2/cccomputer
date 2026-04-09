@@ -3,6 +3,7 @@
  * Script pour exécuter la migration user_permissions
  * Usage: php sql/run_migration_user_permissions.php
  */
+//etst
 
 require_once __DIR__ . '/../includes/db.php';
 

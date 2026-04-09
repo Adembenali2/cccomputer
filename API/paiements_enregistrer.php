@@ -56,7 +56,14 @@ try {
         throw new InvalidArgumentException('Le montant doit être supérieur à 0');
     }
 
-    $modePaiement = Validator::enum(trim((string) ($inputData['mode_paiement'] ?? '')), ['virement', 'cheque', 'especes', 'carte', 'prelevement']);
+    // [Fonctionnalité A] Mode normalisé
+    $rawMode = trim((string) ($inputData['mode_paiement'] ?? ''));
+    if ($rawMode === 'cb') {
+        $rawMode = 'carte';
+    } elseif ($rawMode === 'autre') {
+        $rawMode = 'prelevement';
+    }
+    $modePaiement = Validator::enum($rawMode, ['virement', 'cheque', 'especes', 'prelevement', 'carte']);
 
     $datePaiement = trim((string) ($inputData['date_paiement'] ?? date('Y-m-d')));
     $datePaiementDt = DateTime::createFromFormat('Y-m-d', $datePaiement);
@@ -119,7 +126,7 @@ try {
     
     // Vérifier que la facture existe et récupérer les infos
     $stmt = $pdo->prepare("
-        SELECT f.id, f.id_client, f.numero, f.montant_ttc, f.statut
+        SELECT f.id, f.id_client, f.numero, f.montant_ttc, f.statut, COALESCE(f.montant_paye, 0) AS montant_paye
         FROM factures f
         WHERE f.id = :id
         LIMIT 1
@@ -173,35 +180,60 @@ try {
         $justificatifPath = '/uploads/paiements/' . $fileName;
     }
     
-    // Tous les modes de paiement : en attente de validation (reçu envoyé à la validation)
+    // [Fonctionnalité A] Validation solde restant dû
+    $factureTtc = (float)($facture['montant_ttc'] ?? 0);
+    $hasFactureIdCol = columnExists($pdo, 'paiements', 'facture_id');
+    $hasIdFactureCol = columnExists($pdo, 'paiements', 'id_facture');
+    $whereFacture = [];
+    if ($hasIdFactureCol) { $whereFacture[] = "id_facture = :id"; }
+    if ($hasFactureIdCol) { $whereFacture[] = "facture_id = :id"; }
+    $whereFactureSql = !empty($whereFacture) ? ('(' . implode(' OR ', $whereFacture) . ')') : '1=0';
+    $stmtPaid = $pdo->prepare("SELECT COALESCE(SUM(montant), 0) FROM paiements WHERE {$whereFactureSql}");
+    $stmtPaid->execute([':id' => $factureId]);
+    $dejaPaye = (float)$stmtPaid->fetchColumn();
+    $restant = max(0.0, $factureTtc - $dejaPaye);
+    if ($montant > $restant + 0.0001) {
+        jsonResponse(['ok' => false, 'error' => 'Le montant ne peut pas dépasser le solde restant dû (' . number_format($restant, 2, ',', ' ') . ' €)'], 400);
+    }
+
+    // Tous les modes de paiement : en attente de validation
     $statutPaiement = 'en_cours';
     
     // Démarrer la transaction
     $pdo->beginTransaction();
     
     try {
-        // Insérer le paiement
-        $stmt = $pdo->prepare("
-            INSERT INTO paiements (
-                id_facture, id_client, montant, date_paiement, 
-                mode_paiement, reference, commentaire, statut, created_by
-            ) VALUES (
-                :id_facture, :id_client, :montant, :date_paiement,
-                :mode_paiement, :reference, :commentaire, :statut, :created_by
-            )
-        ");
-        
-        $stmt->execute([
-            ':id_facture' => $factureId,
-            ':id_client' => $clientId,
+        // [Fonctionnalité A] INSERT compatible anciens/nouveaux schémas paiements
+        $hasFactureId = $hasFactureIdCol;
+        $hasIdFacture = $hasIdFactureCol;
+        $hasIdClient = columnExists($pdo, 'paiements', 'id_client');
+        $hasCommentaire = columnExists($pdo, 'paiements', 'commentaire');
+        $hasStatut = columnExists($pdo, 'paiements', 'statut');
+
+        $cols = [];
+        $vals = [];
+        $paramsInsert = [
             ':montant' => $montant,
             ':date_paiement' => $datePaiement,
             ':mode_paiement' => $modePaiement,
             ':reference' => $reference,
-            ':commentaire' => $commentaire,
-            ':statut' => $statutPaiement,
-            ':created_by' => $userId
-        ]);
+            ':created_by' => $userId,
+        ];
+
+        if ($hasFactureId) { $cols[] = 'facture_id'; $vals[] = ':facture_id'; $paramsInsert[':facture_id'] = $factureId; }
+        if ($hasIdFacture) { $cols[] = 'id_facture'; $vals[] = ':id_facture'; $paramsInsert[':id_facture'] = $factureId; }
+        if ($hasIdClient) { $cols[] = 'id_client'; $vals[] = ':id_client'; $paramsInsert[':id_client'] = $clientId; }
+        $cols[] = 'montant'; $vals[] = ':montant';
+        $cols[] = 'date_paiement'; $vals[] = ':date_paiement';
+        $cols[] = 'mode_paiement'; $vals[] = ':mode_paiement';
+        $cols[] = 'reference'; $vals[] = ':reference';
+        if ($hasCommentaire) { $cols[] = 'commentaire'; $vals[] = ':commentaire'; $paramsInsert[':commentaire'] = $commentaire; }
+        if ($hasStatut) { $cols[] = 'statut'; $vals[] = ':statut'; $paramsInsert[':statut'] = $statutPaiement; }
+        $cols[] = 'created_by'; $vals[] = ':created_by';
+
+        $sqlInsert = "INSERT INTO paiements (" . implode(', ', $cols) . ") VALUES (" . implode(', ', $vals) . ")";
+        $stmt = $pdo->prepare($sqlInsert);
+        $stmt->execute($paramsInsert);
         
         $paiementId = $pdo->lastInsertId();
         
@@ -233,7 +265,37 @@ try {
             ]);
         }
         
-        // Ne pas modifier le statut de la facture à l'enregistrement (en_attente, envoyee, en_cours, en_retard selon date)
+        // [Fonctionnalité A] Recalcul montant_paye + statut facture auto
+        $stmtTotal = $pdo->prepare("SELECT COALESCE(SUM(montant), 0) FROM paiements WHERE {$whereFactureSql}");
+        $stmtTotal->execute([':id' => $factureId]);
+        $totalPaye = (float)$stmtTotal->fetchColumn();
+
+        if (columnExists($pdo, 'factures', 'montant_paye')) {
+            $pdo->prepare("UPDATE factures SET montant_paye = :mp, updated_at = NOW() WHERE id = :id")
+                ->execute([':mp' => $totalPaye, ':id' => $factureId]);
+        }
+
+        $nouveauStatut = (string)($facture['statut'] ?? 'en_attente');
+        if ($totalPaye >= $factureTtc - 0.0001) {
+            $nouveauStatut = 'payee';
+        } elseif ($totalPaye > 0.0001 && $totalPaye < $factureTtc - 0.0001) {
+            $nouveauStatut = 'partielle';
+        }
+        if ($nouveauStatut !== (string)$facture['statut']) {
+            try {
+                $pdo->prepare("UPDATE factures SET statut = :s, updated_at = NOW() WHERE id = :id")
+                    ->execute([':s' => $nouveauStatut, ':id' => $factureId]);
+            } catch (Throwable $e) {
+                // Fallback si ENUM ne contient pas 'partielle'
+                if ($nouveauStatut === 'partielle') {
+                    $pdo->prepare("UPDATE factures SET statut = 'en_cours', updated_at = NOW() WHERE id = :id")
+                        ->execute([':id' => $factureId]);
+                    $nouveauStatut = 'en_cours';
+                } else {
+                    throw $e;
+                }
+            }
+        }
         
         $pdo->commit();
 
@@ -262,10 +324,11 @@ try {
             'message' => 'Paiement enregistré avec succès',
             'paiement_id' => $paiementId,
             'facture_id' => $factureId,
-            'nouveau_statut' => $facture['statut'] ?? 'en_attente',
+            'nouveau_statut' => $nouveauStatut,
             'reference' => $reference,
             'recu_path' => $finalRecuPath ?? null,
-            'recu_genere' => $recuPath ? true : false
+            'recu_genere' => $recuPath ? true : false,
+            'montant_paye' => $totalPaye
         ]);
         
     } catch (Exception $e) {

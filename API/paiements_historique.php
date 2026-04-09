@@ -52,10 +52,12 @@ try {
         
         // Labels pour les modes de paiement
         $modeLabels = [
-            'cb' => 'Carte bancaire',
+            'cb' => 'Carte',
+            'carte' => 'Carte',
             'cheque' => 'Chèque',
             'virement' => 'Virement',
-            'especes' => 'Espèce',
+            'especes' => 'Espèces',
+            'prelevement' => 'Prélèvement',
             'autre' => 'Autre paiement'
         ];
         $modeLabel = $modeLabels[$paiement['mode_paiement']] ?? $paiement['mode_paiement'];

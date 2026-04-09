@@ -5,6 +5,7 @@ declare(strict_types=1);
  * Classe centralisée pour la validation des données
  * Remplace les validations dupliquées dans plusieurs fichiers
  */
+if (!class_exists('Validator', false)) {
 class Validator
 {
     /**
@@ -229,5 +230,6 @@ class Validator
         }
         return $id;
     }
+}
 }
 

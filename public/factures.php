@@ -78,39 +78,52 @@ LIMIT 10
 ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 // Compatibilité schéma ancien/nouveau pour factures_recurrentes
-$hasCol = static function (PDO $pdo, string $table, string $column): bool {
-    $st = $pdo->prepare("
-        SELECT COUNT(*) 
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
-    ");
-    $st->execute([$table, $column]);
-    return ((int)$st->fetchColumn()) > 0;
-};
-$hasType = $hasCol($pdo, 'factures_recurrentes', 'type');
-$hasTypeFacture = $hasCol($pdo, 'factures_recurrentes', 'type_facture');
-$hasJourGen = $hasCol($pdo, 'factures_recurrentes', 'jour_generation');
-$hasJourMois = $hasCol($pdo, 'factures_recurrentes', 'jour_mois');
-$hasMoisDernier = $hasCol($pdo, 'factures_recurrentes', 'mois_dernier_envoi');
-$hasProch = $hasCol($pdo, 'factures_recurrentes', 'prochaine_echeance');
-$hasActif = $hasCol($pdo, 'factures_recurrentes', 'actif');
-
-$recTypeExpr = $hasType ? "fr.type" : ($hasTypeFacture ? "fr.type_facture" : "'Consommation'");
-$recJourExpr = $hasJourGen ? "fr.jour_generation" : ($hasJourMois ? "fr.jour_mois" : "1");
-$recLastExpr = $hasMoisDernier ? "fr.mois_dernier_envoi" : ($hasProch ? "DATE_FORMAT(fr.prochaine_echeance, '%Y-%m')" : "NULL");
-$recActifExpr = $hasActif ? "fr.actif" : "0";
-
-$rec = $pdo->query("
-SELECT c.id id_client, c.raison_sociale,
-       {$recTypeExpr} AS type_rec,
-       {$recJourExpr} AS jour_gen,
-       {$recLastExpr} AS dernier_envoi,
-       {$recActifExpr} AS actif_rec
-FROM clients c
-LEFT JOIN factures_recurrentes fr ON fr.id_client = c.id
-ORDER BY c.raison_sociale ASC
-LIMIT 300
-")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$rec = [];
+$recQueries = [
+    // Schéma récent
+    "
+    SELECT c.id id_client, c.raison_sociale,
+           fr.type AS type_rec,
+           fr.jour_generation AS jour_gen,
+           fr.mois_dernier_envoi AS dernier_envoi,
+           fr.actif AS actif_rec
+    FROM clients c
+    LEFT JOIN factures_recurrentes fr ON fr.id_client = c.id
+    ORDER BY c.raison_sociale ASC
+    LIMIT 300
+    ",
+    // Schéma ancien
+    "
+    SELECT c.id id_client, c.raison_sociale,
+           fr.type_facture AS type_rec,
+           fr.jour_mois AS jour_gen,
+           DATE_FORMAT(fr.prochaine_echeance, '%Y-%m') AS dernier_envoi,
+           fr.actif AS actif_rec
+    FROM clients c
+    LEFT JOIN factures_recurrentes fr ON fr.id_client = c.id
+    ORDER BY c.raison_sociale ASC
+    LIMIT 300
+    ",
+    // Fallback minimal (pas de colonnes de config)
+    "
+    SELECT c.id id_client, c.raison_sociale,
+           'Consommation' AS type_rec,
+           1 AS jour_gen,
+           NULL AS dernier_envoi,
+           0 AS actif_rec
+    FROM clients c
+    ORDER BY c.raison_sociale ASC
+    LIMIT 300
+    ",
+];
+foreach ($recQueries as $sqlRec) {
+    try {
+        $rec = $pdo->query($sqlRec)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        break;
+    } catch (Throwable $e) {
+        // Passe à la variante suivante si le schéma diffère.
+    }
+}
 
 function eur($v): string { return number_format((float)$v, 2, ',', ' ') . ' €'; }
 ?>
