@@ -48,6 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
+if (!in_array((string)($_SESSION['emploi'] ?? ''), ['Admin', 'Dirigeant', 'Secrétaire'], true)) {
+    jsonResponse(['ok' => false, 'error' => 'Accès refusé'], 403);
+}
 
 requireCsrfForApi();
 
@@ -70,6 +73,8 @@ $quantiteMin = (int)($data['quantite_min'] ?? 5);
 $prixUnitaire = (float)($data['prix_unitaire_ht'] ?? 0);
 $emplacement = trim((string)($data['emplacement'] ?? ''));
 $actif = (int)($data['actif'] ?? 1);
+$unite = trim((string)($data['unite'] ?? 'unite'));
+$contenance = isset($data['contenance']) && $data['contenance'] !== '' ? (int)$data['contenance'] : null;
 
 if ($reference === '' || $designation === '' || !in_array($categorie, $allowedCategories, true)) {
     jsonResponse(['ok' => false, 'error' => 'Paramètres invalides'], 400);
@@ -78,6 +83,17 @@ if ($quantite < 0 || $quantiteMin < 0 || $prixUnitaire < 0) {
     jsonResponse(['ok' => false, 'error' => 'Quantités/prix invalides'], 400);
 }
 $actif = $actif === 1 ? 1 : 0;
+if (!in_array($unite, ['unite', 'carton', 'rame'], true)) {
+    $unite = 'unite';
+}
+if ($categorie === 'papier') {
+    if ($unite === 'unite') {
+        $unite = 'carton';
+    }
+    if ($contenance === null || $contenance <= 0) {
+        $contenance = 2500;
+    }
+}
 
 try {
     if ($id > 0) {
@@ -93,6 +109,8 @@ try {
                 prix_unitaire_ht = :prix_unitaire_ht,
                 emplacement = :emplacement,
                 actif = :actif,
+                unite = :unite,
+                contenance = :contenance,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
         ";
@@ -109,6 +127,8 @@ try {
             ':prix_unitaire_ht' => $prixUnitaire,
             ':emplacement' => $emplacement !== '' ? $emplacement : null,
             ':actif' => $actif,
+            ':unite' => $unite,
+            ':contenance' => $contenance,
         ]);
         enregistrerAction($pdo, currentUserId(), 'stock_article_modifie', "Article stock #{$id} modifié ({$reference})");
         jsonResponse(['ok' => true, 'id' => $id, 'updated' => true]);
@@ -117,10 +137,10 @@ try {
     $sql = "
         INSERT INTO stock (
             reference, designation, categorie, marque, modele_compatible, quantite, quantite_min,
-            prix_unitaire_ht, emplacement, actif
+            prix_unitaire_ht, emplacement, actif, unite, contenance
         ) VALUES (
             :reference, :designation, :categorie, :marque, :modele_compatible, :quantite, :quantite_min,
-            :prix_unitaire_ht, :emplacement, :actif
+            :prix_unitaire_ht, :emplacement, :actif, :unite, :contenance
         )
     ";
     $stmt = $pdo->prepare($sql);
@@ -135,6 +155,8 @@ try {
         ':prix_unitaire_ht' => $prixUnitaire,
         ':emplacement' => $emplacement !== '' ? $emplacement : null,
         ':actif' => $actif,
+        ':unite' => $unite,
+        ':contenance' => $contenance,
     ]);
     $newId = (int)$pdo->lastInsertId();
 

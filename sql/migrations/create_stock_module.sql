@@ -29,3 +29,41 @@ CREATE TABLE IF NOT EXISTS stock_mouvements (
   FOREIGN KEY (stock_id) REFERENCES stock(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- [Fonctionnalité Stock] Évolution schéma catégories + unité/contenance (idempotent)
+SET @sql := "ALTER TABLE stock MODIFY COLUMN categorie ENUM('papier','toner_noir','toner_cyan','toner_magenta','toner_jaune','pc','ecran_lcd','imprimante','piece_detachee','consommable','autre') NOT NULL";
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'stock'
+    AND COLUMN_NAME = 'unite'
+);
+SET @sql := IF(
+  @col_exists = 0,
+  "ALTER TABLE stock ADD COLUMN unite ENUM('unite','carton','rame') NOT NULL DEFAULT 'unite'",
+  "SELECT 1"
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'stock'
+    AND COLUMN_NAME = 'contenance'
+);
+SET @sql := IF(
+  @col_exists = 0,
+  "ALTER TABLE stock ADD COLUMN contenance INT DEFAULT NULL COMMENT 'Ex: 2500 pour un carton de papier A4'",
+  "SELECT 1"
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+

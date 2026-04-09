@@ -93,6 +93,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
+if (!in_array((string)($_SESSION['emploi'] ?? ''), ['Admin', 'Dirigeant', 'Secrétaire'], true)) {
+    jsonResponse(['ok' => false, 'error' => 'Accès refusé'], 403);
+}
 
 $raw = file_get_contents('php://input');
 $data = json_decode($raw, true) ?? [];

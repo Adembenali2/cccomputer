@@ -199,6 +199,40 @@ function generateBarcode(PDO $pdo, string $type, string $table): string {
     return $barcode;
 }
 
+/**
+ * [Nouveau module stock] Génère une référence stock unique par catégorie.
+ */
+function generateStockReference(PDO $pdo, string $categorie): string
+{
+    $now = new DateTimeImmutable('now');
+    $ymd = $now->format('Ymd');
+    $hms = $now->format('His');
+    $prefixMap = [
+        'papier' => "PAP-{$ymd}-{$hms}",
+        'toner_noir' => "TON-N-{$ymd}",
+        'toner_cyan' => "TON-C-{$ymd}",
+        'toner_magenta' => "TON-M-{$ymd}",
+        'toner_jaune' => "TON-J-{$ymd}",
+        'pc' => "PC-{$ymd}",
+        'ecran_lcd' => "LCD-{$ymd}",
+        'imprimante' => "IMP-{$ymd}",
+        'piece_detachee' => "PDR-{$ymd}",
+        'consommable' => "CON-{$ymd}",
+        'autre' => "ART-{$ymd}",
+    ];
+    $base = $prefixMap[$categorie] ?? "ART-{$ymd}";
+    $pattern = $base . '-%';
+
+    $stmt = $pdo->prepare("SELECT reference FROM stock WHERE reference LIKE :p ORDER BY reference DESC LIMIT 1");
+    $stmt->execute([':p' => $pattern]);
+    $last = (string)($stmt->fetchColumn() ?: '');
+    $next = 1;
+    if ($last !== '' && preg_match('/-(\d{4})$/', $last, $m)) {
+        $next = ((int)$m[1]) + 1;
+    }
+    return $base . '-' . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
+}
+
 // Vérifier l'authentification sans redirection HTML
 if (empty($_SESSION['user_id'])) {
     jsonResponse(['ok' => false, 'error' => 'Non authentifié'], 401);
@@ -217,6 +251,9 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
+if (!in_array((string)($_SESSION['emploi'] ?? ''), ['Admin', 'Dirigeant', 'Secrétaire'], true)) {
+    jsonResponse(['ok' => false, 'error' => 'Accès refusé'], 403);
+}
 
 // Lire et décoder le JSON une seule fois
 $raw = file_get_contents('php://input');
@@ -233,6 +270,97 @@ if (empty($csrfToken) || empty($csrfSession) || !hash_equals($csrfSession, $csrf
 $data = $jsonData ?? [];
 if (!is_array($data)) {
     jsonResponse(['ok' => false, 'error' => 'JSON invalide'], 400);
+}
+
+// --------------------------------------------------------------------
+// [Nouveau module stock] Mode insertion table `stock`
+// Accepte payload racine OU payload dans `data`
+// --------------------------------------------------------------------
+$candidate = isset($data['data']) && is_array($data['data']) ? $data['data'] : $data;
+$newStockCategories = ['papier','toner_noir','toner_cyan','toner_magenta','toner_jaune','pc','ecran_lcd','imprimante','piece_detachee','consommable','autre'];
+if (isset($candidate['categorie']) && in_array((string)$candidate['categorie'], $newStockCategories, true)) {
+    $categorie = (string)$candidate['categorie'];
+    $designation = trim((string)($candidate['designation'] ?? ''));
+    $reference = trim((string)($candidate['reference'] ?? ''));
+    $marque = trim((string)($candidate['marque'] ?? ''));
+    $modeleCompatible = trim((string)($candidate['modele_compatible'] ?? ''));
+    $quantite = max(0, (int)($candidate['quantite'] ?? 0));
+    $quantiteMin = max(0, (int)($candidate['quantite_min'] ?? 5));
+    $prixUnitaire = max(0.0, (float)($candidate['prix_unitaire_ht'] ?? 0));
+    $emplacement = trim((string)($candidate['emplacement'] ?? ''));
+    $actif = (int)($candidate['actif'] ?? 1) === 1 ? 1 : 0;
+    $unite = trim((string)($candidate['unite'] ?? 'unite'));
+    $contenance = isset($candidate['contenance']) && $candidate['contenance'] !== '' ? (int)$candidate['contenance'] : null;
+
+    if ($designation === '') {
+        jsonResponse(['ok' => false, 'error' => 'designation obligatoire'], 400);
+    }
+    if (!in_array($unite, ['unite', 'carton', 'rame'], true)) {
+        $unite = 'unite';
+    }
+    if ($categorie === 'papier') {
+        if ($unite === 'unite') {
+            $unite = 'carton';
+        }
+        if ($contenance === null || $contenance <= 0) {
+            $contenance = 2500;
+        }
+    }
+
+    try {
+        $pdo->beginTransaction();
+        if ($reference === '') {
+            $reference = generateStockReference($pdo, $categorie);
+        }
+
+        $stmt = $pdo->prepare("
+            INSERT INTO stock
+            (reference, designation, categorie, marque, modele_compatible, quantite, quantite_min, prix_unitaire_ht, emplacement, actif, unite, contenance)
+            VALUES
+            (:reference, :designation, :categorie, :marque, :modele_compatible, :quantite, :quantite_min, :prix_unitaire_ht, :emplacement, :actif, :unite, :contenance)
+        ");
+        $stmt->execute([
+            ':reference' => $reference,
+            ':designation' => $designation,
+            ':categorie' => $categorie,
+            ':marque' => $marque !== '' ? $marque : null,
+            ':modele_compatible' => $modeleCompatible !== '' ? $modeleCompatible : null,
+            ':quantite' => $quantite,
+            ':quantite_min' => $quantiteMin,
+            ':prix_unitaire_ht' => $prixUnitaire,
+            ':emplacement' => $emplacement !== '' ? $emplacement : null,
+            ':actif' => $actif,
+            ':unite' => $unite,
+            ':contenance' => $contenance,
+        ]);
+        $newId = (int)$pdo->lastInsertId();
+
+        if ($quantite > 0) {
+            $stmt = $pdo->prepare("
+                INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by)
+                VALUES (:stock_id, 'entree', :quantite, 0, :quantite_apres, 'creation_article', :reference_doc, :created_by)
+            ");
+            $stmt->execute([
+                ':stock_id' => $newId,
+                ':quantite' => $quantite,
+                ':quantite_apres' => $quantite,
+                ':reference_doc' => $reference,
+                ':created_by' => $_SESSION['user_id'] ?? null,
+            ]);
+        }
+
+        $pdo->commit();
+        logStockAction($pdo, 'stock_article_cree', "Article stock #{$newId} {$reference} ({$categorie})");
+        jsonResponse(['ok' => true, 'id' => $newId, 'reference' => $reference], 200);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        if ($e instanceof PDOException && $e->getCode() === '23000' && $reference !== '') {
+            jsonResponse(['ok' => false, 'error' => 'Référence déjà existante'], 409);
+        }
+        throw $e;
+    }
 }
 
 try {

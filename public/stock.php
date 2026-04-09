@@ -13,6 +13,13 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 // Vérification des permissions
 authorize_page('stock', []);
+$emploi = (string)($_SESSION['emploi'] ?? '');
+$allowedReadRoles = ['Admin', 'Dirigeant', 'Secrétaire', 'Livreur'];
+if (!in_array($emploi, $allowedReadRoles, true)) {
+    http_response_code(403);
+    exit('Accès refusé');
+}
+$canWriteStock = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
 
 // Récupérer PDO via la fonction centralisée
 $pdo = getPdo();
@@ -51,6 +58,25 @@ if (isset($_GET['added']) && in_array($_GET['added'], $allowedTypes, true)) {
     if (!empty($_GET['warning'])) {
         $flashWarning = 'Impossible de générer le QR code. L\'étiquette utilisera le code-barres.';
     }
+}
+
+// ====================================================================
+// NOUVEAU MODULE STOCK (table `stock`)
+// ====================================================================
+$stockItemsNew = [];
+try {
+    $stockItemsNew = safeFetchAll(
+        $pdo,
+        "SELECT id, reference, designation, categorie, quantite, quantite_min, unite, contenance
+         FROM stock
+         WHERE actif = 1
+         ORDER BY designation ASC
+         LIMIT 500",
+        [],
+        'stock_new_table'
+    );
+} catch (Throwable $e) {
+    $stockItemsNew = [];
 }
 
 // ====================================================================
@@ -811,6 +837,23 @@ $sectionImages = [
         <button type="button" class="stock-tab" role="tab" data-tab="lcd" aria-selected="false">LCD</button>
         <button type="button" class="stock-tab" role="tab" data-tab="pc" aria-selected="false">PC</button>
     </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+        <a class="btn btn-secondary" target="_blank" href="/public/stock_etiquettes.php?all=1">🖨️ Imprimer toutes les étiquettes</a>
+        <select id="labelsCategorieSelect" class="btn btn-secondary" style="padding:.5rem .75rem;">
+            <option value="">Étiquettes par catégorie...</option>
+            <option value="papier">Papier</option>
+            <option value="toner_noir">Toner noir</option>
+            <option value="toner_cyan">Toner cyan</option>
+            <option value="toner_magenta">Toner magenta</option>
+            <option value="toner_jaune">Toner jaune</option>
+            <option value="pc">PC</option>
+            <option value="ecran_lcd">Écran LCD</option>
+            <option value="imprimante">Imprimante / Photocopieur</option>
+            <option value="piece_detachee">Pièce détachée</option>
+            <option value="consommable">Consommable</option>
+            <option value="autre">Autre</option>
+        </select>
+    </div>
 
     <!-- Barre de recherche - Pleine largeur -->
     <div class="search-bar-full">
@@ -823,6 +866,71 @@ $sectionImages = [
             autocomplete="off" />
         <span class="search-results-count" id="searchResultsCount" style="display: none; color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;" aria-live="polite"></span>
     </div>
+
+    <section class="card-section" style="margin-bottom:1rem;">
+        <div class="section-head">
+            <div class="head-left"><h2 class="section-title">Nouveau stock (catégories avancées)</h2></div>
+        </div>
+        <div class="table-wrapper" style="padding:12px;">
+            <?php if ($canWriteStock): ?>
+            <div style="display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:.5rem;margin-bottom:.75rem;">
+                <input id="nsReference" placeholder="Référence (auto si vide)">
+                <input id="nsDesignation" placeholder="Désignation">
+                <select id="nsCategorie">
+                    <option value="papier">Papier (carton A4)</option>
+                    <option value="toner_noir">Toner Noir</option>
+                    <option value="toner_cyan">Toner Cyan</option>
+                    <option value="toner_magenta">Toner Magenta</option>
+                    <option value="toner_jaune">Toner Jaune</option>
+                    <option value="pc">PC</option>
+                    <option value="ecran_lcd">Écran LCD</option>
+                    <option value="imprimante">Imprimante / Photocopieur</option>
+                    <option value="piece_detachee">Pièce détachée</option>
+                    <option value="consommable">Consommable</option>
+                    <option value="autre">Autre</option>
+                </select>
+                <input id="nsQuantite" type="number" min="0" value="0" placeholder="Quantité">
+                <select id="nsUnite"><option value="unite">unité</option><option value="carton">carton</option><option value="rame">rame</option></select>
+                <div id="nsContenanceRow" style="display:none;"><input id="nsContenance" type="number" min="1" placeholder="Contenance"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;">
+                <small id="nsContenanceHint" style="color:#6b7280;"></small>
+                <button type="button" id="nsAddBtn" class="btn btn-primary">Ajouter article</button>
+            </div>
+            <?php else: ?>
+            <div style="margin-bottom:.75rem;color:#6b7280;">Lecture seule (rôle Livreur).</div>
+            <?php endif; ?>
+            <div style="overflow:auto;">
+                <table class="tbl-stock">
+                    <thead><tr><th>Référence</th><th>Désignation</th><th>Catégorie</th><th>Quantité</th><th>Actions</th></tr></thead>
+                    <tbody>
+                    <?php if (empty($stockItemsNew)): ?>
+                        <tr><td colspan="5"><em>Aucun article dans la table stock</em></td></tr>
+                    <?php else: foreach ($stockItemsNew as $s): ?>
+                        <?php
+                          $cat=(string)($s['categorie'] ?? 'autre');
+                          $badgeMap=[
+                            'papier'=>'background:#dbeafe;color:#1e3a8a;','toner_noir'=>'background:#111827;color:#fff;','toner_cyan'=>'background:#0891b2;color:#fff;',
+                            'toner_magenta'=>'background:#db2777;color:#fff;','toner_jaune'=>'background:#fde047;color:#111827;','pc'=>'background:#4f46e5;color:#fff;',
+                            'ecran_lcd'=>'background:#7c3aed;color:#fff;','imprimante'=>'background:#166534;color:#fff;','piece_detachee'=>'background:#ea580c;color:#fff;',
+                            'consommable'=>'background:#0f766e;color:#fff;','autre'=>'background:#6b7280;color:#fff;'
+                          ];
+                          $q=(int)($s['quantite'] ?? 0); $u=(string)($s['unite'] ?? 'unite'); $c=(int)($s['contenance'] ?? 0);
+                          $qLabel=($u==='carton'&&$c>0)?($q.' cartons ('.($q*$c).' feuilles)'):($q.' unité(s)');
+                        ?>
+                        <tr>
+                            <td><?= h((string)$s['reference']) ?></td>
+                            <td><?= h((string)$s['designation']) ?></td>
+                            <td><span style="padding:2px 8px;border-radius:999px;font-size:11px;<?= $badgeMap[$cat] ?? $badgeMap['autre'] ?>"><?= h($cat) ?></span></td>
+                            <td><?= h($qLabel) ?></td>
+                            <td><a class="btn btn-secondary" target="_blank" href="/public/stock_etiquettes.php?stock_id=<?= (int)$s['id'] ?>">🔳 Étiquettes</a></td>
+                        </tr>
+                    <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
 
     <!-- Layout avec sidebar gauche pour le scanner -->
     <div class="stock-layout">
@@ -1457,6 +1565,71 @@ $sectionImages = [
             }
         }, 5000);
     });
+})();
+
+// [Nouveau module stock] Catégories avancées + étiquettes
+(function() {
+    const sel = document.getElementById('labelsCategorieSelect');
+    if (sel) {
+        sel.addEventListener('change', function() {
+            if (!this.value) return;
+            window.open('/public/stock_etiquettes.php?categorie=' + encodeURIComponent(this.value), '_blank');
+            this.value = '';
+        });
+    }
+
+    const categorieSelect = document.getElementById('nsCategorie');
+    const uniteField = document.getElementById('nsUnite');
+    const contenanceField = document.getElementById('nsContenance');
+    const contenanceRow = document.getElementById('nsContenanceRow');
+    const contenanceHint = document.getElementById('nsContenanceHint');
+    const addBtn = document.getElementById('nsAddBtn');
+
+    function applyCategorieRules() {
+        if (!categorieSelect || !uniteField || !contenanceField || !contenanceRow || !contenanceHint) return;
+        if (categorieSelect.value === 'papier') {
+            uniteField.value = 'carton';
+            contenanceField.value = 2500;
+            contenanceRow.style.display = 'flex';
+            contenanceHint.textContent = '1 carton = 2500 feuilles A4';
+        } else {
+            uniteField.value = 'unite';
+            contenanceField.value = '';
+            contenanceRow.style.display = 'none';
+            contenanceHint.textContent = '';
+        }
+    }
+    if (categorieSelect) {
+        categorieSelect.addEventListener('change', applyCategorieRules);
+        applyCategorieRules();
+    }
+
+    if (addBtn) {
+        addBtn.addEventListener('click', async function() {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+            const payload = {
+                categorie: document.getElementById('nsCategorie')?.value || '',
+                reference: document.getElementById('nsReference')?.value || '',
+                designation: document.getElementById('nsDesignation')?.value || '',
+                quantite: parseInt(document.getElementById('nsQuantite')?.value || '0', 10),
+                unite: document.getElementById('nsUnite')?.value || 'unite',
+                contenance: document.getElementById('nsContenance')?.value || '',
+            };
+            const res = await fetch('/API/stock_add.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
+                body: JSON.stringify({data: payload, csrf_token: csrfToken}),
+            });
+            const j = await res.json();
+            if (!j.ok) {
+                alert('Erreur: ' + (j.error || 'inconnue'));
+                return;
+            }
+            window.location.reload();
+        });
+    }
 })();
 </script>
 
