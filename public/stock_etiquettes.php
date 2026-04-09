@@ -4,10 +4,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/helpers.php';
-require_once __DIR__ . '/../vendor/autoload.php';
-
-use Endroid\QrCode\QrCode;
-use Endroid\QrCode\Writer\PngWriter;
 
 $pdo = getPdo();
 $stockId = (int)($_GET['stock_id'] ?? 0);
@@ -34,22 +30,74 @@ if ($idsCsv !== '') {
   $articles = [];
 }
 
-$writer = new PngWriter();
+/**
+ * Build QR data-uri with broad compatibility:
+ * 1) Endroid v5 (PngWriter)
+ * 2) Endroid legacy APIs
+ * 3) Remote QR image fallback (server-side fetch)
+ */
+function buildQrDataUri(string $text): string
+{
+  if ($text === '') {
+    return '';
+  }
+
+  // Endroid v5+
+  if (class_exists('\\Endroid\\QrCode\\Writer\\PngWriter') && class_exists('\\Endroid\\QrCode\\QrCode')) {
+    try {
+      $writer = new \Endroid\QrCode\Writer\PngWriter();
+      $qrCode = new \Endroid\QrCode\QrCode(data: $text, size: 120, margin: 2);
+      $result = $writer->write($qrCode);
+      if (method_exists($result, 'getDataUri')) {
+        return (string)$result->getDataUri();
+      }
+    } catch (Throwable $e) {
+      // Continue to fallback
+    }
+  }
+
+  // Endroid legacy
+  if (class_exists('\\Endroid\\QrCode\\QrCode')) {
+    try {
+      $legacy = new \Endroid\QrCode\QrCode($text);
+      if (method_exists($legacy, 'writeDataUri')) {
+        return (string)$legacy->writeDataUri();
+      }
+      if (method_exists($legacy, 'writeString')) {
+        $png = (string)$legacy->writeString();
+        if ($png !== '') {
+          return 'data:image/png;base64,' . base64_encode($png);
+        }
+      }
+    } catch (Throwable $e) {
+      // Continue to fallback
+    }
+  }
+
+  // Remote fallback (server side) - works with CSP because image becomes data URI
+  $url = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' . rawurlencode($text);
+  try {
+    $ctx = stream_context_create([
+      'http' => ['timeout' => 5],
+      'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $bin = @file_get_contents($url, false, $ctx);
+    if (is_string($bin) && $bin !== '') {
+      return 'data:image/png;base64,' . base64_encode($bin);
+    }
+  } catch (Throwable $e) {
+    // Ignore and return empty
+  }
+
+  return '';
+}
+
 foreach ($articles as &$article) {
   $qrText = (string)($article['qr_code'] ?? '');
   if ($qrText === '') {
     $qrText = (string)($article['reference'] ?? '');
   }
-  $article['qr_data_uri'] = '';
-  if ($qrText !== '') {
-    try {
-      $qrCode = new QrCode(data: $qrText, size: 120, margin: 2);
-      $result = $writer->write($qrCode);
-      $article['qr_data_uri'] = $result->getDataUri();
-    } catch (Throwable $e) {
-      $article['qr_data_uri'] = '';
-    }
-  }
+  $article['qr_data_uri'] = buildQrDataUri($qrText);
 }
 unset($article);
 ?>

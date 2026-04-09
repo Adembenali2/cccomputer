@@ -115,7 +115,9 @@ function detailsTechniques(array $a): string {
           <td style="padding:12px 16px"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:700;font-size:14px;color:<?= $cq ?>"><?= htmlspecialchars($aff, ENT_QUOTES, 'UTF-8') ?></span></div><div style="width:80px;height:5px;background:#e5e7eb;border-radius:3px;margin-top:4px"><div style="width:<?= (int)$pct ?>%;height:100%;background:<?= $cq ?>;border-radius:3px"></div></div><div style="font-size:10px;color:#9ca3af;margin-top:2px">min: <?= $m ?></div></td>
           <td style="padding:12px 16px"><?= badgeEtat((string)$a['etat']) ?></td>
           <td style="padding:12px 16px;text-align:right;">
-            <div class="menu-wrapper" style="position:relative;display:inline-block;">
+            <div style="display:flex;justify-content:flex-end;gap:6px;align-items:center;">
+              <button type="button" class="act-edit-btn" data-id="<?= (int)$a['id'] ?>" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;">✏️ Modifier</button>
+              <div class="menu-wrapper" style="position:relative;display:inline-block;">
               <button type="button" class="menu-toggle" style="background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px;color:#4b5563;line-height:1;font-weight:600;">Actions ▾</button>
               <div class="action-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:180px;z-index:9999;">
                 <a href="#" class="act-edit" data-id="<?= (int)$a['id'] ?>" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#374151;text-decoration:none;border-radius:10px 10px 0 0;">✏️ Modifier</a>
@@ -125,6 +127,7 @@ function detailsTechniques(array $a): string {
                 <a href="#" class="act-historique" data-id="<?= (int)$a['id'] ?>" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#374151;text-decoration:none;">📋 Historique</a>
                 <hr style="margin:4px 8px;border:none;border-top:1px solid #f3f4f6;">
                 <a href="#" class="act-delete" data-id="<?= (int)$a['id'] ?>" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#ef4444;text-decoration:none;border-radius:0 0 10px 10px;">🗑️ Supprimer</a>
+              </div>
               </div>
             </div>
           </td>
@@ -315,6 +318,7 @@ document.querySelectorAll('.menu-toggle').forEach(btn => {
   btn.addEventListener('click', (event) => { toggleMenu(btn); event.stopPropagation(); });
 });
 document.querySelectorAll('.act-edit').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalModif(parseInt(a.dataset.id||'0',10)); }));
+document.querySelectorAll('.act-edit-btn').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalModif(parseInt(a.dataset.id||'0',10)); }));
 document.querySelectorAll('.act-entree').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalEntree(parseInt(a.dataset.id||'0',10), a.dataset.designation || ''); }));
 document.querySelectorAll('.act-sortie').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalSortie(parseInt(a.dataset.id||'0',10), a.dataset.designation || '', parseInt(a.dataset.qte||'0',10)); }));
 document.querySelectorAll('.act-historique').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirHistorique(parseInt(a.dataset.id||'0',10)); }));
