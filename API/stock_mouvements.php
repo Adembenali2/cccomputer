@@ -34,6 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
+if (!in_array((string)($_SESSION['emploi'] ?? ''), ['Admin', 'Dirigeant', 'Secrétaire'], true)) {
+    jsonResponse(['ok' => false, 'error' => 'Accès refusé'], 403);
+}
 
 requireCsrfForApi();
 
@@ -56,7 +59,7 @@ if ($stockId <= 0 || !in_array($type, $allowedTypes, true) || $qte <= 0) {
 
 $pdo->beginTransaction();
 try {
-    $stmt = $pdo->prepare("SELECT id, reference, designation, quantite FROM stock WHERE id = :id FOR UPDATE");
+    $stmt = $pdo->prepare("SELECT id, reference, designation, quantite, unite FROM stock WHERE id = :id FOR UPDATE");
     $stmt->execute([':id' => $stockId]);
     $stock = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$stock) {
@@ -69,6 +72,10 @@ try {
     if ($type === 'entree') {
         $apres = $avant + $qte;
     } elseif ($type === 'sortie' || $type === 'livraison') {
+        if (($stock['unite'] ?? '') === 'carton' && $qte > $avant) {
+            $pdo->rollBack();
+            jsonResponse(['ok' => false, 'error' => 'Stock insuffisant (cartons)'], 409);
+        }
         $apres = $avant - $qte;
     } elseif ($type === 'ajustement') {
         // ajustement = quantité finale (valeur absolue)

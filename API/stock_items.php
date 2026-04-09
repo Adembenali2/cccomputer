@@ -60,7 +60,7 @@ if (!is_array($data)) {
     $data = $_POST;
 }
 
-$allowedCategories = ['toner_noir','toner_cyan','toner_magenta','toner_jaune','papier','piece_detachee','consommable','autre'];
+$allowedCategories = ['papier','toner_noir','toner_cyan','toner_magenta','toner_jaune','pc','ecran_lcd','imprimante','piece_detachee','consommable','autre'];
 
 $id = (int)($data['id'] ?? 0);
 $reference = trim((string)($data['reference'] ?? ''));
@@ -75,6 +75,16 @@ $emplacement = trim((string)($data['emplacement'] ?? ''));
 $actif = (int)($data['actif'] ?? 1);
 $unite = trim((string)($data['unite'] ?? 'unite'));
 $contenance = isset($data['contenance']) && $data['contenance'] !== '' ? (int)$data['contenance'] : null;
+$numeroSerie = trim((string)($data['numero_serie'] ?? ''));
+$adresseMac = trim((string)($data['adresse_mac'] ?? ''));
+$cpu = trim((string)($data['cpu'] ?? ''));
+$ram = trim((string)($data['ram'] ?? ''));
+$stockage = trim((string)($data['stockage'] ?? ''));
+$etat = trim((string)($data['etat'] ?? 'neuf'));
+$dateAchat = trim((string)($data['date_achat'] ?? ''));
+$fournisseur = trim((string)($data['fournisseur'] ?? ''));
+$notes = trim((string)($data['notes'] ?? ''));
+$photo = trim((string)($data['photo'] ?? ''));
 
 if ($reference === '' || $designation === '' || !in_array($categorie, $allowedCategories, true)) {
     jsonResponse(['ok' => false, 'error' => 'Paramètres invalides'], 400);
@@ -85,6 +95,9 @@ if ($quantite < 0 || $quantiteMin < 0 || $prixUnitaire < 0) {
 $actif = $actif === 1 ? 1 : 0;
 if (!in_array($unite, ['unite', 'carton', 'rame'], true)) {
     $unite = 'unite';
+}
+if (!in_array($etat, ['neuf', 'bon', 'use', 'hs'], true)) {
+    $etat = 'neuf';
 }
 if ($categorie === 'papier') {
     if ($unite === 'unite') {
@@ -111,6 +124,16 @@ try {
                 actif = :actif,
                 unite = :unite,
                 contenance = :contenance,
+                numero_serie = :numero_serie,
+                adresse_mac = :adresse_mac,
+                cpu = :cpu,
+                ram = :ram,
+                stockage = :stockage,
+                etat = :etat,
+                date_achat = :date_achat,
+                fournisseur = :fournisseur,
+                notes = :notes,
+                photo = :photo,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
         ";
@@ -129,6 +152,16 @@ try {
             ':actif' => $actif,
             ':unite' => $unite,
             ':contenance' => $contenance,
+            ':numero_serie' => $numeroSerie !== '' ? $numeroSerie : null,
+            ':adresse_mac' => $adresseMac !== '' ? $adresseMac : null,
+            ':cpu' => $cpu !== '' ? $cpu : null,
+            ':ram' => $ram !== '' ? $ram : null,
+            ':stockage' => $stockage !== '' ? $stockage : null,
+            ':etat' => $etat,
+            ':date_achat' => $dateAchat !== '' ? $dateAchat : null,
+            ':fournisseur' => $fournisseur !== '' ? $fournisseur : null,
+            ':notes' => $notes !== '' ? $notes : null,
+            ':photo' => $photo !== '' ? $photo : null,
         ]);
         enregistrerAction($pdo, currentUserId(), 'stock_article_modifie', "Article stock #{$id} modifié ({$reference})");
         jsonResponse(['ok' => true, 'id' => $id, 'updated' => true]);
@@ -137,10 +170,12 @@ try {
     $sql = "
         INSERT INTO stock (
             reference, designation, categorie, marque, modele_compatible, quantite, quantite_min,
-            prix_unitaire_ht, emplacement, actif, unite, contenance
+            prix_unitaire_ht, emplacement, actif, unite, contenance,
+            numero_serie, adresse_mac, cpu, ram, stockage, etat, date_achat, fournisseur, notes, photo
         ) VALUES (
             :reference, :designation, :categorie, :marque, :modele_compatible, :quantite, :quantite_min,
-            :prix_unitaire_ht, :emplacement, :actif, :unite, :contenance
+            :prix_unitaire_ht, :emplacement, :actif, :unite, :contenance,
+            :numero_serie, :adresse_mac, :cpu, :ram, :stockage, :etat, :date_achat, :fournisseur, :notes, :photo
         )
     ";
     $stmt = $pdo->prepare($sql);
@@ -157,6 +192,16 @@ try {
         ':actif' => $actif,
         ':unite' => $unite,
         ':contenance' => $contenance,
+        ':numero_serie' => $numeroSerie !== '' ? $numeroSerie : null,
+        ':adresse_mac' => $adresseMac !== '' ? $adresseMac : null,
+        ':cpu' => $cpu !== '' ? $cpu : null,
+        ':ram' => $ram !== '' ? $ram : null,
+        ':stockage' => $stockage !== '' ? $stockage : null,
+        ':etat' => $etat,
+        ':date_achat' => $dateAchat !== '' ? $dateAchat : null,
+        ':fournisseur' => $fournisseur !== '' ? $fournisseur : null,
+        ':notes' => $notes !== '' ? $notes : null,
+        ':photo' => $photo !== '' ? $photo : null,
     ]);
     $newId = (int)$pdo->lastInsertId();
 
