@@ -11,12 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['success' => false, 'message' => 'Méthode non autorisée'], 405);
 }
 
-$raw = file_get_contents('php://input') ?: '{}';
-$data = json_decode($raw, true);
-if (!is_array($data)) {
-    $data = $_POST;
-}
-
+$data = $_POST;
 requireCsrfForApi((string)($data['csrf_token'] ?? ''));
 
 $stockId = (int)($data['stock_id'] ?? 0);
@@ -32,20 +27,20 @@ if ($stockId <= 0 || $quantite <= 0 || !in_array($type, ['entree', 'sortie', 'aj
 $pdo = getPdoOrFail();
 $pdo->beginTransaction();
 try {
-    $stmt = $pdo->prepare("SELECT id, quantite FROM stock WHERE id = ? FOR UPDATE");
+    $stmt = $pdo->prepare("SELECT quantite FROM stock WHERE id = ? FOR UPDATE");
     $stmt->execute([$stockId]);
-    $article = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$article) {
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
         throw new RuntimeException('Article introuvable');
     }
 
-    $avant = (int)$article['quantite'];
+    $avant = (int)$row['quantite'];
     $apres = $avant;
     if ($type === 'entree' || $type === 'livraison') {
         $apres = $avant + $quantite;
     } elseif ($type === 'sortie') {
         if ($quantite > $avant) {
-            throw new RuntimeException('Stock insuffisant');
+            throw new RuntimeException('Quantité de sortie supérieure au stock disponible');
         }
         $apres = $avant - $quantite;
     } elseif ($type === 'ajustement') {
@@ -55,7 +50,7 @@ try {
     $stmt = $pdo->prepare("UPDATE stock SET quantite = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
     $stmt->execute([$apres, $stockId]);
 
-    $stmt = $pdo->prepare("INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by) VALUES (?,?,?,?,?,?,?,?)");
+    $stmt = $pdo->prepare("INSERT INTO stock_mouvements (stock_id, type_mouvement, quantite, quantite_avant, quantite_apres, motif, reference_doc, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([$stockId, $type, $quantite, $avant, $apres, $motif, $referenceDoc, (int)($_SESSION['user_id'] ?? 0) ?: null]);
 
     $pdo->commit();

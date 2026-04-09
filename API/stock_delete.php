@@ -11,12 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['success' => false, 'message' => 'Méthode non autorisée'], 405);
 }
 
-$raw = file_get_contents('php://input') ?: '{}';
-$data = json_decode($raw, true);
-if (!is_array($data)) {
-    $data = $_POST;
-}
-
+$data = $_POST;
 requireCsrfForApi((string)($data['csrf_token'] ?? ''));
 $stockId = (int)($data['stock_id'] ?? 0);
 if ($stockId <= 0) {

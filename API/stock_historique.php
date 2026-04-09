@@ -16,14 +16,8 @@ if ($stockId <= 0) {
 }
 
 $pdo = getPdoOrFail();
-$sql = "SELECT sm.*, u.nom
-        FROM stock_mouvements sm
-        LEFT JOIN utilisateurs u ON sm.created_by = u.id
-        WHERE sm.stock_id = ?
-        ORDER BY sm.created_at DESC
-        LIMIT 50";
-$stmt = $pdo->prepare($sql);
+$stmt = $pdo->prepare("SELECT * FROM stock_mouvements WHERE stock_id = ? ORDER BY created_at DESC LIMIT 50");
 $stmt->execute([$stockId]);
 $items = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-jsonResponse($items, 200);
+jsonResponse($items);
