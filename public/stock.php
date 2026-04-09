@@ -442,6 +442,7 @@ document.getElementById('manualSearch').addEventListener('click', ()=>{ stopScan
 </script>
 </body>
 </html>
+<?php __halt_compiler(); ?>
 <?php
 declare(strict_types=1);
 
