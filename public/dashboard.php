@@ -1814,18 +1814,10 @@ $machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
                     },
                     body: JSON.stringify(data)
                 });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                const result = await response.json();
-                
-                if (!result || !result.ok) {
-                    const errorMsg = result && result.error ? result.error : 'Erreur lors de la création de la livraison';
-                    errorDiv.textContent = errorMsg;
-                    errorDiv.style.display = 'block';
-                    return;
+                const result = await response.json().catch(() => null);
+                if (!response.ok || !result || !result.ok) {
+                    const apiError = result && result.error ? result.error : `HTTP ${response.status}`;
+                    throw new Error(apiError);
                 }
                 
                 // Succès : recharger les livraisons et cacher le formulaire
@@ -1857,7 +1849,7 @@ $machinesOrphan = (int)($opsC['machines_sans_client'] ?? 0);
                 
             } catch (err) {
                 console.error('Erreur création livraison:', err);
-                errorDiv.textContent = 'Erreur de connexion lors de la création de la livraison';
+                errorDiv.textContent = err && err.message ? err.message : 'Erreur de connexion lors de la création de la livraison';
                 errorDiv.style.display = 'block';
             }
         });

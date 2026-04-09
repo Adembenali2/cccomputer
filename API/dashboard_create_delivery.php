@@ -10,6 +10,23 @@ $pdo = getPdoOrFail();
 
 require_once __DIR__ . '/../includes/historique.php';
 
+function tableExists(PDO $pdo, string $table): bool
+{
+    try {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) AS cnt
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table
+        ");
+        $stmt->execute([':table' => $table]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return ((int)($row['cnt'] ?? 0)) > 0;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
 }
@@ -74,6 +91,8 @@ try {
     $userStatusCol = columnExists($pdo, 'utilisateurs', 'statut') ? 'statut' : (columnExists($pdo, 'utilisateurs', 'status') ? 'status' : '');
     $hasMoveCreatedBy = columnExists($pdo, 'stock_mouvements', 'created_by');
     $hasMoveUserId = columnExists($pdo, 'stock_mouvements', 'user_id');
+    $hasStockTable = tableExists($pdo, 'stock');
+    $hasStockMouvementsTable = tableExists($pdo, 'stock_mouvements');
     
     // Vérifier que la référence n'existe pas déjà
     $checkRef = $pdo->prepare("SELECT id FROM livraisons WHERE reference = :ref LIMIT 1");
@@ -178,6 +197,13 @@ try {
     $stock = null; // Initialiser pour vérification
     
     if ($productType && $productId > 0 && in_array($productType, ['papier', 'toner', 'lcd', 'pc'], true)) {
+        if (!$hasStockTable || !$hasStockMouvementsTable) {
+            $pdo->rollBack();
+            jsonResponse([
+                'ok' => false,
+                'error' => 'Tables stock manquantes. Exécute la migration stock (stock et stock_mouvements).'
+            ], 500);
+        }
         // Vérifier le stock disponible
         $stockCheck = null;
         
