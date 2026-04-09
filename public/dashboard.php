@@ -147,9 +147,10 @@ $nbNotifs = $savEnRetard + $stockAlerte + $stockRupture;
       <a href="livraison.php" style="display:block;text-align:center;background:#3b82f6;color:#fff;border-radius:8px;padding:9px;font-size:13px;font-weight:600;text-decoration:none;">Voir les livraisons →</a>
     </div>
 
-    <div class="card">
+    <div class="card" style="cursor:pointer;" onclick="window.location.href='historique.php'">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <div style="font-size:14px;font-weight:600;color:#111827;">📋 Historique récent</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:8px;">📋 Historique récent</div>
+        <a href="historique.php" onclick="event.stopPropagation()" style="font-size:12px;color:#6366f1;text-decoration:none;font-weight:500;">Voir tout →</a>
       </div>
       <?php $icones = ['SAV'=>'🔧','Livraison'=>'🚚','Facture'=>'📄']; $couleurs = ['SAV'=>'#fef3c7','Livraison'=>'#dbeafe','Facture'=>'#ede9fe']; ?>
       <?php foreach ($historique as $h): $ic = $icones[$h['type']] ?? '📌'; $bg = $couleurs[$h['type']] ?? '#f3f4f6'; ?>
@@ -162,6 +163,7 @@ $nbNotifs = $savEnRetard + $stockAlerte + $stockRupture;
           <span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:999px;white-space:nowrap;"><?= h((string)$h['type']) ?></span>
         </div>
       <?php endforeach; ?>
+      <a href="historique.php" onclick="event.stopPropagation()" style="display:block;text-align:center;margin-top:16px;background:var(--bg-page);color:var(--text-second);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;font-weight:500;text-decoration:none;transition:background .2s;">Voir tout l'historique →</a>
     </div>
 
     <div class="card">
