@@ -154,6 +154,7 @@ function detailsTechniques(array $a): string {
           <td style="padding:12px 16px;text-align:right;">
             <div style="display:flex;justify-content:flex-end;gap:6px;align-items:center;">
               <button type="button" class="act-edit-btn" data-id="<?= (int)$a['id'] ?>" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;">✏️ Modifier</button>
+              <button type="button" class="act-delete-btn" data-id="<?= (int)$a['id'] ?>" style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;">🗑️ Supprimer</button>
               <div class="menu-wrapper" style="position:relative;display:inline-block;">
               <button type="button" class="menu-toggle" style="background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px;color:#4b5563;line-height:1;font-weight:600;">Actions ▾</button>
               <div class="action-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:180px;z-index:9999;">
@@ -327,7 +328,34 @@ function ouvrirModalEntree(id, designation){ document.getElementById('mv_stock_i
 function ouvrirModalSortie(id, designation, qte){ document.getElementById('mv_stock_id').value=id; document.getElementById('mv_type').value='sortie'; document.getElementById('mv_article').value=designation + ' (Stock: ' + qte + ')'; document.getElementById('mv_quantite').value=''; document.getElementById('mv_motif').value=''; document.getElementById('mv_reference_doc').value=''; document.getElementById('modalMouvement').style.display='flex';}
 document.getElementById('formMouvement').addEventListener('submit', async (e)=>{ e.preventDefault(); const fd = new FormData(e.target); try{ const res = await fetch('../API/stock_mouvement.php', { method:'POST', body:fd, credentials:'include' }); const json = await res.json(); if(json.success){ afficherToast(json.message || 'Mouvement enregistré','success'); setTimeout(()=>location.reload(), 900);} else { afficherToast(json.message || 'Erreur','error'); }}catch(_){ afficherToast('Erreur réseau', 'error'); }});
 async function ouvrirHistorique(id){ const res = await fetch('../API/stock_historique.php?stock_id=' + encodeURIComponent(id), { credentials:'include' }); const rows = await res.json(); const body=document.getElementById('historiqueBody'); body.innerHTML = Array.isArray(rows)&&rows.length ? rows.map(r=>`<tr><td>${r.created_at||''}</td><td>${r.type_mouvement||''}</td><td>${r.quantite||''}</td><td>${r.quantite_avant||''}</td><td>${r.quantite_apres||''}</td><td>${r.motif||''}</td></tr>`).join('') : '<tr><td colspan="6">Aucun mouvement</td></tr>'; document.getElementById('modalHistorique').style.display='flex'; }
-async function supprimerArticle(id){ if(!confirm('Supprimer cet article ?')) return; const fd = new FormData(); fd.append('stock_id', id); fd.append('csrf_token', document.body.dataset.csrfToken || ''); try{ const res = await fetch('../API/stock_delete.php', { method:'POST', body:fd, credentials:'include' }); const json = await res.json(); if(json.success){ afficherToast('Article supprimé','success'); setTimeout(()=>location.reload(),700);} else { afficherToast(json.message || 'Erreur', 'error'); }}catch(_){ afficherToast('Erreur réseau','error'); }}
+async function supprimerArticle(id){
+  if(!confirm('Supprimer cet article ?')) return;
+  const fd = new FormData();
+  fd.append('stock_id', id);
+  fd.append('csrf_token', document.body.dataset.csrfToken || '');
+  try{
+    const res = await fetch('../API/stock_delete.php', { method:'POST', body:fd, credentials:'include' });
+    const json = await res.json();
+    if(json.success){
+      const row = document.querySelector(`#tableauStock tbody tr[data-id="${id}"]`);
+      if (row) {
+        row.remove();
+      }
+      afficherToast('Article supprimé','success');
+      filtrerTableau();
+      if (!document.querySelector('#tableauStock tbody tr[data-id]')) {
+        const tbody = document.querySelector('#tableauStock tbody');
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#9ca3af;">Aucun article en stock</td></tr>';
+        }
+      }
+      return;
+    }
+    afficherToast(json.message || 'Erreur', 'error');
+  }catch(_){
+    afficherToast('Erreur réseau','error');
+  }
+}
 
 let scanStream = null, scanning = false;
 let lastDetectedRef = '';
@@ -410,6 +438,7 @@ document.querySelectorAll('.menu-toggle').forEach(btn => {
 });
 document.querySelectorAll('.act-edit').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalModif(parseInt(a.dataset.id||'0',10)); }));
 document.querySelectorAll('.act-edit-btn').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalModif(parseInt(a.dataset.id||'0',10)); }));
+document.querySelectorAll('.act-delete-btn').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); supprimerArticle(parseInt(a.dataset.id||'0',10)); }));
 document.querySelectorAll('.act-entree').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalEntree(parseInt(a.dataset.id||'0',10), a.dataset.designation || ''); }));
 document.querySelectorAll('.act-sortie').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirModalSortie(parseInt(a.dataset.id||'0',10), a.dataset.designation || '', parseInt(a.dataset.qte||'0',10)); }));
 document.querySelectorAll('.act-historique').forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); ouvrirHistorique(parseInt(a.dataset.id||'0',10)); }));
