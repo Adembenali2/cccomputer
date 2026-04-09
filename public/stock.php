@@ -76,6 +76,23 @@ function detailsTechniques(array $a): string {
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:none;align-items:center;justify-content:center}
     .modal-box{background:#fff;border-radius:16px;width:600px;max-height:90vh;overflow-y:auto;padding:32px}
     .scanline{position:absolute;left:0;right:0;height:2px;background:#22c55e;animation:scan 2s linear infinite}@keyframes scan{0%{top:0}100%{top:298px}}
+    .kpis-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+    .toolbar-stock{background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .table-wrap{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:visible}
+    .scanner-box{position:relative;width:400px;height:300px;margin:auto;background:#000;border-radius:8px;overflow:hidden}
+    @media (max-width: 980px){
+      .kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media (max-width: 768px){
+      .wrap{padding:12px}
+      .kpis-grid{grid-template-columns:1fr;gap:10px}
+      .toolbar-stock{padding:10px;gap:8px}
+      .toolbar-stock .f-input,.toolbar-stock .f-select{width:100%!important}
+      .table-wrap{overflow-x:auto}
+      #tableauStock{min-width:980px}
+      .modal-box{width:96vw;max-height:92vh;padding:16px;border-radius:12px}
+      .scanner-box{width:100%;height:260px}
+    }
   </style>
 </head>
 <body data-csrf-token="<?= htmlspecialchars((string)$csrfToken, ENT_QUOTES, 'UTF-8') ?>">
@@ -86,13 +103,13 @@ function detailsTechniques(array $a): string {
     <h1 style="font-size:26px;font-weight:700;color:#111827;margin:0 0 4px;">Gestion du Stock</h1>
     <p style="color:#6b7280;font-size:14px;margin:0;"><?= $totalArticles ?> article<?= $totalArticles > 1 ? 's' : '' ?> en inventaire</p>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+  <div class="kpis-grid">
     <div style="background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #6366f1;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:8px;">Total articles</div><div style="font-size:28px;font-weight:700;color:#111827;"><?= $totalArticles ?></div></div>
     <div style="background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #10b981;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:8px;">Valeur stock HT</div><div style="font-size:28px;font-weight:700;color:#111827;"><?= number_format($valeurStock, 2, ',', ' ') ?> €</div></div>
     <div style="background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #f59e0b;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:8px;">En alerte</div><div style="font-size:28px;font-weight:700;color:#111827;"><?= $enAlerte ?></div></div>
     <div style="background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #ef4444;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:8px;">En rupture</div><div style="font-size:28px;font-weight:700;color:#111827;"><?= $enRupture ?></div></div>
   </div>
-  <div style="background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <div class="toolbar-stock">
     <button type="button" id="btnAddArticle" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:600;cursor:pointer">+ Ajouter article</button>
     <input id="recherche" class="f-input" placeholder="Rechercher (réf, désignation, SN...)" style="width:240px">
     <select id="filtreCategorie" class="f-select"><option value="">Toutes catégories</option><option value="papier">Papier</option><option value="toner_noir">Toner Noir</option><option value="toner_cyan">Toner Cyan</option><option value="toner_magenta">Toner Magenta</option><option value="toner_jaune">Toner Jaune</option><option value="pc">PC</option><option value="ecran_lcd">Écran LCD</option><option value="imprimante">Imprimante</option></select>
@@ -101,13 +118,13 @@ function detailsTechniques(array $a): string {
     <button type="button" id="btnEtiquettes" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">🏷️ Étiquettes</button>
     <button type="button" id="btnScanner" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">📷 Scanner QR</button>
   </div>
-  <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:visible">
+  <div class="table-wrap">
     <table id="tableauStock" style="width:100%;border-collapse:collapse">
       <thead><tr style="background:#f9fafb"><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Référence</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Désignation</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Catégorie</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Détails</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Quantité</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">État</th><th style="padding:12px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb">Actions</th></tr></thead>
       <tbody>
       <?php foreach ($articles as $a): ?>
         <?php $q=(int)$a['quantite']; $m=(int)$a['quantite_min']; $pct=$m>0?min(100,round(($q/max($m,1))*50)):100; $cq=$q==0?'#ef4444':($q<=$m?'#f59e0b':'#10b981'); $aff=($a['unite']==='carton' && (int)($a['contenance']??0)>0)?($q.' carton'.($q>1?'s':'').' ('.($q*(int)$a['contenance']).' f.)'):($q.' unité'.($q>1?'s':'')); ?>
-        <tr data-id="<?= (int)$a['id'] ?>" data-ref="<?= htmlspecialchars((string)$a['reference'], ENT_QUOTES, 'UTF-8') ?>" data-designation="<?= htmlspecialchars((string)$a['designation'], ENT_QUOTES, 'UTF-8') ?>" data-categorie="<?= htmlspecialchars((string)$a['categorie'], ENT_QUOTES, 'UTF-8') ?>" data-etat="<?= htmlspecialchars((string)$a['etat'], ENT_QUOTES, 'UTF-8') ?>" data-qte="<?= $q ?>" data-qte-min="<?= $m ?>" style="border-bottom:1px solid #f3f4f6;transition:background .15s">
+        <tr data-id="<?= (int)$a['id'] ?>" data-ref="<?= htmlspecialchars((string)$a['reference'], ENT_QUOTES, 'UTF-8') ?>" data-designation="<?= htmlspecialchars((string)$a['designation'], ENT_QUOTES, 'UTF-8') ?>" data-categorie="<?= htmlspecialchars((string)$a['categorie'], ENT_QUOTES, 'UTF-8') ?>" data-etat="<?= htmlspecialchars((string)$a['etat'], ENT_QUOTES, 'UTF-8') ?>" data-qte="<?= $q ?>" data-qte-min="<?= $m ?>" data-marque="<?= htmlspecialchars((string)($a['marque'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-modele="<?= htmlspecialchars((string)($a['modele'] ?? $a['modele_compatible'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-emplacement="<?= htmlspecialchars((string)($a['emplacement'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-unite="<?= htmlspecialchars((string)($a['unite'] ?? 'unite'), ENT_QUOTES, 'UTF-8') ?>" data-contenance="<?= (int)($a['contenance'] ?? 0) ?>" data-details="<?= htmlspecialchars(strip_tags(detailsTechniques($a)), ENT_QUOTES, 'UTF-8') ?>" style="border-bottom:1px solid #f3f4f6;transition:background .15s">
           <td style="padding:12px 16px;font-size:13px;font-family:monospace;color:#374151"><?= htmlspecialchars((string)$a['reference'], ENT_QUOTES, 'UTF-8') ?></td>
           <td style="padding:12px 16px;font-size:14px;font-weight:500;color:#111827"><?= htmlspecialchars((string)$a['designation'], ENT_QUOTES, 'UTF-8') ?></td>
           <td style="padding:12px 16px"><?= badgeCategorie((string)$a['categorie']) ?></td>
@@ -180,7 +197,14 @@ function detailsTechniques(array $a): string {
 </div></div>
 <div id="modalMouvement" class="modal-overlay"><div class="modal-box"><h3 style="margin-top:0">Mouvement stock</h3><form id="formMouvement"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$csrfToken, ENT_QUOTES, 'UTF-8') ?>"><input type="hidden" id="mv_stock_id" name="stock_id"><input type="hidden" id="mv_type" name="type"><div><label>Article</label><input id="mv_article" class="f-input" readonly style="width:100%"></div><div style="margin-top:8px"><label>Quantité</label><input id="mv_quantite" name="quantite" type="number" min="1" required class="f-input" style="width:100%"></div><div style="margin-top:8px"><label>Motif</label><input id="mv_motif" name="motif" class="f-input" style="width:100%"></div><div style="margin-top:8px"><label>Référence doc</label><input id="mv_reference_doc" name="reference_doc" class="f-input" style="width:100%"></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" id="btnCloseMove" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">Annuler</button><button type="submit" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:600;cursor:pointer">Valider</button></div></form></div></div>
 <div id="modalHistorique" class="modal-overlay"><div class="modal-box"><h3 style="margin-top:0">Historique</h3><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Type</th><th style="text-align:left">Quantité</th><th style="text-align:left">Avant</th><th style="text-align:left">Après</th><th style="text-align:left">Motif</th></tr></thead><tbody id="historiqueBody"></tbody></table><div style="text-align:right;margin-top:10px"><button type="button" id="btnCloseHist" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">Fermer</button></div></div></div>
-<div id="modalScanner" class="modal-overlay"><div class="modal-box" style="width:720px"><h3 style="margin-top:0">Scanner QR</h3><div style="margin-bottom:8px"><select id="cameraSelect" class="f-select"></select></div><div style="position:relative;width:400px;height:300px;margin:auto;background:#000;border-radius:8px;overflow:hidden"><video id="qrVideo" width="400" height="300" style="width:100%;height:100%;object-fit:cover"></video><canvas id="qrCanvas" style="display:none"></canvas><div style="position:absolute;left:12px;top:12px;width:40px;height:40px;border-left:3px solid #22c55e;border-top:3px solid #22c55e"></div><div style="position:absolute;right:12px;top:12px;width:40px;height:40px;border-right:3px solid #22c55e;border-top:3px solid #22c55e"></div><div style="position:absolute;left:12px;bottom:12px;width:40px;height:40px;border-left:3px solid #22c55e;border-bottom:3px solid #22c55e"></div><div style="position:absolute;right:12px;bottom:12px;width:40px;height:40px;border-right:3px solid #22c55e;border-bottom:3px solid #22c55e"></div><div class="scanline"></div></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button type="button" id="manualSearch" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">Saisir manuellement</button><button type="button" id="btnCloseScan" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">Fermer</button></div></div></div>
+<div id="modalScanner" class="modal-overlay"><div class="modal-box" style="width:720px"><h3 style="margin-top:0">Scanner QR</h3><div style="margin-bottom:8px"><select id="cameraSelect" class="f-select" style="width:100%"></select></div><div class="scanner-box"><video id="qrVideo" width="400" height="300" style="width:100%;height:100%;object-fit:cover"></video><canvas id="qrCanvas" style="display:none"></canvas><div style="position:absolute;left:12px;top:12px;width:40px;height:40px;border-left:3px solid #22c55e;border-top:3px solid #22c55e"></div><div style="position:absolute;right:12px;top:12px;width:40px;height:40px;border-right:3px solid #22c55e;border-top:3px solid #22c55e"></div><div style="position:absolute;left:12px;bottom:12px;width:40px;height:40px;border-left:3px solid #22c55e;border-bottom:3px solid #22c55e"></div><div style="position:absolute;right:12px;bottom:12px;width:40px;height:40px;border-right:3px solid #22c55e;border-bottom:3px solid #22c55e"></div><div class="scanline"></div></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button type="button" id="manualSearch" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">Saisir manuellement</button><button type="button" id="btnCloseScan" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">Fermer</button></div></div></div>
+<div id="modalScanDetails" class="modal-overlay"><div class="modal-box" style="width:560px">
+  <h3 style="margin-top:0">Produit scanne</h3>
+  <div id="scanDetailsContent" style="font-size:14px;color:#374151;line-height:1.6"></div>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+    <button type="button" id="btnCloseScanDetails" style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;cursor:pointer">Fermer</button>
+  </div>
+</div></div>
 <div id="modalEtiquettes" class="modal-overlay"><div class="modal-box" style="width:760px">
   <h3 style="margin-top:0">Choisir les produits a imprimer</h3>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -286,6 +310,28 @@ async function ouvrirHistorique(id){ const res = await fetch('../API/stock_histo
 async function supprimerArticle(id){ if(!confirm('Supprimer cet article ?')) return; const fd = new FormData(); fd.append('stock_id', id); fd.append('csrf_token', document.body.dataset.csrfToken || ''); try{ const res = await fetch('../API/stock_delete.php', { method:'POST', body:fd, credentials:'include' }); const json = await res.json(); if(json.success){ afficherToast('Article supprimé','success'); setTimeout(()=>location.reload(),700);} else { afficherToast(json.message || 'Erreur', 'error'); }}catch(_){ afficherToast('Erreur réseau','error'); }}
 
 let scanStream = null, scanning = false;
+let lastDetectedRef = '';
+function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function afficherPopupDetailsProduit(row){
+  if (!row) return;
+  const qte = parseInt(row.dataset.qte || '0', 10);
+  const contenance = parseInt(row.dataset.contenance || '0', 10);
+  const unite = row.dataset.unite || 'unite';
+  const totalFeuilles = (unite === 'carton' && contenance > 0) ? qte * contenance : null;
+  const html = `
+    <div><strong>Reference:</strong> ${escapeHtml(row.dataset.ref)}</div>
+    <div><strong>Designation:</strong> ${escapeHtml(row.dataset.designation)}</div>
+    <div><strong>Categorie:</strong> ${escapeHtml(row.dataset.categorie)}</div>
+    <div><strong>Etat:</strong> ${escapeHtml(row.dataset.etat)}</div>
+    <div><strong>Marque:</strong> ${escapeHtml(row.dataset.marque || '—')}</div>
+    <div><strong>Modele:</strong> ${escapeHtml(row.dataset.modele || '—')}</div>
+    <div><strong>Quantite:</strong> ${qte} ${escapeHtml(unite)}${qte > 1 ? 's' : ''}${totalFeuilles !== null ? ' (' + totalFeuilles + ' feuilles)' : ''}</div>
+    <div><strong>Emplacement:</strong> ${escapeHtml(row.dataset.emplacement || '—')}</div>
+    <div><strong>Details techniques:</strong> ${escapeHtml(row.dataset.details || '—')}</div>
+  `;
+  document.getElementById('scanDetailsContent').innerHTML = html;
+  document.getElementById('modalScanDetails').style.display = 'flex';
+}
 async function ouvrirScanner(){
   document.getElementById('modalScanner').style.display='flex';
   try {
@@ -296,10 +342,16 @@ async function ouvrirScanner(){
     if (typeof jsQR === 'undefined') {
       afficherToast('Le module QR est bloque ou non charge', 'warning');
     }
+    await demarrerScan(undefined);
     const cams = await navigator.mediaDevices.enumerateDevices();
     const sel = document.getElementById('cameraSelect');
-    sel.innerHTML = cams.filter(d=>d.kind==='videoinput').map((c,i)=>`<option value="${c.deviceId}">${c.label||('Caméra '+(i+1))}</option>`).join('');
-    await demarrerScan(sel.value||undefined);
+    const videoInputs = cams.filter(d=>d.kind==='videoinput');
+    sel.innerHTML = videoInputs.map((c,i)=>`<option value="${c.deviceId}">${c.label||('Caméra '+(i+1))}</option>`).join('');
+    const backCam = videoInputs.find(c => /back|rear|environment|arriere|derriere/i.test(c.label || ''));
+    if (backCam && backCam.deviceId) {
+      sel.value = backCam.deviceId;
+      await demarrerScan(backCam.deviceId);
+    }
     sel.onchange = async()=>{ await demarrerScan(sel.value||undefined); };
   } catch (e) {
     afficherToast('Acces camera refuse. Autorise la camera puis reessaie.', 'error');
@@ -307,7 +359,7 @@ async function ouvrirScanner(){
 }
 async function demarrerScan(deviceId){ stopScan(); const constraints = deviceId ? { video:{ deviceId:{ exact:deviceId } } } : { video:{ facingMode:'environment', width:400, height:300 } }; scanStream = await navigator.mediaDevices.getUserMedia(constraints); const video=document.getElementById('qrVideo'); video.srcObject=scanStream; await video.play(); scanning=true; requestAnimationFrame(scanFrame); }
 function stopScan(){ scanning=false; if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; } }
-function scanFrame(){ if(!scanning || typeof jsQR==='undefined') return; const video=document.getElementById('qrVideo'); const canvas=document.getElementById('qrCanvas'); const ctx=canvas.getContext('2d'); if(video.readyState===video.HAVE_ENOUGH_DATA){ canvas.width=video.videoWidth; canvas.height=video.videoHeight; ctx.drawImage(video,0,0,canvas.width,canvas.height); const imageData=ctx.getImageData(0,0,canvas.width,canvas.height); const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'dontInvert'}); if(code){ const ref=code.data; document.getElementById('recherche').value=ref; filtrerTableau(); const row=[...document.querySelectorAll('#tableauStock tbody tr[data-ref]')].find(tr=>tr.dataset.ref===ref); if(row){ row.style.background='#dcfce7'; setTimeout(()=>{row.style.background='';},2000);} stopScan(); fermerModal('modalScanner'); return; } } requestAnimationFrame(scanFrame); }
+function scanFrame(){ if(!scanning || typeof jsQR==='undefined') return; const video=document.getElementById('qrVideo'); const canvas=document.getElementById('qrCanvas'); const ctx=canvas.getContext('2d'); if(video.readyState===video.HAVE_ENOUGH_DATA){ canvas.width=video.videoWidth; canvas.height=video.videoHeight; ctx.drawImage(video,0,0,canvas.width,canvas.height); const imageData=ctx.getImageData(0,0,canvas.width,canvas.height); const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'dontInvert'}); if(code){ const ref=(code.data||'').trim(); if(ref && ref !== lastDetectedRef){ lastDetectedRef = ref; document.getElementById('recherche').value=ref; filtrerTableau(); const row=[...document.querySelectorAll('#tableauStock tbody tr[data-ref]')].find(tr=>tr.dataset.ref===ref); if(row){ row.style.background='#dcfce7'; setTimeout(()=>{row.style.background='';},2000); } stopScan(); fermerModal('modalScanner'); if(row){ afficherPopupDetailsProduit(row); } else { afficherToast('Article non trouve: '+ref, 'warning'); } return; } } } requestAnimationFrame(scanFrame); }
 document.getElementById('manualSearch').addEventListener('click', ()=>{ stopScan(); fermerModal('modalScanner'); document.getElementById('recherche').focus(); });
 document.getElementById('btnAddArticle')?.addEventListener('click', ouvrirModalAjout);
 document.getElementById('btnFirstAdd')?.addEventListener('click', ouvrirModalAjout);
@@ -317,6 +369,7 @@ document.getElementById('btnCloseArticle')?.addEventListener('click', ()=>fermer
 document.getElementById('btnCloseMove')?.addEventListener('click', ()=>fermerModal('modalMouvement'));
 document.getElementById('btnCloseHist')?.addEventListener('click', ()=>fermerModal('modalHistorique'));
 document.getElementById('btnCloseScan')?.addEventListener('click', ()=>{ stopScan(); fermerModal('modalScanner'); });
+document.getElementById('btnCloseScanDetails')?.addEventListener('click', ()=>fermerModal('modalScanDetails'));
 document.getElementById('btnCloseLabels')?.addEventListener('click', ()=>fermerModal('modalEtiquettes'));
 document.getElementById('btnSelectAllLabels')?.addEventListener('click', ()=>document.querySelectorAll('.label-item').forEach(c=>{ c.checked = true; }));
 document.getElementById('btnClearLabels')?.addEventListener('click', ()=>document.querySelectorAll('.label-item').forEach(c=>{ c.checked = false; }));
