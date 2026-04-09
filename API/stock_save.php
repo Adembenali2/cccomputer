@@ -22,7 +22,8 @@ $pdo = getPdoOrFail();
 $fields = [
     'id','reference','designation','categorie','marque','modele_compatible','quantite','quantite_min','prix_unitaire_ht',
     'emplacement','actif','unite','contenance','numero_serie','adresse_mac','cpu','ram','stockage',
-    'etat','date_achat','fournisseur','notes'
+    'etat','date_achat','fournisseur','notes','taille_ecran','resolution','couleur_toner','rendement_pages',
+    'grammage','format_papier','compteur_initial'
 ];
 $data = [];
 foreach ($fields as $f) {
@@ -89,6 +90,13 @@ $payload = [
     ':date_achat' => (($v = trim((string)$data['date_achat'])) !== '' ? $v : null),
     ':fournisseur' => (($v = trim((string)$data['fournisseur'])) !== '' ? $v : null),
     ':notes' => (($v = trim((string)$data['notes'])) !== '' ? $v : null),
+    ':taille_ecran' => (($v = trim((string)$data['taille_ecran'])) !== '' ? $v : null),
+    ':resolution' => (($v = trim((string)$data['resolution'])) !== '' ? $v : null),
+    ':couleur_toner' => (($v = trim((string)$data['couleur_toner'])) !== '' ? $v : null),
+    ':rendement_pages' => ($data['rendement_pages'] !== null && $data['rendement_pages'] !== '' ? (int)$data['rendement_pages'] : null),
+    ':grammage' => (($v = trim((string)$data['grammage'])) !== '' ? $v : null),
+    ':format_papier' => (($v = trim((string)$data['format_papier'])) !== '' ? $v : null),
+    ':compteur_initial' => ($data['compteur_initial'] !== null && $data['compteur_initial'] !== '' ? (int)$data['compteur_initial'] : 0),
     ':photo' => ($photoPath !== '' ? $photoPath : null),
 ];
 
@@ -99,7 +107,10 @@ try {
             reference=:reference, designation=:designation, categorie=:categorie, marque=:marque, modele_compatible=:modele_compatible,
             quantite=:quantite, quantite_min=:quantite_min, prix_unitaire_ht=:prix_unitaire_ht, emplacement=:emplacement, actif=:actif,
             unite=:unite, contenance=:contenance, numero_serie=:numero_serie, adresse_mac=:adresse_mac, cpu=:cpu, ram=:ram, stockage=:stockage,
-            etat=:etat, date_achat=:date_achat, fournisseur=:fournisseur, notes=:notes, photo=:photo, updated_at=CURRENT_TIMESTAMP
+            etat=:etat, date_achat=:date_achat, fournisseur=:fournisseur, notes=:notes,
+            taille_ecran=:taille_ecran, resolution=:resolution, couleur_toner=:couleur_toner, rendement_pages=:rendement_pages,
+            grammage=:grammage, format_papier=:format_papier, compteur_initial=:compteur_initial,
+            photo=:photo, updated_at=CURRENT_TIMESTAMP
             WHERE id=:id";
         $pdo->prepare($sql)->execute($payload);
         enregistrerAction($pdo, currentUserId(), 'stock_modifie', "Stock #{$id} modifié");
@@ -108,10 +119,12 @@ try {
 
     $sql = "INSERT INTO stock (
         reference,designation,categorie,marque,modele_compatible,quantite,quantite_min,prix_unitaire_ht,emplacement,actif,
-        unite,contenance,numero_serie,adresse_mac,cpu,ram,stockage,etat,date_achat,fournisseur,notes,photo
+        unite,contenance,numero_serie,adresse_mac,cpu,ram,stockage,etat,date_achat,fournisseur,notes,
+        taille_ecran,resolution,couleur_toner,rendement_pages,grammage,format_papier,compteur_initial,photo
     ) VALUES (
         :reference,:designation,:categorie,:marque,:modele_compatible,:quantite,:quantite_min,:prix_unitaire_ht,:emplacement,:actif,
-        :unite,:contenance,:numero_serie,:adresse_mac,:cpu,:ram,:stockage,:etat,:date_achat,:fournisseur,:notes,:photo
+        :unite,:contenance,:numero_serie,:adresse_mac,:cpu,:ram,:stockage,:etat,:date_achat,:fournisseur,:notes,
+        :taille_ecran,:resolution,:couleur_toner,:rendement_pages,:grammage,:format_papier,:compteur_initial,:photo
     )";
     $pdo->prepare($sql)->execute($payload);
     $newId = (int)$pdo->lastInsertId();

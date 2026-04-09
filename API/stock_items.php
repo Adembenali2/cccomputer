@@ -85,6 +85,13 @@ $dateAchat = trim((string)($data['date_achat'] ?? ''));
 $fournisseur = trim((string)($data['fournisseur'] ?? ''));
 $notes = trim((string)($data['notes'] ?? ''));
 $photo = trim((string)($data['photo'] ?? ''));
+$tailleEcran = trim((string)($data['taille_ecran'] ?? ''));
+$resolution = trim((string)($data['resolution'] ?? ''));
+$couleurToner = trim((string)($data['couleur_toner'] ?? ''));
+$rendementPages = isset($data['rendement_pages']) && $data['rendement_pages'] !== '' ? (int)$data['rendement_pages'] : null;
+$grammage = trim((string)($data['grammage'] ?? ''));
+$formatPapier = trim((string)($data['format_papier'] ?? ''));
+$compteurInitial = isset($data['compteur_initial']) && $data['compteur_initial'] !== '' ? (int)$data['compteur_initial'] : 0;
 
 if ($reference === '' || $designation === '' || !in_array($categorie, $allowedCategories, true)) {
     jsonResponse(['ok' => false, 'error' => 'Paramètres invalides'], 400);
@@ -133,6 +140,13 @@ try {
                 date_achat = :date_achat,
                 fournisseur = :fournisseur,
                 notes = :notes,
+                taille_ecran = :taille_ecran,
+                resolution = :resolution,
+                couleur_toner = :couleur_toner,
+                rendement_pages = :rendement_pages,
+                grammage = :grammage,
+                format_papier = :format_papier,
+                compteur_initial = :compteur_initial,
                 photo = :photo,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
@@ -161,6 +175,13 @@ try {
             ':date_achat' => $dateAchat !== '' ? $dateAchat : null,
             ':fournisseur' => $fournisseur !== '' ? $fournisseur : null,
             ':notes' => $notes !== '' ? $notes : null,
+            ':taille_ecran' => $tailleEcran !== '' ? $tailleEcran : null,
+            ':resolution' => $resolution !== '' ? $resolution : null,
+            ':couleur_toner' => $couleurToner !== '' ? $couleurToner : null,
+            ':rendement_pages' => $rendementPages,
+            ':grammage' => $grammage !== '' ? $grammage : null,
+            ':format_papier' => $formatPapier !== '' ? $formatPapier : null,
+            ':compteur_initial' => $compteurInitial,
             ':photo' => $photo !== '' ? $photo : null,
         ]);
         enregistrerAction($pdo, currentUserId(), 'stock_article_modifie', "Article stock #{$id} modifié ({$reference})");
@@ -172,10 +193,12 @@ try {
             reference, designation, categorie, marque, modele_compatible, quantite, quantite_min,
             prix_unitaire_ht, emplacement, actif, unite, contenance,
             numero_serie, adresse_mac, cpu, ram, stockage, etat, date_achat, fournisseur, notes, photo
+            , taille_ecran, resolution, couleur_toner, rendement_pages, grammage, format_papier, compteur_initial
         ) VALUES (
             :reference, :designation, :categorie, :marque, :modele_compatible, :quantite, :quantite_min,
             :prix_unitaire_ht, :emplacement, :actif, :unite, :contenance,
-            :numero_serie, :adresse_mac, :cpu, :ram, :stockage, :etat, :date_achat, :fournisseur, :notes, :photo
+            :numero_serie, :adresse_mac, :cpu, :ram, :stockage, :etat, :date_achat, :fournisseur, :notes, :photo,
+            :taille_ecran, :resolution, :couleur_toner, :rendement_pages, :grammage, :format_papier, :compteur_initial
         )
     ";
     $stmt = $pdo->prepare($sql);
@@ -201,6 +224,13 @@ try {
         ':date_achat' => $dateAchat !== '' ? $dateAchat : null,
         ':fournisseur' => $fournisseur !== '' ? $fournisseur : null,
         ':notes' => $notes !== '' ? $notes : null,
+        ':taille_ecran' => $tailleEcran !== '' ? $tailleEcran : null,
+        ':resolution' => $resolution !== '' ? $resolution : null,
+        ':couleur_toner' => $couleurToner !== '' ? $couleurToner : null,
+        ':rendement_pages' => $rendementPages,
+        ':grammage' => $grammage !== '' ? $grammage : null,
+        ':format_papier' => $formatPapier !== '' ? $formatPapier : null,
+        ':compteur_initial' => $compteurInitial,
         ':photo' => $photo !== '' ? $photo : null,
     ]);
     $newId = (int)$pdo->lastInsertId();

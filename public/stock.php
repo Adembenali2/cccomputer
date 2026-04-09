@@ -142,12 +142,19 @@ $canWrite = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
       <div class="field" style="grid-column:span 2"><label>Notes</label><textarea id="f_notes" class="input" style="height:72px;padding:8px"></textarea></div>
     </div>
     <div id="step2" class="grid" style="display:none">
-      <div class="field"><label>Numéro de série</label><input id="f_numero_serie" class="input"></div>
-      <div class="field"><label>Adresse MAC</label><input id="f_adresse_mac" class="input"></div>
-      <div class="field"><label>CPU</label><input id="f_cpu" class="input"></div>
-      <div class="field"><label>RAM</label><input id="f_ram" class="input"></div>
-      <div class="field"><label>Stockage</label><input id="f_stockage" class="input"></div>
-      <div class="field"><label>Modèle compatible</label><input id="f_modele_compatible" class="input"></div>
+      <div class="field" data-tech="numero_serie"><label>Numéro de série</label><input id="f_numero_serie" class="input"></div>
+      <div class="field" data-tech="adresse_mac"><label>Adresse MAC</label><input id="f_adresse_mac" class="input"></div>
+      <div class="field" data-tech="cpu"><label>CPU</label><input id="f_cpu" class="input"></div>
+      <div class="field" data-tech="ram"><label>RAM</label><input id="f_ram" class="input"></div>
+      <div class="field" data-tech="stockage"><label>Stockage</label><input id="f_stockage" class="input"></div>
+      <div class="field" data-tech="modele_compatible"><label>Modèle compatible</label><input id="f_modele_compatible" class="input"></div>
+      <div class="field" data-tech="taille_ecran"><label>Taille écran</label><input id="f_taille_ecran" class="input" placeholder="24 pouces"></div>
+      <div class="field" data-tech="resolution"><label>Résolution</label><input id="f_resolution" class="input" placeholder="1920x1080"></div>
+      <div class="field" data-tech="couleur_toner"><label>Couleur toner</label><input id="f_couleur_toner" class="input" readonly></div>
+      <div class="field" data-tech="rendement_pages"><label>Rendement pages</label><input id="f_rendement_pages" type="number" min="0" class="input"></div>
+      <div class="field" data-tech="grammage"><label>Grammage</label><input id="f_grammage" class="input" placeholder="80g/m²"></div>
+      <div class="field" data-tech="format_papier"><label>Format papier</label><input id="f_format_papier" class="input" placeholder="A4"></div>
+      <div class="field" data-tech="compteur_initial"><label>Compteur initial</label><input id="f_compteur_initial" type="number" min="0" class="input" value="0"></div>
       <div class="field"><label>Unité</label><select id="f_unite" class="select"><option value="unite">unité</option><option value="carton">carton</option><option value="rame">rame</option></select></div>
       <div class="field"><label>Contenance</label><input id="f_contenance" type="number" class="input"></div>
     </div>
@@ -208,10 +215,19 @@ $canWrite = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
 
   function tech(i){
     if(i.categorie==='pc') return [i.cpu,i.ram,i.stockage].filter(Boolean).map(x=>`<span class="pill">${esc(x)}</span>`).join(' ');
-    if(i.categorie==='imprimante') return [i.modele_compatible,i.numero_serie].filter(Boolean).map(x=>`<span class="pill">${esc(x)}</span>`).join(' ');
-    if(i.categorie.startsWith('toner_')) return `<span class="pill">${esc(i.categorie.replace('toner_','').toUpperCase())}</span> <span class="pill">${esc(i.modele_compatible||'')}</span>`;
-    if(i.categorie==='papier'){const q=Number(i.quantite||0),c=Number(i.contenance||0);return c>0?`${q} cartons (${q*c} feuilles)`:`${q} unité(s)`;}
-    if(i.categorie==='ecran_lcd') return [i.modele_compatible, i.notes?.match(/\d{3,4}x\d{3,4}/)?.[0]].filter(Boolean).map(x=>`<span class="pill">${esc(x)}</span>`).join(' ');
+    if(i.categorie==='imprimante'){const sn=String(i.numero_serie||''); return [i.modele_compatible, sn?('SN:'+sn.slice(0,10)+(sn.length>10?'...':'')):'' ].filter(Boolean).map(x=>`<span class="pill">${esc(x)}</span>`).join(' ');}
+    if((i.categorie||'').startsWith('toner_')){
+      const clrMap={noir:'#111827',cyan:'#0891b2',magenta:'#db2777',jaune:'#fde047'};
+      const key=(i.couleur_toner||String(i.categorie).replace('toner_','')).toLowerCase();
+      const dot=`<span style="display:inline-block;width:10px;height:10px;border-radius:99px;background:${clrMap[key]||'#6b7280'};vertical-align:middle;margin-right:6px"></span>`;
+      return `${dot}<span class="pill">${esc(i.modele_compatible||'')}</span>${i.rendement_pages?` <span class="pill">${esc(String(i.rendement_pages))} pages</span>`:''}`;
+    }
+    if(i.categorie==='papier'){
+      const q=Number(i.quantite||0),c=Number(i.contenance||0);
+      const qty=c>0?`${q} cartons (${q*c} feuilles)`:`${q} unité(s)`;
+      return [i.format_papier,i.grammage,qty].filter(Boolean).map(x=>`<span class="pill">${esc(x)}</span>`).join(' ');
+    }
+    if(i.categorie==='ecran_lcd') return [i.taille_ecran, i.resolution].filter(Boolean).map(x=>`<span class="pill">${esc(x)}</span>`).join(' ');
     return esc(i.modele_compatible||'');
   }
   function qCell(i){
@@ -289,19 +305,29 @@ $canWrite = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
     fCat.innerHTML = catSel; document.getElementById('f_categorie').innerHTML = cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
     document.getElementById('catChecks').innerHTML = cats.map(c=>`<label><input type="checkbox" value="${esc(c)}" checked> ${esc(c)} (${items.filter(i=>i.categorie===c).length})</label><br>`).join('');
     document.querySelectorAll('#catChecks input,#etatChecks input,input[name="fStockState"]').forEach(el=>el.addEventListener('change',applyFilters));
+    applyTechFieldsByCategory();
     applyFilters();
   }
 
-  function openModal(id){editId=id||0;step=1;showStep();document.getElementById('mTitle').textContent=id?'Modifier article':'Ajouter article';document.getElementById('mbg').style.display='block';document.getElementById('mEdit').style.display='block';}
+  function openModal(id){
+    editId=id||0;step=1;showStep();
+    document.getElementById('mTitle').textContent=id?'Modifier article':'Ajouter article';
+    if(!id){
+      document.querySelectorAll('#mEdit input,#mEdit textarea').forEach(el=>{if(el.type==='file') return; if(el.id==='f_compteur_initial'){el.value='0';} else {el.value='';}});
+      document.querySelectorAll('#mEdit select').forEach(el=>{if(el.id==='f_etat') el.value='neuf';});
+    }
+    document.getElementById('mbg').style.display='block';document.getElementById('mEdit').style.display='block';
+    applyTechFieldsByCategory();
+  }
   function closeModal(){document.getElementById('mbg').style.display='none';document.querySelectorAll('.modal').forEach(m=>m.style.display='none'); stopScan();}
   function showStep(){['step1','step2','step3'].forEach((s,idx)=>document.getElementById(s).style.display=(idx+1===step?'grid':'none')); document.getElementById('mPrev').disabled=step===1; document.getElementById('mNext').disabled=step===3;}
-  window.openEdit = (id) => {const it=items.find(x=>Number(x.id)===Number(id)); if(!it) return; openModal(id); Object.keys(it).forEach(k=>{const el=document.getElementById('f_'+k); if(el){el.value=it[k]??'';}}); };
+  window.openEdit = (id) => {const it=items.find(x=>Number(x.id)===Number(id)); if(!it) return; openModal(id); Object.keys(it).forEach(k=>{const el=document.getElementById('f_'+k); if(el){el.value=it[k]??'';}}); applyTechFieldsByCategory(); };
 
   async function save(){
     if(!canWrite){toast('Lecture seule','tWarn'); return;}
     const fd = new FormData();
     if(editId) fd.append('id', String(editId));
-    ['reference','designation','categorie','marque','modele_compatible','quantite','quantite_min','prix_unitaire_ht','emplacement','unite','contenance','numero_serie','adresse_mac','cpu','ram','stockage','etat','date_achat','fournisseur','notes'].forEach(k=>{
+    ['reference','designation','categorie','marque','modele_compatible','quantite','quantite_min','prix_unitaire_ht','emplacement','unite','contenance','numero_serie','adresse_mac','cpu','ram','stockage','etat','date_achat','fournisseur','notes','taille_ecran','resolution','couleur_toner','rendement_pages','grammage','format_papier','compteur_initial'].forEach(k=>{
       const el=document.getElementById('f_'+k); if(el) fd.append(k, el.value ?? '');
     });
     const file = document.getElementById('f_photo').files[0]; if(file) fd.append('photo', file);
@@ -379,7 +405,40 @@ $canWrite = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
   document.getElementById('scanClose').addEventListener('click',closeModal);
   document.getElementById('camSel').addEventListener('change',async(e)=>{stopScan(); await startScan(e.target.value);});
   document.getElementById('manualEntry').addEventListener('click',()=>{closeModal(); q.focus();});
-  document.getElementById('f_categorie').addEventListener('change',function(){ if(this.value==='papier'){document.getElementById('f_unite').value='carton'; document.getElementById('f_contenance').value='2500';}});
+  const champsParCategorie = {
+    'pc': ['numero_serie','adresse_mac','cpu','ram','stockage'],
+    'ecran_lcd': ['numero_serie','taille_ecran','resolution'],
+    'imprimante': ['numero_serie','modele_compatible','compteur_initial'],
+    'toner_noir': ['couleur_toner','modele_compatible','rendement_pages'],
+    'toner_cyan': ['couleur_toner','modele_compatible','rendement_pages'],
+    'toner_magenta': ['couleur_toner','modele_compatible','rendement_pages'],
+    'toner_jaune': ['couleur_toner','modele_compatible','rendement_pages'],
+    'papier': ['grammage','format_papier'],
+    'piece_detachee': ['numero_serie','modele_compatible'],
+    'consommable': ['modele_compatible'],
+    'autre': []
+  };
+  function applyTechFieldsByCategory(){
+    const cat = (document.getElementById('f_categorie').value || 'autre');
+    const allowed = champsParCategorie[cat] || [];
+    document.querySelectorAll('#step2 [data-tech]').forEach(row => {
+      const key = row.getAttribute('data-tech');
+      const input = document.getElementById('f_' + key);
+      const show = allowed.includes(key);
+      row.style.display = show ? '' : 'none';
+      if (!show && input) input.value = '';
+    });
+    if (cat === 'papier') {
+      document.getElementById('f_unite').value = 'carton';
+      document.getElementById('f_contenance').value = '2500';
+    }
+    const tonal = {'toner_noir':'Noir','toner_cyan':'Cyan','toner_magenta':'Magenta','toner_jaune':'Jaune'};
+    if (tonal[cat]) {
+      const ct = document.getElementById('f_couleur_toner');
+      if (ct) ct.value = tonal[cat];
+    }
+  }
+  document.getElementById('f_categorie').addEventListener('change', applyTechFieldsByCategory);
   document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal(); if(e.key.toLowerCase()==='n'){e.preventDefault();openModal(0);} if(e.key.toLowerCase()==='f'){e.preventDefault();q.focus();} if(e.key.toLowerCase()==='s'){e.preventDefault();document.getElementById('btnScan').click();}});
   if(!canWrite){document.getElementById('btnAdd').classList.add('readOnly');}
   load();
@@ -387,87 +446,6 @@ $canWrite = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
 </script>
 </body>
 </html>
-
-<?php
-/**
- * Page de gestion du stock
- * Affiche les différents types de produits en stock (papier, toners, LCD, PC)
- * 
- * @package CCComputer
- * @version 3.0 - Design moderne Dashboard avec alignement parfait des tableaux
- */
-
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/auth_role.php';
-require_once __DIR__ . '/../includes/helpers.php';
-
-// Vérification des permissions
-authorize_page('stock', []);
-$emploi = (string)($_SESSION['emploi'] ?? '');
-$allowedReadRoles = ['Admin', 'Dirigeant', 'Secrétaire', 'Livreur'];
-if (!in_array($emploi, $allowedReadRoles, true)) {
-    http_response_code(403);
-    exit('Accès refusé');
-}
-$canWriteStock = in_array($emploi, ['Admin', 'Dirigeant', 'Secrétaire'], true);
-
-// Récupérer PDO via la fonction centralisée
-$pdo = getPdo();
-
-// Configuration PDO pour les erreurs
-try {
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    error_log('Erreur configuration PDO dans stock.php: ' . $e->getMessage());
-}
-
-// Génération du token CSRF
-ensureCsrfToken();
-
-// ====================================================================
-// GESTION DES MESSAGES FLASH
-// ====================================================================
-$flash = $_SESSION['flash'] ?? null;
-unset($_SESSION['flash']);
-
-// Message de succès depuis paramètre GET (validation stricte)
-$flashWarning = null;
-$allowedTypes = ['papier', 'toner', 'lcd', 'pc'];
-if (isset($_GET['added']) && in_array($_GET['added'], $allowedTypes, true)) {
-    $typeNames = [
-        'papier' => 'papier',
-        'toner' => 'toner',
-        'lcd' => 'LCD',
-        'pc' => 'PC'
-    ];
-    $typeName = $typeNames[$_GET['added']] ?? 'produit';
-    $flash = [
-        'type' => 'success',
-        'msg' => ucfirst($typeName) . ' ajouté avec succès dans le stock.'
-    ];
-    if (!empty($_GET['warning'])) {
-        $flashWarning = 'Impossible de générer le QR code. L\'étiquette utilisera le code-barres.';
-    }
-}
-
-// ====================================================================
-// NOUVEAU MODULE STOCK (table `stock`)
-// ====================================================================
-$stockItemsNew = [];
-try {
-    $stockItemsNew = safeFetchAll(
-        $pdo,
-        "SELECT id, reference, designation, categorie, quantite, quantite_min, unite, contenance
-         FROM stock
-         WHERE actif = 1
-         ORDER BY designation ASC
-         LIMIT 500",
-        [],
-        'stock_new_table'
-    );
-} catch (Throwable $e) {
-    $stockItemsNew = [];
-}
 
 // ====================================================================
 // FONCTIONS UTILITAIRES
