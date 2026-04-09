@@ -105,7 +105,7 @@ foreach ($articles as $a) {
 
 <script <?= csp_nonce() ?>>
 (() => {
-  const items = <?= json_encode($articles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || [];
+  let items = <?= json_encode($articles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || [];
   const tb = document.getElementById('tb');
   const q = document.getElementById('q');
   const fCategorie = document.getElementById('fCategorie');
@@ -159,7 +159,26 @@ foreach ($articles as $a) {
     window.open('/public/stock_etiquettes.php?all=1', '_blank');
   });
 
-  render();
+  const refreshCategories = () => {
+    const cats = [...new Set(items.map(i => i.categorie).filter(Boolean))];
+    fCategorie.innerHTML = '<option value="">Toutes catégories</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  };
+
+  const loadItems = async () => {
+    try {
+      const r = await fetch('/API/stock_items.php', { credentials: 'include' });
+      const d = await r.json();
+      if (d && d.ok && Array.isArray(d.items) && d.items.length) {
+        items = d.items;
+      }
+    } catch (e) {
+      // Fallback silencieux sur les données PHP déjà chargées
+    }
+    refreshCategories();
+    render();
+  };
+
+  loadItems();
 })();
 </script>
 </body>
