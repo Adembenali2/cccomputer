@@ -55,4 +55,3 @@ try {
     error_log('dashboard_get_stock_products.php error: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'Erreur inattendue'], 500);
 }
-

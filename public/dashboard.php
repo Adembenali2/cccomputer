@@ -28,6 +28,10 @@ $userNom = (string)($_SESSION['nom'] ?? $_SESSION['user_nom'] ?? 'Utilisateur');
 $userRole = (string)($_SESSION['role'] ?? $_SESSION['emploi'] ?? '');
 
 $clientNameCol = colExists($pdo, 'clients', 'nom') ? 'nom' : (colExists($pdo, 'clients', 'raison_sociale') ? 'raison_sociale' : 'id');
+$clientEmailCol = colExists($pdo, 'clients', 'email') ? 'email' : (colExists($pdo, 'clients', 'mail') ? 'mail' : null);
+$clientPhoneCol = colExists($pdo, 'clients', 'telephone') ? 'telephone' : (colExists($pdo, 'clients', 'tel') ? 'tel' : null);
+$clientCityCol = colExists($pdo, 'clients', 'ville') ? 'ville' : null;
+$clientStatusCol = colExists($pdo, 'clients', 'statut') ? 'statut' : (colExists($pdo, 'clients', 'status') ? 'status' : null);
 $clientCreatedCol = colExists($pdo, 'clients', 'created_at') ? 'created_at' : (colExists($pdo, 'clients', 'date_creation') ? 'date_creation' : null);
 $savClientCol = colExists($pdo, 'sav', 'client_id') ? 'client_id' : 'id_client';
 $livClientCol = colExists($pdo, 'livraisons', 'client_id') ? 'client_id' : 'id_client';
@@ -101,12 +105,18 @@ $historique = array_slice($historique, 0, 8);
 $nbNotifs = $savEnRetard + $stockAlerte + $stockRupture;
 
 // Clients pour le widget support
+$clientEmailExpr = $clientEmailCol !== null ? "COALESCE({$clientEmailCol}, '')" : "''";
+$clientDetailExpr = $clientPhoneCol !== null
+    ? "COALESCE({$clientPhoneCol}, " . ($clientCityCol !== null ? "{$clientCityCol}" : "''") . ", '')"
+    : ($clientCityCol !== null ? "COALESCE({$clientCityCol}, '')" : "''");
+$clientStatusExpr = $clientStatusCol !== null ? "COALESCE({$clientStatusCol}, 'actif')" : "'actif'";
+
 $clientsWidget = $pdo->query("
     SELECT id, 
            COALESCE({$clientNameCol}, CONCAT('Client #', id)) as nom,
-           COALESCE(email, '') as email,
-           COALESCE(telephone, ville, '') as detail,
-           COALESCE(statut, 'actif') as statut
+           {$clientEmailExpr} as email,
+           {$clientDetailExpr} as detail,
+           {$clientStatusExpr} as statut
     FROM clients 
     ORDER BY nom ASC
     LIMIT 300
