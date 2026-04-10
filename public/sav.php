@@ -744,10 +744,26 @@ $pdfExportDateFinDefault = $today;
       <?php endif; ?>
       <button type="button" class="btn btn-outline" id="btnOpenPdfExportSav">Exporter PDF</button>
     </div>
+    <div class="view-toggle" id="viewToggle">
+      <button type="button" class="view-btn active" id="btnTableView" title="Vue tableau">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+        </svg>
+        Tableau
+      </button>
+      <button type="button" class="view-btn" id="btnKanbanView" title="Vue Kanban">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="13"/>
+          <rect x="17" y="3" width="5" height="16"/>
+        </svg>
+        Kanban
+      </button>
+    </div>
   </div>
 
   <!-- Tableau -->
-  <div class="table-wrapper">
+  <div class="table-wrapper" id="savTableWrap">
     <table class="tbl-livraisons" id="tbl">
       <thead>
         <tr>
@@ -960,6 +976,41 @@ $pdfExportDateFinDefault = $today;
       <?php endif; ?>
       </tbody>
     </table>
+  </div>
+
+  <div id="kanbanBoard" class="kanban-board" hidden>
+    <div class="kanban-col" data-statut="ouvert">
+      <div class="kanban-col-header">
+        <span class="kanban-col-dot dot-ouvert"></span>
+        <span class="kanban-col-title">Ouvert</span>
+        <span class="kanban-col-count" id="kCount-ouvert">0</span>
+      </div>
+      <div class="kanban-cards" id="kCards-ouvert"></div>
+    </div>
+    <div class="kanban-col" data-statut="en_cours">
+      <div class="kanban-col-header">
+        <span class="kanban-col-dot dot-en_cours"></span>
+        <span class="kanban-col-title">En cours</span>
+        <span class="kanban-col-count" id="kCount-en_cours">0</span>
+      </div>
+      <div class="kanban-cards" id="kCards-en_cours"></div>
+    </div>
+    <div class="kanban-col" data-statut="resolu">
+      <div class="kanban-col-header">
+        <span class="kanban-col-dot dot-resolu"></span>
+        <span class="kanban-col-title">Résolu</span>
+        <span class="kanban-col-count" id="kCount-resolu">0</span>
+      </div>
+      <div class="kanban-cards" id="kCards-resolu"></div>
+    </div>
+    <div class="kanban-col" data-statut="annule">
+      <div class="kanban-col-header">
+        <span class="kanban-col-dot dot-annule"></span>
+        <span class="kanban-col-title">Annulé</span>
+        <span class="kanban-col-count" id="kCount-annule">0</span>
+      </div>
+      <div class="kanban-cards" id="kCards-annule"></div>
+    </div>
   </div>
 </div>
 
@@ -1176,6 +1227,7 @@ $pdfExportDateFinDefault = $today;
 (function(){
   // [Fonctionnalité A/B/G]
   const csrfToken = <?= json_encode($CSRF) ?>;
+  window.__CSRF_TOKEN__ = csrfToken;
   const overlay   = document.getElementById('savModalOverlay');
   const modal     = document.getElementById('editSavModal');
   const closeBtn  = document.getElementById('btnCloseSavModal');
@@ -1583,6 +1635,188 @@ $pdfExportDateFinDefault = $today;
         });
     });
   }
+
+  // ===== KANBAN VIEW =====
+  (function () {
+    const btnTable = document.getElementById('btnTableView');
+    const btnKanban = document.getElementById('btnKanbanView');
+    const board = document.getElementById('kanbanBoard');
+    const tableWrap = document.getElementById('savTableWrap');
+
+    if (!btnTable || !btnKanban || !board || !tableWrap) return;
+
+    const PRIORITY_COLORS = {
+      urgente: '#dc2626', haute: '#f59e0b', normale: '#3b82f6', basse: '#6b7280'
+    };
+    const PRIORITY_LABELS = {
+      urgente: 'Urgente', haute: 'Haute', normale: 'Normale', basse: 'Basse'
+    };
+
+    function escK(s) {
+      const d = document.createElement('div');
+      d.appendChild(document.createTextNode(String(s ?? '')));
+      return d.innerHTML;
+    }
+
+    function frToday() {
+      const d = new Date();
+      const pad = function (n) { return String(n).padStart(2, '0'); };
+      return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+    }
+
+    function visibleSavRows() {
+      return Array.prototype.slice.call(document.querySelectorAll('#tbl tbody tr[data-id]')).filter(function (tr) {
+        if (tr.getAttribute('data-empty-row') === '1') return false;
+        return tr.style.display !== 'none';
+      });
+    }
+
+    function buildKanban() {
+      const rows = visibleSavRows();
+      const counts = { ouvert: 0, en_cours: 0, resolu: 0, annule: 0 };
+
+      ['ouvert', 'en_cours', 'resolu', 'annule'].forEach(function (s) {
+        const el = document.getElementById('kCards-' + s);
+        if (el) el.innerHTML = '';
+        counts[s] = 0;
+      });
+
+      rows.forEach(function (row) {
+        const id = row.getAttribute('data-id');
+        let statut = row.getAttribute('data-statut') || 'ouvert';
+        if (!counts.hasOwnProperty(statut)) statut = 'ouvert';
+        const client = row.getAttribute('data-client') || '—';
+        const ref = row.getAttribute('data-ref') || '—';
+        const desc = row.getAttribute('data-description') || '';
+        const priorite = row.getAttribute('data-priorite') || 'normale';
+        const techCell = row.querySelector('td:nth-child(7)');
+        const techName = techCell ? techCell.textContent.trim() : '—';
+        const dateOuv = row.getAttribute('data-ouverture') || '';
+        const canEdit = row.getAttribute('data-can-edit') === '1';
+
+        const col = document.getElementById('kCards-' + statut);
+        if (!col) return;
+
+        counts[statut] = (counts[statut] || 0) + 1;
+
+        const card = document.createElement('div');
+        card.className = 'kanban-card';
+        card.dataset.id = id;
+        card.dataset.statut = statut;
+
+        const priColor = PRIORITY_COLORS[priorite] || '#6b7280';
+        const priLabel = PRIORITY_LABELS[priorite] || priorite;
+        const descShort = desc.length > 80 ? desc.substring(0, 80) + '…' : desc;
+
+        const moveBtns = canEdit
+          ? (statut !== 'ouvert' ? '<button type="button" class="kanban-move-btn" data-id="' + id + '" data-to="ouvert" title="→ Ouvert">↩</button>' : '') +
+            (statut !== 'en_cours' ? '<button type="button" class="kanban-move-btn" data-id="' + id + '" data-to="en_cours" title="→ En cours">▶</button>' : '') +
+            (statut !== 'resolu' ? '<button type="button" class="kanban-move-btn" data-id="' + id + '" data-to="resolu" title="→ Résolu">✔</button>' : '') +
+            (statut !== 'annule' ? '<button type="button" class="kanban-move-btn" data-id="' + id + '" data-to="annule" title="→ Annulé">✖</button>' : '')
+          : '';
+
+        card.innerHTML =
+          '<div class="kanban-card-head">' +
+          '<span class="kanban-ref">' + escK(ref) + '</span>' +
+          '<span class="kanban-priority" style="background:' + priColor + '">' + escK(priLabel) + '</span>' +
+          '</div>' +
+          '<div class="kanban-client">' + escK(client) + '</div>' +
+          '<div class="kanban-desc">' + escK(descShort) + '</div>' +
+          '<div class="kanban-footer">' +
+          '<span class="kanban-tech">👤 ' + escK(techName) + '</span>' +
+          '<span class="kanban-date">📅 ' + escK(dateOuv) + '</span>' +
+          '</div>' +
+          '<div class="kanban-actions">' +
+          '<button type="button" class="kanban-btn-edit" data-id="' + escK(id) + '" title="Modifier">✏️ Détail</button>' +
+          moveBtns +
+          '</div>';
+
+        col.appendChild(card);
+      });
+
+      ['ouvert', 'en_cours', 'resolu', 'annule'].forEach(function (s) {
+        const el = document.getElementById('kCount-' + s);
+        if (el) el.textContent = String(counts[s] || 0);
+      });
+
+      board.querySelectorAll('.kanban-btn-edit').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const rid = btn.getAttribute('data-id');
+          const tr = document.querySelector('#tbl tbody tr[data-id="' + rid + '"]');
+          if (tr) tr.click();
+        });
+      });
+
+      board.querySelectorAll('.kanban-move-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function (e) {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-id');
+          const to = btn.getAttribute('data-to');
+          btn.disabled = true;
+          try {
+            const res = await fetch('/API/sav/update_statut.php', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+              },
+              body: JSON.stringify({ id: parseInt(id, 10), statut: to, csrf_token: csrfToken })
+            });
+            const data = await res.json();
+            if (data.success) {
+              const row = document.querySelector('#tbl tbody tr[data-id="' + id + '"]');
+              if (row) {
+                row.setAttribute('data-statut', to);
+                if (to === 'resolu') {
+                  row.setAttribute('data-fermeture', frToday());
+                } else {
+                  row.setAttribute('data-fermeture', '—');
+                }
+              }
+              buildKanban();
+            } else {
+              alert('Erreur : ' + (data.error || 'Impossible de mettre à jour'));
+              btn.disabled = false;
+            }
+          } catch (err) {
+            alert('Erreur réseau');
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    function showTable() {
+      btnTable.classList.add('active');
+      btnKanban.classList.remove('active');
+      board.hidden = true;
+      tableWrap.hidden = false;
+      localStorage.setItem('savView', 'table');
+    }
+
+    function showKanban() {
+      btnKanban.classList.add('active');
+      btnTable.classList.remove('active');
+      tableWrap.hidden = true;
+      board.hidden = false;
+      buildKanban();
+      localStorage.setItem('savView', 'kanban');
+    }
+
+    btnTable.addEventListener('click', showTable);
+    btnKanban.addEventListener('click', showKanban);
+
+    const qInputKanban = document.getElementById('q');
+    if (qInputKanban) {
+      qInputKanban.addEventListener('input', function () {
+        if (!board.hidden) buildKanban();
+      });
+    }
+
+    if (localStorage.getItem('savView') === 'kanban') showKanban();
+  })();
 })();
 </script>
 </body>
