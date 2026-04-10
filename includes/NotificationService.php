@@ -81,6 +81,88 @@ final class NotificationService
         }
     }
 
+    /**
+     * Transforme une ligne SQL notifications en payload API (type court, url, message affichable).
+     *
+     * @param array<string, mixed> $row
+     * @return array{id:int,message:string,type:string,url:string,created_at:string}
+     */
+    public static function toApiItem(array $row): array
+    {
+        $dbType = strtolower((string) ($row['type'] ?? ''));
+        $typeLien = isset($row['type_lien']) && $row['type_lien'] !== '' ? (string) $row['type_lien'] : null;
+        $idLien = isset($row['id_lien']) ? (int) $row['id_lien'] : 0;
+        $titre = trim((string) ($row['titre'] ?? ''));
+        $msg = trim((string) ($row['message'] ?? ''));
+        $message = $titre !== '' && $msg !== ''
+            ? $titre . ' — ' . $msg
+            : ($titre !== '' ? $titre : $msg);
+
+        $category = self::mapToCategory($dbType, $typeLien, $titre, $msg);
+        $url = self::buildNotificationUrl($category, $idLien > 0 ? $idLien : null, $typeLien);
+
+        return [
+            'id' => (int) $row['id'],
+            'message' => $message,
+            'type' => $category,
+            'url' => $url,
+            'created_at' => (string) ($row['date_creation'] ?? ''),
+        ];
+    }
+
+    private static function mapToCategory(string $dbType, ?string $typeLien, string $titre, string $msg): string
+    {
+        $blob = strtolower($dbType . ' ' . $titre . ' ' . $msg);
+        if (str_contains($blob, 'sav')) {
+            return 'sav';
+        }
+        if (str_contains($blob, 'facture')) {
+            return 'facture';
+        }
+        if (str_contains($blob, 'livraison')) {
+            return 'livraison';
+        }
+        if (str_contains($blob, 'stock')) {
+            return 'stock';
+        }
+        if (str_contains($blob, 'paiement')) {
+            return 'paiement';
+        }
+
+        return match ($dbType) {
+            'sav_assigne', 'sav_urgent' => 'sav',
+            'livraison_planifiee' => 'livraison',
+            'facture_impayee' => 'facture',
+            'paiement_recu' => 'paiement',
+            default => 'info',
+        };
+    }
+
+    private static function buildNotificationUrl(string $category, ?int $idLien, ?string $typeLien): string
+    {
+        $base = match ($category) {
+            'sav' => '/public/sav.php',
+            'facture' => '/public/historique.php',
+            'livraison' => '/public/livraisons.php',
+            'stock' => '/public/stock.php',
+            'paiement' => '/public/historique.php',
+            default => '/public/dashboard.php',
+        };
+
+        if ($idLien === null || $idLien <= 0) {
+            return $base;
+        }
+
+        if ($category === 'sav' || $typeLien === 'sav') {
+            return '/public/sav.php?sav_id=' . $idLien;
+        }
+        if ($category === 'livraison' || $typeLien === 'livraison') {
+            return '/public/livraisons.php?livraison_id=' . $idLien;
+        }
+
+        return $base;
+    }
+
     public static function markRead(int $notifId, int $userId): void
     {
         if ($notifId <= 0 || $userId <= 0) {

@@ -79,15 +79,23 @@ if (!function_exists('getNavIcon')) {
     <a href="/public/agenda.php" class="header-icon-btn <?= $pageActuelle === 'agenda.php' ? 'nav-icon-active' : '' ?>" title="Agenda">
       <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
     </a>
-    <div class="notif-wrap">
-    <button type="button" class="header-icon-btn notif-btn js-notif" id="btnNotif" title="Notifications"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg><span class="notif-badge" style="display:none">0</span></button>
-    <div class="notif-dropdown" id="notifDropdown">
-      <div class="notif-actions">
-        <span style="font-weight:600;font-size:.85rem">Notifications</span>
-        <button type="button" class="notif-markall" id="notifMarkAll">Tout marquer lu</button>
+    <!-- NOTIFICATIONS -->
+    <div class="notif-wrapper" id="notifWrapper">
+      <button type="button" class="notif-bell" id="notifBell" aria-label="Notifications" aria-expanded="false">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.437L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+        </svg>
+        <span class="notif-badge" id="notifBadge" hidden>0</span>
+      </button>
+      <div class="notif-dropdown" id="notifDropdown" hidden>
+        <div class="notif-header">
+          <span>Notifications</span>
+          <button type="button" class="notif-mark-read" id="notifMarkRead">Tout lire</button>
+        </div>
+        <ul class="notif-list" id="notifList">
+          <li class="notif-empty">Aucune notification</li>
+        </ul>
       </div>
-      <div id="notifList"><p style="padding:1rem;color:var(--text-secondary);font-size:.85rem">Chargement...</p></div>
-    </div>
     </div>
     <a href="/public/messagerie.php" class="header-icon-btn messagerie-link <?= $pageActuelle === 'messagerie.php' ? 'nav-icon-active' : '' ?>" title="Messagerie" id="btnMessagerie">
       <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -110,16 +118,13 @@ if (!function_exists('getNavIcon')) {
       </div>
     </div>
   </div>
+  <!-- TOAST NOTIFICATIONS (position fixed) -->
+  <div id="toastContainer" aria-live="polite"></div>
 <script<?php
   $__hnCsp = (string)($GLOBALS['csp_nonce'] ?? '');
   echo $__hnCsp !== '' ? ' nonce="' . htmlspecialchars($__hnCsp, ENT_QUOTES, 'UTF-8') . '"' : '';
 ?>>
 (function() {
-  function csrfHeader() {
-    const t = document.querySelector('.site-header')?.getAttribute('data-csrf-token') || '';
-    return t ? { 'Content-Type': 'application/json', 'X-CSRF-Token': t } : { 'Content-Type': 'application/json' };
-  }
-
   // ── Badge messagerie (polling 30s) ───────────────────────
   function updateMsgBadge() {
     fetch('/API/messagerie_get_unread_count.php', { credentials: 'include' })
@@ -138,78 +143,187 @@ if (!function_exists('getNavIcon')) {
   }
   updateMsgBadge();
   setInterval(updateMsgBadge, 30000);
+})();
+</script>
+<script<?php
+  $__hnCspNotif = (string)($GLOBALS['csp_nonce'] ?? '');
+  echo $__hnCspNotif !== '' ? ' nonce="' . htmlspecialchars($__hnCspNotif, ENT_QUOTES, 'UTF-8') . '"' : '';
+?>>
+(function () {
+  const POLL_INTERVAL = 30000;
+  let pollTimer = null;
+  let lastIds = new Set();
+  let dropdownOpen = false;
+  let initialNotifFetch = true;
 
-  // ── Dropdown notifications ────────────────────────────────
-  const btnNotif = document.getElementById('btnNotif');
+  const bell = document.getElementById('notifBell');
+  const badge = document.getElementById('notifBadge');
   const dropdown = document.getElementById('notifDropdown');
+  const list = document.getElementById('notifList');
+  const markReadBtn = document.getElementById('notifMarkRead');
+  const notifWrapper = document.getElementById('notifWrapper');
 
-  if (btnNotif && dropdown) {
-    btnNotif.addEventListener('click', function(e) {
-      e.stopPropagation();
-      const isOpen = dropdown.classList.contains('open');
-      dropdown.classList.toggle('open', !isOpen);
-      if (!isOpen) loadNotifications();
-    });
+  if (!bell || !badge || !dropdown || !list) return;
 
-    document.addEventListener('click', () => dropdown.classList.remove('open'));
-    dropdown.addEventListener('click', e => e.stopPropagation());
+  const csrfToken = document.querySelector('.site-header')?.getAttribute('data-csrf-token') || '';
+  window.__CSRF_TOKEN__ = csrfToken;
 
-    document.getElementById('notifMarkAll')?.addEventListener('click', function() {
-      fetch('/API/notifications_mark_read.php', {
-        method: 'POST',
-        credentials: 'include',
-        headers: csrfHeader(),
-        body: JSON.stringify({ all: true })
-      })
-        .then(() => { loadNotifications(); updateNotifBadge(0); });
-    });
+  const TYPE_ICONS = {
+    sav:       '🔧',
+    facture:   '📄',
+    livraison: '🚚',
+    stock:     '📦',
+    paiement:  '💶',
+    info:      'ℹ️',
+  };
+
+  function getIcon(type) {
+    return TYPE_ICONS[type] || TYPE_ICONS.info;
   }
 
-  function loadNotifications() {
-    const list = document.getElementById('notifList');
-    if (!list) return;
-    fetch('/API/notifications_get.php', { credentials: 'include' })
-      .then(r => r.json())
-      .then(d => {
-        const notifs = d.notifications || [];
-        if (notifs.length === 0) {
-          list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);font-size:.85rem">Aucune notification.</p>';
-          updateNotifBadge(0);
-          return;
-        }
-        list.innerHTML = notifs.slice(0, 15).map(n => `
-          <div class="notif-item ${n.lu ? '' : 'unread'}">
-            <div class="title">${escHtml(n.titre || n.title || '')}</div>
-            <div class="body">${escHtml(n.message || n.body || '')}</div>
-            <div class="time">${escHtml(n.date_creation || n.created_at || '')}</div>
-          </div>`).join('');
-        updateNotifBadge(notifs.filter(n => !n.lu).length);
-      }).catch(() => {
-        list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary)">Erreur.</p>';
-      });
-  }
-
-  function updateNotifBadge(count) {
-    const badge = document.querySelector('.notif-btn .notif-badge');
-    const btn = document.getElementById('btnNotif');
-    if (!badge || !btn) return;
-    if (count > 0) {
-      badge.textContent = count > 99 ? '99+' : String(count);
-      badge.style.display = 'inline-block';
-      btn.classList.add('has-unread');
-    } else {
-      badge.style.display = 'none';
-      btn.classList.remove('has-unread');
-    }
-  }
-
-  function escHtml(str) {
+  function escHtml(s) {
     const d = document.createElement('div');
-    d.appendChild(document.createTextNode(str));
+    d.appendChild(document.createTextNode(String(s ?? '')));
     return d.innerHTML;
   }
 
-  loadNotifications();
+  function escAttr(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  async function fetchNotifications() {
+    try {
+      const res = await fetch('/API/notifications_get.php', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.success) return;
+      renderNotifications(data.notifications || [], data.count || 0);
+    } catch (e) { /* réseau indisponible */ }
+  }
+
+  function renderNotifications(notifications, count) {
+    if (count > 0) {
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+
+    if (!initialNotifFetch) {
+      const newItems = notifications.filter(n => !lastIds.has(n.id));
+      newItems.forEach(n => showToast(n));
+    } else {
+      initialNotifFetch = false;
+    }
+    lastIds = new Set(notifications.map(n => n.id));
+
+    list.innerHTML = '';
+    if (notifications.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'notif-empty';
+      li.textContent = 'Aucune notification';
+      list.appendChild(li);
+      return;
+    }
+    notifications.forEach(n => {
+      const li = document.createElement('li');
+      li.className = 'notif-item notif-type-' + (n.type || 'info');
+      const href = n.url || '/public/dashboard.php';
+      li.innerHTML =
+        '<a href="' + escAttr(href) + '" class="notif-link">' +
+        '<span class="notif-icon">' + getIcon(n.type) + '</span>' +
+        '<span class="notif-text">' +
+        '<span class="notif-msg">' + escHtml(n.message) + '</span>' +
+        '<span class="notif-time">' + escHtml(n.created_at || '') + '</span>' +
+        '</span></a>';
+      list.appendChild(li);
+    });
+  }
+
+  function showToast(notif) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'notif-toast';
+    toast.innerHTML =
+      '<span class="toast-icon">' + getIcon(notif.type) + '</span>' +
+      '<span class="toast-msg">' + escHtml(notif.message) + '</span>' +
+      '<button type="button" class="toast-close" aria-label="Fermer">×</button>';
+    container.appendChild(toast);
+
+    requestAnimationFrame(function() { toast.classList.add('show'); });
+
+    const dismiss = function() {
+      toast.classList.remove('show');
+      toast.addEventListener('transitionend', function() { toast.remove(); }, { once: true });
+    };
+    toast.querySelector('.toast-close').addEventListener('click', dismiss);
+    setTimeout(dismiss, 5000);
+  }
+
+  async function markAllRead(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    try {
+      await fetch('/API/notifications_mark_read.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': window.__CSRF_TOKEN__ || '',
+        },
+        body: JSON.stringify({ all: true, csrf_token: window.__CSRF_TOKEN__ || '' }),
+      });
+    } catch (err) {}
+    badge.hidden = true;
+    list.innerHTML = '';
+    const li = document.createElement('li');
+    li.className = 'notif-empty';
+    li.textContent = 'Aucune notification';
+    list.appendChild(li);
+    lastIds.clear();
+  }
+
+  bell.addEventListener('click', function(e) {
+    e.stopPropagation();
+    dropdownOpen = !dropdownOpen;
+    dropdown.hidden = !dropdownOpen;
+    bell.setAttribute('aria-expanded', dropdownOpen ? 'true' : 'false');
+    if (dropdownOpen) fetchNotifications();
+  });
+
+  document.addEventListener('click', function(e) {
+    if (dropdownOpen && notifWrapper && !notifWrapper.contains(e.target)) {
+      dropdownOpen = false;
+      dropdown.hidden = true;
+      bell.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  if (markReadBtn) markReadBtn.addEventListener('click', markAllRead);
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    fetchNotifications();
+    pollTimer = setInterval(fetchNotifications, POLL_INTERVAL);
+  }
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) stopPolling();
+    else startPolling();
+  });
+  window.addEventListener('focus', function() {
+    if (!pollTimer) startPolling();
+  });
+  window.addEventListener('blur', stopPolling);
+
+  startPolling();
 })();
 </script>
 <script<?php

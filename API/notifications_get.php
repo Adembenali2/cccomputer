@@ -11,7 +11,11 @@ initApi();
 requireApiAuth();
 
 $userId = (int) ($_SESSION['user_id'] ?? 0);
-$list = NotificationService::getUnread($userId);
+$raw = NotificationService::getUnread($userId);
+$list = array_map(
+    static fn(array $row): array => NotificationService::toApiItem($row),
+    $raw
+);
 
 while (ob_get_level() > 0) {
     ob_end_clean();
