@@ -41,7 +41,8 @@ try {
         ORDER BY p.date_paiement DESC, p.created_at DESC
     ";
     
-    $stmt = $pdo->query($sql);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
     $paiements = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Formater les données pour le frontend
