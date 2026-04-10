@@ -168,7 +168,7 @@ $clientsWidget = $pdo->query("
   </div>
 
   <!-- GRILLE CARDS -->
-  <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px;">
+  <div class="dash-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px;">
     <!-- CLIENTS -->
     <div class="dash-card">
       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
