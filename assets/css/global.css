@@ -1,8 +1,8 @@
 /* Variables */
 :root {
-  --bg-page:#f1f5f9; --bg-card:#ffffff; --bg-header:#1e1b4b; --bg-input:#ffffff;
+  --bg-page:#f9fafb; --bg-card:#ffffff; --bg-header:#ffffff; --bg-input:#ffffff;
   --border:#e5e7eb; --text-primary:#111827; --text-second:#6b7280; --text-muted:#9ca3af;
-  --text-header:#ffffff; --shadow:0 1px 4px rgba(0,0,0,.07); --shadow-lg:0 8px 24px rgba(0,0,0,.10);
+  --text-header:#111827; --shadow:0 1px 4px rgba(0,0,0,.07); --shadow-lg:0 8px 24px rgba(0,0,0,.10);
   --radius:12px; --accent:#6366f1; --accent-light:#ede9fe;
 }
 body.dark-mode {
@@ -18,37 +18,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   position: sticky;
   top: 0;
   z-index: 500;
-  background: rgba(30, 27, 75, 0.55);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 1px solid #e5e7eb;
   height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
   gap: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   transition: background 0.3s;
 }
 .header-logo{display:flex;align-items:center;gap:8px;text-decoration:none;flex-shrink:0}
 .header-logo img{height:30px}
-.header-logo span{color:#fff;font-weight:700;font-size:15px;white-space:nowrap}
+.header-logo span{color:#111827;font-weight:700;font-size:15px;white-space:nowrap}
 .header-nav{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none}
 .header-nav::-webkit-scrollbar{display:none}
-.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 10px;border-radius:8px;text-decoration:none;color:rgba(255,255,255,.6);font-size:9px;font-weight:500;white-space:nowrap;transition:all .2s;min-width:52px}
-.nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
-.nav-item.nav-active{background:rgba(99,102,241,.4);color:#fff}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 10px;border-radius:8px;text-decoration:none;color:#6b7280;font-size:9px;font-weight:500;white-space:nowrap;transition:all .2s;min-width:52px}
+.nav-item:hover{background:#f3f4f6;color:#111827}
+.nav-item.nav-active{background:#ede9fe;color:#6366f1}
 .header-right{display:flex;align-items:center;gap:4px;flex-shrink:0}
-.header-icon-btn{position:relative;background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:8px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all .2s;font-size:16px}
-.header-icon-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+.header-icon-btn{position:relative;background:none;border:none;color:#6b7280;cursor:pointer;padding:8px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all .2s;font-size:16px}
+.header-icon-btn:hover{background:#f3f4f6;color:#111827}
 .notif-badge{position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:999px;font-size:9px;font-weight:700;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px}
 .profil-wrapper{position:relative}
 .profil-btn{display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px;transition:background .2s;color:#fff}
-.profil-btn:hover{background:rgba(255,255,255,.1)}
+.profil-btn:hover{background:#f3f4f6}
 .profil-avatar{width:32px;height:32px;border-radius:50%;background:#6366f1;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0}
 .profil-info{display:flex;flex-direction:column;text-align:left}
-.profil-nom{font-size:12px;font-weight:600;color:#fff}
-.profil-role{font-size:10px;color:rgba(255,255,255,.5)}
+.profil-nom{font-size:12px;font-weight:600;color:#111827}
+.profil-role{font-size:10px;color:#6b7280}
 .profil-menu{position:absolute;top:calc(100% + 8px);right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);min-width:180px;z-index:1000;padding:6px 0}
 .profil-menu-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;color:var(--text-primary);text-decoration:none;transition:background .15s}
 .profil-menu-item:hover{background:var(--bg-page)}
