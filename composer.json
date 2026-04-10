@@ -1,0 +1,36 @@
+{
+  "scripts": {
+    "scheduled-factures": "php cron/send_scheduled_factures.php",
+    "migrate-programmer": "php scripts/run_programmer_migration.php",
+    "invoice-reminders": "php cron/run_invoice_reminders.php",
+    "recurring-invoices": "php cron/run_recurring_invoices.php",
+    "commercial-opportunities": "php cron/run_commercial_opportunities.php"
+  },
+  "require": {
+    "php": ">=8.0",
+    "endroid/qr-code": "^5.0",
+    "phpoffice/phpspreadsheet": "^1.29",
+    "phpseclib/phpseclib": "^3.0",
+    "tecnickcom/tcpdf": "^6.6",
+    "phpmailer/phpmailer": "^6.9",
+    "monolog/monolog": "^3.0",
+    "sentry/sentry": "^4.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": ["app/", "src/"]
+    },
+    "files": [
+      "includes/helpers.php",
+      "includes/Validator.php"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  }
+}

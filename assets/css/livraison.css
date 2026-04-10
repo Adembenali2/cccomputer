@@ -1,0 +1,940 @@
+/* =========================================================
+   Livraisons (Desktop = tableau complet, Mobile = cartes)
+   ========================================================= */
+
+/* Empêche toute barre horizontale globale */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Quand la popup est ouverte, on bloque le scroll de la page */
+body.modal-open { overflow: hidden; }
+
+/* Désactive le masquage pour cette page -> permet au badge de dépasser à droite */
+.page-livraisons .page-container { overflow: visible; }
+.page-livraisons .page-title { margin-bottom: 0.2rem; }
+.page-livraisons .page-sub { color: var(--text-secondary); margin-top: 0; font-size: 0.95rem; }
+
+/* Meta cards */
+.clients-meta {
+  margin: 1rem 0 1.35rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.85rem;
+}
+.meta-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.meta-label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.meta-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.meta-value.success { color: #16a34a; }
+.meta-value.danger { color: #dc2626; }
+.meta-sub {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.meta-chip {
+  font-size: 0.75rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--border-color);
+  width: fit-content;
+  color: var(--text-secondary);
+}
+
+/* Filters row */
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem;
+  box-shadow: var(--shadow-sm);
+}
+.filters-left {
+  display: flex;
+  flex: 1 1 280px;
+  gap: 0.6rem;
+  align-items: center;
+}
+.filters-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.filter-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+.btn-secondary { background: var(--bg-secondary); }
+.btn-outline {
+  background: transparent;
+  border-color: var(--border-color);
+}
+.btn-primary {
+  background: var(--accent-primary);
+  color: #fff;
+  border: 1px solid var(--accent-primary);
+}
+.btn-primary:hover { filter: brightness(.97); }
+
+/* Animation de clignotement pour les retards */
+@keyframes blink-red {
+  0%, 100% { 
+    background: rgba(239, 68, 68, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.2);
+  }
+  50% { 
+    background: rgba(239, 68, 68, 0.15);
+    box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.4);
+  }
+}
+
+.row-alert {
+  background: rgba(239, 68, 68, 0.08);
+  animation: blink-red 1.5s ease-in-out infinite;
+}
+.row-alert:hover {
+  background: rgba(239, 68, 68, 0.18);
+  animation: none; /* Arrêter l'animation au survol */
+}
+
+/* Respecter les préférences d'accessibilité */
+@media (prefers-reduced-motion: reduce) {
+  .row-alert {
+    animation: none;
+    background: rgba(239, 68, 68, 0.12);
+  }
+}
+
+/* ligne marquée "aujourd’hui" */
+.row-today {
+  box-shadow: inset 3px 0 0 0 var(--accent-primary);
+}
+
+/* ---------- Wrapper & Table (desktop) ---------- */
+.table-wrapper {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: visible;              /* important pour le badge */
+}
+
+.tbl-livraisons {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto; /* autosize selon contenu */
+}
+
+/* En-têtes */
+.tbl-livraisons thead th {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+/* Lignes & cellules */
+.tbl-livraisons tbody tr { position: relative; } /* ancre pour le badge */
+
+.tbl-livraisons tbody td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.tbl-livraisons tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+/* Dernière colonne: ancre locale pour le badge */
+.tbl-livraisons tbody td.td-date,
+.tbl-livraisons tbody td.has-pullout { position: relative; }
+
+/* --- Badge d'alerte tiré à droite, hors tableau --- */
+@keyframes blink-badge {
+  0%, 100% { 
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  50% { 
+    opacity: 0.85;
+    transform: translateY(-50%) scale(1.05);
+  }
+}
+
+.alert-pullout {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px); /* à droite du bord de la cellule */
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #b91c1c;
+  background: #ef44441a;
+  border: 1px solid #ef4444;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none; /* ne gêne pas les clics */
+  animation: blink-badge 1.2s ease-in-out infinite;
+}
+
+/* Respecter les préférences d'accessibilité */
+@media (prefers-reduced-motion: reduce) {
+  .alert-pullout {
+    animation: none;
+  }
+}
+
+/* Badge "Aujourd’hui" plus discret */
+.badge-today {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px);
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Afficher et repositionner les badges en mode cartes */
+@media (max-width: 900px) {
+  .alert-pullout,
+  .badge-today {
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none;
+    display: inline-flex;
+    margin-top: 0.35rem;
+    white-space: normal;
+  }
+
+  /* Aligner à droite et prévoir un peu d'espace */
+  .tbl-livraisons tbody td.has-pullout,
+  .tbl-livraisons tbody td.td-date {
+    text-align: right;
+    padding-bottom: 0.95rem;
+  }
+}
+
+/* ---------- Cellules de contenu ---------- */
+.client-cell .client-raison { font-weight: 700; color: var(--text-primary); }
+.client-cell .client-num    { font-size: 0.85rem; color: var(--text-muted); }
+
+.machine-cell .machine-line { margin-bottom: 0.1rem; }
+.machine-cell .machine-sub  {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* chiffres */
+.td-metric { font-weight: 700; text-align: right; }
+.td-date   { color: var(--text-secondary); }
+
+/* ---------- Boutons génériques ---------- */
+.filters-row .btn { color: var(--text-primary); }
+.btn-primary {
+  background: var(--accent-primary);
+  color: #fff;
+  border: 1px solid var(--accent-primary);
+}
+
+/* =========================================================
+   Popup "Planifier une livraison" (reprend styles popup client)
+   ========================================================= */
+
+/* Overlay plein écran, fixe */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+}
+
+/* Fenêtre popup centrée, ne déborde jamais de l'écran */
+.support-popup {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(980px, calc(100dvw - 48px)); /* évite le débordement de 100vw */
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overflow-x: hidden;             /* pas de barre horizontale dans la modale */
+  padding: 1.25rem 1.25rem 1rem;
+  border-radius: 1.25rem;
+  backdrop-filter: saturate(140%) blur(4px);
+}
+
+/* En-tête : titre centré, bouton X */
+.modal-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-right: 2.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.icon-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  transition: background-color .2s ease, transform .08s ease;
+}
+.icon-btn:hover { background: var(--bg-tertiary); }
+.icon-btn:active { transform: scale(0.98); }
+
+.icon-btn--close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* Cartes/formulaires */
+.card-like {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.9rem;
+}
+
+.subsection-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.6rem;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+  min-width: 0;                  /* évite le débordement */
+}
+
+.grid-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.card-like { min-width: 0; }
+
+/* Les champs ne dépassent pas */
+.modal-form input,
+.modal-form select,
+.modal-form textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Bas de la popup */
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .75rem;
+  margin-top: 1rem;
+}
+
+.modal-hint {
+  margin-right: auto;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Messages flash (au cas où tu en ajoutes plus tard) */
+.flash { padding: 0.6rem 0.8rem; border-radius: var(--radius-md); }
+.flash-success { background: #0ea5e91a; border: 1px solid #0ea5e9; color: var(--text-primary); }
+.flash-error   { background: #ef44441a; border: 1px solid #ef4444; color: var(--text-primary); }
+
+/* =========================================================
+   Mode "Cartes" responsive (<= 900px)
+   ========================================================= */
+@media (max-width: 900px) {
+  .clients-meta { 
+    grid-template-columns: 1fr 1fr; 
+    gap: 0.7rem;
+  }
+  
+  .meta-card {
+    padding: 0.8rem 0.9rem;
+  }
+  
+  .meta-value {
+    font-size: 1.35rem;
+  }
+  
+  .filters-row { 
+    flex-direction: column; 
+    align-items: stretch; 
+    padding: 0.7rem;
+  }
+  
+  .filters-left {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+  
+  .filter-input {
+    min-width: 0;
+    flex: 1;
+  }
+  
+  .filters-actions { 
+    width: 100%; 
+    justify-content: stretch; 
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .filters-actions .btn { 
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: 120px;
+    justify-content: center; 
+    font-size: 0.9rem;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .tbl-livraisons thead {
+    position: absolute;
+    left: -9999px;
+    height: 0;
+    overflow: hidden;
+  }
+
+  .tbl-livraisons,
+  .tbl-livraisons tbody,
+  .tbl-livraisons tr,
+  .tbl-livraisons td {
+    display: block;
+    width: 100%;
+  }
+
+  .tbl-livraisons tbody tr {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    background: var(--bg-primary);
+    margin: 0.75rem 0;
+    overflow: hidden;
+    padding: 0.5rem 0;
+  }
+  
+  .tbl-livraisons tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .tbl-livraisons tbody td {
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.7rem 0.9rem;
+    position: relative;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .tbl-livraisons tbody td:last-child {
+    border-bottom: none;
+  }
+
+  .tbl-livraisons tbody td::before {
+    content: attr(data-th);
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+  }
+
+  .td-metric, .td-date { text-align: left; white-space: normal; }
+
+  .form-grid-2 { grid-template-columns: 1fr; }
+  .modal-hint { margin-left: 0; }
+  
+  .page-header {
+    margin-bottom: 1.25rem;
+  }
+  
+  .page-title {
+    font-size: 1.5rem;
+  }
+  
+  .page-sub {
+    font-size: 0.85rem;
+  }
+  
+  .table-wrapper {
+    border-radius: var(--radius-md);
+    margin: 0 -0.5rem;
+  }
+}
+
+/* =========================================================
+   Petits écrans (<= 480px)
+   ========================================================= */
+@media (max-width: 480px) {
+  .clients-meta { 
+    grid-template-columns: 1fr; 
+    gap: 0.6rem;
+  }
+  
+  .meta-card {
+    padding: 0.75rem;
+  }
+  
+  .meta-value {
+    font-size: 1.3rem;
+  }
+
+  .machine-cell .machine-sub { font-size: 0.8rem; }
+  .client-cell .client-num   { font-size: 0.78rem; }
+
+  .filters-row { 
+    padding: 0.6rem;
+    gap: 0.6rem;
+  }
+  
+  .filters-left {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .filter-input {
+    min-width: 100%;
+    width: 100%;
+  }
+  
+  .filters-row input { font-size: 0.95rem !important; }
+  
+  .filters-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .filters-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modal-actions { flex-wrap: wrap; }
+  .modal-hint { width: 100%; order: -1; margin: 0 0 .5rem 0; }
+  
+  .support-popup {
+    width: calc(100dvw - 24px);
+    max-height: calc(100vh - 24px);
+    padding: 1rem;
+  }
+  
+  .table-wrapper {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  
+  .tbl-livraisons tbody td {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9rem;
+  }
+  
+  .tbl-livraisons tbody td::before {
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+}
+
+/* =========================================================
+   Tablettes (481px - 768px)
+   ========================================================= */
+@media (min-width: 481px) and (max-width: 768px) {
+  .clients-meta { 
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .meta-card {
+    padding: 0.85rem 0.95rem;
+  }
+  
+  .filters-row {
+    flex-wrap: wrap;
+    padding: 0.7rem;
+  }
+  
+  .filters-left {
+    flex: 1 1 100%;
+    margin-bottom: 0.5rem;
+  }
+  
+  .filters-actions {
+    width: 100%;
+    justify-content: stretch;
+    gap: 0.5rem;
+  }
+  
+  .filters-actions .btn {
+    flex: 1 1 calc(33.333% - 0.35rem);
+    min-width: 0;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.7rem;
+  }
+  
+  .support-popup {
+    width: calc(100dvw - 32px);
+    padding: 1.1rem;
+  }
+  
+  .tbl-livraisons tbody td {
+    padding: 0.7rem 0.85rem;
+    font-size: 0.92rem;
+  }
+  
+  .tbl-livraisons tbody td::before {
+    font-size: 0.74rem;
+  }
+}
+
+/* =========================================================
+   Écrans moyens (769px - 900px)
+   ========================================================= */
+@media (min-width: 769px) and (max-width: 900px) {
+  .clients-meta { 
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.8rem;
+  }
+  
+  .filters-row {
+    padding: 0.75rem;
+  }
+  
+  .filters-actions {
+    gap: 0.6rem;
+  }
+  
+  .filters-actions .btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+  
+  .support-popup {
+    width: min(900px, calc(100dvw - 40px));
+    padding: 1.15rem;
+  }
+  
+  .tbl-livraisons thead th {
+    font-size: 0.85rem;
+    padding: 0.6rem 0.7rem;
+  }
+  
+  .tbl-livraisons tbody td {
+    padding: 0.65rem 0.7rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* ===== PIPELINE STATUT (dans le tableau livraisons) ===== */
+.liv-statut-cell {
+  min-width: 200px;
+  vertical-align: top;
+}
+.liv-statut-badge-wrap {
+  margin-bottom: 2px;
+}
+.liv-pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 6px;
+}
+.pip-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.pip-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  background: #fff;
+  transition: background 0.2s, border-color 0.2s;
+}
+.pip-step.pip-done .pip-dot,
+.pip-step.pip-current .pip-dot {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+.pip-step.pip-done:last-child .pip-dot { background: #10b981; border-color: #10b981; }
+.pip-label {
+  font-size: 9px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+.pip-step.pip-current .pip-label { color: #3b82f6; font-weight: 600; }
+.pip-line {
+  flex: 1;
+  height: 2px;
+  background: #e5e7eb;
+  min-width: 16px;
+  margin-bottom: 13px;
+  transition: background 0.2s;
+}
+.pip-line.pip-line-done { background: #3b82f6; }
+.pip-annulee {
+  font-size: 11px;
+  color: #9ca3af;
+  font-style: italic;
+  margin-top: 4px;
+  display: block;
+}
+
+.btn-statut-rapide {
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  display: block;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-statut-rapide:hover { background: #3b82f6; color: #fff; }
+.btn-statut-rapide.btn-livrer { border-color: #10b981; color: #10b981; }
+.btn-statut-rapide.btn-livrer:hover { background: #10b981; color: #fff; }
+
+/* ===== VUE PLANNING HEBDOMADAIRE ===== */
+.planning-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px 16px;
+  flex-wrap: wrap;
+}
+.planning-nav-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg-card, #fff);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.planning-nav-btn:hover { background: var(--border, #f3f4f6); }
+.planning-week-label {
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  flex: 1;
+}
+
+.planning-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 24px;
+}
+@media (max-width: 1100px) { .planning-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 700px)  { .planning-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 400px)  { .planning-grid { grid-template-columns: 1fr; } }
+
+.planning-day-col {
+  background: var(--bg-card, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 10px;
+  min-height: 120px;
+}
+.planning-today {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+}
+.planning-day-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  padding-bottom: 7px;
+}
+.planning-day-name { font-weight: 700; font-size: 12px; }
+.planning-day-date { font-size: 11px; color: #9ca3af; flex: 1; }
+.planning-day-count {
+  background: #3b82f6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+.planning-day-cards { display: flex; flex-direction: column; gap: 8px; }
+.planning-empty { color: #d1d5db; font-size: 12px; text-align: center; padding: 8px 0; }
+
+.planning-card {
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 9px 10px;
+  transition: box-shadow 0.15s;
+}
+.planning-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.planning-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.planning-card-ref { font-size: 10px; font-weight: 700; font-family: monospace; color: #9ca3af; }
+.planning-card-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.planning-card-client { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.planning-card-adresse { font-size: 11px; color: #9ca3af; margin-bottom: 5px; line-height: 1.3; }
+.planning-card-footer { font-size: 11px; color: #9ca3af; margin-bottom: 7px; }
+.planning-card-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+.plan-btn-detail {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.plan-btn-detail:hover { background: var(--border, #f3f4f6); }
+.plan-btn-statut {
+  width: 26px; height: 26px;
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.plan-btn-statut:hover { background: #3b82f6; color: #fff; }
+.plan-btn-livrer { border-color: #10b981; color: #10b981; }
+.plan-btn-livrer:hover { background: #10b981; color: #fff; }
+.plan-btn-statut:disabled { opacity: 0.4; cursor: not-allowed; }
+
+[data-theme="dark"] .planning-day-col,
+body.dark-mode .planning-day-col {
+  background: var(--bg-card, #1e293b);
+  border-color: var(--border, #334155);
+}
+[data-theme="dark"] .planning-card,
+body.dark-mode .planning-card {
+  background: var(--bg-primary, #0f172a);
+  border-color: var(--border, #334155);
+}
+[data-theme="dark"] .planning-nav-btn,
+body.dark-mode .planning-nav-btn {
+  background: var(--bg-card, #1e293b);
+  border-color: var(--border, #334155);
+}
+[data-theme="dark"] .pip-dot,
+body.dark-mode .pip-dot {
+  background: var(--bg-primary, #0f172a);
+}

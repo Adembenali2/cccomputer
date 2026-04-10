@@ -1,0 +1,561 @@
+<?php
+/**
+ * API pour générer une facture et son PDF
+ * Version : Logo Agrandi + Tableau Continu (Totaux intégrés dans la grille)
+ */
+
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/historique.php';
+require_once __DIR__ . '/../includes/Validator.php';
+require_once __DIR__ . '/../includes/NotificationService.php';
+require_once __DIR__ . '/../includes/ErrorHandler.php';
+ErrorHandler::register();
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// Vérifier que c'est une requête POST seulement si le fichier est appelé directement
+// Si le fichier est inclus via require_once, on ne vérifie pas la méthode et on ne s'exécute pas
+if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
+    // Le fichier est appelé directement, exécuter le code API
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        jsonResponse(['ok' => false, 'error' => 'Méthode non autorisée'], 405);
+    }
+
+    requireCsrfToken();
+
+    try {
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+
+        if (!$data || !is_array($data)) {
+            jsonResponse(['ok' => false, 'error' => 'Données incomplètes'], 400);
+        }
+
+        Validator::requireFields(['factureClient', 'factureDate'], $data);
+        $clientId = Validator::int($data['factureClient'], 1);
+        $factureType = Validator::enum($data['factureType'] ?? 'Consommation', ['Consommation', 'Achat', 'Service']);
+        $factureDateRaw = trim((string) $data['factureDate']);
+        $factureDateDt = DateTime::createFromFormat('Y-m-d', $factureDateRaw);
+        if (!$factureDateDt || $factureDateDt->format('Y-m-d') !== $factureDateRaw) {
+            throw new InvalidArgumentException('Date de facture invalide');
+        }
+        $data['factureDate'] = $factureDateRaw;
+
+        $pdo = getPdo();
+
+        // Vérification basique des tables
+        try {
+            $pdo->query("SELECT 1 FROM factures LIMIT 1");
+            $pdo->query("SELECT 1 FROM facture_lignes LIMIT 1");
+        } catch (PDOException $e) {
+            error_log('factures_generer DB: ' . $e->getMessage());
+            $msg = $e->getMessage();
+            if (strpos($msg, 'en_attente') !== false || strpos($msg, 'Data truncated') !== false) {
+                $msg = 'Migration requise: exécutez ALTER TABLE factures MODIFY COLUMN statut enum(\'brouillon\',\'en_attente\',\'envoyee\',\'en_cours\',\'en_retard\',\'payee\',\'annulee\')...';
+            } elseif (strpos($msg, "doesn't exist") !== false || strpos($msg, 'exist') !== false) {
+                $msg = 'Table manquante: ' . $msg;
+            }
+            jsonResponse(['ok' => false, 'error' => $msg], 500);
+        }
+
+        // Client
+        $stmt = $pdo->prepare("SELECT * FROM clients WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $clientId]);
+        $client = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$client) jsonResponse(['ok' => false, 'error' => 'Client introuvable'], 404);
+
+        // Détection du format : nouveau format (imprimantes) ou ancien format (lignes)
+        $useMachineCalculation = !empty($data['offre']) && !empty($data['nb_imprimantes']) && !empty($data['machines']);
+
+        if ($useMachineCalculation) {
+            // NOUVEAU FORMAT : Calcul automatique basé sur les imprimantes
+            try {
+                // Charger le service de calcul (vérifier si autoload ou require direct)
+                if (!class_exists('App\Services\InvoiceCalculationService')) {
+                    require_once __DIR__ . '/../src/Services/InvoiceCalculationService.php';
+                }
+                $calculationService = new \App\Services\InvoiceCalculationService();
+
+                $offre = (int)$data['offre'];
+                $nbImprimantes = (int)$data['nb_imprimantes'];
+                $machines = $data['machines'];
+
+                // Générer les lignes automatiquement
+                $data['lignes'] = $calculationService::generateAllInvoiceLines(
+                    $offre,
+                    $nbImprimantes,
+                    $machines
+                );
+
+                // Calculer les totaux
+                $totals = $calculationService::calculateInvoiceTotals($data['lignes']);
+                $montantHT = $totals['montant_ht'];
+                $tva = $totals['tva'];
+                $montantTTC = $totals['montant_ttc'];
+
+            } catch (\InvalidArgumentException $e) {
+                jsonResponse(['ok' => false, 'error' => 'Erreur de calcul: ' . $e->getMessage()], 400);
+            } catch (\Throwable $e) {
+                error_log('Erreur calcul facture imprimantes: ' . $e->getMessage());
+                jsonResponse(['ok' => false, 'error' => 'Erreur lors du calcul de la facture'], 500);
+            }
+        } else {
+            // ANCIEN FORMAT : Lignes fournies manuellement
+            if (empty($data['lignes'])) {
+                jsonResponse(['ok' => false, 'error' => 'Données incomplètes: lignes ou données imprimantes requises'], 400);
+            }
+
+            // Calculs classiques
+            $montantHT = 0;
+            foreach ($data['lignes'] as $ligne) {
+                $montantHT += (float)($ligne['total_ht'] ?? 0);
+            }
+            $tva = $montantHT * 0.20;
+            $montantTTC = $montantHT + $tva;
+        }
+
+        // Calculs et Sauvegarde DB
+        // Type de facture déjà validé (Consommation / Achat / Service)
+        $numeroFacture = generateFactureNumber($pdo, $factureType);
+
+        $pdo->beginTransaction();
+
+        try {
+            // Insertion Facture : statut envoyee à la génération (PDF joint) — suivi recouvrement côté créateur
+            $stmt = $pdo->prepare("INSERT INTO factures (id_client, numero, date_facture, type, montant_ht, tva, montant_ttc, statut, created_by) VALUES (:id_client, :numero, :date_facture, :type, :montant_ht, :tva, :montant_ttc, :statut, :created_by)");
+            $creatorId = (int) currentUserId();
+            $stmt->execute([
+                ':id_client' => $clientId,
+                ':numero' => $numeroFacture,
+                ':date_facture' => $data['factureDate'],
+                ':type' => $factureType,
+                ':montant_ht' => $montantHT,
+                ':tva' => $tva,
+                ':montant_ttc' => $montantTTC,
+                ':statut' => 'envoyee',
+                ':created_by' => $creatorId ?: null
+            ]);
+            $factureId = $pdo->lastInsertId();
+
+            // Insertion Lignes
+            // Validation des types de ligne (ENUM: 'N&B','Couleur','Service','Produit')
+            $validLigneTypes = ['N&B', 'Couleur', 'Service', 'Produit'];
+            $stmtLigne = $pdo->prepare("INSERT INTO facture_lignes (id_facture, description, type, quantite, prix_unitaire_ht, total_ht, ordre) VALUES (:id_facture, :description, :type, :quantite, :prix_unitaire_ht, :total_ht, :ordre)");
+            foreach ($data['lignes'] as $i => $l) {
+                // Valider et corriger le type si nécessaire
+                $ligneType = $l['type'] ?? 'Service';
+                if (!in_array($ligneType, $validLigneTypes, true)) {
+                    // Tenter de corriger automatiquement
+                    if (stripos($ligneType, 'couleur') !== false || stripos($ligneType, 'color') !== false) {
+                        $ligneType = 'Couleur';
+                    } elseif (stripos($ligneType, 'nb') !== false || stripos($ligneType, 'noir') !== false) {
+                        $ligneType = 'N&B';
+                    } else {
+                        $ligneType = 'Service'; // Par défaut
+                    }
+                    error_log("Type de ligne corrigé de '{$l['type']}' à '{$ligneType}' pour la ligne: " . ($l['description'] ?? 'N/A'));
+                }
+
+                $stmtLigne->execute([
+                    ':id_facture' => $factureId,
+                    ':description' => $l['description'] ?? '',
+                    ':type' => $ligneType,
+                    ':quantite' => (float)($l['quantite'] ?? 1.0),
+                    // on garde ton mapping d'origine :
+                    ':prix_unitaire_ht' => (float)($l['prix_unitaire'] ?? 0.0),
+                    ':total_ht' => (float)($l['total_ht'] ?? 0.0),
+                    ':ordre' => $i
+                ]);
+            }
+
+            // Génération PDF
+            $pdfWebPath = generateFacturePDF($pdo, $factureId, $client, $data);
+
+            // Vérifier que le fichier existe vraiment avant de le stocker dans la DB
+            // Utiliser le même pattern que dans generateFacturePDF
+            $possibleBaseDirs = [];
+
+            $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+            if ($docRoot !== '' && is_dir($docRoot)) {
+                $possibleBaseDirs[] = $docRoot;
+            }
+
+            $projectDir = dirname(__DIR__);
+            if (is_dir($projectDir)) {
+                $possibleBaseDirs[] = $projectDir;
+            }
+
+            if (is_dir('/app')) {
+                $possibleBaseDirs[] = '/app';
+            }
+            if (is_dir('/var/www/html')) {
+                $possibleBaseDirs[] = '/var/www/html';
+            }
+
+            $baseDir = null;
+            foreach ($possibleBaseDirs as $dir) {
+                if (is_dir($dir)) {
+                    $baseDir = $dir;
+                    break;
+                }
+            }
+
+            if (!$baseDir) {
+                $baseDir = dirname(__DIR__);
+            }
+
+            $baseUploadDir = $baseDir . '/uploads';
+            $facturesDir = $baseUploadDir . '/factures';
+            $relativePath = preg_replace('#^/uploads/factures/#', '', $pdfWebPath);
+            $actualFilePath = $facturesDir . '/' . $relativePath;
+
+            error_log('Vérification fichier - Base dir: ' . $baseDir);
+            error_log('Vérification fichier - Chemin testé: ' . $actualFilePath);
+
+            if (!file_exists($actualFilePath)) {
+                error_log('ERREUR CRITIQUE: Le fichier PDF n\'existe pas après génération: ' . $actualFilePath);
+                error_log('Chemin web retourné: ' . $pdfWebPath);
+                error_log('Chemin relatif: ' . $relativePath);
+                throw new RuntimeException('Le fichier PDF n\'a pas pu être créé ou n\'existe pas: ' . $actualFilePath);
+            }
+
+            error_log('Vérification finale: Le fichier PDF existe bien: ' . $actualFilePath . ' (Taille: ' . filesize($actualFilePath) . ' bytes)');
+
+            // Mise à jour chemin PDF (on stocke le chemin web relatif)
+            $pdo->prepare("UPDATE factures SET pdf_genere = 1, pdf_path = ? WHERE id = ?")->execute([$pdfWebPath, $factureId]);
+
+            $pdo->commit();
+
+            if ($creatorId > 0) {
+                NotificationService::create(
+                    $creatorId,
+                    'facture_impayee',
+                    'Facture générée — suivi recouvrement',
+                    sprintf(
+                        'La facture n° %s (%s) a été créée avec le statut « envoyée ». Montant TTC : %.2f €.',
+                        $numeroFacture,
+                        $client['raison_sociale'] ?? ('Client #' . $clientId),
+                        $montantTTC
+                    ),
+                    (int) $factureId,
+                    'facture'
+                );
+            }
+
+            $clientNom = (string)($client['raison_sociale'] ?? ('Client #' . $clientId));
+            logAction(
+                $pdo,
+                'facture',
+                'creation',
+                'Facture creee — ' . $numeroFacture . ' · ' . $clientNom,
+                'Montant TTC: ' . number_format((float)$montantTTC, 2, '.', '') . ' EUR',
+                (int)$factureId,
+                'factures.php?id=' . (int)$factureId
+            );
+
+            jsonResponse([
+                'ok' => true,
+                'facture_id' => $factureId,
+                'numero' => $numeroFacture,
+                'pdf_url' => $pdfWebPath
+            ]);
+
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+    } catch (InvalidArgumentException $e) {
+        jsonResponse(['ok' => false, 'error' => $e->getMessage()], 400);
+    } catch (Throwable $e) {
+        ErrorHandler::apiError($e);
+    }
+}
+
+function generateFactureNumber($pdo, $type) {
+    if (strtolower($type) === 'service') {
+        $prefix = 'S';
+    } else {
+        $prefix = 'P';
+    }
+
+    $year = date('Y');
+    $month = date('m');
+
+    $pattern = $prefix . $year . $month . '%';
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM factures WHERE numero LIKE :pattern");
+    $stmt->execute([':pattern' => $pattern]);
+    $count = (int)$stmt->fetchColumn();
+
+    $numero = sprintf("%s%s%s%03d", $prefix, $year, $month, $count + 1);
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM factures WHERE numero = :numero");
+    $stmt->execute([':numero' => $numero]);
+    $exists = (int)$stmt->fetchColumn();
+
+    $attempt = 1;
+    while ($exists > 0 && $attempt < 1000) {
+        $count++;
+        $numero = sprintf("%s%s%s%03d", $prefix, $year, $month, $count + 1);
+        $stmt->execute([':numero' => $numero]);
+        $exists = (int)$stmt->fetchColumn();
+        $attempt++;
+    }
+
+    return $numero;
+}
+
+/**
+ * GÉNÉRATION PDF - LOGO AGRANDI & TABLEAU COMPLET
+ */
+function generateFacturePDF(PDO $pdo, int $factureId, array $client, array $data): string {
+    require_once __DIR__ . '/../vendor/autoload.php';
+    require_once __DIR__ . '/factures_generate_pdf_content.php';
+
+    // Données
+    $lignes = $pdo->query("SELECT * FROM facture_lignes WHERE id_facture = $factureId ORDER BY ordre ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $facture = $pdo->query("SELECT * FROM factures WHERE id = $factureId")->fetch(PDO::FETCH_ASSOC);
+
+    // Setup Dossier - Compatible Railway
+    $possibleBaseDirs = [];
+
+    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
+    if ($docRoot !== '' && is_dir($docRoot)) {
+        $possibleBaseDirs[] = $docRoot;
+    }
+
+    $projectDir = dirname(__DIR__);
+    if (is_dir($projectDir)) {
+        $possibleBaseDirs[] = $projectDir;
+    }
+
+    if (is_dir('/app')) {
+        $possibleBaseDirs[] = '/app';
+    }
+    if (is_dir('/var/www/html')) {
+        $possibleBaseDirs[] = '/var/www/html';
+    }
+
+    $baseDir = null;
+    foreach ($possibleBaseDirs as $dir) {
+        if (is_dir($dir) && is_writable($dir)) {
+            $baseDir = $dir;
+            break;
+        }
+    }
+
+    if (!$baseDir) {
+        $baseDir = dirname(__DIR__);
+    }
+
+    $baseUploadDir = $baseDir . '/uploads';
+    $facturesDir = $baseUploadDir . '/factures';
+    $uploadDir = $facturesDir . '/' . date('Y');
+
+    if (!is_dir($baseUploadDir)) {
+        $created = @mkdir($baseUploadDir, 0755, true);
+        if (!$created) {
+            throw new RuntimeException('Impossible de créer le répertoire de base uploads: ' . $baseUploadDir);
+        }
+    }
+
+    if (!is_dir($facturesDir)) {
+        $created = @mkdir($facturesDir, 0755, true);
+        if (!$created) {
+            throw new RuntimeException('Impossible de créer le répertoire factures: ' . $facturesDir);
+        }
+    }
+
+    if (!is_dir($uploadDir)) {
+        $created = @mkdir($uploadDir, 0755, true);
+        if (!$created) {
+            throw new RuntimeException('Impossible de créer le répertoire de stockage des factures: ' . $uploadDir);
+        }
+    }
+
+    if (!is_writable($uploadDir)) {
+        throw new RuntimeException('Le répertoire de stockage des factures n\'est pas accessible en écriture: ' . $uploadDir);
+    }
+
+    // Setup TCPDF
+    $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
+    $pdf->SetCreator('System');
+    $pdf->SetTitle('Facture ' . $facture['numero']);
+    $pdf->setPrintHeader(false);
+    $pdf->setPrintFooter(false);
+    $pdf->SetMargins(15, 10, 15);
+    $pdf->SetAutoPageBreak(false);
+    $pdf->AddPage();
+    $pdf->SetTextColor(0, 0, 0);
+
+    // ✅ rendu plus propre
+    $pdf->setCellPaddings(1, 1, 1, 1);
+    $pdf->setCellHeightRatio(1.1);
+
+    // LOGO
+    $logoPath = __DIR__ . '/../assets/logos/logo1.png';
+    if (file_exists($logoPath)) {
+        $pdf->Image($logoPath, 15, 10, 60, 0, 'PNG');
+    }
+
+    // EXPÉDITEUR
+    $pdf->SetY(25);
+    $pdf->SetFont('helvetica', '', 10);
+    $pdf->Cell(0, 5, 'SSS international', 0, 1, 'R');
+    $pdf->Cell(0, 5, '7, rue pierre brolet', 0, 1, 'R');
+    $pdf->Cell(0, 5, '93100 Stains', 0, 1, 'R');
+
+    // CLIENT
+    $pdf->SetY(55);
+    $pdf->SetFont('helvetica', 'B', 11);
+    $pdf->Cell(0, 5, 'Client :', 0, 1, 'L');
+    $pdf->SetFont('helvetica', '', 10);
+    $pdf->Cell(0, 5, $client['raison_sociale'], 0, 1, 'L');
+    $pdf->Cell(0, 5, $client['adresse'], 0, 1, 'L');
+    $pdf->Cell(0, 5, trim(($client['code_postal'] ?? '') . ' ' . ($client['ville'] ?? '')), 0, 1, 'L');
+    if (!empty($client['siret'])) $pdf->Cell(0, 5, 'SIRET: ' . $client['siret'], 0, 1, 'L');
+
+    // DATE & NUMÉRO
+    $pdf->SetY(85);
+    $pdf->SetFont('helvetica', '', 11);
+    $pdf->Cell(90, 6, 'Date : ' . date('d/m/Y', strtotime($facture['date_facture'])), 0, 0, 'L');
+    $pdf->SetFont('helvetica', 'B', 11);
+    $pdf->Cell(0, 6, 'Facture N° : ' . $facture['numero'], 0, 1, 'R');
+    $pdf->Ln(5);
+
+    // TABLEAU — style professionnel
+    $pdf->SetDrawColor(226, 232, 240);
+    $pdf->SetLineWidth(0.3);
+    $pdf->SetFont('helvetica', 'B', 9);
+    $pdf->SetFillColor(248, 250, 252);
+    $pdf->SetTextColor(71, 85, 105);
+
+    $wDesc = 80; $wType = 25; $wQty = 20; $wPrix = 25; $wTotal = 30;
+
+    $printTableHeader = function() use ($pdf, $wDesc, $wType, $wQty, $wPrix, $wTotal) {
+        $pdf->SetFont('helvetica', 'B', 9);
+        $pdf->SetFillColor(248, 250, 252);
+        $pdf->SetTextColor(71, 85, 105);
+        $pdf->SetX(15);
+        $pdf->Cell($wDesc, 9, 'Description', 1, 0, 'L', true);
+        $pdf->Cell($wType, 9, 'Type', 1, 0, 'C', true);
+        $pdf->Cell($wQty, 9, 'Qté', 1, 0, 'C', true);
+        $pdf->Cell($wPrix, 9, 'Prix unit.', 1, 0, 'R', true);
+        $pdf->Cell($wTotal, 9, 'Total HT', 1, 1, 'R', true);
+        $pdf->SetFont('helvetica', '', 9);
+        $pdf->SetTextColor(30, 41, 59);
+    };
+
+    $printTableHeader();
+
+    // Lignes (✅ corrigé)
+    foreach ($lignes as $ligne) {
+        $xStart = 15;
+        $yStart = $pdf->GetY();
+
+        $desc = formatInvoiceDescription((string)($ligne['description'] ?? ''));
+        $type = (string)($ligne['type'] ?? '');
+
+        $qty = (float)($ligne['quantite'] ?? 0);
+        $prixUnit = (float)($ligne['prix_unitaire_ht'] ?? ($ligne['prix_unitaire'] ?? 0));
+        $total = (float)($ligne['total_ht'] ?? 0);
+
+        $minHeight = 7;
+        $descHeight = $pdf->getStringHeight($wDesc, $desc, false, true, '', 1);
+        $cellHeight = max($minHeight, $descHeight);
+
+        // footer manuel à -35 => on prend une marge un peu plus safe
+        $bottomMargin = 40;
+        $pageBottomY = $pdf->getPageHeight() - $bottomMargin;
+
+        if (($yStart + $cellHeight) > $pageBottomY) {
+            $pdf->AddPage();
+            $printTableHeader();
+            $yStart = $pdf->GetY();
+        }
+
+        // Description
+        $pdf->SetXY($xStart, $yStart);
+        $pdf->MultiCell(
+            $wDesc,
+            $cellHeight,
+            $desc,
+            1,
+            'L',
+            false,
+            0,
+            $xStart,
+            $yStart,
+            true,
+            0,
+            false,
+            true,
+            $cellHeight,
+            'M'
+        );
+
+        // Colonnes
+        $x = $xStart + $wDesc;
+        $pdf->SetXY($x, $yStart);
+
+        $pdf->Cell($wType,  $cellHeight, $type, 1, 0, 'C');
+        $pdf->Cell($wQty,   $cellHeight, number_format($qty, 2, ',', ' '), 1, 0, 'C');
+        $pdf->Cell($wPrix,  $cellHeight, number_format($prixUnit, 2, ',', ' ') . ' €', 1, 0, 'R');
+        $pdf->Cell($wTotal, $cellHeight, number_format($total, 2, ',', ' ') . ' €', 1, 1, 'R');
+
+        $pdf->SetY($yStart + $cellHeight);
+    }
+
+    // TOTAUX INTÉGRÉS — style professionnel
+    $wMerged = $wDesc + $wType + $wQty + $wPrix;
+
+    $pdf->SetFont('helvetica', '', 10);
+    $pdf->SetTextColor(30, 41, 59);
+    $pdf->SetX(15);
+    $pdf->Cell($wMerged, 7, 'Total HT', 1, 0, 'R');
+    $pdf->Cell($wTotal, 7, number_format((float)($facture['montant_ht'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+
+    $pdf->SetX(15);
+    $pdf->Cell($wMerged, 7, 'TVA (20 %)', 1, 0, 'R');
+    $pdf->Cell($wTotal, 7, number_format((float)($facture['tva'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R');
+
+    $pdf->SetFont('helvetica', 'B', 11);
+    $pdf->SetFillColor(248, 250, 252);
+    $pdf->SetX(15);
+    $pdf->Cell($wMerged, 9, 'Total TTC', 1, 0, 'R', true);
+    $pdf->Cell($wTotal, 9, number_format((float)($facture['montant_ttc'] ?? 0), 2, ',', ' ') . ' €', 1, 1, 'R', true);
+
+    // IBAN
+    $pdf->Ln(5);
+    $pdf->SetX(15);
+    $pdf->SetFont('helvetica', '', 10);
+    $pdf->Cell(0, 6, 'IBAN : FR76 1027 8063 4700 0229 4870 249 - BIC : CMCIFR2A', 0, 1, 'L');
+
+    // Footer Fixe
+    $pdf->SetY(-35);
+    $pdf->SetFont('helvetica', '', 8);
+
+    $f1 = "Conditions de règlement : Toutes nos factures sont payables au comptant net sans escompte. Taux de pénalités de retard applicable : 3 fois le taux légal. Indemnité forfaitaire pour frais de recouvrement : 40 €";
+    $f2 = "Camson Group - 97, Boulevard Maurice Berteaux - SANNOIS SASU - Siret 947 820 585 00018 RCS Versailles TVA FR81947820585";
+    $f3 = "www.camsongroup.fr - 01 55 99 00 69";
+
+    $pdf->MultiCell(0, 4, $f1, 0, 'C');
+    $pdf->Ln(1);
+    $pdf->Cell(0, 4, $f2, 0, 1, 'C');
+    $pdf->Cell(0, 4, $f3, 0, 1, 'C');
+
+    // Sauvegarde
+    $filename = 'facture_' . $facture['numero'] . '_' . date('YmdHis') . '.pdf';
+    $filepath = $uploadDir . '/' . $filename;
+
+    $pdf->Output($filepath, 'F');
+
+    // Vérifications simples (tu peux garder tes logs avancés si tu veux)
+    if (!file_exists($filepath) || filesize($filepath) === 0) {
+        throw new RuntimeException('Le fichier PDF n\'a pas pu être créé ou est vide: ' . $filepath);
+    }
+
+    return '/uploads/factures/' . date('Y') . '/' . $filename;
+}
+?>

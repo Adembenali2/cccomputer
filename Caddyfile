@@ -1,0 +1,7 @@
+:{$PORT}
+
+# Si ton app a un dossier public, remplace /app par /app/public
+root * /app
+encode zstd gzip
+php_server
+file_server
