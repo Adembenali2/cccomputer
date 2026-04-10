@@ -25,7 +25,11 @@ if (!function_exists('getNavIcon')) {
     <img src="/assets/logos/logo.png" alt="CC" onerror="this.style.display='none'">
     <span>CCComputer</span>
   </a>
-  <nav class="header-nav">
+  <button type="button" class="header-menu-toggle" id="headerMenuToggle" aria-label="Menu" aria-expanded="false">
+    <svg class="icon-menu" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    <svg class="icon-close" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <nav class="header-nav" id="headerNav">
     <?php
     $navItems = [
       ['href'=>'dashboard.php','icon'=>'grid','label'=>'Dashboard'],
@@ -46,6 +50,20 @@ if (!function_exists('getNavIcon')) {
       </a>
     <?php endforeach; ?>
   </nav>
+  <!-- RECHERCHE GLOBALE -->
+  <div class="global-search-wrapper" id="globalSearchWrapper">
+    <input
+      type="search"
+      id="globalSearchInput"
+      class="global-search-input"
+      placeholder="Rechercher..."
+      autocomplete="off"
+      aria-label="Recherche globale"
+      aria-haspopup="listbox"
+      aria-expanded="false"
+    >
+    <div class="global-search-dropdown" id="globalSearchDropdown" role="listbox" hidden></div>
+  </div>
   <div class="header-right">
     <button type="button" class="header-icon-btn" id="btnDarkMode" title="Mode nuit"><span id="iconDarkMode">🌙</span></button>
     <a href="/public/espace_commercial.php"
@@ -192,6 +210,121 @@ if (!function_exists('getNavIcon')) {
   }
 
   loadNotifications();
+})();
+</script>
+<script<?php
+  $__hnCsp2 = (string)($GLOBALS['csp_nonce'] ?? '');
+  echo $__hnCsp2 !== '' ? ' nonce="' . htmlspecialchars($__hnCsp2, ENT_QUOTES, 'UTF-8') . '"' : '';
+?>>
+(function() {
+  const toggle = document.getElementById('headerMenuToggle');
+  const nav    = document.getElementById('headerNav');
+  if (!toggle || !nav) return;
+  toggle.addEventListener('click', function() {
+    const open = nav.classList.toggle('nav-open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.classList.toggle('is-open', open);
+  });
+  nav.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => {
+      nav.classList.remove('nav-open');
+      toggle.classList.remove('is-open');
+      toggle.setAttribute('aria-expanded', 'false');
+    });
+  });
+})();
+</script>
+<script<?php
+  $__hnCsp3 = (string)($GLOBALS['csp_nonce'] ?? '');
+  echo $__hnCsp3 !== '' ? ' nonce="' . htmlspecialchars($__hnCsp3, ENT_QUOTES, 'UTF-8') . '"' : '';
+?>>
+(function() {
+  const input    = document.getElementById('globalSearchInput');
+  const dropdown = document.getElementById('globalSearchDropdown');
+  const wrapper  = document.getElementById('globalSearchWrapper');
+  if (!input || !dropdown || !wrapper) return;
+
+  let debounceTimer = null;
+  let lastQuery = '';
+
+  const ICONS = { clients: '👥', factures: '📄', sav: '🔧', livraisons: '📦' };
+  const LABELS = { clients: 'Clients', factures: 'Factures', sav: 'SAV', livraisons: 'Livraisons' };
+
+  function escHtml(s) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(String(s ?? '')));
+    return d.innerHTML;
+  }
+  function escAttr(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  function showDropdown(results) {
+    const categories = ['clients', 'factures', 'sav', 'livraisons'];
+    let html = '';
+    let total = 0;
+
+    categories.forEach(cat => {
+      const items = results[cat] || [];
+      if (!items.length) return;
+      total += items.length;
+      html += '<div class="gs-group"><div class="gs-group-title">' + ICONS[cat] + ' ' + LABELS[cat] + '</div>';
+      items.forEach(item => {
+        html += '<a href="' + escAttr(item.url) + '" class="gs-item" role="option">' +
+          '<span class="gs-item-label">' + escHtml(item.label) + '</span>' +
+          (item.sub ? '<span class="gs-item-sub">' + escHtml(item.sub) + '</span>' : '') +
+          '</a>';
+      });
+      html += '</div>';
+    });
+
+    if (total === 0) {
+      html = '<div class="gs-empty">Aucun résultat</div>';
+    }
+
+    dropdown.innerHTML = html;
+    dropdown.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  function hideDropdown() {
+    dropdown.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+  }
+
+  function search(q) {
+    if (q.length < 2) { hideDropdown(); return; }
+    if (q === lastQuery) return;
+    lastQuery = q;
+
+    fetch('/API/global_search.php?q=' + encodeURIComponent(q), { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (d.ok) showDropdown(d.results); })
+      .catch(() => {});
+  }
+
+  input.addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    const q = this.value.trim();
+    if (q.length < 2) { hideDropdown(); lastQuery = ''; return; }
+    debounceTimer = setTimeout(function() { search(q); }, 280);
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { hideDropdown(); this.blur(); }
+    if (e.key === 'Enter') {
+      const first = dropdown.querySelector('.gs-item');
+      if (first) window.location.href = first.getAttribute('href');
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!wrapper.contains(e.target)) hideDropdown();
+  });
+
+  input.addEventListener('focus', function() {
+    if (this.value.trim().length >= 2) search(this.value.trim());
+  });
 })();
 </script>
 </header>
