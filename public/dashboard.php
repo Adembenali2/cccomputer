@@ -140,7 +140,7 @@ $clientsWidget = $pdo->query("
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
 
 <!-- FOND PAGE -->
-<div style="min-height:100vh; background: linear-gradient(180deg, #f0f4ff 0%, #f8fafc 100%);">
+<div style="min-height:100vh; background: #f9fafb;">
 <div class="page-container">
 
   <!-- HERO BANNER -->
