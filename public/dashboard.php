@@ -75,6 +75,63 @@ $impayeStmt->execute();
 $montantImpaye = (float)$impayeStmt->fetchColumn();
 $nbImpayes = (int)$pdo->query("SELECT COUNT(*) FROM factures WHERE statut IN ('envoyee','partielle','en_retard')")->fetchColumn();
 
+// CA MENSUEL — 12 derniers mois
+$factDateCol = colExists($pdo, 'factures', 'date_facture') ? 'date_facture' : $factCreatedCol;
+$caMensuelRaw = [];
+$stmtCa = $pdo->prepare("
+    SELECT DATE_FORMAT({$factDateCol}, '%Y-%m') as mois,
+           COALESCE(SUM(montant_ttc), 0) as ca
+    FROM factures
+    WHERE statut NOT IN ('annulee','brouillon')
+      AND {$factDateCol} >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    GROUP BY mois
+    ORDER BY mois ASC
+");
+$stmtCa->execute();
+$caMensuelRaw = $stmtCa->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+// Construire tableau complet des 12 mois (même si CA = 0)
+$caMensuel = [];
+for ($i = 11; $i >= 0; $i--) {
+    $mois = date('Y-m', strtotime("-{$i} months"));
+    $caMensuel[$mois] = 0.0;
+}
+foreach ($caMensuelRaw as $row) {
+    if (isset($caMensuel[$row['mois']])) {
+        $caMensuel[$row['mois']] = (float)$row['ca'];
+    }
+}
+$caLabels = array_map(fn($m) => date('M Y', strtotime($m . '-01')), array_keys($caMensuel));
+$caValues = array_values($caMensuel);
+
+// TOP 5 CLIENTS par CA
+$stmtTop = $pdo->prepare("
+    SELECT COALESCE(c.raison_sociale, CONCAT('Client #', c.id)) as nom,
+           COALESCE(SUM(f.montant_ttc), 0) as ca_total
+    FROM factures f
+    LEFT JOIN clients c ON f.{$factClientCol} = c.id
+    WHERE f.statut NOT IN ('annulee','brouillon')
+    GROUP BY c.id, c.raison_sociale
+    ORDER BY ca_total DESC
+    LIMIT 5
+");
+$stmtTop->execute();
+$topClients = $stmtTop->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$maxCaTop = !empty($topClients) ? (float)$topClients[0]['ca_total'] : 1.0;
+
+// TAUX DE RECOUVREMENT
+$stmtRecouvrement = $pdo->prepare("
+    SELECT
+        COALESCE(SUM(CASE WHEN statut = 'payee' THEN montant_ttc ELSE 0 END), 0) as total_paye,
+        COALESCE(SUM(CASE WHEN statut NOT IN ('annulee','brouillon') THEN montant_ttc ELSE 0 END), 0) as total_facture
+    FROM factures
+");
+$stmtRecouvrement->execute();
+$recRow = $stmtRecouvrement->fetch(PDO::FETCH_ASSOC);
+$totalFacture = (float)($recRow['total_facture'] ?? 0);
+$totalPaye    = (float)($recRow['total_paye'] ?? 0);
+$tauxRecouvrement = $totalFacture > 0 ? round(($totalPaye / $totalFacture) * 100, 1) : 0;
+
 // HISTORIQUE
 $savRecents = $pdo->query("
   SELECT 'SAV' as type, CONCAT('SAV #',s.id,' — ',COALESCE(c.{$clientNameCol},'Client')) as label, s.{$savCreatedCol} as created_at
@@ -134,7 +191,12 @@ $clientsWidget = $pdo->query("
     .grid-dashboard { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
     @media (max-width: 1024px) { .grid-dashboard { grid-template-columns: repeat(2,1fr) !important; } }
     @media (max-width: 640px) { .grid-dashboard { grid-template-columns: 1fr !important; } header nav { display:none !important; } }
+    @media (max-width: 768px) {
+      .dash-grid { grid-template-columns: 1fr !important; }
+      .dash-grid + div { grid-template-columns: 1fr !important; }
+    }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
@@ -260,6 +322,65 @@ $clientsWidget = $pdo->query("
           </div>
         </div>
       <?php endforeach; ?>
+    </div>
+  </div>
+
+  <!-- SECTION GRAPHIQUES -->
+  <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px; margin-bottom:24px;">
+
+    <!-- GRAPHIQUE CA MENSUEL -->
+    <div class="dash-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <div>
+          <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);">Chiffre d'affaires</div>
+          <div style="font-size:1rem;font-weight:700;">12 derniers mois</div>
+        </div>
+        <div style="font-size:1.25rem;font-weight:800;color:var(--accent-primary);">
+          <?= number_format(array_sum($caValues), 0, ',', ' ') ?> €
+        </div>
+      </div>
+      <canvas id="caChart" height="120"></canvas>
+    </div>
+
+    <!-- COLONNE DROITE : top clients + taux recouvrement -->
+    <div style="display:flex; flex-direction:column; gap:20px;">
+
+      <!-- TOP 5 CLIENTS -->
+      <div class="dash-card" style="flex:1;">
+        <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);margin-bottom:.75rem;">Top clients</div>
+        <?php if (empty($topClients)): ?>
+          <p style="color:var(--text-secondary);font-size:.85rem;">Aucune donnée.</p>
+        <?php else: ?>
+          <?php foreach ($topClients as $i => $tc): ?>
+            <?php $pct = $maxCaTop > 0 ? round(((float)$tc['ca_total'] / $maxCaTop) * 100) : 0; ?>
+            <div style="margin-bottom:.625rem;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem;">
+                <span style="font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65%;"><?= h((string)$tc['nom']) ?></span>
+                <span style="font-size:.75rem;color:var(--text-secondary);white-space:nowrap;"><?= number_format((float)$tc['ca_total'], 0, ',', ' ') ?> €</span>
+              </div>
+              <div style="height:5px;background:var(--bg-tertiary);border-radius:999px;overflow:hidden;">
+                <div style="height:100%;width:<?= $pct ?>%;background:var(--accent-primary);border-radius:999px;transition:width .5s;"></div>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+
+      <!-- TAUX DE RECOUVREMENT -->
+      <div class="dash-card">
+        <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);margin-bottom:.5rem;">Taux de recouvrement</div>
+        <div style="font-size:2rem;font-weight:800;margin-bottom:.5rem;color:<?= $tauxRecouvrement >= 80 ? '#059669' : ($tauxRecouvrement >= 50 ? '#d97706' : '#dc2626') ?>;">
+          <?= $tauxRecouvrement ?> %
+        </div>
+        <div style="height:8px;background:var(--bg-tertiary);border-radius:999px;overflow:hidden;margin-bottom:.5rem;">
+          <div style="height:100%;width:<?= min($tauxRecouvrement, 100) ?>%;background:<?= $tauxRecouvrement >= 80 ? '#059669' : ($tauxRecouvrement >= 50 ? '#d97706' : '#dc2626') ?>;border-radius:999px;transition:width .5s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--text-secondary);">
+          <span>Payé : <?= number_format($totalPaye, 0, ',', ' ') ?> €</span>
+          <span>Total : <?= number_format($totalFacture, 0, ',', ' ') ?> €</span>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -493,6 +614,56 @@ document.addEventListener('click', e => {
     cspOpen = false;
   }
 });
+</script>
+
+<script <?= csp_nonce() ?>>
+(function() {
+  const labels = <?= json_encode($caLabels, JSON_UNESCAPED_UNICODE) ?>;
+  const values = <?= json_encode($caValues) ?>;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+  const gridColor  = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+  const textColor  = isDark ? '#94a3b8' : '#64748b';
+  const barColor   = isDark ? '#60a5fa' : '#3b82f6';
+
+  const ctx = document.getElementById('caChart');
+  if (!ctx || typeof Chart === 'undefined') return;
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: barColor,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (c) => new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 }).format(c.raw)
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } } },
+        y: {
+          grid: { color: gridColor },
+          ticks: {
+            color: textColor,
+            font: { size: 11 },
+            callback: (v) => new Intl.NumberFormat('fr-FR', { notation:'compact', compactDisplay:'short' }).format(v) + ' €'
+          }
+        }
+      }
+    }
+  });
+})();
 </script>
 
 </body>
