@@ -103,7 +103,7 @@ $nbNotifs = $savEnRetard + $stockAlerte + $stockRupture;
 // Clients pour le widget support
 $clientsWidget = $pdo->query("
     SELECT id, 
-           COALESCE(nom, raison_sociale, CONCAT('Client #', id)) as nom,
+           COALESCE({$clientNameCol}, CONCAT('Client #', id)) as nom,
            COALESCE(email, '') as email,
            COALESCE(telephone, ville, '') as detail,
            COALESCE(statut, 'actif') as statut
