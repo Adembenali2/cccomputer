@@ -535,10 +535,24 @@ $pdfExportDateFinDefault = $today;
       <?php endif; ?>
       <button type="button" class="btn btn-outline" id="btnOpenPdfExportLiv">Exporter PDF</button>
     </div>
+    <div class="view-toggle" id="livViewToggle">
+      <button type="button" class="view-btn active" id="btnLivTableau" title="Vue tableau">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+        </svg> Tableau
+      </button>
+      <button type="button" class="view-btn" id="btnLivPlanning" title="Vue planning">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+          <line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>
+        </svg> Planning
+      </button>
+    </div>
   </div>
 
   <!-- Tableau -->
-  <div class="table-wrapper">
+  <div class="table-wrapper" id="livTableWrap">
     <table class="tbl-livraisons" id="tbl">
       <thead>
         <tr>
@@ -641,16 +655,49 @@ $pdfExportDateFinDefault = $today;
           <td class="td-date" data-th="Date prévue"><?= h($prevueLabel) ?></td>
           <td class="td-date" data-th="Date réelle"><?= h($reelleLabel) ?></td>
           <td data-th="Livré par"><?= h($livreurNomComplet) ?></td>
-          <td class="td-date has-pullout" data-th="Statut">
-            <?= h($statutLabel) ?>
-            <?php if ($isLate): ?>
-              <span class="alert-pullout" title="Livraison en retard">
-                ⚠️ En retard
-              </span>
-            <?php elseif ($isToday): ?>
-              <span class="badge-today" title="Prévue ou livrée aujourd’hui">
-                📅 Aujourd’hui
-              </span>
+          <td class="td-date has-pullout liv-statut-cell" data-th="Statut">
+            <div class="liv-statut-badge-wrap">
+              <?= h($statutLabel) ?>
+              <?php if ($isLate): ?>
+                <span class="alert-pullout" title="Livraison en retard">
+                  ⚠️ En retard
+                </span>
+              <?php elseif ($isToday): ?>
+                <span class="badge-today" title="Prévue ou livrée aujourd’hui">
+                  📅 Aujourd’hui
+                </span>
+              <?php endif; ?>
+            </div>
+            <?php
+            $rawStatut = $liv['statut'] ?? 'planifiee';
+            $pipStatutLabels = [
+                'planifiee' => 'Planifiée',
+                'en_cours'  => 'En cours',
+                'livree'    => 'Livrée',
+                'annulee'   => 'Annulée',
+            ];
+            $statutOrder = ['planifiee', 'en_cours', 'livree'];
+            $stepIndex = array_search($rawStatut, $statutOrder, true);
+            ?>
+            <?php if ($rawStatut !== 'annulee'): ?>
+            <div class="liv-pipeline">
+              <?php foreach ($statutOrder as $i => $s): ?>
+                <div class="pip-step <?= ($stepIndex !== false && $i <= $stepIndex) ? 'pip-done' : '' ?> <?= $s === $rawStatut ? 'pip-current' : '' ?>">
+                  <div class="pip-dot"></div>
+                  <span class="pip-label"><?= h($pipStatutLabels[$s]) ?></span>
+                </div>
+                <?php if ($i < count($statutOrder) - 1): ?>
+                  <div class="pip-line <?= ($stepIndex !== false && $i < $stepIndex) ? 'pip-line-done' : '' ?>"></div>
+                <?php endif; ?>
+              <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <span class="pip-annulee">Annulée</span>
+            <?php endif; ?>
+            <?php if ($canEditThis && $rawStatut === 'planifiee'): ?>
+              <button type="button" class="btn-statut-rapide" data-id="<?= (int)$liv['id'] ?>" data-to="en_cours">▶ Démarrer</button>
+            <?php elseif ($canEditThis && $rawStatut === 'en_cours'): ?>
+              <button type="button" class="btn-statut-rapide btn-livrer" data-id="<?= (int)$liv['id'] ?>" data-to="livree">✔ Marquer livrée</button>
             <?php endif; ?>
           </td>
         </tr>
@@ -658,6 +705,15 @@ $pdfExportDateFinDefault = $today;
       <?php endif; ?>
       </tbody>
     </table>
+  </div>
+
+  <div id="livPlanningView" hidden>
+    <div class="planning-nav">
+      <button type="button" class="planning-nav-btn" id="planPrev">&#8592; Semaine préc.</button>
+      <span class="planning-week-label" id="planWeekLabel"></span>
+      <button type="button" class="planning-nav-btn" id="planNext">Semaine suiv. &#8594;</button>
+    </div>
+    <div class="planning-grid" id="planGrid"></div>
   </div>
 </div>
 
@@ -754,6 +810,9 @@ $pdfExportDateFinDefault = $today;
 <script <?= csp_nonce() ?>>
 // Gestion modale
 (function(){
+  const csrfToken = <?= json_encode($CSRF) ?>;
+  window.__CSRF_TOKEN__ = csrfToken;
+
   const overlay   = document.getElementById('deliveryModalOverlay');
   const modal     = document.getElementById('editDeliveryModal');
   const closeBtn  = document.getElementById('btnCloseDeliveryModal');
@@ -792,6 +851,7 @@ $pdfExportDateFinDefault = $today;
   rows.forEach(tr => {
     tr.style.cursor = 'pointer';
     tr.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-statut-rapide')) return;
       // ne pas ouvrir si l'utilisateur est en train de sélectionner du texte
       if (window.getSelection && String(window.getSelection())) return;
 
@@ -962,6 +1022,298 @@ $pdfExportDateFinDefault = $today;
       closePdfLivModal();
     });
   }
+
+  // ===== PLANNING HEBDOMADAIRE + actions statut rapide =====
+  (function () {
+    const btnTableau = document.getElementById('btnLivTableau');
+    const btnPlanning = document.getElementById('btnLivPlanning');
+    const planView = document.getElementById('livPlanningView');
+    const planGrid = document.getElementById('planGrid');
+    const planLabel = document.getElementById('planWeekLabel');
+    const tableWrap = document.getElementById('livTableWrap');
+    const planPrev = document.getElementById('planPrev');
+    const planNext = document.getElementById('planNext');
+
+    if (!btnTableau || !btnPlanning || !planView || !planGrid || !planLabel) return;
+
+    const WEEK_KEY = 'livPlanWeekStart';
+
+    function getMonday(d) {
+      const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const day = dt.getDay();
+      const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
+      dt.setDate(diff);
+      dt.setHours(0, 0, 0, 0);
+      return dt;
+    }
+
+    function formatDateLocal(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    function formatDisplayDate(d) {
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    }
+
+    function loadWeekStart() {
+      const stored = sessionStorage.getItem(WEEK_KEY);
+      if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) {
+        const p = stored.split('-').map(Number);
+        const dt = new Date(p[0], p[1] - 1, p[2]);
+        if (!isNaN(dt.getTime())) return getMonday(dt);
+      }
+      return getMonday(new Date());
+    }
+
+    let currentWeekStart = loadWeekStart();
+
+    function saveWeekStart() {
+      sessionStorage.setItem(WEEK_KEY, formatDateLocal(currentWeekStart));
+    }
+
+    const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    const STATUT_COLORS = {
+      planifiee: '#3b82f6',
+      en_cours: '#f59e0b',
+      livree: '#10b981',
+      annulee: '#9ca3af'
+    };
+    const STATUT_LABELS = {
+      planifiee: 'Planifiée', en_cours: 'En cours', livree: 'Livrée', annulee: 'Annulée'
+    };
+
+    function escP(s) {
+      const d = document.createElement('div');
+      d.appendChild(document.createTextNode(String(s ?? '')));
+      return d.innerHTML;
+    }
+
+    function frTodayLabel() {
+      const n = new Date();
+      const pad = function (x) { return String(x).padStart(2, '0'); };
+      return pad(n.getDate()) + '/' + pad(n.getMonth() + 1) + '/' + n.getFullYear();
+    }
+
+    function visibleLivRows() {
+      return Array.prototype.slice.call(document.querySelectorAll('#tbl tbody tr[data-id]')).filter(function (tr) {
+        if (tr.getAttribute('data-empty-row') === '1') return false;
+        return tr.style.display !== 'none';
+      });
+    }
+
+    function getLivraisonsData() {
+      const result = [];
+      visibleLivRows().forEach(function (tr) {
+        const prevIso = tr.getAttribute('data-prevue-iso') || '';
+        result.push({
+          id: tr.getAttribute('data-id'),
+          client: tr.getAttribute('data-client') || '—',
+          ref: tr.getAttribute('data-ref') || '—',
+          adresse: tr.getAttribute('data-adresse') || '—',
+          objet: tr.getAttribute('data-objet') || '—',
+          prevue: prevIso,
+          statut: tr.getAttribute('data-statut') || 'planifiee',
+          livreur: tr.getAttribute('data-livreur') || '—',
+          canEdit: tr.getAttribute('data-can-edit') !== '0'
+        });
+      });
+      return result;
+    }
+
+    async function postStatut(id, statut) {
+      const res = await fetch('/API/livraisons/update_statut.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ id: parseInt(id, 10), statut: statut, csrf_token: csrfToken })
+      });
+      return res.json();
+    }
+
+    function updateRowAfterStatut(tr, to, data) {
+      if (!tr) return;
+      tr.setAttribute('data-statut', to);
+      if (to === 'livree') {
+        const dr = data && data.date_reelle ? String(data.date_reelle) : '';
+        if (dr && /^\d{4}-\d{2}-\d{2}$/.test(dr)) {
+          const p = dr.split('-');
+          tr.setAttribute('data-reelle', p[2] + '/' + p[1] + '/' + p[0]);
+        } else {
+          tr.setAttribute('data-reelle', frTodayLabel());
+        }
+      } else {
+        tr.setAttribute('data-reelle', '—');
+      }
+    }
+
+    function buildPlanning() {
+      const livraisons = getLivraisonsData();
+      planGrid.innerHTML = '';
+
+      const weekEnd = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + 6);
+      planLabel.textContent = 'Semaine du ' + formatDisplayDate(currentWeekStart) + ' au ' + formatDisplayDate(weekEnd);
+
+      const todayStr = formatDateLocal(new Date());
+
+      for (let i = 0; i < 7; i++) {
+        const day = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + i);
+        const dayStr = formatDateLocal(day);
+        const isToday = dayStr === todayStr;
+
+        const dayItems = livraisons.filter(function (l) { return l.prevue && l.prevue.indexOf(dayStr) === 0; });
+
+        const col = document.createElement('div');
+        col.className = 'planning-day-col' + (isToday ? ' planning-today' : '');
+        col.innerHTML =
+          '<div class="planning-day-header">' +
+          '<span class="planning-day-name">' + JOURS[i] + '</span>' +
+          '<span class="planning-day-date">' + formatDisplayDate(day) + '</span>' +
+          (dayItems.length > 0 ? '<span class="planning-day-count">' + dayItems.length + '</span>' : '') +
+          '</div>' +
+          '<div class="planning-day-cards" id="planDay-' + dayStr + '"></div>';
+        planGrid.appendChild(col);
+
+        const cardsContainer = col.querySelector('.planning-day-cards');
+        if (dayItems.length === 0) {
+          cardsContainer.innerHTML = '<div class="planning-empty">—</div>';
+        } else {
+          dayItems.forEach(function (liv) {
+            const card = document.createElement('div');
+            card.className = 'planning-card';
+            card.dataset.id = liv.id;
+            const addr = liv.adresse || '';
+            const addrShort = addr.length > 60 ? addr.substring(0, 60) + '…' : addr;
+            const c = STATUT_COLORS[liv.statut] || '#9ca3af';
+            const lb = STATUT_LABELS[liv.statut] || liv.statut;
+            const movePlan = liv.canEdit && liv.statut === 'planifiee'
+              ? '<button type="button" class="plan-btn-statut" data-id="' + escP(liv.id) + '" data-to="en_cours">▶</button>'
+              : '';
+            const moveLiv = liv.canEdit && liv.statut === 'en_cours'
+              ? '<button type="button" class="plan-btn-statut plan-btn-livrer" data-id="' + escP(liv.id) + '" data-to="livree">✔</button>'
+              : '';
+            card.innerHTML =
+              '<div class="planning-card-head">' +
+              '<span class="planning-card-ref">' + escP(liv.ref) + '</span>' +
+              '<span class="planning-card-badge" style="background:' + c + '">' + escP(lb) + '</span>' +
+              '</div>' +
+              '<div class="planning-card-client">' + escP(liv.client) + '</div>' +
+              '<div class="planning-card-adresse">' + escP(addrShort) + '</div>' +
+              '<div class="planning-card-footer"><span>👤 ' + escP(liv.livreur) + '</span></div>' +
+              '<div class="planning-card-actions">' +
+              '<button type="button" class="plan-btn-detail" data-id="' + escP(liv.id) + '">✏️ Détail</button>' +
+              movePlan + moveLiv +
+              '</div>';
+            cardsContainer.appendChild(card);
+          });
+        }
+      }
+
+      planGrid.querySelectorAll('.plan-btn-detail').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const tr = document.querySelector('#tbl tbody tr[data-id="' + btn.getAttribute('data-id') + '"]');
+          if (tr) tr.click();
+        });
+      });
+
+      planGrid.querySelectorAll('.plan-btn-statut').forEach(function (btn) {
+        btn.addEventListener('click', async function (e) {
+          e.stopPropagation();
+          btn.disabled = true;
+          const id = btn.getAttribute('data-id');
+          const to = btn.getAttribute('data-to');
+          try {
+            const data = await postStatut(id, to);
+            if (data.success) {
+              const tr = document.querySelector('#tbl tbody tr[data-id="' + id + '"]');
+              updateRowAfterStatut(tr, to, data);
+              buildPlanning();
+            } else {
+              alert(data.error || 'Erreur');
+              btn.disabled = false;
+            }
+          } catch (err) {
+            alert('Erreur réseau');
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    function showTableau() {
+      btnTableau.classList.add('active');
+      btnPlanning.classList.remove('active');
+      planView.hidden = true;
+      if (tableWrap) tableWrap.hidden = false;
+      localStorage.setItem('livView', 'tableau');
+    }
+
+    function showPlanning() {
+      btnPlanning.classList.add('active');
+      btnTableau.classList.remove('active');
+      if (tableWrap) tableWrap.hidden = true;
+      planView.hidden = false;
+      saveWeekStart();
+      buildPlanning();
+      localStorage.setItem('livView', 'planning');
+    }
+
+    btnTableau.addEventListener('click', showTableau);
+    btnPlanning.addEventListener('click', showPlanning);
+
+    if (planPrev) {
+      planPrev.addEventListener('click', function () {
+        currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+        saveWeekStart();
+        buildPlanning();
+      });
+    }
+    if (planNext) {
+      planNext.addEventListener('click', function () {
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+        saveWeekStart();
+        buildPlanning();
+      });
+    }
+
+    const tableEl = document.getElementById('livTableWrap');
+    if (tableEl) {
+      tableEl.addEventListener('click', async function (e) {
+        const btn = e.target.closest('.btn-statut-rapide');
+        if (!btn) return;
+        e.stopPropagation();
+        e.preventDefault();
+        btn.disabled = true;
+        try {
+          const data = await postStatut(btn.getAttribute('data-id'), btn.getAttribute('data-to'));
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error || 'Erreur');
+            btn.disabled = false;
+          }
+        } catch (err) {
+          alert('Erreur réseau');
+          btn.disabled = false;
+        }
+      });
+    }
+
+    const qPlan = document.getElementById('q');
+    if (qPlan) {
+      qPlan.addEventListener('input', function () {
+        if (!planView.hidden) buildPlanning();
+      });
+    }
+
+    if (localStorage.getItem('livView') === 'planning') showPlanning();
+  })();
 })();
 </script>
 </body>

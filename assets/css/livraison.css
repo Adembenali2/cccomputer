@@ -717,3 +717,224 @@ body.modal-open { overflow: hidden; }
     font-size: 0.9rem;
   }
 }
+
+/* ===== PIPELINE STATUT (dans le tableau livraisons) ===== */
+.liv-statut-cell {
+  min-width: 200px;
+  vertical-align: top;
+}
+.liv-statut-badge-wrap {
+  margin-bottom: 2px;
+}
+.liv-pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 6px;
+}
+.pip-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.pip-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  background: #fff;
+  transition: background 0.2s, border-color 0.2s;
+}
+.pip-step.pip-done .pip-dot,
+.pip-step.pip-current .pip-dot {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+.pip-step.pip-done:last-child .pip-dot { background: #10b981; border-color: #10b981; }
+.pip-label {
+  font-size: 9px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+.pip-step.pip-current .pip-label { color: #3b82f6; font-weight: 600; }
+.pip-line {
+  flex: 1;
+  height: 2px;
+  background: #e5e7eb;
+  min-width: 16px;
+  margin-bottom: 13px;
+  transition: background 0.2s;
+}
+.pip-line.pip-line-done { background: #3b82f6; }
+.pip-annulee {
+  font-size: 11px;
+  color: #9ca3af;
+  font-style: italic;
+  margin-top: 4px;
+  display: block;
+}
+
+.btn-statut-rapide {
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  display: block;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-statut-rapide:hover { background: #3b82f6; color: #fff; }
+.btn-statut-rapide.btn-livrer { border-color: #10b981; color: #10b981; }
+.btn-statut-rapide.btn-livrer:hover { background: #10b981; color: #fff; }
+
+/* ===== VUE PLANNING HEBDOMADAIRE ===== */
+.planning-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px 16px;
+  flex-wrap: wrap;
+}
+.planning-nav-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg-card, #fff);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.planning-nav-btn:hover { background: var(--border, #f3f4f6); }
+.planning-week-label {
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  flex: 1;
+}
+
+.planning-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 24px;
+}
+@media (max-width: 1100px) { .planning-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 700px)  { .planning-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 400px)  { .planning-grid { grid-template-columns: 1fr; } }
+
+.planning-day-col {
+  background: var(--bg-card, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 10px;
+  min-height: 120px;
+}
+.planning-today {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+}
+.planning-day-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  padding-bottom: 7px;
+}
+.planning-day-name { font-weight: 700; font-size: 12px; }
+.planning-day-date { font-size: 11px; color: #9ca3af; flex: 1; }
+.planning-day-count {
+  background: #3b82f6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+.planning-day-cards { display: flex; flex-direction: column; gap: 8px; }
+.planning-empty { color: #d1d5db; font-size: 12px; text-align: center; padding: 8px 0; }
+
+.planning-card {
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 9px 10px;
+  transition: box-shadow 0.15s;
+}
+.planning-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.planning-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.planning-card-ref { font-size: 10px; font-weight: 700; font-family: monospace; color: #9ca3af; }
+.planning-card-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.planning-card-client { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.planning-card-adresse { font-size: 11px; color: #9ca3af; margin-bottom: 5px; line-height: 1.3; }
+.planning-card-footer { font-size: 11px; color: #9ca3af; margin-bottom: 7px; }
+.planning-card-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+.plan-btn-detail {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.plan-btn-detail:hover { background: var(--border, #f3f4f6); }
+.plan-btn-statut {
+  width: 26px; height: 26px;
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.plan-btn-statut:hover { background: #3b82f6; color: #fff; }
+.plan-btn-livrer { border-color: #10b981; color: #10b981; }
+.plan-btn-livrer:hover { background: #10b981; color: #fff; }
+.plan-btn-statut:disabled { opacity: 0.4; cursor: not-allowed; }
+
+[data-theme="dark"] .planning-day-col,
+body.dark-mode .planning-day-col {
+  background: var(--bg-card, #1e293b);
+  border-color: var(--border, #334155);
+}
+[data-theme="dark"] .planning-card,
+body.dark-mode .planning-card {
+  background: var(--bg-primary, #0f172a);
+  border-color: var(--border, #334155);
+}
+[data-theme="dark"] .planning-nav-btn,
+body.dark-mode .planning-nav-btn {
+  background: var(--bg-card, #1e293b);
+  border-color: var(--border, #334155);
+}
+[data-theme="dark"] .pip-dot,
+body.dark-mode .pip-dot {
+  background: var(--bg-primary, #0f172a);
+}
