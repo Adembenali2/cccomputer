@@ -99,6 +99,18 @@ usort($historique, static fn(array $a, array $b): int => strtotime((string)$b['c
 $historique = array_slice($historique, 0, 8);
 
 $nbNotifs = $savEnRetard + $stockAlerte + $stockRupture;
+
+// Clients pour le widget support
+$clientsWidget = $pdo->query("
+    SELECT id, 
+           COALESCE(nom, raison_sociale, CONCAT('Client #', id)) as nom,
+           COALESCE(email, '') as email,
+           COALESCE(telephone, ville, '') as detail,
+           COALESCE(statut, 'actif') as statut
+    FROM clients 
+    ORDER BY nom ASC
+    LIMIT 300
+")->fetchAll(PDO::FETCH_ASSOC) ?: [];
 ?>
 <!doctype html>
 <html lang="fr">
@@ -116,82 +128,232 @@ $nbNotifs = $savEnRetard + $stockAlerte + $stockRupture;
 </head>
 <body>
 <?php require_once __DIR__ . '/../source/templates/header.php'; ?>
+
+<!-- FOND PAGE -->
+<div style="min-height:100vh; background: linear-gradient(180deg, #f0f4ff 0%, #f8fafc 100%);">
 <div class="page-container">
-  <div style="margin-bottom:24px;">
-    <h1 style="font-size:22px;font-weight:700;color:#111827;margin:0 0 2px;">Tableau de bord</h1>
-    <p style="color:#6b7280;font-size:13px;margin:0;">Bonjour <?= h($userNom) ?> 👋 — <?= date('l d F Y') ?></p>
+
+  <!-- HERO BANNER -->
+  <div class="dashboard-hero">
+    <h1>Tableau de bord</h1>
+    <p>Bonjour <?= h($userNom) ?> 👋 — <?= date('l d F Y') ?></p>
+    <div class="hero-stats-row">
+      <div class="hero-stat">
+        <div class="hero-stat-value"><?= $totalClients ?></div>
+        <div class="hero-stat-label">Clients actifs</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value"><?= $savOuverts ?></div>
+        <div class="hero-stat-label">SAV ouverts</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value"><?= $livraisonsEnCours ?></div>
+        <div class="hero-stat-label">Livraisons</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value"><?= number_format($montantImpaye, 0, ',', ' ') ?>€</div>
+        <div class="hero-stat-label">Impayes</div>
+      </div>
+    </div>
   </div>
 
-  <div class="grid-dashboard">
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-        <div><div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:6px;">Clients</div><div style="font-size:36px;font-weight:700;color:#111827;line-height:1;"><?= $totalClients ?></div><div style="font-size:12px;color:#10b981;margin-top:4px;">+<?= $nouveauxMois ?> ce mois</div></div>
-        <div style="width:48px;height:48px;border-radius:12px;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:22px;">👥</div>
-      </div>
-      <a href="clients.php" style="display:block;text-align:center;background:#6366f1;color:#fff;border-radius:8px;padding:9px;font-size:13px;font-weight:600;text-decoration:none;">Voir les clients →</a>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-        <div><div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:6px;">SAV</div><div style="font-size:36px;font-weight:700;color:#111827;line-height:1;"><?= $savOuverts ?></div><div style="font-size:12px;color:#ef4444;margin-top:4px;"><?= $savEnRetard ?> en retard</div></div>
-        <div style="width:48px;height:48px;border-radius:12px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:22px;">🔧</div>
-      </div>
-      <a href="sav.php" style="display:block;text-align:center;background:#f59e0b;color:#fff;border-radius:8px;padding:9px;font-size:13px;font-weight:600;text-decoration:none;">Voir les SAV →</a>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-        <div><div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:6px;">Livraisons</div><div style="font-size:36px;font-weight:700;color:#111827;line-height:1;"><?= $livraisonsEnCours ?></div><div style="font-size:12px;color:#3b82f6;margin-top:4px;"><?= $livraisonsJour ?> aujourd'hui</div></div>
-        <div style="width:48px;height:48px;border-radius:12px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:22px;">🚚</div>
-      </div>
-      <a href="livraison.php" style="display:block;text-align:center;background:#3b82f6;color:#fff;border-radius:8px;padding:9px;font-size:13px;font-weight:600;text-decoration:none;">Voir les livraisons →</a>
-    </div>
-
-    <div class="card" style="cursor:pointer;" onclick="window.location.href='historique.php'">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <div style="font-size:14px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:8px;">📋 Historique récent</div>
-        <a href="historique.php" onclick="event.stopPropagation()" style="font-size:12px;color:#6366f1;text-decoration:none;font-weight:500;">Voir tout →</a>
-      </div>
-      <?php $icones = ['SAV'=>'🔧','Livraison'=>'🚚','Facture'=>'📄']; $couleurs = ['SAV'=>'#fef3c7','Livraison'=>'#dbeafe','Facture'=>'#ede9fe']; ?>
-      <?php foreach ($historique as $h): $ic = $icones[$h['type']] ?? '📌'; $bg = $couleurs[$h['type']] ?? '#f3f4f6'; ?>
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f9fafb;">
-          <div style="width:32px;height:32px;border-radius:8px;background:<?= $bg ?>;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;"><?= $ic ?></div>
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;color:#374151;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= h((string)$h['label']) ?></div>
-            <div style="font-size:11px;color:#9ca3af;"><?= date('d/m/Y à H:i', strtotime((string)$h['created_at'])) ?></div>
-          </div>
-          <span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:999px;white-space:nowrap;"><?= h((string)$h['type']) ?></span>
-        </div>
-      <?php endforeach; ?>
-      <a href="historique.php" onclick="event.stopPropagation()" style="display:block;text-align:center;margin-top:16px;background:var(--bg-page);color:var(--text-second);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;font-weight:500;text-decoration:none;transition:background .2s;">Voir tout l'historique →</a>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+  <!-- GRILLE CARDS -->
+  <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px;">
+    <!-- CLIENTS -->
+    <div class="dash-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
-          <div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:6px;">Stock</div>
-          <div style="font-size:36px;font-weight:700;color:#111827;line-height:1;"><?= $stockAlerte + $stockRupture ?></div>
+          <div class="dash-card-label">Clients</div>
+          <div class="dash-card-number"><?= $totalClients ?></div>
+          <div class="dash-card-sub" style="color:#10b981;">+<?= $nouveauxMois ?> ce mois</div>
+        </div>
+        <div class="dash-card-icon" style="background:#ede9fe;">👥</div>
+      </div>
+      <a href="clients.php" class="dash-btn" style="background:#6366f1;">Voir les clients →</a>
+    </div>
+
+    <!-- SAV -->
+    <div class="dash-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="dash-card-label">SAV</div>
+          <div class="dash-card-number"><?= $savOuverts ?></div>
+          <div class="dash-card-sub" style="color:#ef4444;"><?= $savEnRetard ?> en retard</div>
+        </div>
+        <div class="dash-card-icon" style="background:#fef3c7;">🔧</div>
+      </div>
+      <a href="sav.php" class="dash-btn" style="background:#f59e0b;">Voir les SAV →</a>
+    </div>
+
+    <!-- LIVRAISONS -->
+    <div class="dash-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="dash-card-label">Livraisons</div>
+          <div class="dash-card-number"><?= $livraisonsEnCours ?></div>
+          <div class="dash-card-sub" style="color:#3b82f6;"><?= $livraisonsJour ?> aujourd'hui</div>
+        </div>
+        <div class="dash-card-icon" style="background:#dbeafe;">🚚</div>
+      </div>
+      <a href="livraison.php" class="dash-btn" style="background:#3b82f6;">Voir les livraisons →</a>
+    </div>
+
+    <!-- STOCK -->
+    <div class="dash-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="dash-card-label">Stock</div>
+          <div class="dash-card-number"><?= $stockAlerte + $stockRupture ?></div>
           <?php if (($stockAlerte + $stockRupture) === 0): ?>
-            <div style="font-size:12px;color:#10b981;margin-top:4px;">✅ Stock OK</div>
+            <div class="dash-card-sub" style="color:#10b981;">✅ Stock OK</div>
           <?php else: ?>
-            <div style="font-size:12px;color:#f59e0b;margin-top:4px;">⚠️ <?= $stockAlerte ?> sous seuil</div>
-            <div style="font-size:12px;color:#ef4444;">🔴 <?= $stockRupture ?> en rupture</div>
+            <div class="dash-card-sub" style="color:#f59e0b;">⚠️ <?= $stockAlerte ?> sous seuil</div>
+            <div class="dash-card-sub" style="color:#ef4444;">🔴 <?= $stockRupture ?> rupture</div>
           <?php endif; ?>
         </div>
-        <div style="width:48px;height:48px;border-radius:12px;background:#ffedd5;display:flex;align-items:center;justify-content:center;font-size:22px;">📦</div>
+        <div class="dash-card-icon" style="background:#ffedd5;">📦</div>
       </div>
-      <a href="stock.php" style="display:block;text-align:center;background:#f97316;color:#fff;border-radius:8px;padding:9px;font-size:13px;font-weight:600;text-decoration:none;">Voir le stock →</a>
+      <a href="stock.php" class="dash-btn" style="background:#f97316;">Voir le stock →</a>
     </div>
 
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-        <div><div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:6px;">Paiements</div><div style="font-size:36px;font-weight:700;color:#111827;line-height:1;"><?= number_format($montantImpaye, 0, ',', ' ') ?> €</div><div style="font-size:12px;color:#6b7280;margin-top:4px;"><?= $nbImpayes ?> facture(s) en attente</div></div>
-        <div style="width:48px;height:48px;border-radius:12px;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:22px;">💶</div>
+    <!-- PAIEMENTS -->
+    <div class="dash-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="dash-card-label">Paiements</div>
+          <div class="dash-card-number" style="font-size:28px;"><?= number_format($montantImpaye, 0, ',', ' ') ?>€</div>
+          <div class="dash-card-sub" style="color:#6b7280;"><?= $nbImpayes ?> facture(s) en attente</div>
+        </div>
+        <div class="dash-card-icon" style="background:#dcfce7;">💶</div>
       </div>
-      <a href="paiements.php" style="display:block;text-align:center;background:#10b981;color:#fff;border-radius:8px;padding:9px;font-size:13px;font-weight:600;text-decoration:none;">Voir les paiements →</a>
+      <a href="paiements.php" class="dash-btn" style="background:#10b981;">Voir les paiements →</a>
+    </div>
+
+    <!-- HISTORIQUE -->
+    <div class="dash-card" style="cursor:pointer;" onclick="window.location.href='historique.php'">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div style="font-size:14px; font-weight:600; color:var(--text-primary);">📋 Activite recente</div>
+        <a href="historique.php" onclick="event.stopPropagation()" style="font-size:12px;color:#6366f1;text-decoration:none;font-weight:500;">Tout voir →</a>
+      </div>
+      <?php
+        $icones = ['SAV'=>'🔧','Livraison'=>'🚚','Facture'=>'📄'];
+        $couleurs = ['SAV'=>'#fef3c7','Livraison'=>'#dbeafe','Facture'=>'#ede9fe'];
+        foreach (array_slice($historique, 0, 5) as $item):
+          $ic = $icones[$item['type']] ?? '📌';
+          $bg = $couleurs[$item['type']] ?? '#f3f4f6';
+      ?>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="width:30px;height:30px;border-radius:8px;background:<?= $bg ?>;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;"><?= $ic ?></div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;color:var(--text-primary);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= h((string)$item['label']) ?></div>
+            <div style="font-size:10px;color:var(--text-second);"><?= date('d/m à H:i', strtotime((string)$item['created_at'])) ?></div>
+          </div>
+        </div>
+      <?php endforeach; ?>
     </div>
   </div>
+
+</div><!-- /page-container -->
+</div><!-- /fond page -->
+
+<!-- ===== WIDGET SUPPORT CLIENT ===== -->
+<button id="client-support-btn" title="Clients">
+  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+  </svg>
+</button>
+
+<div id="client-support-panel">
+  <div class="csp-header">
+    <div class="csp-title">
+      👥 Clients
+      <span class="csp-count" id="csp-count"><?= count($clientsWidget) ?></span>
+    </div>
+    <button onclick="toggleClientPanel()" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="csp-search">
+    <input type="text" id="csp-search-input" placeholder="Rechercher un client..." oninput="filterClients(this.value)">
+  </div>
+  <div class="csp-list" id="csp-list"></div>
+  <div class="csp-footer">
+    <a href="clients.php">Voir tous les clients →</a>
+  </div>
 </div>
+
+<script>
+// Donnees clients injectees depuis PHP
+const CSP_CLIENTS = <?= json_encode(array_map(function($c) {
+  return [
+    'id'     => (int)$c['id'],
+    'nom'    => (string)$c['nom'],
+    'detail' => (string)$c['detail'],
+    'statut' => (string)$c['statut'],
+  ];
+}, $clientsWidget), JSON_UNESCAPED_UNICODE) ?>;
+
+let cspOpen = false;
+
+function toggleClientPanel() {
+  cspOpen = !cspOpen;
+  document.getElementById('client-support-panel').classList.toggle('open', cspOpen);
+  if (cspOpen) {
+    document.getElementById('csp-search-input').focus();
+    renderClients(CSP_CLIENTS);
+  }
+}
+
+function filterClients(q) {
+  const filtered = q.trim() === ''
+    ? CSP_CLIENTS
+    : CSP_CLIENTS.filter(c =>
+        c.nom.toLowerCase().includes(q.toLowerCase()) ||
+        c.detail.toLowerCase().includes(q.toLowerCase())
+      );
+  renderClients(filtered);
+  document.getElementById('csp-count').textContent = filtered.length;
+}
+
+function renderClients(clients) {
+  const list = document.getElementById('csp-list');
+  if (clients.length === 0) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-second);font-size:13px;">Aucun client trouve</div>';
+    return;
+  }
+  list.innerHTML = clients.map(c => {
+    const initial = c.nom.charAt(0).toUpperCase();
+    const statusClass = c.statut === 'actif' ? 'actif' : 'inactif';
+    return `
+      <a class="csp-item" href="/public/client_fiche.php?id=${c.id}">
+        <div class="csp-avatar">${initial}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="csp-name">${escHtml(c.nom)}</div>
+          ${c.detail ? `<div class="csp-detail">${escHtml(c.detail)}</div>` : ''}
+        </div>
+        <span class="csp-status ${statusClass}">${c.statut}</span>
+      </a>`;
+  }).join('');
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.getElementById('client-support-btn').addEventListener('click', toggleClientPanel);
+
+// Fermer en cliquant a l'exterieur
+document.addEventListener('click', function(e) {
+  if (cspOpen &&
+      !document.getElementById('client-support-panel').contains(e.target) &&
+      e.target !== document.getElementById('client-support-btn')) {
+    cspOpen = false;
+    document.getElementById('client-support-panel').classList.remove('open');
+  }
+});
+</script>
 
 </body>
 </html>
