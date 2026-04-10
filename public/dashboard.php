@@ -308,7 +308,7 @@ $clientsWidget = $pdo->query("
   <div id="csp-detail-content" style="overflow-y:auto;flex:1;padding:0;"></div>
 </div>
 
-<script>
+<script <?= csp_nonce() ?>>
 // Donnees clients injectees depuis PHP
 const CSP_CLIENTS = <?= json_encode(array_map(function($c) {
   return [
