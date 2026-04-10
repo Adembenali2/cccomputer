@@ -294,6 +294,20 @@ $clientsWidget = $pdo->query("
   </div>
 </div>
 
+<!-- PANEL DETAIL CLIENT -->
+<div id="csp-detail-panel">
+  <div class="csp-header">
+    <button onclick="closeDetail()" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Retour
+    </button>
+    <button onclick="closeAllPanels()" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div id="csp-detail-content" style="overflow-y:auto;flex:1;padding:0;"></div>
+</div>
+
 <script>
 // Donnees clients injectees depuis PHP
 const CSP_CLIENTS = <?= json_encode(array_map(function($c) {
@@ -329,38 +343,135 @@ function filterClients(q) {
 
 function renderClients(clients) {
   const list = document.getElementById('csp-list');
-  if (clients.length === 0) {
-    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-second);font-size:13px;">Aucun client trouve</div>';
+  if (!clients.length) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-second);font-size:13px;">Aucun client trouvé</div>';
     return;
   }
-  list.innerHTML = clients.map(c => {
-    const initial = c.nom.charAt(0).toUpperCase();
-    const statusClass = c.statut === 'actif' ? 'actif' : 'inactif';
-    return `
-      <a class="csp-item" href="/public/client_fiche.php?id=${c.id}">
-        <div class="csp-avatar">${initial}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="csp-name">${escHtml(c.nom)}</div>
-          ${c.detail ? `<div class="csp-detail">${escHtml(c.detail)}</div>` : ''}
+  list.innerHTML = clients.map(c => `
+    <div class="csp-item" onclick="openClientDetail(${c.id})" style="cursor:pointer;">
+      <div class="csp-avatar">${escHtml(c.nom.charAt(0).toUpperCase())}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="csp-name">${escHtml(c.nom)}</div>
+        ${c.detail ? `<div class="csp-detail">${escHtml(c.detail)}</div>` : ''}
+      </div>
+      <svg width="14" height="14" fill="none" stroke="#9ca3af" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;"><path d="M9 18l6-6-6-6"/></svg>
+    </div>`).join('');
+}
+
+function openClientDetail(clientId) {
+  const detailPanel = document.getElementById('csp-detail-panel');
+  const content = document.getElementById('csp-detail-content');
+  content.innerHTML = '<div style="padding:32px;text-align:center;color:#6b7280;font-size:13px;">Chargement...</div>';
+  document.getElementById('client-support-panel').classList.remove('open');
+  detailPanel.classList.add('open');
+
+  fetch('/API/client_widget_detail.php?id=' + clientId, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.ok) { content.innerHTML = '<div style="padding:24px;color:#ef4444;font-size:13px;">Erreur : ' + escHtml(data.error || 'Erreur inconnue') + '</div>'; return; }
+    const c = data.client;
+    const livs = data.livraisons;
+    const savs = data.sav;
+
+    const statutLivColor = { planifiee:'#dbeafe|#2563eb', en_cours:'#fef9c3|#ca8a04', livree:'#dcfce7|#16a34a', annulee:'#f3f4f6|#6b7280' };
+    const statutSavColor = { ouvert:'#dbeafe|#2563eb', en_cours:'#fef9c3|#ca8a04', resolu:'#dcfce7|#16a34a', annule:'#f3f4f6|#6b7280' };
+    const prioriteColor  = { basse:'#f3f4f6|#6b7280', normale:'#dbeafe|#2563eb', haute:'#fef9c3|#ca8a04', urgente:'#fee2e2|#dc2626' };
+
+    function badge(val, map) {
+      const parts = (map[val] || '#f3f4f6|#6b7280').split('|');
+      return `<span style="background:${parts[0]};color:${parts[1]};font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">${escHtml(val)}</span>`;
+    }
+
+    let html = `
+      <!-- INFOS CLIENT -->
+      <div style="padding:20px;border-bottom:1px solid #e5e7eb;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <div style="width:44px;height:44px;border-radius:12px;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0;">${escHtml(c.raison_sociale.charAt(0).toUpperCase())}</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:#111827;">${escHtml(c.raison_sociale)}</div>
+            <div style="font-size:11px;color:#6b7280;">${escHtml(c.numero_client)}</div>
+          </div>
+          <a href="/public/client_fiche.php?id=${c.id}" style="margin-left:auto;font-size:11px;color:#2563eb;text-decoration:none;font-weight:600;white-space:nowrap;">Voir fiche →</a>
         </div>
-        <span class="csp-status ${statusClass}">${c.statut}</span>
-      </a>`;
-  }).join('');
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          ${c.telephone1 ? `<div style="font-size:12px;color:#6b7280;">📞 ${escHtml(c.telephone1)}</div>` : ''}
+          ${c.email ? `<div style="font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">✉️ ${escHtml(c.email)}</div>` : ''}
+          ${c.ville ? `<div style="font-size:12px;color:#6b7280;">📍 ${escHtml(c.code_postal)} ${escHtml(c.ville)}</div>` : ''}
+          ${c.nom_dirigeant ? `<div style="font-size:12px;color:#6b7280;">👤 ${escHtml(c.nom_dirigeant)} ${escHtml(c.prenom_dirigeant || '')}</div>` : ''}
+        </div>
+      </div>
+
+      <!-- LIVRAISONS -->
+      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+        <div style="font-size:12px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">🚚 Livraisons (${livs.length})</div>
+        ${livs.length === 0
+          ? '<div style="font-size:12px;color:#9ca3af;text-align:center;padding:8px 0;">Aucune livraison</div>'
+          : livs.map(l => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(l.objet)}</div>
+                <div style="font-size:11px;color:#6b7280;">${escHtml(l.reference)} · ${escHtml(l.date_prevue)}</div>
+              </div>
+              ${badge(l.statut, statutLivColor)}
+            </div>`).join('')
+        }
+      </div>
+
+      <!-- SAV -->
+      <div style="padding:16px 20px;">
+        <div style="font-size:12px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">🔧 SAV (${savs.length})</div>
+        ${savs.length === 0
+          ? '<div style="font-size:12px;color:#9ca3af;text-align:center;padding:8px 0;">Aucun SAV</div>'
+          : savs.map(s => `
+            <div style="padding:8px 0;border-bottom:1px solid #f3f4f6;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <div style="font-size:12px;font-weight:600;color:#111827;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(s.description.substring(0,50))}${s.description.length > 50 ? '…' : ''}</div>
+                ${badge(s.statut, statutSavColor)}
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:11px;color:#6b7280;">${escHtml(s.reference)} · ${escHtml(s.date_ouverture)}</span>
+                ${badge(s.priorite, prioriteColor)}
+              </div>
+            </div>`).join('')
+        }
+      </div>`;
+
+    content.innerHTML = html;
+  })
+  .catch(() => {
+    content.innerHTML = '<div style="padding:24px;color:#ef4444;font-size:13px;">Erreur de connexion</div>';
+  });
+}
+
+function closeDetail() {
+  document.getElementById('csp-detail-panel').classList.remove('open');
+  document.getElementById('client-support-panel').classList.add('open');
+}
+
+function closeAllPanels() {
+  document.getElementById('csp-detail-panel').classList.remove('open');
+  document.getElementById('client-support-panel').classList.remove('open');
+  cspOpen = false;
 }
 
 function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const s = String(str ?? '');
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 document.getElementById('client-support-btn').addEventListener('click', toggleClientPanel);
 
 // Fermer en cliquant a l'exterieur
-document.addEventListener('click', function(e) {
-  if (cspOpen &&
-      !document.getElementById('client-support-panel').contains(e.target) &&
-      e.target !== document.getElementById('client-support-btn')) {
+document.addEventListener('click', e => {
+  const btn    = document.getElementById('client-support-btn');
+  const panel  = document.getElementById('client-support-panel');
+  const detail = document.getElementById('csp-detail-panel');
+  if (!panel.contains(e.target) && !detail.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+    panel.classList.remove('open');
+    detail.classList.remove('open');
     cspOpen = false;
-    document.getElementById('client-support-panel').classList.remove('open');
   }
 });
 </script>

@@ -225,6 +225,30 @@ transform: scale(1) translateY(0);
 opacity: 1;
 pointer-events: all;
 }
+#csp-detail-panel {
+position: fixed;
+bottom: 96px;
+right: 28px;
+z-index: 9000;
+width: 380px;
+max-height: 580px;
+background: #ffffff;
+border-radius: 18px;
+box-shadow: 0 12px 48px rgba(0,0,0,0.18);
+border: 1px solid #e5e7eb;
+display: flex;
+flex-direction: column;
+overflow: hidden;
+transform: scale(0.85) translateY(20px);
+opacity: 0;
+pointer-events: none;
+transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#csp-detail-panel.open {
+transform: scale(1) translateY(0);
+opacity: 1;
+pointer-events: all;
+}
 .csp-header {
 padding: 18px 20px 14px;
 border-bottom: 1px solid #e5e7eb;
@@ -349,4 +373,7 @@ transition: background 0.2s;
 .hero-stat { min-width: 100px; padding: 10px 14px; }
 #client-support-panel { width: calc(100vw - 32px); right: 16px; }
 #client-support-btn { right: 16px; bottom: 16px; }
+}
+@media (max-width: 480px) {
+  #csp-detail-panel { width: calc(100vw - 32px); right: 16px; }
 }
