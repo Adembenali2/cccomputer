@@ -240,10 +240,10 @@ $clientsWidget = $pdo->query("
     </div>
 
     <!-- HISTORIQUE -->
-    <div class="dash-card" style="cursor:pointer;" onclick="window.location.href='historique.php'">
+    <div class="dash-card js-history-card" style="cursor:pointer;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
         <div style="font-size:14px; font-weight:600; color:var(--text-primary);">📋 Activite recente</div>
-        <a href="historique.php" onclick="event.stopPropagation()" style="font-size:12px;color:#6366f1;text-decoration:none;font-weight:500;">Tout voir →</a>
+        <a href="historique.php" class="js-history-link" style="font-size:12px;color:#6366f1;text-decoration:none;font-weight:500;">Tout voir →</a>
       </div>
       <?php
         $icones = ['SAV'=>'🔧','Livraison'=>'🚚','Facture'=>'📄'];
@@ -281,12 +281,12 @@ $clientsWidget = $pdo->query("
       👥 Clients
       <span class="csp-count" id="csp-count"><?= count($clientsWidget) ?></span>
     </div>
-    <button onclick="toggleClientPanel()" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;">
+    <button id="csp-close-list-btn" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
   </div>
   <div class="csp-search">
-    <input type="text" id="csp-search-input" placeholder="Rechercher un client..." oninput="filterClients(this.value)">
+    <input type="text" id="csp-search-input" placeholder="Rechercher un client...">
   </div>
   <div class="csp-list" id="csp-list"></div>
   <div class="csp-footer">
@@ -297,11 +297,11 @@ $clientsWidget = $pdo->query("
 <!-- PANEL DETAIL CLIENT -->
 <div id="csp-detail-panel">
   <div class="csp-header">
-    <button onclick="closeDetail()" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
+    <button id="csp-detail-back-btn" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       Retour
     </button>
-    <button onclick="closeAllPanels()" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;">
+    <button id="csp-detail-close-btn" style="background:none;border:none;cursor:pointer;color:var(--text-second);padding:4px;">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
   </div>
@@ -348,7 +348,7 @@ function renderClients(clients) {
     return;
   }
   list.innerHTML = clients.map(c => `
-    <div class="csp-item" onclick="openClientDetail(${c.id})" style="cursor:pointer;">
+    <div class="csp-item" data-client-id="${c.id}" style="cursor:pointer;">
       <div class="csp-avatar">${escHtml(c.nom.charAt(0).toUpperCase())}</div>
       <div style="flex:1;min-width:0;">
         <div class="csp-name">${escHtml(c.nom)}</div>
@@ -462,6 +462,25 @@ function escHtml(str) {
 }
 
 document.getElementById('client-support-btn').addEventListener('click', toggleClientPanel);
+document.getElementById('csp-close-list-btn').addEventListener('click', toggleClientPanel);
+document.getElementById('csp-search-input').addEventListener('input', function() {
+  filterClients(this.value);
+});
+document.getElementById('csp-detail-back-btn').addEventListener('click', closeDetail);
+document.getElementById('csp-detail-close-btn').addEventListener('click', closeAllPanels);
+document.querySelector('.js-history-card')?.addEventListener('click', function() {
+  window.location.href = 'historique.php';
+});
+document.querySelector('.js-history-link')?.addEventListener('click', function(e) {
+  e.stopPropagation();
+});
+document.getElementById('csp-list').addEventListener('click', function(e) {
+  const item = e.target.closest('.csp-item[data-client-id]');
+  if (!item) return;
+  const clientId = Number(item.getAttribute('data-client-id'));
+  if (!Number.isFinite(clientId) || clientId <= 0) return;
+  openClientDetail(clientId);
+});
 
 // Fermer en cliquant a l'exterieur
 document.addEventListener('click', e => {
