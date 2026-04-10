@@ -359,3 +359,38 @@ button.notif-item {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
+
+/* Liens icônes header (agenda, messagerie, maps) */
+a.header-icon-btn {
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+/* Lien icône actif */
+.nav-icon-active {
+  background: rgba(255,255,255,.15);
+  color: var(--accent-primary, #2563eb) !important;
+}
+[data-theme="dark"] .nav-icon-active {
+  background: rgba(255,255,255,.1);
+}
+
+/* Dropdown notifications positionné (cohérence avec .notif-wrap existant) */
+.notif-wrap, .profil-wrapper {
+  position: relative;
+}
+.notif-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, .75rem);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,.15));
+  display: none;
+  z-index: 9999;
+}
+.notif-dropdown.open { display: block; }

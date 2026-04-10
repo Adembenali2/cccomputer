@@ -4,26 +4,6 @@ $userNom  = $_SESSION['nom'] ?? $_SESSION['user_nom'] ?? 'Utilisateur';
 $userRole = $_SESSION['role'] ?? $_SESSION['emploi'] ?? '';
 $pageActuelle = basename((string)($_SERVER['PHP_SELF'] ?? ''));
 
-try {
-    $nbSavRetard = 0;
-    $nbStock = 0;
-    if (isset($pdo) && $pdo instanceof PDO) {
-        try {
-            $nbSavRetard = (int)$pdo->query("SELECT COUNT(*) FROM sav WHERE statut IN ('ouvert','en_cours') AND date_intervention < CURDATE()")->fetchColumn();
-        } catch (Throwable $e) {
-            try {
-                $nbSavRetard = (int)$pdo->query("SELECT COUNT(*) FROM sav WHERE statut IN ('ouvert','en_cours') AND date_prevue < CURDATE()")->fetchColumn();
-            } catch (Throwable $ignore) {
-                $nbSavRetard = 0;
-            }
-        }
-        $nbStock = (int)$pdo->query("SELECT COUNT(*) FROM stock WHERE actif=1 AND quantite<=quantite_min")->fetchColumn();
-    }
-    $nbNotifTotal = $nbSavRetard + $nbStock;
-} catch (Throwable $e) {
-    $nbNotifTotal = 0;
-}
-
 if (!function_exists('getNavIcon')) {
     function getNavIcon(string $name): string {
         $icons = [
@@ -40,7 +20,7 @@ if (!function_exists('getNavIcon')) {
     }
 }
 ?>
-<header class="site-header">
+<header class="site-header" data-csrf-token="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
   <a href="/public/dashboard.php" class="header-logo">
     <img src="/assets/logos/logo.png" alt="CC" onerror="this.style.display='none'">
     <span>CCComputer</span>
@@ -78,10 +58,26 @@ if (!function_exists('getNavIcon')) {
         <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
       </svg>
     </a>
-    <button type="button" class="header-icon-btn js-cal" title="Calendrier"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button>
-    <button type="button" class="header-icon-btn notif-btn js-notif" title="Notifications"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg><?php if ($nbNotifTotal > 0): ?><span class="notif-badge"><?= (int)$nbNotifTotal ?></span><?php endif; ?></button>
-    <button type="button" class="header-icon-btn js-msg" title="Messagerie"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></button>
-    <button type="button" class="header-icon-btn js-maps" title="Maps"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></button>
+    <a href="/public/agenda.php" class="header-icon-btn <?= $pageActuelle === 'agenda.php' ? 'nav-icon-active' : '' ?>" title="Agenda">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+    </a>
+    <div class="notif-wrap">
+    <button type="button" class="header-icon-btn notif-btn js-notif" id="btnNotif" title="Notifications"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg><span class="notif-badge" style="display:none">0</span></button>
+    <div class="notif-dropdown" id="notifDropdown">
+      <div class="notif-actions">
+        <span style="font-weight:600;font-size:.85rem">Notifications</span>
+        <button type="button" class="notif-markall" id="notifMarkAll">Tout marquer lu</button>
+      </div>
+      <div id="notifList"><p style="padding:1rem;color:var(--text-secondary);font-size:.85rem">Chargement...</p></div>
+    </div>
+    </div>
+    <a href="/public/messagerie.php" class="header-icon-btn messagerie-link <?= $pageActuelle === 'messagerie.php' ? 'nav-icon-active' : '' ?>" title="Messagerie" id="btnMessagerie">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span class="messagerie-badge" id="msgBadge" style="display:none">0</span>
+    </a>
+    <a href="/public/maps.php" class="header-icon-btn <?= $pageActuelle === 'maps.php' ? 'nav-icon-active' : '' ?>" title="Maps">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+    </a>
     <div class="profil-wrapper">
       <button type="button" class="profil-btn" id="btnProfilMenu">
         <div class="profil-avatar"><?= htmlspecialchars(strtoupper((string)mb_substr((string)$userNom,0,1)), ENT_QUOTES, 'UTF-8') ?></div>
@@ -96,4 +92,106 @@ if (!function_exists('getNavIcon')) {
       </div>
     </div>
   </div>
+<script<?php
+  $__hnCsp = (string)($GLOBALS['csp_nonce'] ?? '');
+  echo $__hnCsp !== '' ? ' nonce="' . htmlspecialchars($__hnCsp, ENT_QUOTES, 'UTF-8') . '"' : '';
+?>>
+(function() {
+  function csrfHeader() {
+    const t = document.querySelector('.site-header')?.getAttribute('data-csrf-token') || '';
+    return t ? { 'Content-Type': 'application/json', 'X-CSRF-Token': t } : { 'Content-Type': 'application/json' };
+  }
+
+  // ── Badge messagerie (polling 30s) ───────────────────────
+  function updateMsgBadge() {
+    fetch('/API/messagerie_get_unread_count.php', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        const badge = document.getElementById('msgBadge');
+        if (!badge) return;
+        const c = typeof d.count === 'number' ? d.count : 0;
+        if (c > 0) {
+          badge.textContent = c > 99 ? '99+' : String(c);
+          badge.style.display = 'inline-block';
+        } else {
+          badge.style.display = 'none';
+        }
+      }).catch(() => {});
+  }
+  updateMsgBadge();
+  setInterval(updateMsgBadge, 30000);
+
+  // ── Dropdown notifications ────────────────────────────────
+  const btnNotif = document.getElementById('btnNotif');
+  const dropdown = document.getElementById('notifDropdown');
+
+  if (btnNotif && dropdown) {
+    btnNotif.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const isOpen = dropdown.classList.contains('open');
+      dropdown.classList.toggle('open', !isOpen);
+      if (!isOpen) loadNotifications();
+    });
+
+    document.addEventListener('click', () => dropdown.classList.remove('open'));
+    dropdown.addEventListener('click', e => e.stopPropagation());
+
+    document.getElementById('notifMarkAll')?.addEventListener('click', function() {
+      fetch('/API/notifications_mark_read.php', {
+        method: 'POST',
+        credentials: 'include',
+        headers: csrfHeader(),
+        body: JSON.stringify({ all: true })
+      })
+        .then(() => { loadNotifications(); updateNotifBadge(0); });
+    });
+  }
+
+  function loadNotifications() {
+    const list = document.getElementById('notifList');
+    if (!list) return;
+    fetch('/API/notifications_get.php', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        const notifs = d.notifications || [];
+        if (notifs.length === 0) {
+          list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);font-size:.85rem">Aucune notification.</p>';
+          updateNotifBadge(0);
+          return;
+        }
+        list.innerHTML = notifs.slice(0, 15).map(n => `
+          <div class="notif-item ${n.lu ? '' : 'unread'}">
+            <div class="title">${escHtml(n.titre || n.title || '')}</div>
+            <div class="body">${escHtml(n.message || n.body || '')}</div>
+            <div class="time">${escHtml(n.date_creation || n.created_at || '')}</div>
+          </div>`).join('');
+        updateNotifBadge(notifs.filter(n => !n.lu).length);
+      }).catch(() => {
+        list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary)">Erreur.</p>';
+      });
+  }
+
+  function updateNotifBadge(count) {
+    const badge = document.querySelector('.notif-btn .notif-badge');
+    const btn = document.getElementById('btnNotif');
+    if (!badge || !btn) return;
+    if (count > 0) {
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.style.display = 'inline-block';
+      btn.classList.add('has-unread');
+    } else {
+      badge.style.display = 'none';
+      btn.classList.remove('has-unread');
+    }
+  }
+
+  function escHtml(str) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(str));
+    return d.innerHTML;
+  }
+
+  loadNotifications();
+})();
+</script>
 </header>
