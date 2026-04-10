@@ -811,3 +811,214 @@ body.dark-mode .view-toggle {
 body.dark-mode .view-btn.active {
   background: var(--bg-primary, #0f172a);
 }
+
+/* ===== ONGLETS ESPACE COMMERCIAL ===== */
+.comm-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border, #e5e7eb);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.comm-tab {
+  padding: 9px 18px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted, #6b7280);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 6px 6px 0 0;
+  transition: color 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.comm-tab:hover { color: var(--text-primary, #111); }
+.comm-tab.active { color: var(--accent, #3b82f6); border-bottom-color: var(--accent, #3b82f6); }
+.comm-tab-badge {
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+/* ===== OPPORTUNITÉS (espace commercial) ===== */
+.opp-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.opp-filter-btn {
+  padding: 5px 14px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg-card, #fff);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  color: var(--text-muted, #6b7280);
+}
+.opp-filter-btn:hover,
+.opp-filter-btn.active {
+  background: var(--accent, #3b82f6);
+  border-color: var(--accent, #3b82f6);
+  color: #fff;
+}
+
+.opp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.opp-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted, #9ca3af);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.opp-card {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: 16px;
+  transition: box-shadow 0.2s;
+}
+.opp-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.opp-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.opp-type-icon { font-size: 24px; flex-shrink: 0; line-height: 1; }
+.opp-type-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.opp-type-label { font-size: 12px; font-weight: 600; color: var(--text-primary, #111); }
+.opp-client { font-size: 11px; color: var(--text-muted, #9ca3af); }
+.opp-statut-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  padding: 3px 9px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.opp-desc {
+  font-size: 13px;
+  color: var(--text-muted, #6b7280);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+.opp-montant {
+  font-size: 13px;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  background: rgba(16,185,129,.08);
+  border-radius: 6px;
+  color: #065f46;
+}
+[data-theme="dark"] .opp-montant,
+body.dark-mode .opp-montant { background: rgba(16,185,129,.12); color: #6ee7b7; }
+.opp-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.opp-btn {
+  font-size: 12px;
+  padding: 5px 11px;
+  border-radius: 7px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  color: var(--text-primary, #333);
+}
+.opp-btn:hover { background: var(--border, #f3f4f6); }
+.opp-btn-converti { border-color: #10b981; color: #10b981; }
+.opp-btn-converti:hover { background: #10b981; color: #fff; }
+.opp-btn-ignore { border-color: #9ca3af; color: #9ca3af; }
+.opp-btn-ignore:hover { background: #9ca3af; color: #fff; }
+.opp-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ===== ACTIVITÉS PANEL (espace commercial) ===== */
+.act-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.act-header h3 { margin: 0; font-size: 16px; }
+.btn-act-new {
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-act-new:hover { filter: brightness(1.05); }
+.act-list { display: flex; flex-direction: column; gap: 10px; }
+.act-empty { text-align: center; color: var(--text-muted, #9ca3af); padding: 32px; font-size: 14px; }
+.act-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: box-shadow 0.15s;
+}
+.act-item.act-overdue { border-left: 3px solid #ef4444; }
+.act-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.07); }
+.act-icon { font-size: 20px; flex-shrink: 0; line-height: 1.4; }
+.act-body { flex: 1; min-width: 0; }
+.act-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.act-meta { font-size: 12px; color: var(--text-muted, #9ca3af); margin-bottom: 4px; }
+.act-late { color: #ef4444; font-weight: 600; }
+.act-notes { font-size: 12px; color: var(--text-muted, #6b7280); font-style: italic; }
+.act-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.act-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.act-btn-done { border-color: #10b981; color: #10b981; }
+.act-btn-done:hover { background: #10b981; color: #fff; }
+.act-btn-cancel { color: #9ca3af; }
+.act-btn-cancel:hover { background: #f3f4f6; }
+.act-done-label { font-size: 12px; color: var(--text-muted, #9ca3af); }
+
+[data-theme="dark"] .opp-card,
+[data-theme="dark"] .act-item,
+body.dark-mode .opp-card,
+body.dark-mode .act-item {
+  background: var(--bg-card, #1e293b);
+  border-color: var(--border, #334155);
+}
+[data-theme="dark"] .opp-filter-btn,
+body.dark-mode .opp-filter-btn {
+  background: var(--bg-card, #1e293b);
+}

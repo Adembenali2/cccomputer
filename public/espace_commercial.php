@@ -99,6 +99,31 @@ $activites = $pdo->query("
   LIMIT 8
 ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+$activitesPlanifiees = $pdo->query("
+  SELECT a.*, c.{$clientNameCol} as client_nom
+  FROM commercial_activites a
+  LEFT JOIN clients c ON a.client_id = c.id
+  WHERE a.statut = 'planifie'
+  ORDER BY a.date_activite ASC
+  LIMIT 100
+")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$nbActivitesPlanifiees = (int) $pdo->query("SELECT COUNT(*) FROM commercial_activites WHERE statut = 'planifie'")->fetchColumn();
+
+$opportunites = [];
+try {
+    $oppSql = "
+      SELECT o.*, c.{$clientNameCol} as client_nom
+      FROM commercial_opportunites o
+      LEFT JOIN clients c ON c.id = o.id_client
+      ORDER BY CASE o.statut WHEN 'nouveau' THEN 0 WHEN 'vu' THEN 1 WHEN 'converti' THEN 2 ELSE 3 END,
+               o.updated_at DESC
+    ";
+    $opportunites = $pdo->query($oppSql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} catch (Throwable $e) {
+    $opportunites = [];
+}
+
 $derniersPaiements = $pdo->query("
   SELECT p.*, f.{$factNumCol} as numero_facture, c.{$clientNameCol} as client_nom
   FROM paiements p
@@ -124,7 +149,7 @@ $topClients = $topClientsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 $maxCA = !empty($topClients) ? (float)$topClients[0]['ca'] : 1.0;
 
 $clientsList = $pdo->query("SELECT id, {$clientNameCol} as nom FROM clients {$clientsWhere} ORDER BY {$clientNameCol}")->fetchAll(PDO::FETCH_ASSOC) ?: [];
-$csrfToken = $_SESSION['csrf_token'] ?? '';
+$csrfToken = ensureCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -149,6 +174,21 @@ $csrfToken = $_SESSION['csrf_token'] ?? '';
     </div>
   </div>
 
+  <?php
+  $nbNouvellesOpp = count(array_filter($opportunites, static fn($o) => ($o['statut'] ?? '') === 'nouveau'));
+  ?>
+  <div class="comm-tabs" id="commTabs">
+    <button type="button" class="comm-tab active" data-tab="dashboard">📊 Dashboard</button>
+    <button type="button" class="comm-tab" data-tab="opportunites">
+      🎯 Opportunités
+      <?php if ($nbNouvellesOpp > 0): ?>
+        <span class="comm-tab-badge"><?= (int)$nbNouvellesOpp ?></span>
+      <?php endif; ?>
+    </button>
+    <button type="button" class="comm-tab" data-tab="activites">📅 Activités</button>
+  </div>
+
+  <div id="tabDashboard" class="comm-tab-panel active">
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
     <div class="card" style="border-left:4px solid #6366f1;">
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-second);margin-bottom:8px;">CA ce mois</div>
@@ -177,7 +217,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? '';
 
     <div class="card" style="border-left:4px solid #f59e0b;">
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-second);margin-bottom:8px;">Activités planifiées</div>
-      <div style="font-size:26px;font-weight:700;color:var(--text-primary);"><?= count($activites) ?></div>
+      <div style="font-size:26px;font-weight:700;color:var(--text-primary);"><?= (int)$nbActivitesPlanifiees ?></div>
       <button type="button" onclick="ouvrirModalActivite()" style="background:none;border:none;font-size:11px;color:#f59e0b;cursor:pointer;padding:0;margin-top:4px;font-weight:500;">+ Planifier →</button>
     </div>
   </div>
@@ -268,6 +308,138 @@ $csrfToken = $_SESSION['csrf_token'] ?? '';
       <?php if (empty($activites)): ?><div style="text-align:center;padding:30px;color:var(--text-muted);">Aucune activité planifiée</div><?php endif; ?>
     </div>
   </div>
+  </div>
+
+  <div id="tabOpportunites" class="comm-tab-panel" hidden>
+    <div class="opp-filters">
+      <button type="button" class="opp-filter-btn active" data-filter="all">Toutes</button>
+      <button type="button" class="opp-filter-btn" data-filter="nouveau">🔵 Nouvelles</button>
+      <button type="button" class="opp-filter-btn" data-filter="vu">👁 Vues</button>
+      <button type="button" class="opp-filter-btn" data-filter="converti">✅ Converties</button>
+      <button type="button" class="opp-filter-btn" data-filter="ignore">🚫 Ignorées</button>
+    </div>
+
+    <?php if (empty($opportunites)): ?>
+      <div class="opp-empty">
+        <span style="font-size:2rem">🎯</span>
+        <p>Aucune opportunité détectée pour le moment.</p>
+        <small>Le système analyse automatiquement les SAV, consommables et historique clients.</small>
+      </div>
+    <?php else: ?>
+      <div class="opp-grid" id="oppGrid">
+        <?php
+        $oppRuleToType = [
+            'sav_maintenance' => 'maintenance',
+            'consommables_abo' => 'consommables',
+            'relance_commerciale' => 'reactivation',
+            'compte_premium' => 'premium',
+        ];
+        $typeIcons = [
+            'maintenance' => '🔧',
+            'consommables' => '📦',
+            'reactivation' => '💤',
+            'premium' => '⭐',
+        ];
+        $typeLabels = [
+            'maintenance' => 'Contrat maintenance',
+            'consommables' => 'Abonnement consommables',
+            'reactivation' => 'Réactivation compte',
+            'premium' => 'Offre premium',
+        ];
+        $statutColors = [
+            'nouveau' => '#3b82f6',
+            'vu' => '#f59e0b',
+            'converti' => '#10b981',
+            'ignore' => '#9ca3af',
+        ];
+        $statutLabelsOpp = [
+            'nouveau' => 'Nouveau',
+            'vu' => 'Vue',
+            'converti' => 'Converti',
+            'ignore' => 'Ignorée',
+        ];
+        foreach ($opportunites as $opp):
+            $ruleCode = (string)($opp['rule_code'] ?? '');
+            $type = $oppRuleToType[$ruleCode] ?? 'autre';
+            $statutO = (string)($opp['statut'] ?? 'nouveau');
+            $icon = $typeIcons[$type] ?? '💼';
+            $label = $typeLabels[$type] ?? ucfirst($type);
+            $color = $statutColors[$statutO] ?? '#9ca3af';
+            $clientNom = (string)($opp['client_nom'] ?? '—');
+            $detail = (string)($opp['detail'] ?? '');
+            $badgeStatut = $statutLabelsOpp[$statutO] ?? ucfirst($statutO);
+        ?>
+        <div class="opp-card" data-statut="<?= htmlspecialchars($statutO, ENT_QUOTES, 'UTF-8') ?>" data-id="<?= (int)$opp['id'] ?>">
+          <div class="opp-card-head">
+            <span class="opp-type-icon"><?= $icon ?></span>
+            <div class="opp-type-info">
+              <span class="opp-type-label"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></span>
+              <span class="opp-client"><?= htmlspecialchars($clientNom, ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+            <span class="opp-statut-badge" style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>">
+              <?= htmlspecialchars($badgeStatut, ENT_QUOTES, 'UTF-8') ?>
+            </span>
+          </div>
+          <p class="opp-desc"><?= htmlspecialchars((string)($opp['titre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+          <?php if ($detail !== ''): ?>
+            <p class="opp-desc" style="margin-top:-6px;font-size:12px;"><?= htmlspecialchars($detail, ENT_QUOTES, 'UTF-8') ?></p>
+          <?php endif; ?>
+          <div class="opp-actions">
+            <?php if ($statutO === 'nouveau'): ?>
+              <button type="button" class="opp-btn opp-btn-vu" data-id="<?= (int)$opp['id'] ?>" data-to="vu">👁 Marquer vu</button>
+              <button type="button" class="opp-btn opp-btn-converti" data-id="<?= (int)$opp['id'] ?>" data-to="converti">✅ Converti</button>
+              <button type="button" class="opp-btn opp-btn-ignore" data-id="<?= (int)$opp['id'] ?>" data-to="ignore">🚫 Ignorer</button>
+            <?php elseif ($statutO === 'vu'): ?>
+              <button type="button" class="opp-btn opp-btn-converti" data-id="<?= (int)$opp['id'] ?>" data-to="converti">✅ Converti</button>
+              <button type="button" class="opp-btn opp-btn-ignore" data-id="<?= (int)$opp['id'] ?>" data-to="ignore">🚫 Ignorer</button>
+            <?php elseif ($statutO === 'ignore'): ?>
+              <button type="button" class="opp-btn opp-btn-vu" data-id="<?= (int)$opp['id'] ?>" data-to="nouveau">↩ Rouvrir</button>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+
+  <div id="tabActivites" class="comm-tab-panel" hidden>
+    <div class="act-header">
+      <h3>Activités planifiées</h3>
+      <button type="button" class="btn-act-new" id="btnNewActivite">+ Nouvelle activité</button>
+    </div>
+    <div class="act-list" id="actList">
+      <?php
+      $typesActiviteTab = ['appel' => '📞', 'email' => '📧', 'rdv' => '🤝', 'relance' => '🔔', 'devis' => '📋', 'autre' => '💼'];
+      foreach ($activitesPlanifiees as $act):
+          $icon2 = $typesActiviteTab[$act['type'] ?? 'autre'] ?? '💼';
+          $dtAct = strtotime((string)($act['date_activite'] ?? ''));
+          $isPast = $dtAct !== false && $dtAct < time();
+      ?>
+      <div class="act-item<?= $isPast ? ' act-overdue' : '' ?>" data-id="<?= (int)$act['id'] ?>" data-statut="<?= htmlspecialchars((string)($act['statut'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+        <div class="act-icon"><?= $icon2 ?></div>
+        <div class="act-body">
+          <div class="act-title"><?= htmlspecialchars((string)($act['titre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+          <div class="act-meta">
+            <?= htmlspecialchars((string)($act['client_nom'] ?? '—'), ENT_QUOTES, 'UTF-8') ?>
+            · <?= $dtAct ? htmlspecialchars(date('d/m/Y H:i', $dtAct), ENT_QUOTES, 'UTF-8') : '—' ?>
+            <?= $isPast ? ' <span class="act-late">En retard</span>' : '' ?>
+          </div>
+          <?php if (!empty($act['description'])): ?>
+            <div class="act-notes"><?= htmlspecialchars((string)$act['description'], ENT_QUOTES, 'UTF-8') ?></div>
+          <?php endif; ?>
+        </div>
+        <div class="act-actions">
+          <button type="button" class="act-btn act-btn-done" data-id="<?= (int)$act['id'] ?>">✔ Fait</button>
+          <button type="button" class="act-btn act-btn-cancel" data-id="<?= (int)$act['id'] ?>">✖</button>
+        </div>
+      </div>
+      <?php endforeach; ?>
+      <?php if (empty($activitesPlanifiees)): ?>
+        <div class="act-empty">Aucune activité planifiée.</div>
+      <?php endif; ?>
+    </div>
+  </div>
+
 </div>
 
 <div id="modalActivite" class="modal-overlay" style="display:none;">
@@ -315,6 +487,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? '';
 </div>
 
 <script <?= csp_nonce() ?>>
+window.__CSRF_TOKEN__ = <?= json_encode((string)$csrfToken) ?>;
 function ouvrirModalActivite() { document.getElementById('modalActivite').style.display='flex'; }
 function ouvrirModalObjectif() { document.getElementById('modalObjectif').style.display='flex'; }
 function fermerModal(id) { document.getElementById(id).style.display='none'; }
@@ -348,11 +521,105 @@ async function marquerFaite(id) {
   const fd = new FormData();
   fd.append('id', id);
   fd.append('statut', 'fait');
-  fd.append('csrf_token', '<?= htmlspecialchars((string)$csrfToken, ENT_QUOTES, 'UTF-8') ?>');
+  fd.append('csrf_token', window.__CSRF_TOKEN__ || '');
   const res = await fetch('/API/commercial_activite_save.php', { method:'POST', body:fd });
   const json = await res.json();
   if (json.success) location.reload();
 }
+
+(function () {
+  var csrf = window.__CSRF_TOKEN__ || '';
+
+  document.querySelectorAll('.comm-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('.comm-tab').forEach(function (t) { t.classList.remove('active'); });
+      document.querySelectorAll('.comm-tab-panel').forEach(function (p) {
+        p.hidden = true;
+        p.classList.remove('active');
+      });
+      tab.classList.add('active');
+      var key = tab.getAttribute('data-tab') || 'dashboard';
+      var id = 'tab' + key.charAt(0).toUpperCase() + key.slice(1);
+      var target = document.getElementById(id);
+      if (target) {
+        target.hidden = false;
+        target.classList.add('active');
+      }
+      try { localStorage.setItem('commTab', key); } catch (e) {}
+    });
+  });
+
+  var savedTab = null;
+  try { savedTab = localStorage.getItem('commTab'); } catch (e) {}
+  if (savedTab) {
+    var btn = document.querySelector('.comm-tab[data-tab="' + savedTab + '"]');
+    if (btn) btn.click();
+  }
+
+  document.querySelectorAll('.opp-filter-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.opp-filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      var filter = btn.getAttribute('data-filter') || 'all';
+      document.querySelectorAll('.opp-card').forEach(function (card) {
+        var st = card.getAttribute('data-statut') || '';
+        card.hidden = filter !== 'all' && st !== filter;
+      });
+    });
+  });
+
+  document.querySelectorAll('.opp-btn').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      btn.disabled = true;
+      try {
+        var res = await fetch('/API/commercial_opportunite_update.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+          body: JSON.stringify({
+            id: parseInt(btn.getAttribute('data-id'), 10),
+            statut: btn.getAttribute('data-to'),
+            csrf_token: csrf
+          })
+        });
+        var data = await res.json();
+        if (data.success) location.reload();
+        else { alert(data.error || 'Erreur'); btn.disabled = false; }
+      } catch (e) {
+        alert('Erreur réseau');
+        btn.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll('.act-btn-done, .act-btn-cancel').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      btn.disabled = true;
+      var statut = btn.classList.contains('act-btn-done') ? 'fait' : 'annule';
+      try {
+        var res = await fetch('/API/commercial_activite_save.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+          body: JSON.stringify({
+            id: parseInt(btn.getAttribute('data-id'), 10),
+            statut: statut,
+            csrf_token: csrf
+          })
+        });
+        var data = await res.json();
+        if (data.success) location.reload();
+        else { alert(data.message || data.error || 'Erreur'); btn.disabled = false; }
+      } catch (e) {
+        alert('Erreur réseau');
+        btn.disabled = false;
+      }
+    });
+  });
+
+  var btnNew = document.getElementById('btnNewActivite');
+  if (btnNew) btnNew.addEventListener('click', function () { ouvrirModalActivite(); });
+})();
 </script>
 </body>
 </html>

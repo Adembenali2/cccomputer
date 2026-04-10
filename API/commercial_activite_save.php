@@ -16,8 +16,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['success' => false, 'message' => 'Méthode non autorisée'], 405);
 }
 
-requireCsrfForApi((string)($_POST['csrf_token'] ?? ''));
 $pdo = getPdoOrFail();
+
+$contentType = (string) ($_SERVER['CONTENT_TYPE'] ?? '');
+if (str_starts_with($contentType, 'application/json')) {
+    $jsonBody = json_decode((string) file_get_contents('php://input'), true);
+    if (is_array($jsonBody) && isset($jsonBody['id'], $jsonBody['statut'])) {
+        requireCsrfForApi((string) ($jsonBody['csrf_token'] ?? ''));
+        $jid = (int) $jsonBody['id'];
+        $jstatut = trim((string) $jsonBody['statut']);
+        if ($jid > 0 && in_array($jstatut, ['planifie', 'fait', 'annule'], true)) {
+            $stmt = $pdo->prepare('UPDATE commercial_activites SET statut = ? WHERE id = ?');
+            $stmt->execute([$jstatut, $jid]);
+            jsonResponse(['success' => true, 'message' => 'Activité mise à jour']);
+        }
+        jsonResponse(['success' => false, 'message' => 'Paramètres invalides'], 400);
+    }
+}
+
+requireCsrfForApi((string)($_POST['csrf_token'] ?? ''));
 
 $id = (int)($_POST['id'] ?? 0);
 $statut = trim((string)($_POST['statut'] ?? ''));
